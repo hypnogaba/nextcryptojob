@@ -97,6 +97,8 @@ def wallets(r):
         if (s.get("sigs") or 0) > 0:
             chains.add("solana")
         sent += s.get("sigs") or 0
+        if s.get("sample_seen") is not None and s["sample_seen"] < 50:
+            s = {**s, "swaps": None}  # замала вибірка: прогалина, а не нуль
         if s.get("swaps") is None:
             gap = True
         swaps += s.get("swaps") or 0
