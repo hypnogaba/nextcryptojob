@@ -1,0 +1,8 @@
+# Дані про реальних людей (еталон, бали) не публікуємо: GDPR.
+research/data/
+research/harness/selectors.json
+*.private.*
+.env*
+node_modules/
+.wrangler/
+.open-next/
