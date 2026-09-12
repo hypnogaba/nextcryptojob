@@ -27,6 +27,18 @@
       "service": "nextcryptojob"
     }
   ],
+  // Ліміти сплесків CRM і API (специфікація CRM, розділи 7.1 і 9). Лічильник
+  // локальний для локації й приблизний, тому він лише від сплесків; денні
+  // квоти рахує D1 (src/lib/crm/quotas.ts). namespace_id унікальні на акаунт.
+  // https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+  "ratelimits": [
+    // 60 запитів на хвилину на ключ API.
+    { "name": "RL_API", "namespace_id": "4101", "simple": { "limit": 60, "period": 60 } },
+    // 120 запитів на хвилину на сесію члена команди.
+    { "name": "RL_WEB", "namespace_id": "4102", "simple": { "limit": 120, "period": 60 } },
+    // 10 запитів на хвилину з однієї IP для гостей x402.
+    { "name": "RL_IP", "namespace_id": "4103", "simple": { "limit": 10, "period": 60 } }
+  ],
   // Власного домену ще немає: NS зони nextcryptojob.xyz чекають на Cloudflare.
   // До того сайт живе лише на workers.dev. Коли зона стане active, тут
   // з'являться routes з custom_domain, а workers_dev варто вимкнути (як у

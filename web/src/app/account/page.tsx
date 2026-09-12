@@ -7,6 +7,7 @@ import { loadAnswers } from "@/lib/onboarding/store";
 
 const LINK =
   "flex min-h-12 items-center justify-between rounded-lg border border-line bg-surface px-4 text-base font-medium text-ink hover:border-line-strong";
+import { TelegramPanel } from "./telegram-panel";
 
 export const metadata: Metadata = { title: "Account", robots: { index: false } };
 
@@ -36,6 +37,7 @@ export default async function AccountPage() {
           <span aria-hidden className="text-ink-muted">&rarr;</span>
         </Link>
       </nav>
+      <TelegramPanel userId={user.id} />
       <div className="mt-8">
         <SignOutButton />
       </div>
