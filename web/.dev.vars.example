@@ -1,0 +1,3 @@
+# Скопіюй у .dev.vars і встав випадкове значення: openssl rand -base64 48
+# У продакшені це Worker secret: wrangler secret put SESSION_SECRET
+SESSION_SECRET=

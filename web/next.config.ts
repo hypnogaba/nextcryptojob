@@ -9,6 +9,10 @@ initOpenNextCloudflareForDev();
 const nextConfig: NextConfig = {
   poweredByHeader: false,
 
+  // Інакше `next dev`, помітивши агента, сам створює AGENTS.md і CLAUDE.md у
+  // web/: незакомічені файли з довгим тире, яке ламає тест no-em-dash.
+  agentRules: false,
+
   // Заголовки безпеки й CSP живуть у src/lib/csp.ts (там же, як додати джерело).
   headers() {
     return Promise.resolve([{ source: "/:path*", headers: securityHeaders() }]);
