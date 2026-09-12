@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TestDb } from "@/test/sqlite-d1";
-import { addCompany, addSubscription, all, crmDb } from "@/test/crm-fixtures";
+import { addCompany, addSubscription, all, crmDb, run } from "@/test/crm-fixtures";
 import { hasAccess } from "./access";
 import {
   checkoutCompleted,
@@ -369,5 +369,39 @@ describe("a second subscription for the same company", () => {
       { status: "active" },
       { status: "canceled" },
     ]);
+  });
+});
+
+describe("a subscription of a closed company", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    run(db.raw, "UPDATE companies SET status = 'closed' WHERE id = ?", company);
+  });
+
+  it("is canceled through the API when it arrives after the close", async () => {
+    // Checkout дійшов до кінця вже після закриття компанії.
+    fake.set(subscription({ id: "sub_late", companyId: company, status: "active" }));
+    const res = await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_late");
+    expect(fake.canceled).toEqual(["sub_late"]);
+    expect(res).toMatchObject({ outcome: "synced", status: "canceled" });
+    expect(stripeRows().map((r) => r.status)).toEqual(["canceled"]);
+    expect(await hasAccess(db.d1, company)).toBe(false);
+  });
+
+  it("is canceled when it becomes active later (3-D Secure confirmed after the close)", async () => {
+    fake.set(subscription({ id: "sub_3ds", companyId: company, status: "incomplete" }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_3ds");
+    expect(fake.canceled).toEqual(["sub_3ds"]);
+    fake.set(subscription({ id: "sub_3ds", companyId: company, status: "active" }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_3ds");
+    expect(fake.canceled).toEqual(["sub_3ds", "sub_3ds"]);
+    expect(stripeRows().map((r) => r.status)).toEqual(["canceled"]);
+  });
+
+  it("an already canceled one is only recorded", async () => {
+    fake.set(subscription({ id: "sub_done", companyId: company, status: "canceled", canceledAt: days(-1) }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_done");
+    expect(fake.canceled).toEqual([]);
+    expect(stripeRows().map((r) => r.status)).toEqual(["canceled"]);
   });
 });

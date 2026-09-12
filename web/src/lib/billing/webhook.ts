@@ -1,6 +1,6 @@
 import { newId } from "@/lib/ids";
 import { sqlTime } from "@/lib/time";
-import { OPEN_STRIPE_STATUSES } from "./access";
+import { CANCEL_ON_CLOSE_STRIPE_STATUSES, OPEN_STRIPE_STATUSES } from "./access";
 import { Stripe, stripeClient, type StripeApi, type StripeEnv } from "./stripe";
 
 /**
@@ -34,6 +34,7 @@ const HANDLED = new Set<string>(STRIPE_EVENTS);
 
 const RETRIEVE_EXPAND = "items.data.price.currency_options";
 const OPEN = new Set<string>(OPEN_STRIPE_STATUSES);
+const CANCEL_ON_CLOSE = new Set<string>(CANCEL_ON_CLOSE_STRIPE_STATUSES);
 
 /** Статуси з CHECK колонки subscriptions.status (0004). */
 const STATUSES = new Set([
@@ -156,10 +157,23 @@ export async function syncStripeSubscription(
   const candidate = existing?.company_id ?? sub.metadata?.company_id ?? hint.companyId ?? null;
   if (!candidate) return { outcome: "ignored", reason: "no company_id on subscription" };
   const company = await deps.db
-    .prepare("SELECT id FROM companies WHERE id = ?")
+    .prepare("SELECT id, status FROM companies WHERE id = ?")
     .bind(candidate)
-    .first<{ id: string }>();
+    .first<{ id: string; status: string }>();
   if (!company) return { outcome: "ignored", reason: "unknown company" };
+
+  // Компанію закрито, а підписка прийшла чи ожила (Checkout завершився після
+  // закриття, 3-D Secure підтвердили пізніше): скасовуємо одразу, щоб не брати
+  // гроші з закритої компанії, і пишемо вже скасований стан.
+  if (company.status === "closed" && CANCEL_ON_CLOSE.has(sub.status)) {
+    try {
+      sub = await deps.stripe.subscriptions.cancel(sub.id);
+      console.warn(`stripe: subscription ${sub.id} of closed company ${company.id} canceled`);
+    } catch (err) {
+      if (isMissingResource(err)) return { outcome: "ignored", reason: "subscription not found in Stripe" };
+      throw err;
+    }
+  }
 
   // Друга жива підписка тієї самої компанії (дві вкладки Checkout, повтор після
   // збою): лишаємо ту, що вже є в базі, нову скасовуємо одразу. Лише для нового

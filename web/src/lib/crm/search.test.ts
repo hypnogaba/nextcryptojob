@@ -367,7 +367,19 @@ describe("pagination", () => {
     const last = first.data.at(-1)!;
     const bytes = Buffer.from(cursor, "base64url");
     const text = bytes.toString("latin1");
-    for (const leak of [last.candidate_id, last.candidate_id.replace(/-/g, ""), ...scores.map(String), String(Math.floor(scores[0]))]) {
+    // Лише маркери, які випадкові байти не дадуть: id (32+ символи), бали з крапкою
+    // (крапки й лапок немає в base64url) і ключі відкритого JSON курсору. Двосимвольне
+    // "73" траплялось у шифротексті випадково (флейк 1 з ~20).
+    const leaks = [
+      last.candidate_id,
+      last.candidate_id.replace(/-/g, ""),
+      ...scores.map(String),
+      '"k":',
+      '"id":"',
+      '"sort":"score"',
+      '"page":2',
+    ];
+    for (const leak of leaks) {
       expect(cursor).not.toContain(leak);
       expect(text).not.toContain(leak);
     }
