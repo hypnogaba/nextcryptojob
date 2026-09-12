@@ -1,0 +1,34 @@
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+
+# env files
+.env*
+.dev.vars*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# wrangler local state
+/.wrangler
+
+# Артефакти збірки для Cloudflare, збираються перед кожним деплоєм.
+/.open-next/
+
+# Згенеровано `npm run cf-typegen`, не комітити
+cloudflare-env.d.ts

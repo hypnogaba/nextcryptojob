@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "nextcryptojob",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nextcryptojob",
+      "database_id": "c66a99cf-230b-4b8b-9cff-862d4b18a4ae"
+    },
+    {
+      // База вакансій NextRole. Код лише читає з неї (docs/contracts.md, розділ 6).
+      "binding": "JOBS_DB",
+      "database_name": "crypto-jobs-agent",
+      "database_id": "0bf4b998-cbdc-474b-b739-eb6e6e7d5a9d"
+    }
+  ],
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "nextcryptojob"
+    }
+  ],
+  // Власного домену ще немає: NS зони nextcryptojob.xyz чекають на Cloudflare.
+  // До того сайт живе лише на workers.dev. Коли зона стане active, тут
+  // з'являться routes з custom_domain, а workers_dev варто вимкнути (як у
+  // NextRole), щоб правила WAF зони не можна було обійти другою адресою.
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  }
+}
