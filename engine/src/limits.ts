@@ -1,10 +1,18 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 /**
- * Обмежувачі запитів до зовнішніх API.
+ * Обмежувачі запитів до зовнішніх API. Єдиний дросель engine.
  *
- * Кожен провайдер має свою стелю: Etherscan і публічний Solana RPC карають
+ * Кожен провайдер має свій бюджет: Etherscan і публічний Solana RPC карають
  * за другий запит у ту саму мить, GitHub і Google терплять паралельні.
- * Обмежувач один на хост на весь процес, тож кілька людей у черзі
- * не множать навантаження на провайдера.
+ * Бюджет один на весь процес, тож кілька людей у черзі не множать
+ * навантаження на провайдера. safeFetch (http.ts) і D1Client (d1.ts)
+ * беруть слот самі; збирачі run не викликають.
+ *
+ * Правило: run не можна викликати зсередини run того самого обмежувача.
+ * Зовнішній виклик тримає слот і чекає внутрішнього, а внутрішній чекає
+ * вільного слота; за concurrency 1 це вічне очікування. Тому такий виклик
+ * одразу відмовляє з NestedRunError.
  */
 export interface LimiterOptions {
   /** Скільки викликів може бути в польоті одночасно. */
@@ -13,57 +21,143 @@ export interface LimiterOptions {
   minIntervalMs: number;
 }
 
-export interface Limiter { run<T>(fn: () => Promise<T>): Promise<T> }
+export interface RunOptions {
+  /** Скасування, поки виклик чекає в черзі. Після старту fn відповідає за себе сама. */
+  signal?: AbortSignal;
+}
+
+export interface Limiter {
+  run<T>(fn: () => Promise<T>, opts?: RunOptions): Promise<T>;
+  /** Не стартувати нічого в цьому бюджеті раніше, ніж через ms (усі слоти). */
+  backoff(ms: number): void;
+  /** Скільки викликів чекає в черзі (без тих, що вже в польоті). */
+  pending(): number;
+}
+
+export class NestedRunError extends Error {
+  override name = "NestedRunError";
+}
+
+/** Слоти, які тримає поточний асинхронний ланцюжок. `done` гасить слот, щойно fn завершилась. */
+type Held = { limiter: Limiter; done: boolean };
+const held = new AsyncLocalStorage<readonly Held[]>();
+
+interface Waiter { start: () => void; cancel?: () => void }
+
+interface InternalLimiter extends Limiter { idle(): boolean }
+
+const abortReason = (signal: AbortSignal): unknown =>
+  signal.reason ?? new DOMException("Виклик скасовано до старту", "AbortError");
 
 export function createLimiter({ concurrency, minIntervalMs }: LimiterOptions): Limiter {
+  return makeLimiter({ concurrency, minIntervalMs });
+}
+
+function makeLimiter({ concurrency, minIntervalMs }: LimiterOptions): InternalLimiter {
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError(`concurrency має бути цілим ≥ 1, а не ${concurrency}`);
   if (!Number.isFinite(minIntervalMs) || minIntervalMs < 0) throw new RangeError(`minIntervalMs має бути ≥ 0, а не ${minIntervalMs}`);
 
-  const queue: Array<() => void> = [];
+  const queue: Waiter[] = [];
   let active = 0;
   let lastStart = -Infinity;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let notBefore = -Infinity;
+  let timerArmed = false;
 
   // performance.now() монотонний: перевід системного годинника назад не заморозить чергу.
+  const nextAllowed = (): number => Math.max(lastStart + minIntervalMs, notBefore);
+
   const pump = (): void => {
     while (queue.length > 0 && active < concurrency) {
-      const wait = lastStart + minIntervalMs - performance.now();
+      const wait = nextAllowed() - performance.now();
       if (wait > 0) {
-        timer ??= setTimeout(() => { timer = null; pump(); }, wait);
+        if (!timerArmed) {
+          timerArmed = true;
+          setTimeout(() => { timerArmed = false; pump(); }, wait);
+        }
         return;
       }
       lastStart = performance.now();
       active++;
-      queue.shift()!();
+      queue.shift()!.start();
     }
   };
 
-  return {
-    run<T>(fn: () => Promise<T>): Promise<T> {
+  const self: InternalLimiter = {
+    run<T>(fn: () => Promise<T>, opts: RunOptions = {}): Promise<T> {
+      const outer = held.getStore() ?? [];
+      if (outer.some((h) => h.limiter === self && !h.done)) {
+        return Promise.reject(new NestedRunError(
+          "run викликано зсередини run того самого обмежувача: зовнішній виклик тримає слот, " +
+          "внутрішній чекав би його вічно. Візьміть слот один раз на весь запит."));
+      }
+      const { signal } = opts;
+      if (signal?.aborted) return Promise.reject(abortReason(signal));
+      // Виклик стартує з контексту того, хто його поставив, а не того, хто звільнив слот.
+      const inCallerContext = AsyncLocalStorage.snapshot();
+
       return new Promise<T>((resolve, reject) => {
-        queue.push(async () => {
-          try {
-            resolve(await fn());
-          } catch (e) {
-            reject(e);
-          } finally {
-            // Слот звільняється за будь-якого результату, інакше одна відмова заморозила б хост.
-            active--;
-            pump();
-          }
-        });
+        const waiter: Waiter = {
+          start: () => {
+            signal?.removeEventListener("abort", onAbort);
+            const token: Held = { limiter: self, done: false };
+            inCallerContext(() => held.run([...outer, token], async () => {
+              try {
+                // Через мікрозадачу: синхронний throw у fn не рекурсує через pump.
+                resolve(await Promise.resolve().then(fn));
+              } catch (e) {
+                reject(e);
+              } finally {
+                // Слот звільняється за будь-якого результату, інакше одна відмова заморозила б бюджет.
+                token.done = true;
+                active--;
+                pump();
+              }
+            }));
+          },
+        };
+        const onAbort = (): void => {
+          const i = queue.indexOf(waiter);
+          if (i >= 0) { queue.splice(i, 1); reject(abortReason(signal!)); }
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+        queue.push(waiter);
         pump();
       });
     },
+
+    backoff(ms: number): void {
+      if (!(ms > 0)) return;
+      notBefore = Math.max(notBefore, performance.now() + ms);
+      // Взведений таймер спрацює раніше і перезведеться з новою межею в pump.
+    },
+
+    pending: () => queue.length,
+
+    idle: () => active === 0 && queue.length === 0 && nextAllowed() <= performance.now(),
   };
+  return self;
 }
 
-const HOST_DEFAULTS: Record<string, LimiterOptions> = {
-  "ai.6551.io": { concurrency: 2, minIntervalMs: 500 },
-  "api.etherscan.io": { concurrency: 1, minIntervalMs: 250 },
-  "api.blockscout.com": { concurrency: 1, minIntervalMs: 250 },
+/** Хости одного провайдера з одним спільним лімітом. */
+const ALIASES: Record<string, string> = {
+  "api.blockscout.com": "blockscout",
+  "api.etherscan.io": "etherscan",
+  "ai.6551.io": "6551",
+  "api.helius.xyz": "helius",
+  "api.cloudflare.com": "cloudflare",
+};
+const SUFFIX_ALIASES: Array<[suffix: string, budget: string]> = [
+  [".blockscout.com", "blockscout"],
+  [".helius-rpc.com", "helius"],
+];
+
+const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
+  "6551": { concurrency: 2, minIntervalMs: 500 },
+  etherscan: { concurrency: 1, minIntervalMs: 250 },
+  blockscout: { concurrency: 1, minIntervalMs: 250 },
+  helius: { concurrency: 4, minIntervalMs: 100 },
+  cloudflare: { concurrency: 4, minIntervalMs: 250 },
   "api.hyperliquid.xyz": { concurrency: 4, minIntervalMs: 0 },
-  "mainnet.helius-rpc.com": { concurrency: 4, minIntervalMs: 100 },
   "api.mainnet-beta.solana.com": { concurrency: 1, minIntervalMs: 300 },
   "api.github.com": { concurrency: 4, minIntervalMs: 0 },
   "www.googleapis.com": { concurrency: 4, minIntervalMs: 0 },
@@ -71,15 +165,59 @@ const HOST_DEFAULTS: Record<string, LimiterOptions> = {
 };
 const OTHER_HOST: LimiterOptions = { concurrency: 4, minIntervalMs: 0 };
 
-const shared = new Map<string, Limiter>();
+/** Стеля для backoff: довше хвилини чекати не варто, краще віддати прогалину. */
+export const MAX_BACKOFF_MS = 60_000;
 
-/** Спільний обмежувач для хоста. Незнайомий хост отримує власний, з типовими межами. */
-export function limiterFor(host: string): Limiter {
-  const key = host.trim().toLowerCase();
-  let limiter = shared.get(key);
+/**
+ * Ключ бюджету для хоста: нижній регістр, без крапки в кінці й без порту,
+ * а хости одного провайдера зводяться до одного імені. Ідемпотентний:
+ * budgetKey(budgetKey(x)) === budgetKey(x).
+ */
+export function budgetKey(hostOrBudget: string): string {
+  let h = hostOrBudget.trim().toLowerCase();
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(h);
+  if (bracketed) h = bracketed[1]!;
+  else if (/^[^:]+:\d+$/.test(h)) h = h.slice(0, h.lastIndexOf(":"));
+  h = h.replace(/\.+$/, "");
+  const alias = ALIASES[h];
+  if (alias) return alias;
+  for (const [suffix, budget] of SUFFIX_ALIASES) if (h.endsWith(suffix)) return budget;
+  return h;
+}
+
+const registry = new Map<string, InternalLimiter>();
+
+/**
+ * Спільний обмежувач для хоста або ключа бюджету.
+ *
+ * Незнайомий хост отримує власний обмежувач із типовими межами, а коли той
+ * простоює, його прибирають, щоб реєстр не ріс із кожним сайтом кандидата.
+ * Тому посилання на обмежувач незнайомого хоста не зберігайте: беріть
+ * limiterFor(host) щоразу перед run.
+ */
+export function limiterFor(hostOrBudget: string): Limiter {
+  const key = budgetKey(hostOrBudget);
+  let limiter = registry.get(key);
   if (!limiter) {
-    limiter = createLimiter(HOST_DEFAULTS[key] ?? OTHER_HOST);
-    shared.set(key, limiter);
+    for (const [k, l] of registry) if (!(k in BUDGET_DEFAULTS) && l.idle()) registry.delete(k);
+    limiter = makeLimiter(BUDGET_DEFAULTS[key] ?? OTHER_HOST);
+    registry.set(key, limiter);
   }
   return limiter;
+}
+
+/**
+ * Відсунути всі старти бюджету, до якого належить адреса чи хост.
+ * Для лімітів, про які провайдер каже в тілі відповіді, а не статусом 429
+ * (Etherscan відповідає 200 з "Max rate limit reached").
+ */
+export function backoffFor(urlOrHost: string | URL, ms: number): void {
+  const host = urlOrHost instanceof URL ? urlOrHost.hostname
+    : urlOrHost.includes("://") ? new URL(urlOrHost).hostname : urlOrHost;
+  limiterFor(host).backoff(Math.min(ms, MAX_BACKOFF_MS));
+}
+
+/** Лише для тестів: забути всі обмежувачі. */
+export function __resetLimiters(): void {
+  registry.clear();
 }
