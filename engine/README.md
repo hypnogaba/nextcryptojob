@@ -12,6 +12,20 @@
 з `breakdown_json`. `npm run parity` звіряє її з Python-еталоном `research/harness/score_v5.py`,
 якщо поруч є дані дослідження (`research/data/`, у git їх немає: це реальні люди).
 
+Збирачі живуть у `src/collectors/` (по файлу на джерело: x, github, site, youtube, audits, dune).
+Кожен повертає `Fetched<Facts>` і приймає `{ env, signal }`; без ключа джерело дає прогалину
+`not configured: <KEY>`. Мережа лише через `safeFetch`: з'єднання йде тільки на IP, перевірену
+в момент підключення (захист від DNS rebinding). Жива перевірка одного збирача на справжніх ключах:
+`npm run smoke -- <x|github|site|youtube|dune|audits> <значення>` (у тестах не запускається).
+
+`src/pipeline/` конвеєр: `queue.ts` черга `score_jobs` (взяття з перевіркою changes = 1, до 3 спроб,
+завислі, щотижневе оновлення рівномірно по годинах), `run-person.ts` `scoreUser` (збирачі паралельно
+з дедлайном 45 с, формула, один пакет запису `source_facts` і `scores`), `quality-gate.ts` ворота
+якості. Збирачі конвеєр бачить лише через `registry.ts` (`CollectorRegistry`); тести беруть
+`fake-registry.ts` і справжній SQLite (`src/testing/sqlite-d1.ts`), продукт `realRegistry.ts`.
+`src/main.ts` worker, `src/cli.ts` команди (`worker`, `score-user`, `enqueue-refresh`,
+`quality-gate`). Встановлення на VPS: `deploy/README.md`.
+
 ```sh
 npm install       # потрібен Node 24
 npm test          # vitest run

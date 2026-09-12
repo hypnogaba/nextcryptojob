@@ -1,6 +1,9 @@
 // Перенесено з NextRole (написано до запуску 14.09.2026).
+import type { LookupAddress } from "node:dns";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checkUrlShape, fetchJson, isPrivateIp, redact, safeFetch, SourceUnavailableError, UnsafeUrlError } from "./http.js";
+import { checkUrlShape, fetchJson, guardedLookup, isPrivateIp, redact, safeFetch, SourceUnavailableError, UnsafeUrlError } from "./http.js";
 import { __resetLimiters } from "./limits.js";
 
 type Impl = (url: string, init: RequestInit) => Response | Promise<Response>;
@@ -13,7 +16,13 @@ afterEach(() => { vi.useRealTimers(); });
 describe("політика адрес", () => {
   it.each(["127.0.0.1", "10.1.2.3", "169.254.169.254", "172.16.0.1", "192.168.1.1", "0.0.0.0", "::1", "fd00::1", "::ffff:127.0.0.1", "100.64.0.1"])
     ("%s: приватна", (ip) => expect(isPrivateIp(ip)).toBe(true));
-  it.each(["8.8.8.8", "104.16.1.1", "2606:4700::1111"])("%s: публічна", (ip) => expect(isPrivateIp(ip)).toBe(false));
+  it.each(["8.8.8.8", "104.16.1.1", "2606:4700::1111", "2001:4860:4860::8888", "64:ff9c::1"])("%s: публічна", (ip) => expect(isPrivateIp(ip)).toBe(false));
+  it.each(["64:ff9b::10.0.0.1", "64:ff9b::a00:1", "64:ff9b::808:808", "64:ff9b:0:0:0:0:7f00:1", "64:ff9b:1::1",
+    "2002::1", "2002:c0a8:101::1", "2002:0808:0808::1"])("%s: NAT64 і 6to4 блокуються (обгортки IPv4)", (ip) => expect(isPrivateIp(ip)).toBe(true));
+  it("URL з NAT64-літералом відкидається без мережі", () => {
+    expect(() => checkUrlShape("https://[64:ff9b::7f00:1]/")).toThrow(UnsafeUrlError);
+    expect(() => checkUrlShape("https://[2002:7f00:1::]/")).toThrow(UnsafeUrlError);
+  });
 
   it.each([
     "ftp://jobs.dou.ua/feed", "file:///etc/passwd", "javascript:alert(1)",
@@ -152,6 +161,55 @@ describe("safeFetch: редиректи", () => {
   });
 });
 
+describe("SSRF: з'єднання лише на перевірену IP (DNS rebinding)", () => {
+  type Cb = (err: Error | null, address: string | LookupAddress[], family?: number) => void;
+  const run = (lookup: ReturnType<typeof guardedLookup>, all: boolean, family?: number) =>
+    new Promise<{ err: Error | null; address: string | LookupAddress[]; family?: number }>((resolve) => {
+      (lookup as unknown as (h: string, o: object, cb: Cb) => void)(
+        "site.example.com", { all, ...(family ? { family } : {}) },
+        (err, address, fam) => resolve({ err, address, family: fam }));
+    });
+
+  it("публічні адреси проходять у форматі, якого чекає net.connect", async () => {
+    const lookup = guardedLookup(async () => ["93.184.216.34", "2606:2800:220:1::1"]);
+    expect((await run(lookup, true)).address).toEqual([
+      { address: "93.184.216.34", family: 4 }, { address: "2606:2800:220:1::1", family: 6 },
+    ]);
+    expect(await run(lookup, false)).toMatchObject({ err: null, address: "93.184.216.34", family: 4 });
+    expect(await run(lookup, false, 6)).toMatchObject({ err: null, address: "2606:2800:220:1::1", family: 6 });
+  });
+
+  it.each([["лише приватна", ["10.0.0.5"]], ["публічна разом із приватною", ["93.184.216.34", "127.0.0.1"]],
+    ["IPv6 loopback", ["::1"]], ["metadata", ["169.254.169.254"]]])("%s: відмова", async (_n, addrs) => {
+    const { err } = await run(guardedLookup(async () => addrs), true);
+    expect(err).toBeInstanceOf(UnsafeUrlError);
+  });
+
+  it("порожній DNS: джерело недоступне, а не небезпечне", async () => {
+    const { err } = await run(guardedLookup(async () => []), true);
+    expect(err).toBeInstanceOf(SourceUnavailableError);
+  });
+
+  it("ім'я, що після перевірки почало вказувати на 127.0.0.1, не отримує запиту", async () => {
+    let hits = 0;
+    const server = createServer((_q, r) => { hits++; r.end("{}"); });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const answers = [["93.184.216.34"], ["127.0.0.1"]];
+      const lookup = async () => answers.shift() ?? ["127.0.0.1"];
+      await expect(safeFetch(`http://rebind.example.test:${port}/`, {}, { lookup })).rejects.toThrow(UnsafeUrlError);
+      expect(answers).toHaveLength(0);   // друге питання поставило саме з'єднання
+      expect(hits).toBe(0);
+      await expect(fetchJson(`http://rebind2.example.test:${port}/`, {}, { lookup: async () => ["127.0.0.1"], retries: 2 }))
+        .rejects.toMatchObject({ name: "SourceUnavailableError", status: 403 });
+      expect(hits).toBe(0);
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
+  });
+});
+
 describe("заголовки й тіло відповіді", () => {
   it("заголовки викликача зливаються з типовими через Headers і мають перевагу", async () => {
     let seen: Headers | undefined;
@@ -237,6 +295,17 @@ describe("safeFetch і бюджети запитів", () => {
     });
     await settle(fetchJson("https://api.example.com/a", {}, { fetchImpl, retryDelayMs: 0 }));
     expect(starts).toEqual([0, 60_000]);
+  });
+
+  it("maxBackoffMs обрізає Retry-After для всього бюджету", async () => {
+    const starts: number[] = [];
+    const t0 = Date.now();
+    const fetchImpl = asFetch(() => {
+      starts.push(Date.now() - t0);
+      return starts.length === 1 ? new Response("slow", { status: 429, headers: { "retry-after": "3600" } }) : new Response("{}");
+    });
+    await settle(fetchJson("https://api.example.com/a", {}, { fetchImpl, retryDelayMs: 0, maxBackoffMs: 15_000 }));
+    expect(starts).toEqual([0, 15_000]);
   });
 
   it("429 без Retry-After чекає зростаючу паузу", async () => {
