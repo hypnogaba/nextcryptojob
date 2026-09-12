@@ -1,9 +1,9 @@
 /**
  * Доступ компанії до CRM (специфікація CRM, 2.3 і 4.2).
  *
- * Хто має доступ, каже одне SQL-подання `company_access` з 0004: Stripe
- * (`trialing`/`active` до кінця періоду + 2 доби на запізнілий вебхук,
- * `past_due` ще 7 діб), ручний доступ від адміна (`provider = 'manual'`) і
+ * Хто має доступ, каже одне SQL-подання `company_access` (0012_access_views):
+ * Stripe (`trialing`/`active` до кінця періоду + 2 доби на запізнілий вебхук,
+ * `past_due` 7 діб від початку періоду з невдалим списанням), ручний доступ від адміна (`provider = 'manual'`) і
  * оплачені USDC-періоди x402 (`provider = 'usdc'`). Тут лише читання подання
  * і того, що бачить сторінка оплати; власного правила доступу модуль не має.
  */
@@ -12,16 +12,16 @@ export type AccessMode = "subscription" | "pay_per_request" | "none";
 export type Provider = "stripe" | "usdc" | "manual";
 
 /**
- * Та сама умова, що в поданні company_access: підписка, яка дає доступ зараз.
- * Потрібна, щоб знайти саме рядок (подання дає лише так/ні); тест звіряє,
- * що обидва завжди згодні.
+ * Та сама умова, що в поданні company_access (0012_access_views): підписка, яка
+ * дає доступ зараз. Потрібна, щоб знайти саме рядок (подання дає лише так/ні);
+ * тест звіряє, що подання, ця умова і crm/context.ts завжди згодні.
+ * past_due: 7 діб від початку періоду, у якому не пройшло списання.
  */
 const GRANTING = `
   ((s.status IN ('trialing', 'active')
-     AND (s.current_period_end IS NULL
-          OR datetime(s.current_period_end,
-                      CASE s.provider WHEN 'stripe' THEN '+2 days' ELSE '+0 days' END) > datetime('now')))
-   OR (s.status = 'past_due' AND datetime(s.current_period_end, '+7 days') > datetime('now')))`;
+     AND datetime(s.current_period_end,
+                  CASE s.provider WHEN 'stripe' THEN '+2 days' ELSE '+0 days' END) > datetime('now'))
+   OR (s.status = 'past_due' AND datetime(s.current_period_start, '+7 days') > datetime('now')))`;
 
 /** Статуси Stripe, за яких підписка ще жива: друга через Checkout була б дублем. */
 export const OPEN_STRIPE_STATUSES = ["trialing", "active", "past_due", "unpaid", "paused"] as const;
@@ -50,15 +50,22 @@ export async function hasAccess(db: D1Database, companyId: string): Promise<bool
 }
 
 /**
- * Чи був у компанії пробний період: Stripe (trial_end стоїть назавжди, навіть
- * після скасування) або ручний `trialing` від адміна (manual.ts ставить trial_end).
- * Пробний дається один раз на компанію.
+ * Чи був пробний період у компанії або в людини: пробний дається раз на
+ * компанію і раз на людину. Рахуються Stripe (trial_end стоїть назавжди, навіть
+ * після скасування) і ручний `trialing` від адміна (manual.ts ставить trial_end)
+ * у цій компанії та в усіх компаніях, де людина власник або яку вона створила.
+ * Інакше пробний можна брати знову й знову, щоразу створюючи нову компанію.
  */
-const HAD_TRIAL =
-  "SELECT 1 AS yes FROM subscriptions WHERE company_id = ? AND (trial_end IS NOT NULL OR status = 'trialing') LIMIT 1";
+const HAD_TRIAL = `
+  SELECT 1 AS yes FROM subscriptions s
+   WHERE (s.trial_end IS NOT NULL OR s.status = 'trialing')
+     AND (s.company_id = ?1
+          OR s.company_id IN (SELECT m.company_id FROM company_members m WHERE m.user_id = ?2 AND m.role = 'owner')
+          OR s.company_id IN (SELECT c.id FROM companies c WHERE c.created_by = ?2))
+   LIMIT 1`;
 
-export async function hadTrial(db: D1Database, companyId: string): Promise<boolean> {
-  return (await db.prepare(HAD_TRIAL).bind(companyId).first()) !== null;
+export async function hadTrial(db: D1Database, companyId: string, userId: string | null = null): Promise<boolean> {
+  return (await db.prepare(HAD_TRIAL).bind(companyId, userId).first()) !== null;
 }
 
 export interface SubscriptionView {
@@ -84,10 +91,11 @@ export interface BillingState {
   current: SubscriptionView | null;
   /** Найновіша підписка Stripe будь-якого статусу (плашка "Payment failed", портал). */
   stripe: (SubscriptionView & { customerId: string | null }) | null;
-  /** Жива підписка Stripe є: замість Checkout веди в портал. */
+  /** Є хоч одна жива підписка Stripe (не лише найновіша): замість Checkout веди в портал. */
   stripeOpen: boolean;
   /** Клієнт Stripe для порталу: з будь-якої підписки компанії. */
   stripeCustomerId: string | null;
+  /** Пробний ще не використано ні компанією, ні людиною, що дивиться (hadTrial). */
   trialAvailable: boolean;
 }
 
@@ -119,9 +127,19 @@ function view(row: SubRow): SubscriptionView {
   };
 }
 
-/** Усе, що показує сторінка оплати, п'ятьма читаннями одним пакетом. */
-export async function loadBillingState(db: D1Database, companyId: string): Promise<BillingState | null> {
-  const [company, current, stripe, customer, trial] = await db.batch([
+const OPEN_STRIPE = `SELECT 1 AS yes FROM subscriptions WHERE company_id = ? AND provider = 'stripe'
+  AND status IN (${OPEN_STRIPE_STATUSES.map((s) => `'${s}'`).join(", ")}) LIMIT 1`;
+
+/**
+ * Усе, що показує сторінка оплати, шістьма читаннями одним пакетом.
+ * `userId`: людина, що дивиться або платить (для пробного раз на людину).
+ */
+export async function loadBillingState(
+  db: D1Database,
+  companyId: string,
+  opts: { userId?: string | null } = {},
+): Promise<BillingState | null> {
+  const [company, current, stripe, customer, trial, open] = await db.batch([
     db
       .prepare(
         `SELECT c.id, c.name, c.status, c.billing_email, a.access FROM companies c
@@ -147,7 +165,8 @@ export async function loadBillingState(db: D1Database, companyId: string): Promi
           ORDER BY created_at DESC, rowid DESC LIMIT 1`,
       )
       .bind(companyId),
-    db.prepare(HAD_TRIAL).bind(companyId),
+    db.prepare(HAD_TRIAL).bind(companyId, opts.userId ?? null),
+    db.prepare(OPEN_STRIPE).bind(companyId),
   ]);
 
   const c = company.results[0] as
@@ -167,7 +186,7 @@ export async function loadBillingState(db: D1Database, companyId: string): Promi
     // Подання вже врахувало статус компанії; рядок підписки без доступу не показуємо як чинний.
     current: cur && c.access === "subscription" ? view(cur) : null,
     stripe: st ? { ...view(st), customerId: st.stripe_customer_id } : null,
-    stripeOpen: st ? (OPEN_STRIPE_STATUSES as readonly string[]).includes(st.status) : false,
+    stripeOpen: open.results.length > 0,
     stripeCustomerId: cust?.stripe_customer_id ?? null,
     trialAvailable: trial.results.length === 0,
   };

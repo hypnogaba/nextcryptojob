@@ -22,7 +22,7 @@ export interface StripeEnv {
 }
 
 export type StripeSettings =
-  | { enabled: true; secretKey: string; priceId: string; webhookSecret: string | null }
+  | { enabled: true; secretKey: string; priceId: string; webhookSecret: string }
   | {
       enabled: false;
       /** Текст для журналу й адмінки, без секретів: "not configured: STRIPE_SECRET_KEY". */
@@ -36,18 +36,23 @@ function clean(value: string | undefined): string | undefined {
 }
 
 /**
- * Чи можна продавати карткою. Потрібні ключ і ціна; секрет вебхука потрібен
- * лише самому вебхуку (без нього Checkout працює, але рядок підписки не з'явиться),
- * тож його відсутність видно в адмінці, а не ховає кнопки.
+ * Чи можна продавати карткою. Потрібні всі три: ключ, ціна і секрет вебхука.
+ * Без секрету вебхука Checkout узяв би гроші, а рядок підписки так і не
+ * з'явився б у базі (доступу немає, хоч компанія заплатила). Тому без будь-якого
+ * з трьох кнопки картки вимкнені, а причину видно в адмінці.
  */
 export function stripeSettings(env: StripeEnv): StripeSettings {
   const secretKey = clean(env.STRIPE_SECRET_KEY);
   const priceId = clean(env.STRIPE_PRICE_ID);
+  const webhookSecret = clean(env.STRIPE_WEBHOOK_SECRET);
   const missing: string[] = [];
   if (!secretKey) missing.push("STRIPE_SECRET_KEY");
   if (!priceId) missing.push("STRIPE_PRICE_ID");
-  if (!secretKey || !priceId) return { enabled: false, reason: `not configured: ${missing.join(", ")}`, missing };
-  return { enabled: true, secretKey, priceId, webhookSecret: clean(env.STRIPE_WEBHOOK_SECRET) ?? null };
+  if (!webhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
+  if (!secretKey || !priceId || !webhookSecret) {
+    return { enabled: false, reason: `not configured: ${missing.join(", ")}`, missing };
+  }
+  return { enabled: true, secretKey, priceId, webhookSecret };
 }
 
 /** Клієнт Stripe або null, якщо немає STRIPE_SECRET_KEY. */
@@ -69,7 +74,8 @@ export function stripeClient(env: StripeEnv): Stripe | null {
  */
 export interface StripeApi {
   subscriptions: {
-    retrieve(id: string): Promise<Stripe.Subscription>;
+    retrieve(id: string, params?: Stripe.SubscriptionRetrieveParams): Promise<Stripe.Subscription>;
+    cancel(id: string, params?: Stripe.SubscriptionCancelParams): Promise<Stripe.Subscription>;
   };
   checkout: {
     sessions: {

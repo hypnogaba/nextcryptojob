@@ -6,12 +6,21 @@ import type { Stripe, StripeApi } from "./stripe";
  *
  * Одна ціна (`STRIPE_PRICE_ID`, $100 на місяць з currency_options.eur, ціна без
  * податку), Stripe Tax сам рахує ПДВ, покупець може ввести VAT ID. Пробні
- * 14 днів лише раз на компанію: якщо компанія вже мала пробний (Stripe чи
- * ручний від адміна), кнопка стає "Subscribe" і сесія йде без пробного.
+ * 14 днів лише раз на компанію і раз на людину: якщо компанія або її власник
+ * уже мали пробний (Stripe чи ручний від адміна), кнопка стає "Subscribe" і
+ * сесія йде без пробного.
  * Картку просимо завжди, навіть на пробний (питання 1 у специфікації, розділ 14).
  */
 
 export const TRIAL_DAYS = 14;
+
+/**
+ * Сесія Checkout живе 30 хв (найменше, що дозволяє Stripe) плюс хвилина: Stripe
+ * рахує від миті створення в себе, а запит іде якийсь час. Коротке життя
+ * звужує вікно, коли дві відкриті вкладки дають дві підписки (другу все одно
+ * скасує вебхук, див. webhook.ts).
+ */
+export const CHECKOUT_TTL_SECONDS = 31 * 60;
 
 export interface CheckoutDeps {
   db: D1Database;
@@ -23,6 +32,8 @@ export interface CheckoutInput {
   companyId: string;
   /** Пошта власника: Stripe створить клієнта з нею, якщо клієнта ще немає. */
   email: string | null;
+  /** Людина, що платить: пробний раз на людину (access.ts hadTrial). */
+  userId: string | null;
   /** Походження сайту для адрес повернення, напр. https://nextcryptojob.xyz. */
   origin: string;
 }
@@ -32,11 +43,18 @@ export type CheckoutResult =
   | { ok: false; reason: "not_found" | "company_not_active" | "already_subscribed" | "no_url" };
 
 /** Параметри сесії. Окремо, щоб тест бачив рівно те, що піде в Stripe. */
-export function checkoutParams(
-  o: { companyId: string; priceId: string; origin: string; trial: boolean; customerId: string | null; email: string | null },
-): Stripe.Checkout.SessionCreateParams {
+export function checkoutParams(o: {
+  companyId: string;
+  priceId: string;
+  origin: string;
+  trial: boolean;
+  customerId: string | null;
+  email: string | null;
+  now?: Date;
+}): Stripe.Checkout.SessionCreateParams {
   const billing = `${o.origin}/company/billing`;
   return {
+    expires_at: Math.floor((o.now ?? new Date()).getTime() / 1000) + CHECKOUT_TTL_SECONDS,
     mode: "subscription",
     line_items: [{ price: o.priceId, quantity: 1 }],
     client_reference_id: o.companyId,
@@ -62,7 +80,7 @@ export function checkoutParams(
 }
 
 export async function createCheckout(deps: CheckoutDeps, input: CheckoutInput): Promise<CheckoutResult> {
-  const state = await loadBillingState(deps.db, input.companyId);
+  const state = await loadBillingState(deps.db, input.companyId, { userId: input.userId });
   if (!state) return { ok: false, reason: "not_found" };
   if (state.companyStatus !== "active") return { ok: false, reason: "company_not_active" };
   // Жива підписка Stripe уже є: друга дала б подвійне списання. Керувати нею можна в порталі.

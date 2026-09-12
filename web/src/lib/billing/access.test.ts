@@ -1,9 +1,15 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TestDb } from "@/test/sqlite-d1";
 import { addCompany, addSubscription, crmDb, run } from "@/test/crm-fixtures";
+import { loadCompany } from "@/lib/crm/context";
 import { companyAccess, hadTrial, hasAccess, loadBillingState } from "./access";
-import { days, FakeStripe, subscription } from "./stripe-fixtures";
+import { days, FakeStripe, subscription } from "@/test/stripe-fixtures";
 import { syncStripeSubscription } from "./webhook";
+
+// crm/context.ts тягне куки й сесію Next; самі функції тут не потрібні.
+vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
+vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
+vi.mock("next/navigation", async () => (await import("@/test/harness")).navigationModule);
 
 let db: TestDb;
 
@@ -36,8 +42,18 @@ describe("company_access view", () => {
       subs: [{ provider: "stripe", status: "active", end: "-3 days" }],
       access: "pay_per_request",
     },
-    { name: "Stripe past_due, 5 days", subs: [{ provider: "stripe", status: "past_due", end: "-5 days" }], access: "subscription" },
-    { name: "Stripe past_due, 8 days", subs: [{ provider: "stripe", status: "past_due", end: "-8 days" }], access: "pay_per_request" },
+    // Продовження не пройшло: Stripe уже зсунув період (початок = день невдалого списання,
+    // кінець через місяць) і ставить past_due. Пільга 7 днів від початку періоду.
+    {
+      name: "Stripe past_due, renewal failed 3 days ago",
+      subs: [{ provider: "stripe", status: "past_due", start: "-3 days", end: "+27 days" }],
+      access: "subscription",
+    },
+    {
+      name: "Stripe past_due, renewal failed 8 days ago (period end still ahead)",
+      subs: [{ provider: "stripe", status: "past_due", start: "-8 days", end: "+22 days" }],
+      access: "pay_per_request",
+    },
     { name: "Stripe canceled", subs: [{ provider: "stripe", status: "canceled", end: "+20 days" }], access: "pay_per_request" },
     { name: "Stripe unpaid", subs: [{ provider: "stripe", status: "unpaid", end: "+20 days" }], access: "pay_per_request" },
     { name: "manual trialing", subs: [{ provider: "manual", status: "trialing", end: "+7 days" }], access: "subscription" },
@@ -82,12 +98,24 @@ describe("company_access view", () => {
       }
       expect((await companyAccess(db.d1, co))?.access).toBe(c.access);
       expect(await hasAccess(db.d1, co)).toBe(c.access === "subscription");
-      // Сторінка оплати бачить чинну підписку рівно тоді, коли подання каже "subscription".
+      // Сторінка оплати й CRM (crm/context.ts) бачать чинну підписку рівно тоді, коли подання каже "subscription".
       const state = await loadBillingState(db.d1, co);
       expect(state?.access).toBe(c.access);
       expect(state?.current !== null).toBe(c.access === "subscription");
+      const crm = await loadCompany(db.d1, co);
+      expect(crm?.access).toBe(c.access);
+      expect(crm?.subscription !== null).toBe(c.access === "subscription");
     });
   }
+
+  it("a Stripe row without a period end gives no access", async () => {
+    const co = addCompany(db.raw);
+    const id = addSubscription(db.raw, co, { provider: "stripe", status: "active" });
+    run(db.raw, "UPDATE subscriptions SET current_period_start = NULL, current_period_end = NULL WHERE id = ?", id);
+    expect(await hasAccess(db.d1, co)).toBe(false);
+    expect((await loadCompany(db.d1, co))?.subscription).toBeNull();
+    expect((await loadBillingState(db.d1, co))?.current).toBeNull();
+  });
 
   it("says nothing for a company that does not exist", async () => {
     expect(await companyAccess(db.d1, "co_AAAAAAAAAAAAAAAAAAAA")).toBeNull();

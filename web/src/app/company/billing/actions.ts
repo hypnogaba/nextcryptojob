@@ -32,7 +32,7 @@ function fail(code: BillingError): never {
   redirect(`${BILLING}?error=${code}`);
 }
 
-async function owner(): Promise<{ companyId: string; email: string | null }> {
+async function owner(): Promise<{ companyId: string; userId: string; email: string | null }> {
   const user = await currentUser();
   if (!user) redirect("/login");
   let ctx: ActionContext | null = null;
@@ -43,11 +43,11 @@ async function owner(): Promise<{ companyId: string; email: string | null }> {
   }
   if (!ctx) redirect(BILLING);
   if (ctx.actor.kind !== "member" || !can(ctx.actor.role, "billing.stripe")) fail("owner_only");
-  return { companyId: ctx.actor.companyId, email: user.email };
+  return { companyId: ctx.actor.companyId, userId: user.id, email: user.email };
 }
 
 export async function startCheckoutAction(): Promise<void> {
-  const { companyId, email } = await owner();
+  const { companyId, userId, email } = await owner();
   const env = appEnv() as unknown as StripeEnv;
   const settings = stripeSettings(env);
   const stripe = stripeClient(env);
@@ -56,7 +56,7 @@ export async function startCheckoutAction(): Promise<void> {
   const origin = requestOrigin(await headers());
   let res: CheckoutResult | null = null;
   try {
-    res = await createCheckout({ db: db(), stripe, priceId: settings.priceId }, { companyId, email, origin });
+    res = await createCheckout({ db: db(), stripe, priceId: settings.priceId }, { companyId, email, userId, origin });
   } catch (err) {
     console.error("stripe checkout failed:", err instanceof Error ? err.message : String(err));
   }

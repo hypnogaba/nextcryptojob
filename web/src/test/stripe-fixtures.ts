@@ -1,4 +1,4 @@
-import { Stripe, type StripeApi } from "./stripe";
+import { Stripe, type StripeApi } from "@/lib/billing/stripe";
 
 /**
  * Замінник Stripe для тестів: об'єкти тієї самої форми, що віддає API
@@ -81,7 +81,7 @@ export function subscription(o: SubOpts = {}): Stripe.Subscription {
             billing_scheme: "per_unit",
             created: 1757600000,
             currency: "usd",
-            // Приходить лише з expand; тут є, щоб перевірити суму для EUR.
+            // Справжній API віддає лише з expand; FakeStripe прибирає без нього.
             currency_options: {
               usd: { custom_unit_amount: null, tax_behavior: "exclusive", unit_amount: 10000, unit_amount_decimal: "10000" },
               eur: { custom_unit_amount: null, tax_behavior: "exclusive", unit_amount: 9500, unit_amount_decimal: "9500" },
@@ -237,32 +237,65 @@ export class FakeStripe implements StripeApi {
   readonly portalCalls: Stripe.BillingPortal.SessionCreateParams[] = [];
   /** Кинути цю помилку з наступного retrieve. */
   failNext: Error | null = null;
+  /** Відкидати expand, як відкинув би Stripe шлях, якого не приймає. */
+  rejectExpand = false;
 
   set(sub: Stripe.Subscription): this {
     this.state.set(sub.id, sub);
     return this;
   }
 
+  /** Скасовані через API (дубль підписки). */
+  readonly canceled: string[] = [];
+
   subscriptions = {
-    retrieve: async (id: string): Promise<Stripe.Subscription> => {
+    retrieve: async (id: string, params?: Stripe.SubscriptionRetrieveParams): Promise<Stripe.Subscription> => {
       this.retrieved.push(id);
+      this.retrieveParams.push(params ?? {});
       if (this.failNext) {
         const err = this.failNext;
         this.failNext = null;
         throw err;
       }
-      const sub = this.state.get(id);
-      if (!sub) {
+      if (this.rejectExpand && params?.expand?.length) {
         throw new Stripe.errors.StripeInvalidRequestError({
           type: "invalid_request_error",
-          code: "resource_missing",
-          statusCode: 404,
-          message: `No such subscription: '${id}'`,
+          param: "expand[0]",
+          statusCode: 400,
+          message: `This property cannot be expanded (${params.expand[0]}).`,
         });
       }
+      const sub = structuredClone(this.found(id));
+      // Як справжній API: currency_options ціни приходить лише з expand.
+      if (!params?.expand?.includes("items.data.price.currency_options")) {
+        for (const item of sub.items.data) delete (item.price as { currency_options?: unknown }).currency_options;
+      }
+      return sub;
+    },
+    cancel: async (id: string): Promise<Stripe.Subscription> => {
+      this.canceled.push(id);
+      const sub = structuredClone(this.found(id));
+      const now = unix(new Date());
+      Object.assign(sub, { status: "canceled", canceled_at: now, ended_at: now });
+      this.state.set(id, sub);
       return structuredClone(sub);
     },
   };
+
+  readonly retrieveParams: Stripe.SubscriptionRetrieveParams[] = [];
+
+  private found(id: string): Stripe.Subscription {
+    const sub = this.state.get(id);
+    if (!sub) {
+      throw new Stripe.errors.StripeInvalidRequestError({
+        type: "invalid_request_error",
+        code: "resource_missing",
+        statusCode: 404,
+        message: `No such subscription: '${id}'`,
+      });
+    }
+    return sub;
+  }
 
   checkout = {
     sessions: {

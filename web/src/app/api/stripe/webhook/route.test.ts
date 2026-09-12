@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { event, signed, WEBHOOK_SECRET, webhookRequest } from "@/lib/billing/stripe-fixtures";
+import { event, signed, WEBHOOK_SECRET, webhookRequest } from "@/test/stripe-fixtures";
 import type { AppEnv } from "@/lib/db";
 import { resetHarness } from "@/test/harness";
 import { POST } from "./route";

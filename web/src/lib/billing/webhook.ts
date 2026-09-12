@@ -1,5 +1,6 @@
 import { newId } from "@/lib/ids";
 import { sqlTime } from "@/lib/time";
+import { OPEN_STRIPE_STATUSES } from "./access";
 import { Stripe, stripeClient, type StripeApi, type StripeEnv } from "./stripe";
 
 /**
@@ -30,6 +31,9 @@ export const STRIPE_EVENTS = [
 ] as const;
 
 const HANDLED = new Set<string>(STRIPE_EVENTS);
+
+const RETRIEVE_EXPAND = "items.data.price.currency_options";
+const OPEN = new Set<string>(OPEN_STRIPE_STATUSES);
 
 /** Статуси з CHECK колонки subscriptions.status (0004). */
 const STATUSES = new Set([
@@ -96,6 +100,23 @@ function isMissingResource(err: unknown): boolean {
 }
 
 /**
+ * Підписка з Stripe з `currency_options` ціни (без expand суми для EUR немає).
+ * Якщо Stripe відкине сам expand, читаємо без нього: рядок важливіший за суму,
+ * а без цього кожна подія падала б і повторювалась три доби.
+ */
+async function retrieveSubscription(stripe: Pick<StripeApi, "subscriptions">, id: string): Promise<Stripe.Subscription> {
+  try {
+    return await stripe.subscriptions.retrieve(id, { expand: [RETRIEVE_EXPAND] });
+  } catch (err) {
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.param?.startsWith("expand")) {
+      console.warn(`stripe: expand ${RETRIEVE_EXPAND} refused (${err.message}); syncing without the EUR amount`);
+      return stripe.subscriptions.retrieve(id);
+    }
+    throw err;
+  }
+}
+
+/**
  * Перечитує підписку в Stripe і перезаписує її рядок.
  *
  * Компанія: рядок, що вже є (підписку ніколи не переносимо між компаніями),
@@ -116,7 +137,7 @@ export async function syncStripeSubscription(
 
   let sub: Stripe.Subscription;
   try {
-    sub = await deps.stripe.subscriptions.retrieve(stripeSubscriptionId);
+    sub = await retrieveSubscription(deps.stripe, stripeSubscriptionId);
   } catch (err) {
     if (isMissingResource(err)) return { outcome: "ignored", reason: "subscription not found in Stripe" };
     throw err;
@@ -139,6 +160,28 @@ export async function syncStripeSubscription(
     .bind(candidate)
     .first<{ id: string }>();
   if (!company) return { outcome: "ignored", reason: "unknown company" };
+
+  // Друга жива підписка тієї самої компанії (дві вкладки Checkout, повтор після
+  // збою): лишаємо ту, що вже є в базі, нову скасовуємо одразу. Лише для нового
+  // рядка, тож наступні події вже скасованої підписки нічого не роблять.
+  if (!existing && OPEN.has(sub.status)) {
+    const other = await deps.db
+      .prepare(
+        `SELECT stripe_subscription_id FROM subscriptions
+          WHERE company_id = ? AND provider = 'stripe' AND stripe_subscription_id <> ?
+            AND status IN (${[...OPEN].map((st) => `'${st}'`).join(", ")})
+          ORDER BY created_at LIMIT 1`,
+      )
+      .bind(company.id, sub.id)
+      .first<{ stripe_subscription_id: string }>();
+    if (other) {
+      sub = await deps.stripe.subscriptions.cancel(sub.id);
+      console.error(
+        `stripe: duplicate subscription ${sub.id} for company ${company.id} canceled, ${other.stripe_subscription_id} stays; ` +
+          `refund its invoice ${idOf(sub.latest_invoice) ?? "(none)"} in the Stripe Dashboard if it was charged`,
+      );
+    }
+  }
 
   const item = sub.items?.data?.[0];
   const price = item?.price;
@@ -225,8 +268,11 @@ export interface WebhookDeps {
 /**
  * Відповідь маршруту /api/stripe/webhook.
  * - 503 `not configured: …`, якщо бракує STRIPE_WEBHOOK_SECRET або STRIPE_SECRET_KEY;
- * - 400 на відсутній чи хибний підпис (Stripe не повторює 4xx, і не треба);
- * - 200 одразу для подій не про підписку; для решти після одного retrieve і запису;
+ * - 400 на відсутній чи хибний підпис. Stripe повторює будь-яку відповідь не 2xx,
+ *   і 4xx теж, але справжня подія з правильним підписом сюди не потрапить, а
+ *   підробленій повтор не допоможе;
+ * - 200 одразу для подій не про підписку і для тих, які не виправить повтор
+ *   (невідома компанія, підписки вже немає в Stripe); для решти після retrieve і запису;
  * - 500 на збій Stripe чи D1: Stripe повторить подію (до 3 діб), а перезапис ідемпотентний.
  */
 export async function stripeWebhookResponse(request: Request, deps: WebhookDeps): Promise<Response> {

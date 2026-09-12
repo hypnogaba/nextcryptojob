@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomToken, sha256Hex } from "@/lib/auth/hash";
 import { SESSION_COOKIE } from "@/lib/auth/session";
-import { days, FakeStripe, subscription } from "@/lib/billing/stripe-fixtures";
+import { days, FakeStripe, subscription } from "@/test/stripe-fixtures";
 import { syncStripeSubscription } from "@/lib/billing/webhook";
 import type { AppEnv } from "@/lib/db";
 import { addCompany, addMember, addSubscription, addUser, crmDb } from "@/test/crm-fixtures";
@@ -21,7 +21,11 @@ vi.mock("@/lib/billing/stripe", async (importOriginal) => {
   return { ...mod, stripeClient: (env: Parameters<typeof mod.stripeClient>[0]) => (mod.stripeClient(env) ? stripeHolder.fake : null) };
 });
 
-const STRIPE_ON = { STRIPE_SECRET_KEY: "sk_test_fake", STRIPE_PRICE_ID: "price_1S9xNcjTestMonthly" };
+const STRIPE_ON = {
+  STRIPE_SECRET_KEY: "sk_test_fake",
+  STRIPE_PRICE_ID: "price_1S9xNcjTestMonthly",
+  STRIPE_WEBHOOK_SECRET: "whsec_test",
+};
 let fake: FakeStripe;
 let company: string;
 let owner: string;
@@ -85,6 +89,16 @@ describe("billing page without Stripe keys", () => {
     expect(await render({ error: "not_configured" })).toContain("Card payments are coming soon.");
   });
 
+  it("keeps cards off while the webhook secret is missing", async () => {
+    setup({ STRIPE_SECRET_KEY: "sk_test_fake", STRIPE_PRICE_ID: "price_1S9xNcjTestMonthly" });
+    await signIn(owner);
+    const html = await render();
+    expect(html).toContain("Card payments are coming soon.");
+    expect(html).not.toContain("Start 14-day trial");
+    expect(await redirectOf(startCheckoutAction)).toBe("/company/billing?error=not_configured");
+    expect(fake.checkoutCalls).toEqual([]);
+  });
+
   it("shows manual access from an admin with the trial banner", async () => {
     addSubscription(harness.raw, company, { provider: "manual", status: "trialing", end: "2099-01-01 00:00:00" });
     exec("UPDATE subscriptions SET current_period_end = datetime('now', '+5 days', '-1 minute')");
@@ -138,15 +152,43 @@ describe("billing page with Stripe", () => {
   });
 
   it("shows Payment failed when the card was declined", async () => {
-    await stripeSays({ id: "sub_pd", customer: "cus_acme", status: "past_due", periodStart: days(-32), periodEnd: days(-2) });
+    // Продовження не пройшло 2 дні тому: Stripe уже зсунув період на новий місяць.
+    await stripeSays({ id: "sub_pd", customer: "cus_acme", status: "past_due", periodStart: days(-2), periodEnd: days(28) });
     const html = await render();
     expect(html).toContain("Payment failed. Update your card.");
     expect(html).toContain("Past due");
   });
 
+  it("after 7 days past due the banner stays but access is gone", async () => {
+    await stripeSays({ id: "sub_pd", customer: "cus_acme", status: "past_due", periodStart: days(-8), periodEnd: days(22) });
+    const html = await render();
+    expect(html).toContain("Payment failed. Update your card.");
+    expect(html).not.toContain("Past due");
+    expect(html).toContain("No subscription");
+  });
+
   it("shows when a canceled subscription stops", async () => {
     await stripeSays({ id: "sub_c", customer: "cus_acme", status: "active", periodEnd: days(9), cancelAt: days(9) });
     expect(await render()).toContain("It will not renew.");
+  });
+
+  it("asks to confirm the payment when the first payment needs action", async () => {
+    await stripeSays({ id: "sub_inc", customer: "cus_acme", status: "incomplete" });
+    const html = await render();
+    expect(html).toContain("Confirm your payment to start the subscription.");
+    expect(html).toContain("Manage billing");
+  });
+
+  it("gives no trial to an owner who already used one in another company", async () => {
+    const old = addCompany(harness.raw, { name: "Old Labs" });
+    addMember(harness.raw, old, owner, "owner");
+    addSubscription(harness.raw, old, { provider: "manual", status: "trialing" });
+    // Сторінка про нову компанію (Acme Labs), не про стару.
+    harness.jar.set("ncj_company", company);
+    const html = await render();
+    expect(html).toContain("Acme Labs");
+    expect(html).toContain("Subscribe");
+    expect(html).not.toContain("Start 14-day trial");
   });
 
   it("the portal needs a Stripe customer first", async () => {

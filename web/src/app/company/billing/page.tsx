@@ -55,9 +55,9 @@ function Banner({ tone, children }: { tone: Tone; children: React.ReactNode }) {
     error: "border-danger/40 bg-danger/10 text-ink",
   };
   return (
-    <p role={tone === "info" ? "status" : "alert"} className={`rounded-md border px-4 py-3 text-sm ${styles[tone]}`}>
+    <div role={tone === "info" ? "status" : "alert"} className={`rounded-md border px-4 py-3 text-sm ${styles[tone]}`}>
       {children}
-    </p>
+    </div>
   );
 }
 
@@ -98,7 +98,30 @@ function describe(state: BillingState): { label: string; detail: string } {
   };
 }
 
-function Banners({ state, now, checkout, error }: { state: BillingState; now: Date; checkout?: string; error?: string }) {
+function PortalButton() {
+  return (
+    <form action={openPortalAction} className="mt-3">
+      <Button type="submit" variant="outline" className="h-10 px-4">
+        Manage billing
+      </Button>
+    </form>
+  );
+}
+
+function Banners({
+  state,
+  now,
+  checkout,
+  error,
+  canManage,
+}: {
+  state: BillingState;
+  now: Date;
+  checkout?: string;
+  error?: string;
+  /** Власник і картки ввімкнені: у плашці можна дати кнопку порталу. */
+  canManage: boolean;
+}) {
   const out: React.ReactNode[] = [];
   if (checkout === "success") {
     out.push(
@@ -114,6 +137,16 @@ function Banners({ state, now, checkout, error }: { state: BillingState; now: Da
   const stripe = state.stripe;
   if (stripe && (stripe.status === "past_due" || stripe.status === "unpaid")) {
     out.push(<Banner key="failed" tone="error">Payment failed. Update your card.</Banner>);
+  }
+  // Перший платіж чекає підтвердження банку (3-D Secure): без нього Stripe
+  // за добу закриє підписку як incomplete_expired.
+  if (stripe?.status === "incomplete") {
+    out.push(
+      <Banner key="incomplete" tone="warning">
+        <p>Confirm your payment to start the subscription.</p>
+        {canManage && state.stripeCustomerId ? <PortalButton /> : null}
+      </Banner>,
+    );
   }
   const cur = state.current;
   if (cur?.status === "trialing") {
@@ -212,7 +245,7 @@ export default async function BillingPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const params = await searchParams;
 
   let ctx: ActionContext | null = null;
@@ -229,7 +262,7 @@ export default async function BillingPage({
     </section>
   );
 
-  const state = ctx?.company ? await loadBillingState(db(), ctx.company.id) : null;
+  const state = ctx?.company ? await loadBillingState(db(), ctx.company.id, { userId: user.id }) : null;
   if (!ctx || ctx.actor.kind !== "member" || !state) {
     return shell(<p className="mt-4 text-ink-muted">Your account is not part of a company yet.</p>);
   }
@@ -245,7 +278,13 @@ export default async function BillingPage({
   return shell(
     <>
       <p className="mt-2 text-ink-muted">{state.companyName}</p>
-      <Banners state={state} now={now} checkout={first(params.checkout)} error={first(params.error)} />
+      <Banners
+        state={state}
+        now={now}
+        checkout={first(params.checkout)}
+        error={first(params.error)}
+        canManage={isOwner && cardsEnabled}
+      />
       <dl className="mt-8 grid gap-1">
         <dt className="font-mono text-xs tracking-widest text-ink-muted uppercase">Current plan</dt>
         <dd className="text-lg font-semibold text-ink">{status.label}</dd>

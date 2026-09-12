@@ -89,7 +89,7 @@ describe("grant and revoke", () => {
     const html = renderToStaticMarkup(await AdminCompaniesPage({ searchParams: Promise.resolve({}) }));
     expect(html).toContain("Acme Labs");
     expect(html).toContain("pay_per_request");
-    expect(html).toContain("Card payments: off (not configured: STRIPE_SECRET_KEY, STRIPE_PRICE_ID)");
+    expect(html).toContain("Card payments: off (not configured: STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET)");
     expect(html).toContain("Grant access");
     expect(html).not.toContain(">Revoke<");
   });

@@ -95,7 +95,6 @@ export default async function AdminCompaniesPage({
   const params = await searchParams;
   const rows = await listCompaniesForAdmin(db());
   const stripe = stripeSettings(appEnv() as unknown as StripeEnv);
-  const webhookReady = Boolean((appEnv() as unknown as StripeEnv).STRIPE_WEBHOOK_SECRET?.trim());
   const now = new Date();
 
   const error = first(params.error);
@@ -107,7 +106,7 @@ export default async function AdminCompaniesPage({
       <h1 className="text-3xl font-semibold tracking-tight">Companies</h1>
       <p className="mt-2 text-sm text-ink-muted">
         {stripe.enabled
-          ? `Card payments: on.${webhookReady ? "" : " Webhook: not configured: STRIPE_WEBHOOK_SECRET."}`
+          ? "Card payments: on."
           : `Card payments: off (${stripe.reason}). Grant access by hand below.`}
       </p>
 

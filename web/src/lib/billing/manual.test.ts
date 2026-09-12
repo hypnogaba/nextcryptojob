@@ -3,7 +3,7 @@ import type { TestDb } from "@/test/sqlite-d1";
 import { addCompany, addMember, addSubscription, addUser, all, crmDb } from "@/test/crm-fixtures";
 import { hasAccess, loadBillingState } from "./access";
 import { grantManualAccess, listCompaniesForAdmin, revokeManualAccess } from "./manual";
-import { days } from "./stripe-fixtures";
+import { days } from "@/test/stripe-fixtures";
 
 let db: TestDb;
 let company: string;

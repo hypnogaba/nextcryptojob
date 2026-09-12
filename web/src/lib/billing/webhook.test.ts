@@ -14,7 +14,7 @@ import {
   unix,
   WEBHOOK_SECRET,
   webhookRequest,
-} from "./stripe-fixtures";
+} from "@/test/stripe-fixtures";
 import type { Stripe } from "./stripe";
 import { handleStripeEvent, stripeWebhookResponse, syncStripeSubscription } from "./webhook";
 
@@ -294,10 +294,20 @@ describe("syncStripeSubscription", () => {
     expect(stripeRows()).toHaveLength(1);
   });
 
-  it("stores the EUR amount from the price currency options", async () => {
+  it("stores the EUR amount: asks Stripe to expand the price currency options", async () => {
     fake.set(subscription({ id: SUB, companyId: company, currency: "eur" }));
     await syncStripeSubscription({ db: db.d1, stripe: fake }, SUB);
+    expect(fake.retrieveParams).toEqual([{ expand: ["items.data.price.currency_options"] }]);
     expect(stripeRows()[0]).toMatchObject({ currency: "eur", amount_cents: 9500 });
+  });
+
+  it("still syncs if Stripe refuses the expand: the row is right, only the EUR amount is unknown", async () => {
+    fake.rejectExpand = true;
+    fake.set(subscription({ id: SUB, companyId: company, currency: "eur", status: "active" }));
+    const res = await syncStripeSubscription({ db: db.d1, stripe: fake }, SUB);
+    expect(res).toMatchObject({ outcome: "synced", status: "active" });
+    expect(fake.retrieveParams).toEqual([{ expand: ["items.data.price.currency_options"] }, {}]);
+    expect(stripeRows()[0]).toMatchObject({ status: "active", currency: "eur", amount_cents: null });
   });
 
   it("does not touch manual or USDC rows of the same company", async () => {
@@ -310,5 +320,54 @@ describe("syncStripeSubscription", () => {
       { provider: "stripe", status: "canceled" },
     ]);
     expect(await hasAccess(db.d1, company)).toBe(true);
+  });
+});
+
+describe("a second subscription for the same company", () => {
+  it("is canceled through the API when another one is still open, and logged for a refund", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    fake.set(subscription({ id: "sub_first", customer: CUS, companyId: company, status: "active" }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_first");
+
+    // Друга вкладка Checkout теж дійшла до кінця.
+    fake.set(subscription({ id: "sub_second", customer: "cus_second", companyId: company, status: "active" }));
+    const res = await handleStripeEvent(
+      { db: db.d1, stripe: fake },
+      checkoutCompleted({ subscriptionId: "sub_second", customer: "cus_second", companyId: company }),
+    );
+
+    expect(fake.canceled).toEqual(["sub_second"]);
+    expect(res).toMatchObject({ outcome: "synced", status: "canceled" });
+    expect(
+      all(db.raw, "SELECT stripe_subscription_id AS id, status FROM subscriptions ORDER BY stripe_subscription_id"),
+    ).toEqual([
+      { id: "sub_first", status: "active" },
+      { id: "sub_second", status: "canceled" },
+    ]);
+    expect(error).toHaveBeenCalledWith(expect.stringMatching(/duplicate.*sub_second.*sub_first.*refund/i));
+    expect(await hasAccess(db.d1, company)).toBe(true);
+  });
+
+  it("is kept when the earlier one has ended", async () => {
+    fake.set(subscription({ id: "sub_first", companyId: company, status: "canceled", canceledAt: days(-5) }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_first");
+    fake.set(subscription({ id: "sub_second", companyId: company, status: "active" }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_second");
+    expect(fake.canceled).toEqual([]);
+    expect(stripeRows().map((r) => r.status)).toEqual(["canceled", "active"]);
+  });
+
+  it("the first subscription is never canceled by later events", async () => {
+    fake.set(subscription({ id: "sub_first", companyId: company, status: "active" }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_first");
+    fake.set(subscription({ id: "sub_second", companyId: company, status: "active" }));
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_second");
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_first");
+    await syncStripeSubscription({ db: db.d1, stripe: fake }, "sub_second");
+    expect(fake.canceled).toEqual(["sub_second"]);
+    expect(all(db.raw, "SELECT status FROM subscriptions ORDER BY stripe_subscription_id")).toEqual([
+      { status: "active" },
+      { status: "canceled" },
+    ]);
   });
 });
