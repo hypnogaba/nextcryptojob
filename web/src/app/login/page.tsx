@@ -13,7 +13,8 @@ export default async function LoginPage() {
     <section className="mx-auto max-w-sm px-4 py-16 sm:py-24">
       <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
       <p className="mt-3 text-ink-muted">
-        Enter your email and we will send you a 6-digit code. New here? The same step creates your account.
+        Enter your email and we will send you a <span className="whitespace-nowrap">6-digit</span> code.
+        New here? The same step creates your account.
       </p>
       <LoginForm />
     </section>
