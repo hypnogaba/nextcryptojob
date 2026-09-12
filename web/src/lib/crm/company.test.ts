@@ -2,8 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addApiKey, addCompany, addMember, addSubscription, addUser, all, contextFor, crmDb, run } from "@/test/crm-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
 import { runAction } from "./actions";
+import { Stripe } from "@/lib/billing/stripe";
 import {
+  ACTIVITY_TEXT,
+  activityText,
+  assertFormCompany,
+  auditIfChanged,
   closeCompany,
+  COMPANY_SWITCHED_TEXT,
   COMPANIES_PER_DAY,
   COMPANY_TERMS_VERSION,
   CompanyError,
@@ -276,5 +282,113 @@ describe("people labels and the activity log", () => {
       [FORMER_MEMBER, "added a note on #3F9A1C"],
       ["dana@acme.io", "created the company"],
     ]);
+  });
+});
+
+describe("close company and Stripe", () => {
+  async function owned() {
+    const owner = addUser(db.raw, { email: "dana@acme.io" });
+    const co = (await registerCompany(db.d1, { id: owner, email: "dana@acme.io" }, input())).companyId;
+    return { owner, co };
+  }
+
+  it("also cancels an incomplete subscription (the first payment could still go through)", async () => {
+    const { owner, co } = await owned();
+    addSubscription(db.raw, co, { provider: "stripe", status: "incomplete" });
+    const stripe = { subscriptions: { cancel: vi.fn().mockResolvedValue({}), retrieve: vi.fn() } };
+    expect(await closeCompany(await ownerCtx(owner), { stripe })).toEqual({ canceledStripe: 1 });
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledTimes(1);
+    expect(all(db.raw, "SELECT status FROM subscriptions")).toEqual([{ status: "canceled" }]);
+  });
+
+  it("a subscription Stripe no longer has, or has already canceled, does not block the close", async () => {
+    const { owner, co } = await owned();
+    addSubscription(db.raw, co, { provider: "stripe", status: "active" });
+    addSubscription(db.raw, co, { provider: "stripe", status: "past_due" });
+    const missing = new Stripe.errors.StripeInvalidRequestError({
+      type: "invalid_request_error",
+      code: "resource_missing",
+      statusCode: 404,
+      message: "No such subscription",
+    });
+    const alreadyDone = new Stripe.errors.StripeInvalidRequestError({
+      type: "invalid_request_error",
+      statusCode: 400,
+      message: "This subscription is already canceled.",
+    });
+    const stripe = {
+      subscriptions: {
+        cancel: vi.fn().mockRejectedValueOnce(missing).mockRejectedValueOnce(alreadyDone),
+        retrieve: vi.fn().mockResolvedValue({ status: "canceled" }),
+      },
+    };
+    expect(await closeCompany(await ownerCtx(owner), { stripe })).toEqual({ canceledStripe: 2 });
+    expect(all(db.raw, "SELECT status FROM companies")).toEqual([{ status: "closed" }]);
+  });
+
+  it("a subscription that is still live after a failed cancel keeps the company open", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { owner, co } = await owned();
+    addSubscription(db.raw, co, { provider: "stripe", status: "active" });
+    const stripe = {
+      subscriptions: {
+        cancel: vi.fn().mockRejectedValue(new Error("network")),
+        retrieve: vi.fn().mockResolvedValue({ status: "active" }),
+      },
+    };
+    expect(await failure(closeCompany(await ownerCtx(owner), { stripe }))).toMatchObject({ code: "stripe_failed" });
+    expect(all(db.raw, "SELECT status FROM companies")).toEqual([{ status: "active" }]);
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'company.close'")).toEqual([{ n: 0 }]);
+  });
+
+  it("after the close the session moves to another company, even with the old cookie", async () => {
+    const { owner, co } = await owned();
+    const other = addCompany(db.raw, { name: "Beta" });
+    addMember(db.raw, other, owner, "member");
+    await closeCompany(await ownerCtx(owner, co), { stripe: null });
+    // Інша вкладка ще має кукі закритої компанії.
+    expect((await ownerCtx(owner, co)).company?.id).toBe(other);
+    // Без іншої компанії людина бачить закриту (щоб вийти з неї чи почати нову).
+    run(db.raw, "DELETE FROM company_members WHERE company_id = ?", other);
+    expect((await ownerCtx(owner, co)).company).toMatchObject({ id: co, status: "closed" });
+  });
+});
+
+describe("audit rows follow the change, not the attempt", () => {
+  it("auditIfChanged writes only when the statement before it changed a row", async () => {
+    const owner = addUser(db.raw, { email: "dana@acme.io" });
+    const co = (await registerCompany(db.d1, { id: owner, email: "dana@acme.io" }, input())).companyId;
+    const ctx = await ownerCtx(owner);
+    const del = () => db.d1.prepare("DELETE FROM company_members WHERE company_id = ? AND user_id = ?").bind(co, "ghost");
+    await db.d1.batch([del(), auditIfChanged(ctx, { action: "team.remove" })]);
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'team.remove'")).toEqual([{ n: 0 }]);
+    const ghost = addUser(db.raw, { id: "ghost", email: "ghost@acme.io" });
+    addMember(db.raw, co, ghost, "member");
+    await db.d1.batch([del(), auditIfChanged(ctx, { action: "team.remove" })]);
+    await db.d1.batch([del(), auditIfChanged(ctx, { action: "team.remove" })]);
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'team.remove'")).toEqual([{ n: 1 }]);
+  });
+});
+
+describe("a form from another tab", () => {
+  it("is refused when it was shown for another company; its id never selects the company", async () => {
+    const owner = addUser(db.raw, { email: "dana@acme.io" });
+    const a = (await registerCompany(db.d1, { id: owner, email: "dana@acme.io" }, input({ name: "Acme" }))).companyId;
+    const b = (await registerCompany(db.d1, { id: owner, email: "dana@acme.io" }, input({ name: "Beta" }))).companyId;
+    const ctx = await ownerCtx(owner, b);
+    expect(() => assertFormCompany(ctx, a)).toThrow(COMPANY_SWITCHED_TEXT);
+    expect(() => assertFormCompany(ctx, null)).toThrow(COMPANY_SWITCHED_TEXT);
+    expect(() => assertFormCompany(ctx, b)).not.toThrow();
+  });
+});
+
+describe("activity texts", () => {
+  it("system rows and unknown actions read as text, never as raw keys", () => {
+    const id = "3f9a1c00-0000-4000-8000-000000000000";
+    expect(activityText("candidate.erased", id)).toBe("noted: #3F9A1C deleted their account");
+    expect(activityText("pipeline.visibility_lost", id)).toBe("noted: #3F9A1C is no longer visible");
+    expect(activityText("intro.expired", id)).toBe("noted: the intro with #3F9A1C expired");
+    expect(activityText("something.new", null)).toBe("made a change");
+    for (const text of Object.values(ACTIVITY_TEXT)) expect(text).not.toMatch(/[a-z]+\.[a-z_]+/);
   });
 });

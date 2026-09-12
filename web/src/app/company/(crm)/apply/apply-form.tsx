@@ -55,12 +55,23 @@ function describedBy(id: string, error?: string, hint?: boolean): string | undef
   return ids.length ? ids.join(" ") : undefined;
 }
 
-export function ApplyForm({ defaults, countries, resubmit }: { defaults: Defaults; countries: readonly Country[]; resubmit: boolean }) {
+export function ApplyForm({
+  companyId,
+  defaults,
+  countries,
+  resubmit,
+}: {
+  companyId: string;
+  defaults: Defaults;
+  countries: readonly Country[];
+  resubmit: boolean;
+}) {
   const [state, action] = useActionState(submitApplicationAction, {} as ApplyState);
   const e = state.errors ?? {};
   const v = { ...defaults, ...(state.values ?? {}) };
   return (
     <form action={action} className="grid gap-5" noValidate>
+      <input type="hidden" name="company_id" value={companyId} />
       <Field id="contact_name" label="Contact name" error={e.contact_name}>
         <input
           id="contact_name"

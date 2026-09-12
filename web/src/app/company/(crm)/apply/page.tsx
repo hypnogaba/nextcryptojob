@@ -71,6 +71,7 @@ export default async function ApplyPage() {
             </p>
           ) : null}
           <ApplyForm
+            companyId={company.id}
             countries={COUNTRIES}
             resubmit={application?.status === "needs_info"}
             defaults={{

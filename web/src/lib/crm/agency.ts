@@ -2,8 +2,7 @@ import { normaliseEmail } from "@/lib/auth/email-code";
 import { newId } from "@/lib/ids";
 import type { Mailer } from "@/lib/mail";
 import { sqlTime } from "@/lib/time";
-import { auditStatement } from "./audit";
-import { CompanyError, guardedAudit, inactiveError, memberOf, oneLine, type Fields } from "./company";
+import { CompanyError, auditIfChanged, inactiveError, memberOf, oneLine, type Fields } from "./company";
 import { agencyApprovedEmail, agencyNeedsInfoEmail, agencyRejectedEmail, sendAll } from "./company-mail";
 import { actorRole, type ActionContext } from "./context";
 import { countryCode } from "./countries";
@@ -156,12 +155,11 @@ export async function submitApplication(
 
   const current = await loadApplication(ctx.db, me.companyId);
   const at = sqlTime(ctx.now);
-  if (current && current.status === "pending") {
-    throw new CompanyError("application_not_open", "Your application is already under review. We review applications within 2 business days.");
-  }
+  // Уже на перевірці (друге натискання, друга вкладка): та сама заявка, нічого не пишемо.
+  if (current && current.status === "pending") return { applicationId: current.id, resubmitted: false };
 
   if (current && current.status === "needs_info") {
-    await ctx.db.batch([
+    const [updated] = await ctx.db.batch([
       ctx.db
         .prepare(
           `UPDATE agency_applications
@@ -180,19 +178,23 @@ export async function submitApplication(
           at,
           current.id,
         ),
-      auditStatement(ctx, { action: "agency.resubmit", meta: { application_id: current.id } }),
+      auditIfChanged(ctx, { action: "agency.resubmit", meta: { application_id: current.id } }),
     ]);
-    return { applicationId: current.id, resubmitted: true };
+    // Подвійне натискання: друга відповідь бачить уже оновлену заявку і нічого не пише.
+    return { applicationId: current.id, resubmitted: (updated?.meta.changes ?? 0) > 0 };
   }
 
   const id = newId("app");
-  await ctx.db.batch([
-    // uq_agency_apps_open: друга відкрита заявка тієї самої компанії впаде тут, а не задвоїться.
+  const [inserted] = await ctx.db.batch([
+    // Друга відкрита заявка тієї самої компанії (подвійне натискання) не вставляється;
+    // uq_agency_apps_open лишається страховкою.
     ctx.db
       .prepare(
         `INSERT INTO agency_applications (id, company_id, applicant_user_id, contact_name, contact_email, website, country,
                                           clients_text, volume_text, data_use_text, no_resale_ack, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?, ?)`,
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, 'pending', ?11, ?11
+          WHERE NOT EXISTS (SELECT 1 FROM agency_applications
+                             WHERE company_id = ?2 AND status IN ('pending', 'needs_info'))`,
       )
       .bind(
         id,
@@ -206,10 +208,13 @@ export async function submitApplication(
         input.volumeText,
         input.dataUseText,
         at,
-        at,
       ),
-    auditStatement(ctx, { action: "agency.apply", meta: { application_id: id } }),
+    auditIfChanged(ctx, { action: "agency.apply", meta: { application_id: id } }),
   ]);
+  if ((inserted?.meta.changes ?? 0) === 0) {
+    const existing = await loadApplication(ctx.db, me.companyId);
+    if (existing) return { applicationId: existing.id, resubmitted: false };
+  }
   return { applicationId: id, resubmitted: false };
 }
 
@@ -260,15 +265,18 @@ export interface ReviewInput {
 
 export type ReviewResult =
   | { ok: true; status: ApplicationStatus; companyId: string; emailed: boolean }
-  | { ok: false; reason: "not_found" | "not_open" | "note_required" | "note_too_long" | "invalid_decision" };
+  | { ok: false; reason: "not_found" | "not_open" | "not_pending" | "note_required" | "note_too_long" | "invalid_decision" };
 
 export const REVIEW_NOTE_MAX = 1000;
 
 /**
  * Рішення адміна. Заявка, компанія й журнал (актор `admin:<id>`) одним пакетом;
  * зміна компанії й запис журналу під умовою, що саме цей перегляд змінив заявку.
- * Лист власникам агенції (їхні підтверджені пошти) після запису; без пошти
- * адмін бачить, що листа не надіслано.
+ * Лише для компанії, що чекає перевірки: закриту, призупинену чи вже вирішену
+ * агенцію не схвалюємо і листа не шлемо (`not_pending`).
+ * Лист лише на підтверджені пошти власників (users.email з входу кодом). Пошту
+ * з форми заявки ніхто не підтверджував, тож на неї не пишемо; без пошти адмін
+ * бачить, що листа не надіслано.
  */
 export async function reviewApplication(
   db: D1Database,
@@ -284,13 +292,14 @@ export async function reviewApplication(
 
   const app = await db
     .prepare(
-      `SELECT a.id, a.company_id, a.status, a.contact_email, c.name
+      `SELECT a.id, a.company_id, a.status, c.name, c.status AS company_status
          FROM agency_applications a JOIN companies c ON c.id = a.company_id WHERE a.id = ?`,
     )
     .bind(input.applicationId)
-    .first<{ id: string; company_id: string; status: ApplicationStatus; contact_email: string; name: string }>();
+    .first<{ id: string; company_id: string; status: ApplicationStatus; name: string; company_status: string }>();
   if (!app) return { ok: false, reason: "not_found" };
   if (app.status !== "pending" && app.status !== "needs_info") return { ok: false, reason: "not_open" };
+  if (app.company_status !== "pending_review") return { ok: false, reason: "not_pending" };
 
   const status: ApplicationStatus =
     input.decision === "approve" ? "approved" : input.decision === "reject" ? "rejected" : "needs_info";
@@ -330,22 +339,24 @@ export async function reviewApplication(
       .prepare(
         `UPDATE agency_applications
             SET status = ?, reviewer_note = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
-          WHERE id = ? AND status IN ('pending', 'needs_info')`,
+          WHERE id = ? AND status IN ('pending', 'needs_info')
+            AND EXISTS (SELECT 1 FROM companies WHERE id = ? AND status = 'pending_review')`,
       )
-      .bind(status, status === "approved" ? null : note, admin.userId, at, at, app.id),
+      .bind(status, status === "approved" ? null : note, admin.userId, at, at, app.id, app.company_id),
+    // Одразу за заявкою: другий паралельний перегляд нічого не змінить і рядка не допише.
+    auditIfChanged(ctx, {
+      action: status === "approved" ? "agency.approve" : status === "rejected" ? "agency.reject" : "agency.needs_info",
+      meta: { company_id: app.company_id, application_id: app.id },
+    }),
     ...(companyUpdate ? [companyUpdate] : []),
-    guardedAudit(
-      ctx,
-      {
-        action: status === "approved" ? "agency.approve" : status === "rejected" ? "agency.reject" : "agency.needs_info",
-        meta: { company_id: app.company_id, application_id: app.id },
-      },
-      mine,
-    ),
   ]);
-  if ((appUpdate?.meta.changes ?? 0) === 0) return { ok: false, reason: "not_open" };
+  if ((appUpdate?.meta.changes ?? 0) === 0) {
+    // Між читанням і записом: або заявку вже вирішили, або компанію закрили.
+    const still = await db.prepare("SELECT status FROM companies WHERE id = ?").bind(app.company_id).first<string>("status");
+    return { ok: false, reason: still === "pending_review" ? "not_open" : "not_pending" };
+  }
 
-  // Власники агенції з підтвердженою поштою; нікого немає, тоді пошта з заявки.
+  // Лише підтверджені пошти власників агенції.
   const { results: owners } = await db
     .prepare(
       `SELECT u.email FROM company_members m JOIN users u ON u.id = m.user_id
@@ -353,7 +364,7 @@ export async function reviewApplication(
     )
     .bind(app.company_id)
     .all<{ email: string }>();
-  const to = owners.length > 0 ? owners.map((o) => o.email) : [app.contact_email];
+  const to = owners.map((o) => o.email);
   const letter =
     status === "approved"
       ? agencyApprovedEmail({ company: app.name, link: `${opts.origin}/company/billing?welcome=1` })

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
 import { parseApplication, submitApplication } from "@/lib/crm/agency";
-import { userFacingError, type Fields } from "@/lib/crm/company";
+import { assertFormCompany, userFacingError, type Fields } from "@/lib/crm/company";
 import { resolveWebActor } from "@/lib/crm/context";
 
 export type ApplyState = { message?: FormMessage; errors?: Fields; values?: Fields };
@@ -17,7 +17,9 @@ export async function submitApplicationAction(_prev: ApplyState, form: FormData)
   const parsed = parseApplication(form);
   if (!parsed.ok) return { errors: parsed.errors, values, message: { tone: "error", text: "Check the fields above." } };
   try {
-    await submitApplication(await resolveWebActor(), parsed.value);
+    const ctx = await resolveWebActor();
+    assertFormCompany(ctx, form.get("company_id"));
+    await submitApplication(ctx, parsed.value);
   } catch (err) {
     const known = userFacingError(err);
     if (!known) throw err;

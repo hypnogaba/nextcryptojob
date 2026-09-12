@@ -3,11 +3,10 @@ import { randomToken, sha256Hex } from "@/lib/auth/hash";
 import { consume, type Limits } from "@/lib/auth/ratelimit";
 import type { Mailer } from "@/lib/mail";
 import { fromSqlTime, sqlTime } from "@/lib/time";
-import { auditStatement } from "./audit";
 import {
   CompanyError,
   LAST_OWNER_TEXT,
-  guardedAudit,
+  auditIfChanged,
   inactiveError,
   memberContext,
   memberOf,
@@ -191,11 +190,7 @@ export async function inviteMember(
       )
       .bind(me.companyId, email, hash, me.userId, at, limit),
     // Пошту в журнал не пишемо (audit_log живе довше за дані): лише сам факт запрошення.
-    guardedAudit(
-      ctx,
-      { action: "team.invite", meta: { role: "member" } },
-      { sql: "EXISTS (SELECT 1 FROM company_members WHERE invite_token_hash = ?)", params: [hash] },
-    ),
+    auditIfChanged(ctx, { action: "team.invite", meta: { role: "member" } }),
   ]);
 
   const row = await ctx.db.prepare("SELECT id FROM company_members WHERE invite_token_hash = ?").bind(hash).first();
@@ -229,15 +224,11 @@ export async function inviteMember(
 export async function revokeInvite(ctx: ActionContext, inviteId: number): Promise<void> {
   assertCan(actorRole(ctx.actor), "team.manage");
   const me = memberOf(ctx);
-  const row = await ctx.db
-    .prepare("SELECT id FROM company_members WHERE id = ? AND company_id = ? AND user_id IS NULL")
-    .bind(inviteId, me.companyId)
-    .first();
-  if (!row) throw new CompanyError("not_found", "This invite does not exist or was already used.");
-  await ctx.db.batch([
+  const [deleted] = await ctx.db.batch([
     ctx.db.prepare("DELETE FROM company_members WHERE id = ? AND company_id = ? AND user_id IS NULL").bind(inviteId, me.companyId),
-    auditStatement(ctx, { action: "team.invite_revoke", meta: { invite_id: inviteId } }),
+    auditIfChanged(ctx, { action: "team.invite_revoke", meta: { invite_id: inviteId } }),
   ]);
+  if ((deleted?.meta.changes ?? 0) === 0) throw new CompanyError("not_found", "This invite does not exist or was already used.");
 }
 
 // ---------------------------------------------------------------------------
@@ -329,7 +320,7 @@ export async function acceptInvite(
   const limit = company ? seatLimit(company) : 0;
   const at = sqlTime(now);
   const ctx = memberContext(db, { userId: user.id, companyId: invite.companyId, role: "member" }, company, now);
-  await db.batch([
+  const [joined] = await db.batch([
     db
       .prepare(
         `UPDATE company_members SET user_id = ?1, joined_at = ?2, last_seen_at = ?2, invite_token_hash = NULL
@@ -337,35 +328,39 @@ export async function acceptInvite(
             AND (SELECT COUNT(*) FROM company_members WHERE company_id = ?4 AND user_id IS NOT NULL) < ?5`,
       )
       .bind(user.id, at, hash, invite.companyId, limit),
-    guardedAudit(
-      ctx,
-      { action: "team.join", meta: { role: "member" } },
-      {
-        sql: "EXISTS (SELECT 1 FROM company_members WHERE company_id = ? AND user_id = ? AND joined_at = ?)",
-        params: [invite.companyId, user.id, at],
-      },
-    ),
+    auditIfChanged(ctx, { action: "team.join", meta: { role: "member" } }),
   ]);
-
-  const joined = await db
-    .prepare("SELECT 1 AS yes FROM company_members WHERE company_id = ? AND user_id = ?")
-    .bind(invite.companyId, user.id)
-    .first();
-  if (!joined) {
-    throw new CompanyError("seat_limit", "This team is full. Ask the owner to free a seat, then open the link again.");
+  if ((joined?.meta.changes ?? 0) > 0) {
+    return { companyId: invite.companyId, companyName: invite.companyName, alreadyMember: false };
   }
-  return { companyId: invite.companyId, companyName: invite.companyName, alreadyMember: false };
+
+  // Не приєднали: чому саме. Запрошення могли скасувати, використати чи воно
+  // саме прострочилось між читанням і записом; лише інакше це повна команда.
+  const again = await findInvite(db, token, now);
+  if (again.state === "invalid") {
+    throw new CompanyError("invite_invalid", "This invite link is not valid or was already used. Ask the owner for a new one.");
+  }
+  if (again.state === "expired") {
+    throw new CompanyError("invite_expired", "This invite has expired. Ask the owner to send a new one.");
+  }
+  throw new CompanyError("seat_limit", "This team is full. Ask the owner to free a seat, then open the link again.");
 }
 
 // ---------------------------------------------------------------------------
 // Ролі, прибрати, піти
 
-async function targetRole(db: D1Database, companyId: string, userId: string): Promise<"owner" | "member"> {
-  const role = await db
+const NOT_ON_TEAM = "This person is not on your team.";
+
+async function currentRole(db: D1Database, companyId: string, userId: string): Promise<"owner" | "member" | null> {
+  return db
     .prepare("SELECT role FROM company_members WHERE company_id = ? AND user_id = ?")
     .bind(companyId, userId)
     .first<"owner" | "member">("role");
-  if (!role) throw new CompanyError("not_found", "This person is not on your team.");
+}
+
+async function targetRole(db: D1Database, companyId: string, userId: string): Promise<"owner" | "member"> {
+  const role = await currentRole(db, companyId, userId);
+  if (!role) throw new CompanyError("not_found", NOT_ON_TEAM);
   return role;
 }
 
@@ -391,13 +386,14 @@ export async function changeRole(ctx: ActionContext, userId: string, role: "owne
             AND (?1 = 'owner' OR ${OWNERS.replace("?", "?2")} > 1)`,
       )
       .bind(role, me.companyId, userId),
-    guardedAudit(
-      ctx,
-      { action: "team.role", meta: { member_user_id: userId, role } },
-      { sql: "EXISTS (SELECT 1 FROM company_members WHERE company_id = ? AND user_id = ? AND role = ?)", params: [me.companyId, userId, role] },
-    ),
+    auditIfChanged(ctx, { action: "team.role", meta: { member_user_id: userId, role } }),
   ]);
-  if ((res[0]?.meta.changes ?? 0) === 0) throw new CompanyError("last_owner", LAST_OWNER_TEXT);
+  if ((res[0]?.meta.changes ?? 0) > 0) return;
+  // Нічого не змінилось: людину тим часом прибрали, роль уже така, або це останній власник.
+  const now = await currentRole(ctx.db, me.companyId, userId);
+  if (!now) throw new CompanyError("not_found", NOT_ON_TEAM);
+  if (now === role) return;
+  throw new CompanyError("last_owner", LAST_OWNER_TEXT);
 }
 
 /** Прибрати рядок членства, якщо це не останній власник живої компанії. */
@@ -413,13 +409,12 @@ async function dropMember(ctx: ActionContext, userId: string, action: "team.remo
             AND (role <> 'owner' OR ?3 = 0 OR ${OWNERS.replace("?", "?1")} > 1)`,
       )
       .bind(me.companyId, userId, guardOwners),
-    guardedAudit(
-      ctx,
-      { action, meta: action === "team.remove" ? { member_user_id: userId, role } : { role } },
-      { sql: "NOT EXISTS (SELECT 1 FROM company_members WHERE company_id = ? AND user_id = ?)", params: [me.companyId, userId] },
-    ),
+    auditIfChanged(ctx, { action, meta: action === "team.remove" ? { member_user_id: userId, role } : { role } }),
   ]);
-  if ((res[0]?.meta.changes ?? 0) === 0) throw new CompanyError("last_owner", LAST_OWNER_TEXT);
+  if ((res[0]?.meta.changes ?? 0) > 0) return;
+  // Нічого не видалено: людини вже немає (друга вкладка, інший власник) чи це останній власник.
+  if (!(await currentRole(ctx.db, me.companyId, userId))) throw new CompanyError("not_found", NOT_ON_TEAM);
+  throw new CompanyError("last_owner", LAST_OWNER_TEXT);
 }
 
 /** "Remove". Себе прибрати не можна кнопкою Remove: для цього "Leave the team". */

@@ -5,7 +5,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
 import { stripeClient, type StripeEnv } from "@/lib/billing/stripe";
-import { CLOSE_CONFIRM_WORD, closeCompany, parseSettings, updateCompanySettings, userFacingError, type Fields } from "@/lib/crm/company";
+import {
+  assertFormCompany,
+  CLOSE_CONFIRM_WORD,
+  closeCompany,
+  parseSettings,
+  updateCompanySettings,
+  userFacingError,
+  type Fields,
+} from "@/lib/crm/company";
 import { COMPANY_COOKIE, resolveWebActor } from "@/lib/crm/context";
 import { appEnv } from "@/lib/db";
 
@@ -20,7 +28,9 @@ export async function updateCompanySettingsAction(_prev: CompanySettingsState, f
   if (!parsed.ok) return { errors: parsed.errors, values, message: { tone: "error", text: "Check the fields above." } };
   let res;
   try {
-    res = await updateCompanySettings(await resolveWebActor(), parsed.value);
+    const ctx = await resolveWebActor();
+    assertFormCompany(ctx, form.get("company_id"));
+    res = await updateCompanySettings(ctx, parsed.value);
   } catch (err) {
     const known = userFacingError(err);
     if (!known) throw err;
@@ -39,9 +49,13 @@ export async function closeCompanyAction(_prev: CompanySettingsState, form: Form
   if (String(form.get("confirm") ?? "").trim() !== CLOSE_CONFIRM_WORD) {
     return { errors: { confirm: `Type ${CLOSE_CONFIRM_WORD} to confirm.` } };
   }
-  const ctx = await resolveWebActor();
+  let closedId: string | null = null;
   try {
+    // Актор усередині try: сесія, що скінчилась (401), дає текст, а не сторінку помилки.
+    const ctx = await resolveWebActor();
+    assertFormCompany(ctx, form.get("company_id"));
     await closeCompany(ctx, { stripe: stripeClient(appEnv() as unknown as StripeEnv) });
+    closedId = ctx.company?.id ?? null;
   } catch (err) {
     const known = userFacingError(err);
     if (!known) throw err;
@@ -49,7 +63,7 @@ export async function closeCompanyAction(_prev: CompanySettingsState, form: Form
   }
   // Кукі на закриту компанію більше не потрібна: наступний запит візьме іншу, якщо вона є.
   const jar = await cookies();
-  if (jar.get(COMPANY_COOKIE)?.value === ctx.company?.id) jar.delete(COMPANY_COOKIE);
+  if (closedId && jar.get(COMPANY_COOKIE)?.value === closedId) jar.delete(COMPANY_COOKIE);
   revalidatePath("/company", "layout");
   redirect("/company/settings");
 }

@@ -272,11 +272,14 @@ async function memberFromSession(
   userId: string,
   preferredCompany: string | null,
 ): Promise<Extract<Actor, { kind: "member" }> | null> {
+  // Закрита компанія поточною лише тоді, коли іншої в людини немає, навіть з кукі
+  // (кукі могла лишитись в іншій вкладці чи на іншому пристрої).
   const row = await db
     .prepare(
-      `SELECT company_id, role FROM company_members
-        WHERE user_id = ?
-        ORDER BY (company_id = ?) DESC, last_seen_at IS NULL, last_seen_at DESC, joined_at DESC, id DESC
+      `SELECT m.company_id, m.role FROM company_members m JOIN companies c ON c.id = m.company_id
+        WHERE m.user_id = ?
+        ORDER BY (c.status = 'closed'), (m.company_id = ?) DESC, m.last_seen_at IS NULL, m.last_seen_at DESC,
+                 m.joined_at DESC, m.id DESC
         LIMIT 1`,
     )
     .bind(userId, preferredCompany ?? "")

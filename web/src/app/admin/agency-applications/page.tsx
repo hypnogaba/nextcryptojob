@@ -22,6 +22,7 @@ const ERRORS: Record<string, string> = {
   not_admin: "Only admins can do this.",
   not_found: "Application not found.",
   not_open: "This application was already decided.",
+  not_pending: "This agency is closed or no longer waiting for review. Nothing was changed and no email was sent.",
   note_required: "Write a note: the applicant sees it.",
   note_too_long: `Keep the note under ${REVIEW_NOTE_MAX} characters.`,
   invalid_decision: "Choose Approve, Ask for more info or Reject.",

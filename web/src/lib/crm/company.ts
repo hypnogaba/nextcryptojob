@@ -1,9 +1,9 @@
-import { OPEN_STRIPE_STATUSES } from "@/lib/billing/access";
-import type { StripeApi } from "@/lib/billing/stripe";
+import { CANCEL_ON_CLOSE_STRIPE_STATUSES } from "@/lib/billing/access";
+import { Stripe, type StripeApi } from "@/lib/billing/stripe";
 import { normalizeX } from "@/lib/identity/normalize";
 import { newId } from "@/lib/ids";
 import { sqlTime } from "@/lib/time";
-import { auditStatement, auditValues, companyAuditRange, guardedAuditStatement, type AuditEntry } from "./audit";
+import { auditValues, companyAuditRange, guardedAuditStatement, type AuditEntry } from "./audit";
 import { actorRole, type ActionContext, type Actor, type CompanyInfo } from "./context";
 import { countryCode } from "./countries";
 import { companySite, emailProvesDomain } from "./domain";
@@ -48,7 +48,9 @@ export type CompanyErrorCode =
   | "already_member"
   | "application_not_open"
   | "rate_limited"
-  | "stripe_failed";
+  | "stripe_failed"
+  | "company_switched"
+  | "not_pending";
 
 /**
  * Помилка дій компанії й команди, яких немає в договорі REST (openapi.yaml):
@@ -73,6 +75,8 @@ export { LAST_OWNER_TEXT } from "./visibility";
 export function userFacingError(error: unknown): { code: string; message: string; fields?: Record<string, string> } | null {
   if (error instanceof CompanyError) return { code: error.code, message: error.message, fields: error.fields };
   if (error instanceof ActionError) {
+    // Сесія скінчилась або людина вже не в команді: текст для людини, не для API.
+    if (error.code === "unauthorized") return { code: error.code, message: "Sign in again to continue." };
     const fields = (error.details?.fields as Record<string, string> | undefined) ?? undefined;
     return { code: error.code, message: error.message, fields };
   }
@@ -95,6 +99,33 @@ export function guardedAudit(
   guard: { sql: string; params: (string | number | null)[] },
 ): D1PreparedStatement {
   return guardedAuditStatement(ctx.db, auditValues(ctx, entry), guard);
+}
+
+/**
+ * Рядок журналу лише тоді, коли попередня інструкція пакета щось змінила.
+ * `changes()` у SQLite каже, скільки рядків змінила остання завершена
+ * INSERT/UPDATE/DELETE того самого з'єднання; пакет D1 іде одним з'єднанням і
+ * однією транзакцією (перевірено на локальному D1 через wrangler getPlatformProxy:
+ * DELETE з 0 змін, тоді INSERT … WHERE changes() = 1 нічого не пише). Тому
+ * дві паралельні однакові дії дають одну зміну й один рядок журналу.
+ * Ставити одразу після тієї інструкції, чию зміну засвідчує.
+ */
+export function auditIfChanged(ctx: AuditCtx, entry: AuditEntry): D1PreparedStatement {
+  return guardedAudit(ctx, entry, { sql: "changes() > 0", params: [] });
+}
+
+export const COMPANY_SWITCHED_TEXT = "You switched company in another tab. Reload this page.";
+
+/**
+ * Форма несе id компанії, для якої її показали. Дія діє лише на компанію сесії
+ * (кукі ncj_company); якщо друга вкладка тим часом перемкнула компанію, дія
+ * відмовляє, а не зачіпає іншу компанію. id з форми лише порівнюємо, ніколи не
+ * беремо ним компанію.
+ */
+export function assertFormCompany(ctx: ActionContext, formCompanyId: FormDataEntryValue | null): void {
+  if (!ctx.company || typeof formCompanyId !== "string" || formCompanyId !== ctx.company.id) {
+    throw new CompanyError("company_switched", COMPANY_SWITCHED_TEXT);
+  }
 }
 
 /** Контекст для дій поза реєстром: людина вже член `companyId` (або щойно стане ним). */
@@ -451,7 +482,7 @@ export async function updateCompanySettings(
           WHERE id = ?`,
       )
       .bind(input.name, input.website, input.domain, verifiedAt, input.country, input.about, input.xHandle, sqlTime(ctx.now), me.companyId),
-    auditStatement(ctx, {
+    auditIfChanged(ctx, {
       action: "company.update",
       meta: { fields: changed, domain_verified: verifiedAt !== null },
     }),
@@ -469,7 +500,9 @@ export const CLOSE_CONFIRM_WORD = "CLOSE";
  * відкриті знайомства відкликано (картки назад у Found), вакансії закрито,
  * запрошення анульовано. Дані видаляються через 30 днів (у релізі 1 адмін вручну).
  * Stripe першим: якщо скасувати не вдалось, компанія лишається відкритою, щоб
- * не брати гроші з закритої компанії.
+ * не брати гроші з закритої компанії. Скасовуємо й `incomplete`; підписка, якої
+ * Stripe уже не має або яка вже скасована, вважається скасованою. Підписку, що
+ * з'явиться чи оживе вже після закриття, скасовує вебхук (billing/webhook.ts).
  */
 export async function closeCompany(
   ctx: ActionContext,
@@ -482,23 +515,20 @@ export async function closeCompany(
   if (!status) throw new CompanyError("not_found", "This company does not exist.");
   if (status === "closed") throw inactiveError("closed");
 
-  const placeholders = OPEN_STRIPE_STATUSES.map(() => "?").join(", ");
+  const placeholders = CANCEL_ON_CLOSE_STRIPE_STATUSES.map(() => "?").join(", ");
   const { results: open } = await ctx.db
     .prepare(
       `SELECT id, stripe_subscription_id FROM subscriptions
         WHERE company_id = ? AND provider = 'stripe' AND stripe_subscription_id IS NOT NULL AND status IN (${placeholders})`,
     )
-    .bind(companyId, ...OPEN_STRIPE_STATUSES)
+    .bind(companyId, ...CANCEL_ON_CLOSE_STRIPE_STATUSES)
     .all<{ id: string; stripe_subscription_id: string }>();
   if (open.length > 0) {
     if (!opts.stripe) {
       throw new CompanyError("stripe_failed", "We could not cancel your card subscription. Write to support@nextcryptojob.xyz.");
     }
     for (const sub of open) {
-      try {
-        await opts.stripe.subscriptions.cancel(sub.stripe_subscription_id);
-      } catch (err) {
-        console.error("stripe cancel failed:", err instanceof Error ? err.message : String(err));
+      if (!(await cancelStripeSubscription(opts.stripe, sub.stripe_subscription_id))) {
         throw new CompanyError("stripe_failed", "We could not cancel your card subscription. Try again in a minute.");
       }
     }
@@ -513,6 +543,8 @@ export async function closeCompany(
           WHERE id = ? AND status <> 'closed'`,
       )
       .bind(at, companyId),
+    // Одразу за зміною статусу: друге паралельне закриття нічого не змінить і рядка не допише.
+    auditIfChanged(ctx, { action: "company.close", meta: { stripe_canceled: open.length } }),
     d
       .prepare("UPDATE api_keys SET revoked_at = ?, revoked_by_user_id = ? WHERE company_id = ? AND revoked_at IS NULL")
       .bind(at, me.userId, companyId),
@@ -552,10 +584,35 @@ export async function closeCompany(
         `UPDATE subscriptions SET status = 'canceled', canceled_at = COALESCE(canceled_at, ?), updated_at = ?
           WHERE company_id = ? AND provider = 'stripe' AND status IN (${placeholders})`,
       )
-      .bind(at, at, companyId, ...OPEN_STRIPE_STATUSES),
-    auditStatement(ctx, { action: "company.close", meta: { stripe_canceled: open.length } }),
+      .bind(at, at, companyId, ...CANCEL_ON_CLOSE_STRIPE_STATUSES),
   ]);
   return { canceledStripe: open.length };
+}
+
+function isMissingInStripe(err: unknown): boolean {
+  return err instanceof Stripe.errors.StripeError && (err.code === "resource_missing" || err.statusCode === 404);
+}
+
+/**
+ * Скасувати підписку в Stripe. true, якщо її більше немає живої: скасовано зараз,
+ * уже скасована раніше (Stripe тоді відповідає помилкою, стан перевіряємо читанням)
+ * або Stripe її не має (resource_missing). false: скасувати не вдалось.
+ */
+export async function cancelStripeSubscription(stripe: Pick<StripeApi, "subscriptions">, id: string): Promise<boolean> {
+  try {
+    await stripe.subscriptions.cancel(id);
+    return true;
+  } catch (err) {
+    if (isMissingInStripe(err)) return true;
+    try {
+      const sub = await stripe.subscriptions.retrieve(id);
+      if (sub.status === "canceled" || sub.status === "incomplete_expired") return true;
+    } catch (again) {
+      if (isMissingInStripe(again)) return true;
+    }
+    console.error("stripe cancel failed:", err instanceof Error ? err.message : String(err));
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -596,12 +653,21 @@ export interface ActivityRow {
   what: string;
 }
 
-const ACTIVITY_TEXT: Record<string, string> = {
+/**
+ * Текст рядка журналу; `{c}` стає міткою кандидата (#3F9A1C). Невідома дія
+ * показується загальним текстом, не сирою назвою.
+ */
+export const ACTIVITY_TEXT: Record<string, string> = {
   "company.create": "created the company",
   "company.update": "updated the company profile",
   "company.close": "closed the company",
   "agency.apply": "sent the agency application",
   "agency.resubmit": "updated the agency application",
+  "agency.approve": "approved the agency account",
+  "agency.needs_info": "asked for more information about the agency",
+  "agency.reject": "did not approve the agency application",
+  "access.grant": "granted access",
+  "access.revoke": "revoked access",
   "team.invite": "invited a teammate",
   "team.invite_revoke": "canceled an invite",
   "team.join": "joined the team",
@@ -611,16 +677,28 @@ const ACTIVITY_TEXT: Record<string, string> = {
   "api_key.create": "created an API key",
   "api_key.revoke": "revoked an API key",
   "candidate.search": "searched candidates",
-  "candidate.view": "viewed",
-  "pipeline.add": "added to the pipeline",
-  "pipeline.stage": "moved",
-  "pipeline.tags": "changed tags of",
-  "pipeline.note": "added a note on",
-  "pipeline.remove": "removed from the pipeline",
-  "intro.request": "requested an intro with",
-  "intro.cancel": "withdrew the intro with",
-  "contact.reveal": "viewed the Telegram handle of",
+  "candidate.view": "viewed {c}",
+  "candidate.erased": "noted: {c} deleted their account",
+  "pipeline.add": "added {c} to the pipeline",
+  "pipeline.stage": "moved {c}",
+  "pipeline.tags": "changed tags of {c}",
+  "pipeline.job": "linked a job to {c}",
+  "pipeline.note": "added a note on {c}",
+  "pipeline.remove": "removed {c} from the pipeline",
+  "pipeline.visibility_lost": "noted: {c} is no longer visible",
+  "pipeline.visibility_restored": "noted: {c} is visible again",
+  "intro.request": "requested an intro with {c}",
+  "intro.cancel": "withdrew the intro with {c}",
+  "intro.accepted": "noted: {c} accepted the intro",
+  "intro.declined": "noted: {c} declined the intro",
+  "intro.expired": "noted: the intro with {c} expired",
+  "contact.reveal": "viewed the Telegram handle of {c}",
 };
+
+export function activityText(action: string, target: string | null): string {
+  const label = target && /^[0-9a-f-]{36}$/i.test(target) ? candidateLabel(target) : "a candidate";
+  return (ACTIVITY_TEXT[action] ?? "made a change").replace("{c}", label);
+}
 
 /**
  * Журнал дій компанії ("Activity log", 10.2): хто, що, коли. Про кандидата
@@ -659,8 +737,6 @@ export async function listActivity(ctx: ActionContext, limit = 50): Promise<Acti
     const [, kind, id] = r.actor.split(":");
     const who =
       kind === "member" ? (labels.get(id) ?? FORMER_MEMBER) : kind === "agent" ? `API key ${keys.get(id) ?? "(deleted)"}` : "NextCryptoJob";
-    const verb = ACTIVITY_TEXT[r.action] ?? r.action;
-    const what = r.target && /^[0-9a-f-]{36}$/i.test(r.target) ? `${verb} ${candidateLabel(r.target)}` : verb;
-    return { at: r.at, who, what };
+    return { at: r.at, who, what: activityText(r.action, r.target) };
   });
 }

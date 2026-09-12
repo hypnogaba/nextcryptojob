@@ -2,7 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { HINT } from "@/components/form/styles";
-import { ABOUT_MAX, CLOSE_CONFIRM_WORD, COMPANY_TERMS_VERSION, listActivity, loadCompanyProfile } from "@/lib/crm/company";
+import { LeaveTeam } from "@/components/crm/leave-team";
+import {
+  ABOUT_MAX,
+  CLOSE_CONFIRM_WORD,
+  COMPANY_SWITCHED_TEXT,
+  COMPANY_TERMS_VERSION,
+  LAST_OWNER_TEXT,
+  listActivity,
+  loadCompanyProfile,
+} from "@/lib/crm/company";
 import { can } from "@/lib/crm/permissions";
 import { COUNTRIES, countryName } from "@/lib/crm/countries";
 import { fromSqlTime } from "@/lib/time";
@@ -21,6 +30,12 @@ const TIME = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 const LINK = "font-medium text-brand underline underline-offset-4";
+
+const LEAVE_ERRORS: Record<string, string> = {
+  last_owner: LAST_OWNER_TEXT,
+  company_switched: COMPANY_SWITCHED_TEXT,
+  unauthorized: "Sign in again to continue.",
+};
 
 function Section({ id, title, intro, children }: { id: string; title: string; intro?: ReactNode; children: ReactNode }) {
   return (
@@ -50,9 +65,22 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
  * бачить), стан домену, вебхук (незабаром), журнал дій, закриття компанії.
  * Відкриті в будь-якому стані компанії, зокрема поки агенція на перевірці.
  */
-export default async function CompanySettingsPage() {
+export default async function CompanySettingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+} = {}) {
   const { ctx, role, company } = await crmPage("settings");
-  const [profile, activity] = await Promise.all([loadCompanyProfile(ctx.db, company.id), listActivity(ctx, 50)]);
+  const params = (await searchParams) ?? {};
+  const error = Array.isArray(params.error) ? params.error[0] : params.error;
+  const [profile, activity, owners] = await Promise.all([
+    loadCompanyProfile(ctx.db, company.id),
+    listActivity(ctx, 50),
+    ctx.db
+      .prepare("SELECT COUNT(*) AS n FROM company_members WHERE company_id = ? AND role = 'owner' AND user_id IS NOT NULL")
+      .bind(company.id)
+      .first<number>("n"),
+  ]);
   if (!profile) return null;
   const isOwner = can(role, "settings.write");
   const editable = isOwner && (profile.status === "active" || profile.status === "pending_review");
@@ -60,10 +88,16 @@ export default async function CompanySettingsPage() {
   return (
     <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Company settings</h1>
+      {error ? (
+        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ink">
+          {LEAVE_ERRORS[error] ?? "Something went wrong. Try again."}
+        </p>
+      ) : null}
 
       <Section id="profile" title="Company profile" intro={isOwner ? undefined : "Only the owner can change these."}>
         {editable ? (
           <CompanyProfileForm
+            companyId={company.id}
             countries={COUNTRIES}
             aboutMax={ABOUT_MAX}
             profile={{
@@ -151,9 +185,19 @@ export default async function CompanySettingsPage() {
         )}
       </Section>
 
+      {/* Команда закрита, поки компанія не active: вийти можна звідси. */}
+      {profile.status !== "active" ? (
+        <LeaveTeam
+          companyId={company.id}
+          companyName={company.name}
+          blocked={role === "owner" && profile.status !== "closed" && (owners ?? 0) <= 1}
+          from="settings"
+        />
+      ) : null}
+
       {isOwner && profile.status !== "closed" ? (
         <Section id="close" title="Close company">
-          <CloseCompanyForm word={CLOSE_CONFIRM_WORD} />
+          <CloseCompanyForm word={CLOSE_CONFIRM_WORD} companyId={company.id} />
         </Section>
       ) : null}
     </div>

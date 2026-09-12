@@ -17,12 +17,23 @@ function Err({ id, text }: { id: string; text?: string }) {
   ) : null;
 }
 
-export function CompanyProfileForm({ profile, countries, aboutMax }: { profile: Profile; countries: readonly Country[]; aboutMax: number }) {
+export function CompanyProfileForm({
+  companyId,
+  profile,
+  countries,
+  aboutMax,
+}: {
+  companyId: string;
+  profile: Profile;
+  countries: readonly Country[];
+  aboutMax: number;
+}) {
   const [state, action] = useActionState(updateCompanySettingsAction, {} as CompanySettingsState);
   const e = state.errors ?? {};
   const v: Profile = { ...profile, ...(state.values ?? {}) };
   return (
     <form action={action} className="grid gap-5" noValidate>
+      <input type="hidden" name="company_id" value={companyId} />
       <div className="grid gap-1.5">
         <label htmlFor="name" className={LABEL}>
           Company name
@@ -131,12 +142,13 @@ export function CompanyProfileForm({ profile, countries, aboutMax }: { profile: 
   );
 }
 
-export function CloseCompanyForm({ word }: { word: string }) {
+export function CloseCompanyForm({ word, companyId }: { word: string; companyId: string }) {
   const [state, action] = useActionState(closeCompanyAction, {} as CompanySettingsState);
   const [typed, setTyped] = useState("");
   const error = state.errors?.confirm;
   return (
     <form action={action} className="grid gap-3">
+      <input type="hidden" name="company_id" value={companyId} />
       <p className={HINT}>
         Your subscription is canceled now, API keys stop working, pending intros are withdrawn. Data is deleted after 30
         days.

@@ -32,11 +32,12 @@ function CopyLink({ link }: { link: string }) {
   );
 }
 
-export function InviteForm({ seatsLeft }: { seatsLeft: number }) {
+export function InviteForm({ seatsLeft, companyId }: { seatsLeft: number; companyId: string }) {
   const [state, action] = useActionState(inviteAction, {} as InviteState);
   return (
     <div className="grid gap-4">
       <form action={action} className="grid gap-3" noValidate>
+        <input type="hidden" name="company_id" value={companyId} />
         <div className="grid gap-1.5">
           <label htmlFor="email" className={LABEL}>
             Work email

@@ -13,6 +13,7 @@ import ApplyPage from "./(crm)/apply/page";
 import BillingPage from "./(crm)/billing/page";
 import CrmLayout from "./(crm)/layout";
 import SettingsPage from "./(crm)/settings/page";
+import { closeCompanyAction, updateCompanySettingsAction } from "./(crm)/settings/actions";
 import { inviteAction, leaveAction, removeMemberAction } from "./(crm)/team/actions";
 import TeamPage from "./(crm)/team/page";
 import { acceptInviteAction } from "./join/actions";
@@ -125,7 +126,8 @@ describe("agency: from application to access", () => {
     expect(await html(ApplyPage())).toContain("Send application");
     expect(await html(CrmLayout({ children: null }))).toContain("Finish your agency application to get access.");
 
-    expect(await redirectOf(submitApplicationAction({}, form(APPLICATION)))).toBe("/company/apply");
+    const [{ id: agencyId }] = rows<{ id: string }>("SELECT id FROM companies");
+    expect(await redirectOf(submitApplicationAction({}, form({ ...APPLICATION, company_id: agencyId })))).toBe("/company/apply");
     expect(await html(ApplyPage())).toContain("Application received.");
     const shell = await html(CrmLayout({ children: null }));
     expect(shell).toContain("Application received. We review applications within 2 business days.");
@@ -181,7 +183,7 @@ describe("team pages", () => {
   it("without mail the owner gets the invite link; the invitee joins with the matching email only", async () => {
     vi.stubEnv("NODE_ENV", "production");
     const { companyId } = await companyWithOwner();
-    const state = await inviteAction({}, form({ email: "lee@acme.io" }));
+    const state = await inviteAction({}, form({ email: "lee@acme.io", company_id: companyId }));
     expect(state.message?.text).toBe("We could not email lee@acme.io. Copy the link below and send it yourself.");
     const link = state.link!;
     expect(link).toMatch(/^https:\/\/nextcryptojob\.xyz\/company\/join\?t=/);
@@ -222,15 +224,15 @@ describe("team pages", () => {
     const leeJar = harness.jar;
 
     harness.jar = ownerJar;
-    expect(await redirectOf(removeMemberAction(form({ user_id: lee })))).toBe("/company/team?done=removed");
+    expect(await redirectOf(removeMemberAction(form({ user_id: lee, company_id: companyId })))).toBe("/company/team?done=removed");
 
     harness.jar = leeJar;
     expect(await redirectOf(TeamPage(params()))).toBe("/company/start");
   });
 
   it("the only owner cannot leave; the page says why", async () => {
-    await companyWithOwner();
-    expect(await redirectOf(leaveAction())).toBe("/company/team?error=last_owner");
+    const { companyId } = await companyWithOwner();
+    expect(await redirectOf(leaveAction(form({ company_id: companyId })))).toBe("/company/team?error=last_owner");
     expect(await html(TeamPage(params({ error: "last_owner" })))).toContain("Make someone else an owner or close the company first.");
   });
 });
@@ -253,5 +255,62 @@ describe("company switcher", () => {
     await redirectOf(switchCompanyAction(form({ company_id: other })));
     expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(b);
     expect(await html(CrmLayout({ children: null }))).not.toContain("Not mine");
+  });
+});
+
+describe("forms from a tab that shows another company", () => {
+  async function twoCompanies() {
+    const dana = await signIn("dana@acme.io");
+    await redirectOf(registerCompanyAction({}, form(COMPANY)));
+    await redirectOf(registerCompanyAction({}, form({ ...COMPANY, name: "Beta Labs", website: "beta.io" })));
+    const ids = Object.fromEntries(rows<{ id: string; name: string }>("SELECT id, name FROM companies").map((r) => [r.name, r.id]));
+    return { dana, a: ids["Acme Labs"], b: ids["Beta Labs"] };
+  }
+
+  it("tab 1 shows A, tab 2 switched to B: CLOSE in tab 1 is refused and closes nothing", async () => {
+    const { a, b } = await twoCompanies();
+    // Кукі вже на B (друга вкладка перемкнула), форма з першої вкладки несе A.
+    expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(b);
+    const state = await closeCompanyAction({}, form({ confirm: "CLOSE", company_id: a }));
+    expect(state.message?.text).toBe("You switched company in another tab. Reload this page.");
+    expect(rows("SELECT status FROM companies ORDER BY name")).toEqual([{ status: "active" }, { status: "active" }]);
+
+    // Інші дії так само.
+    expect((await inviteAction({}, form({ email: "lee@acme.io", company_id: a }))).error).toBe(
+      "You switched company in another tab. Reload this page.",
+    );
+    expect(await redirectOf(leaveAction(form({ company_id: a })))).toBe("/company/team?error=company_switched");
+    expect((await updateCompanySettingsAction({}, form({ ...COMPANY, company_id: a }))).message?.text).toBe(
+      "You switched company in another tab. Reload this page.",
+    );
+    expect(rows("SELECT COUNT(*) AS n FROM company_members WHERE user_id IS NULL")).toEqual([{ n: 0 }]);
+
+    // Форма з тієї самої компанії працює.
+    expect(await redirectOf(closeCompanyAction({}, form({ confirm: "CLOSE", company_id: b })))).toBe("/company/settings");
+    expect(rows<{ id: string; status: string }>("SELECT id, status FROM companies WHERE status = 'closed'").map((r) => r.id)).toEqual([b]);
+  });
+
+  it("after closing B the session is in A; a member of a closed company can leave it from settings", async () => {
+    const { a, b } = await twoCompanies();
+    await redirectOf(closeCompanyAction({}, form({ confirm: "CLOSE", company_id: b })));
+    expect(await html(CrmLayout({ children: null }))).toContain("Acme Labs");
+
+    // Кукі старої вкладки на B: однаково A.
+    harness.jar.set(COMPANY_COOKIE, b);
+    expect(await html(CrmLayout({ children: null }))).not.toContain("This company is closed.");
+
+    // Лише закрита компанія: налаштування показують вихід.
+    exec("DELETE FROM company_members WHERE company_id = ?", a);
+    expect(await html(CrmLayout({ children: null }))).toContain("This company is closed.");
+    expect(await html(SettingsPage())).toContain("Leave Beta Labs");
+    expect(await redirectOf(leaveAction(form({ company_id: b, from: "settings" })))).toBe("/company/start");
+    expect(rows("SELECT COUNT(*) AS n FROM company_members")).toEqual([{ n: 0 }]);
+  });
+
+  it("an expired session on Close company shows a message, not an error page", async () => {
+    const { b } = await twoCompanies();
+    harness.jar = (await import("@/test/harness")).fakeCookieJar();
+    const state = await closeCompanyAction({}, form({ confirm: "CLOSE", company_id: b }));
+    expect(state.message?.text).toBe("Sign in again to continue.");
   });
 });

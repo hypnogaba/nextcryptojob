@@ -323,3 +323,68 @@ describe("tenant isolation", () => {
     expect(all(db.raw, "SELECT COUNT(*) AS n FROM company_members WHERE company_id = ?", other)).toEqual([{ n: 3 }]);
   });
 });
+
+/** D1, у якого перед пакетом встигає відбутись чужа зміна (друга вкладка, інший власник). */
+function racing(d1: D1Database, meanwhile: () => void): D1Database {
+  return new Proxy(d1, {
+    get(target, prop, receiver) {
+      if (prop === "batch") {
+        return async (statements: D1PreparedStatement[]) => {
+          meanwhile();
+          return target.batch(statements);
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+describe("races: the error says what happened and the log has one row per change", () => {
+  it("an invite canceled while it is being accepted says it is not valid, not that the team is full", async () => {
+    const { owner } = await companyWithOwner({ subscription: true });
+    const token = await invite(owner, "lee@acme.io");
+    const lee = addUser(db.raw, { email: "lee@acme.io" });
+    const d1 = racing(db.d1, () => run(db.raw, "DELETE FROM company_members WHERE user_id IS NULL"));
+    expect(await failure(acceptInvite(d1, { id: lee, email: "lee@acme.io" }, token))).toMatchObject({ code: "invite_invalid" });
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'team.join'")).toEqual([{ n: 0 }]);
+  });
+
+  it("an invite that expires between the check and the write says it expired", async () => {
+    const { owner } = await companyWithOwner({ subscription: true });
+    const token = await invite(owner, "lee@acme.io");
+    const lee = addUser(db.raw, { email: "lee@acme.io" });
+    const d1 = racing(db.d1, () => run(db.raw, "UPDATE company_members SET invited_at = datetime('now', '-8 days') WHERE user_id IS NULL"));
+    expect(await failure(acceptInvite(d1, { id: lee, email: "lee@acme.io" }, token))).toMatchObject({ code: "invite_expired" });
+  });
+
+  it("removing someone another owner just removed says not on the team, not last owner", async () => {
+    const { owner, companyId } = await companyWithOwner({ subscription: true });
+    const lee = addUser(db.raw, { email: "lee@acme.io" });
+    addMember(db.raw, companyId, lee, "member");
+    const ctx = await ctxOf(owner);
+    ctx.db = racing(db.d1, () => run(db.raw, "DELETE FROM company_members WHERE user_id = ?", lee));
+    expect(await failure(removeMember(ctx, lee))).toMatchObject({ code: "not_found", message: "This person is not on your team." });
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'team.remove'")).toEqual([{ n: 0 }]);
+  });
+
+  it("a role change that another tab already made is fine and logged once", async () => {
+    const { owner, companyId } = await companyWithOwner({ subscription: true });
+    const lee = addUser(db.raw, { email: "lee@acme.io" });
+    addMember(db.raw, companyId, lee, "member");
+    await changeRole(await ctxOf(owner), lee, "owner");
+    const ctx = await ctxOf(owner);
+    run(db.raw, "UPDATE company_members SET role = 'member' WHERE user_id = ?", lee);
+    ctx.db = racing(db.d1, () => run(db.raw, "UPDATE company_members SET role = 'owner' WHERE user_id = ?", lee));
+    await changeRole(ctx, lee, "owner");
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'team.role'")).toEqual([{ n: 1 }]);
+  });
+
+  it("canceling the same invite twice: the second says it is gone, one log row", async () => {
+    const { owner } = await companyWithOwner();
+    await invite(owner, "lee@acme.io");
+    const [{ id }] = all<{ id: number }>(db.raw, "SELECT id FROM company_members WHERE user_id IS NULL");
+    await revokeInvite(await ctxOf(owner), id);
+    expect(await failure(revokeInvite(await ctxOf(owner), id))).toMatchObject({ code: "not_found" });
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'team.invite_revoke'")).toEqual([{ n: 1 }]);
+  });
+});

@@ -4,7 +4,7 @@ import { addApiKey, addUser, all, contextFor, crmDb } from "@/test/crm-fixtures"
 import type { TestDb } from "@/test/sqlite-d1";
 import { PaymentRequired, runAction } from "./actions";
 import { listApplicationsForAdmin, loadApplication, parseApplication, reviewApplication, submitApplication, type ApplicationInput } from "./agency";
-import { CompanyError, registerCompany, updateCompanySettings } from "./company";
+import { closeCompany, CompanyError, registerCompany, updateCompanySettings } from "./company";
 import { inviteMember } from "./team";
 import { ActionError } from "./types";
 
@@ -75,7 +75,9 @@ describe("agency waiting for review", () => {
     const sent = await submitApplication(await ctx(), application());
     expect(sent.resubmitted).toBe(false);
     expect(await loadApplication(db.d1, companyId)).toMatchObject({ status: "pending", contactName: "Ann Lee" });
-    expect(await failure(submitApplication(await ctx(), application()))).toMatchObject({ code: "application_not_open" });
+    // Друге натискання: та сама заявка, без другого рядка й другого запису в журналі.
+    expect(await submitApplication(await ctx(), application())).toEqual({ applicationId: sent.applicationId, resubmitted: false });
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM agency_applications")).toEqual([{ n: 1 }]);
 
     const c = await ctx();
     expect(await failure(runAction("search_candidates", { filters: {} }, c))).toMatchObject({ code: "company_not_active", status: 403 });
@@ -204,5 +206,48 @@ describe("admin review", () => {
     const c = await ctx();
     expect(await failure(runAction("search_candidates", { filters: {} }, c))).toMatchObject({ code: "company_not_active" });
     expect(await failure(submitApplication(c, application()))).toBeInstanceOf(ActionError);
+  });
+});
+
+describe("agency edge cases", () => {
+  it("two first submits at the same time give one application and no error", async () => {
+    const { companyId, ctx } = await agency();
+    const c = await ctx();
+    const [a, b] = await Promise.all([submitApplication(c, application()), submitApplication(c, application())]);
+    expect(a.applicationId).toBe(b.applicationId);
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM agency_applications WHERE company_id = ?", companyId)).toEqual([{ n: 1 }]);
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'agency.apply'")).toEqual([{ n: 1 }]);
+  });
+
+  it("a closed agency is not approved and gets no email", async () => {
+    const { admin, ctx } = await agency();
+    const { applicationId } = await submitApplication(await ctx(), application());
+    await closeCompany(await ctx(), { stripe: null });
+    const mailer = fakeMailer();
+    for (const decision of ["approve", "needs_info", "reject"] as const) {
+      expect(
+        await reviewApplication(db.d1, { userId: admin }, { applicationId, decision, note: "x" }, { mailer, origin: ORIGIN }),
+      ).toEqual({ ok: false, reason: "not_pending" });
+    }
+    expect(mailer.sent).toEqual([]);
+    expect(all(db.raw, "SELECT status FROM companies")).toEqual([{ status: "closed" }]);
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM audit_log WHERE action LIKE 'agency.%' AND action <> 'agency.apply'")).toEqual([{ n: 0 }]);
+  });
+
+  it("mails only verified member emails, never the contact email typed into the form", async () => {
+    const tg = addUser(db.raw, { email: null, telegram: "ann_tg" });
+    await registerCompany(db.d1, { id: tg, email: null }, {
+      name: "Hire Co",
+      website: "https://hire.co",
+      domain: "hire.co",
+      country: "GB",
+      kind: "agency",
+    });
+    const { applicationId } = await submitApplication(await contextFor(db, { sessionUserId: tg }), application());
+    const admin = addUser(db.raw, { email: "hypnogaba@gmail.com" });
+    const mailer = fakeMailer();
+    const res = await reviewApplication(db.d1, { userId: admin }, { applicationId, decision: "approve", note: "" }, { mailer, origin: ORIGIN });
+    expect(res).toMatchObject({ ok: true, status: "approved", emailed: false });
+    expect(mailer.sent).toEqual([]);
   });
 });

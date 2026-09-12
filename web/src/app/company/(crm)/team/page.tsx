@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { HINT } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
-import { LAST_OWNER_TEXT } from "@/lib/crm/company";
+import { COMPANY_SWITCHED_TEXT, LAST_OWNER_TEXT } from "@/lib/crm/company";
 import { can } from "@/lib/crm/permissions";
 import { loadTeam } from "@/lib/crm/team";
 import { fromSqlTime } from "@/lib/time";
 import { crmPage } from "../crm";
-import { changeRoleAction, leaveAction, removeMemberAction, revokeInviteAction } from "./actions";
+import { LeaveTeam } from "@/components/crm/leave-team";
+import { changeRoleAction, removeMemberAction, revokeInviteAction } from "./actions";
 import { InviteForm } from "./invite-form";
 
 export const metadata: Metadata = { title: "Team", robots: { index: false } };
@@ -26,6 +26,7 @@ const ERRORS: Record<string, string> = {
   forbidden: "Only the company owner can manage the team.",
   company_not_active: "This company account is not active.",
   validation_failed: "Use Leave the team to leave this company.",
+  company_switched: COMPANY_SWITCHED_TEXT,
   unauthorized: "Sign in again to continue.",
 };
 
@@ -76,7 +77,7 @@ export default async function TeamPage({
           <h2 id="invite-title" className="text-lg font-semibold tracking-tight">
             Invite teammate
           </h2>
-          <InviteForm seatsLeft={seatsLeft} />
+          <InviteForm seatsLeft={seatsLeft} companyId={company.id} />
         </section>
       ) : null}
 
@@ -99,6 +100,7 @@ export default async function TeamPage({
               {isOwner && !m.isMe ? (
                 <div className="flex flex-wrap gap-2">
                   <form action={changeRoleAction}>
+                    <input type="hidden" name="company_id" value={company.id} />
                     <input type="hidden" name="user_id" value={m.userId} />
                     <input type="hidden" name="role" value={m.role === "owner" ? "member" : "owner"} />
                     <Button type="submit" variant="outline" className="h-11 px-3 text-sm">
@@ -110,7 +112,8 @@ export default async function TeamPage({
                       Remove
                     </summary>
                     <form action={removeMemberAction} className="absolute right-0 z-10 mt-1 grid w-64 gap-2 rounded-lg border border-line bg-surface p-3 shadow-lg">
-                      <input type="hidden" name="user_id" value={m.userId} />
+                      <input type="hidden" name="company_id" value={company.id} />
+                    <input type="hidden" name="user_id" value={m.userId} />
                       <p className="text-sm text-ink">Remove {m.label}? Their notes stay, signed Former member.</p>
                       <Button type="submit" variant="destructive" className="h-11 px-3 text-sm">
                         Remove from team
@@ -121,7 +124,8 @@ export default async function TeamPage({
               ) : null}
               {isOwner && m.isMe && m.role === "owner" ? (
                 <form action={changeRoleAction}>
-                  <input type="hidden" name="user_id" value={m.userId} />
+                  <input type="hidden" name="company_id" value={company.id} />
+                    <input type="hidden" name="user_id" value={m.userId} />
                   <input type="hidden" name="role" value="member" />
                   <Button type="submit" variant="outline" className="h-11 px-3 text-sm" disabled={team.owners <= 1}>
                     Step down to member
@@ -149,6 +153,7 @@ export default async function TeamPage({
                 </div>
                 {isOwner ? (
                   <form action={revokeInviteAction}>
+                    <input type="hidden" name="company_id" value={company.id} />
                     <input type="hidden" name="invite_id" value={i.id} />
                     <Button type="submit" variant="outline" className="h-11 px-3 text-sm">
                       Cancel invite
@@ -161,21 +166,7 @@ export default async function TeamPage({
         </section>
       ) : null}
 
-      <section aria-labelledby="leave-title" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-6">
-        <h2 id="leave-title" className="text-lg font-semibold tracking-tight">
-          Leave the team
-        </h2>
-        {role === "owner" && team.owners <= 1 ? (
-          <p className={HINT}>{LAST_OWNER_TEXT}</p>
-        ) : (
-          <form action={leaveAction} className="grid gap-3">
-            <p className={HINT}>You lose access to {company.name} right away. Your notes stay, signed Former member.</p>
-            <Button type="submit" variant="destructive" className="h-11 w-full px-5 text-base sm:w-fit">
-              Leave {company.name}
-            </Button>
-          </form>
-        )}
-      </section>
+      <LeaveTeam companyId={company.id} companyName={company.name} blocked={role === "owner" && team.owners <= 1} from="team" />
     </div>
   );
 }
