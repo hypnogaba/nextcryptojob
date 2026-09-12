@@ -1,6 +1,9 @@
 // Перенесено з NextRole (написано до запуску 14.09.2026).
+import type { LookupAddress } from "node:dns";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checkUrlShape, fetchJson, isPrivateIp, redact, safeFetch, SourceUnavailableError, UnsafeUrlError } from "./http.js";
+import { checkUrlShape, fetchJson, guardedLookup, isPrivateIp, redact, safeFetch, SourceUnavailableError, UnsafeUrlError } from "./http.js";
 import { __resetLimiters } from "./limits.js";
 
 type Impl = (url: string, init: RequestInit) => Response | Promise<Response>;
@@ -149,6 +152,55 @@ describe("safeFetch: редиректи", () => {
     await expect(safeFetch("https://rpc.example.com/rpc", { method: "POST", body: "{}" }, { fetchImpl }))
       .rejects.toThrow(/POST/);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("SSRF: з'єднання лише на перевірену IP (DNS rebinding)", () => {
+  type Cb = (err: Error | null, address: string | LookupAddress[], family?: number) => void;
+  const run = (lookup: ReturnType<typeof guardedLookup>, all: boolean, family?: number) =>
+    new Promise<{ err: Error | null; address: string | LookupAddress[]; family?: number }>((resolve) => {
+      (lookup as unknown as (h: string, o: object, cb: Cb) => void)(
+        "site.example.com", { all, ...(family ? { family } : {}) },
+        (err, address, fam) => resolve({ err, address, family: fam }));
+    });
+
+  it("публічні адреси проходять у форматі, якого чекає net.connect", async () => {
+    const lookup = guardedLookup(async () => ["93.184.216.34", "2606:2800:220:1::1"]);
+    expect((await run(lookup, true)).address).toEqual([
+      { address: "93.184.216.34", family: 4 }, { address: "2606:2800:220:1::1", family: 6 },
+    ]);
+    expect(await run(lookup, false)).toMatchObject({ err: null, address: "93.184.216.34", family: 4 });
+    expect(await run(lookup, false, 6)).toMatchObject({ err: null, address: "2606:2800:220:1::1", family: 6 });
+  });
+
+  it.each([["лише приватна", ["10.0.0.5"]], ["публічна разом із приватною", ["93.184.216.34", "127.0.0.1"]],
+    ["IPv6 loopback", ["::1"]], ["metadata", ["169.254.169.254"]]])("%s: відмова", async (_n, addrs) => {
+    const { err } = await run(guardedLookup(async () => addrs), true);
+    expect(err).toBeInstanceOf(UnsafeUrlError);
+  });
+
+  it("порожній DNS: джерело недоступне, а не небезпечне", async () => {
+    const { err } = await run(guardedLookup(async () => []), true);
+    expect(err).toBeInstanceOf(SourceUnavailableError);
+  });
+
+  it("ім'я, що після перевірки почало вказувати на 127.0.0.1, не отримує запиту", async () => {
+    let hits = 0;
+    const server = createServer((_q, r) => { hits++; r.end("{}"); });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const answers = [["93.184.216.34"], ["127.0.0.1"]];
+      const lookup = async () => answers.shift() ?? ["127.0.0.1"];
+      await expect(safeFetch(`http://rebind.example.test:${port}/`, {}, { lookup })).rejects.toThrow(UnsafeUrlError);
+      expect(answers).toHaveLength(0);   // друге питання поставило саме з'єднання
+      expect(hits).toBe(0);
+      await expect(fetchJson(`http://rebind2.example.test:${port}/`, {}, { lookup: async () => ["127.0.0.1"], retries: 2 }))
+        .rejects.toMatchObject({ name: "SourceUnavailableError", status: 403 });
+      expect(hits).toBe(0);
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
   });
 });
 

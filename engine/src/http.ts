@@ -1,6 +1,8 @@
 // Перенесено з NextRole (написано до запуску 14.09.2026).
+import type { LookupAddress } from "node:dns";
 import { lookup as dnsLookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { isIP, type LookupFunction } from "node:net";
+import { Agent, fetch as undiciFetch } from "undici";
 import { limiterFor, MAX_BACKOFF_MS, NestedRunError } from "./limits.js";
 
 /**
@@ -97,8 +99,57 @@ export async function assertSafeUrl(raw: string, lookup: Lookup | null): Promise
   return u;
 }
 
+/**
+ * lookup для net.connect: розвʼязує ім'я і відмовляє, якщо хоч одна адреса приватна.
+ *
+ * Перевірка перед запитом (assertSafeUrl) і з'єднання питають DNS окремо, і між ними
+ * ім'я може почати вказувати в приватну мережу (DNS rebinding). Тому з'єднання
+ * бере адреси лише звідси: сокет відкривається на ту IP, яку щойно перевірено.
+ */
+export function guardedLookup(resolve: Lookup): LookupFunction {
+  return (hostname, options, callback) => {
+    resolve(hostname).then((addrs) => {
+      const all: LookupAddress[] = addrs.map((address) => ({ address, family: isIP(address) }));
+      if (all.length === 0) throw new SourceUnavailableError(`${hostname}: DNS порожній`);
+      if (all.some((a) => a.family === 0 || isPrivateIp(a.address))) {
+        throw new UnsafeUrlError(`${hostname} вказує в приватну мережу`);
+      }
+      const family = options.family === 4 || options.family === 6 ? options.family : 0;
+      const fit = family ? all.filter((a) => a.family === family) : all;
+      if (fit.length === 0) throw new SourceUnavailableError(`${hostname}: немає адрес IPv${family}`);
+      if (options.all) callback(null, fit);
+      else callback(null, fit[0]!.address, fit[0]!.family);
+    }).catch((e: unknown) => {
+      callback(e instanceof Error ? e : new Error(String(e)), "", 0);
+    });
+  };
+}
+
+/** Один пул з'єднань на функцію DNS: у роботі це завжди realLookup. */
+const pinnedAgents = new WeakMap<Lookup, Agent>();
+
+/** fetch, у якого кожне з'єднання йде лише на адресу, перевірену guardedLookup. */
+function pinnedFetch(resolve: Lookup): typeof fetch {
+  let agent = pinnedAgents.get(resolve);
+  if (!agent) {
+    agent = new Agent({ connect: { lookup: guardedLookup(resolve) } });
+    pinnedAgents.set(resolve, agent);
+  }
+  const dispatcher = agent;
+  return ((input: string | URL, init?: RequestInit) =>
+    undiciFetch(input, { ...(init as object), dispatcher })) as unknown as typeof fetch;
+}
+
+/** Відмова guardedLookup приходить загорнутою в TypeError("fetch failed"); дістаємо її. */
+function unsafeCause(e: unknown): UnsafeUrlError | null {
+  for (let c: unknown = e, depth = 0; c instanceof Error && depth < 5; c = c.cause, depth++) {
+    if (c instanceof UnsafeUrlError) return c;
+  }
+  return null;
+}
+
 /** Читає тіло зі стелею замість того, щоб довіряти Content-Length. */
-async function readCapped(res: Response, cap: number, shownUrl: string): Promise<string> {
+export async function readCapped(res: Response, cap: number, shownUrl: string): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const parts: Uint8Array[] = [];
@@ -205,11 +256,11 @@ function mergeHeaders(base: Record<string, string>, extra: RequestInit["headers"
  * з внутрішнім хостом, і повіз би туди токени.
  */
 export async function safeFetch(url: string, init: RequestInit = {}, o: FetchOptions = {}): Promise<Response> {
-  const fetchImpl = o.fetchImpl ?? fetch;
-  // TODO(збирачі, SSRF): з підміненим fetchImpl перевірка DNS вимикається, а зі справжнім
-  // між перевіркою і з'єднанням DNS може відповісти інакше (rebinding). Прив'язати
-  // з'єднання до перевіреної IP через undici dispatcher.
+  // Підмінений fetchImpl (тести) мережі не має: DNS перевіряється, лише якщо тест дав lookup.
+  // Справжній fetch відкриває з'єднання тільки на IP, перевірену guardedLookup, тож
+  // відповідь DNS між перевіркою і з'єднанням (rebinding) нічого не змінює.
   const lookup = o.lookup === undefined ? (o.fetchImpl ? null : realLookup) : o.lookup;
+  const fetchImpl = o.fetchImpl ?? (lookup ? pinnedFetch(lookup) : fetch);
   const timeoutMs = o.timeoutMs ?? 25_000;
   const userSignal = init.signal ?? undefined;
   const method = (init.method ?? "GET").toUpperCase();
@@ -224,7 +275,7 @@ export async function safeFetch(url: string, init: RequestInit = {}, o: FetchOpt
       const r = await fetchImpl(u.toString(), {
         ...init, method, headers, redirect: "manual",
         signal: userSignal ? AbortSignal.any([userSignal, timeout]) : timeout,
-      });
+      }).catch((e: unknown) => { throw unsafeCause(e) ?? e; });
       if (r.status === 429) {
         limiter.backoff(Math.min(retryAfterMs(r.headers) ?? o.backoffOn429Ms ?? 2_000, MAX_BACKOFF_MS));
       }
