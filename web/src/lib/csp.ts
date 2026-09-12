@@ -10,9 +10,10 @@
  * - Допиши походження (схема + хост, без шляху) у потрібні директиви
  *   DIRECTIVES з коментарем, навіщо воно. Лише ті директиви, які справді
  *   потрібні: скрипт, фрейм, запит, картинка чи відправка форми.
- * - Stripe Checkout / Elements: script-src і frame-src `https://js.stripe.com`,
+ * - Stripe Elements (якщо колись): script-src і frame-src `https://js.stripe.com`,
  *   frame-src `https://hooks.stripe.com`, connect-src `https://api.stripe.com`.
- *   Перенаправлення на checkout.stripe.com окремого дозволу не потребує.
+ *   Stripe Checkout і портал уже є (сторінка /company/billing): це перехід на
+ *   сторінку Stripe після server action, тому лише form-action нижче.
  * - Гаманці (підпис для підтвердження адреси): провайдери, вбудовані в
  *   браузер, дозволів не потребують. WalletConnect: connect-src
  *   `https://*.walletconnect.com wss://*.walletconnect.com
@@ -24,6 +25,8 @@
 const TURNSTILE = "https://challenges.cloudflare.com";
 const TELEGRAM_OAUTH = "https://oauth.telegram.org";
 const TELEGRAM = "https://telegram.org";
+const STRIPE_CHECKOUT = "https://checkout.stripe.com";
+const STRIPE_PORTAL = "https://billing.stripe.com";
 
 export const DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
   "default-src": ["'self'"],
@@ -45,7 +48,10 @@ export const DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
   "object-src": ["'none'"],
   "base-uri": ["'none'"],
   // Вхід Telegram OIDC: форма й перенаправлення йдуть на oauth.telegram.org.
-  "form-action": ["'self'", TELEGRAM_OAUTH],
+  // Оплата: кнопки на /company/billing перенаправляють у Stripe Checkout і портал.
+  // З JS Next переходить сам, але без JS форма йде звичайним POST, і браузер
+  // перевіряє form-action і для перенаправлення після нього.
+  "form-action": ["'self'", TELEGRAM_OAUTH, STRIPE_CHECKOUT, STRIPE_PORTAL],
   "frame-ancestors": ["'none'"],
   "upgrade-insecure-requests": [],
 };

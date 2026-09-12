@@ -102,13 +102,16 @@ export function actorCompanyId(actor: Actor): string | null {
 // ---------------------------------------------------------------------------
 // Компанія й доступ
 
-/** Та сама умова, що в поданні company_access (0004): підписка, яка дає доступ зараз. */
+/**
+ * Та сама умова, що в поданні company_access (0012_access_views): підписка, яка дає доступ зараз.
+ * past_due: 7 діб від початку періоду з невдалим списанням; рядок без кінця періоду доступу не дає.
+ * Тест lib/billing/access.test.ts звіряє її з поданням.
+ */
 const GRANTING_SUBSCRIPTION = `
   (s2.status IN ('trialing', 'active')
-     AND (s2.current_period_end IS NULL
-          OR datetime(s2.current_period_end,
-                      CASE s2.provider WHEN 'stripe' THEN '+2 days' ELSE '+0 days' END) > datetime('now')))
-  OR (s2.status = 'past_due' AND datetime(s2.current_period_end, '+7 days') > datetime('now'))`;
+     AND datetime(s2.current_period_end,
+                  CASE s2.provider WHEN 'stripe' THEN '+2 days' ELSE '+0 days' END) > datetime('now'))
+  OR (s2.status = 'past_due' AND datetime(s2.current_period_start, '+7 days') > datetime('now'))`;
 
 type CompanyRow = {
   id: string;
