@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
 import { ERROR, FIELD, HINT, LABEL } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
@@ -40,19 +40,26 @@ const RADIO_ROW =
 
 export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, paused, zones }: Props) {
   const [state, action] = useActionState(saveDailyJobsAction, {} as SettingsState);
-  const zoneRef = useRef<HTMLSelectElement>(null);
+  // Списки керовані станом: після дії React скидає форму, і некерований <select>
+  // повертався б до варіанта з першого показу, а не до щойно збереженого.
+  const [hourValue, setHourValue] = useState(String(hour));
+  const [zone, setZone] = useState(timezone ?? "UTC");
+  const [detected, setDetected] = useState(false);
 
   // Перший візит: пояс ще не збережено, беремо з браузера й одразу пишемо.
-  // Значення ставимо прямо в поле: так немає розбіжності між HTML з сервера й браузером.
   useEffect(() => {
     if (timezone) return;
-    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const match = detected ? matchZone(detected, zones) : null;
-    if (!match || !zoneRef.current) return;
-    zoneRef.current.value = match;
-    detectTimezoneAction(match).catch(() => {
-      // Не вийшло: людина збереже пояс сама кнопкою Save.
-    });
+    const fromDevice = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const match = fromDevice ? matchZone(fromDevice, zones) : null;
+    if (!match) return;
+    detectTimezoneAction(match)
+      .catch(() => {
+        // Не вийшло записати: людина збереже пояс сама кнопкою Save.
+      })
+      .finally(() => {
+        setZone(match);
+        setDetected(true);
+      });
   }, [timezone, zones]);
 
   const errors = state.errors ?? {};
@@ -106,7 +113,8 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
           <select
             id="hour"
             name="hour"
-            defaultValue={String(hour)}
+            value={hourValue}
+            onChange={(e) => setHourValue(e.target.value)}
             aria-invalid={errors.hour ? true : undefined}
             aria-describedby={errors.hour ? "hour-error" : undefined}
             className={FIELD}
@@ -130,8 +138,11 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
           <select
             id="timezone"
             name="timezone"
-            ref={zoneRef}
-            defaultValue={timezone ?? "UTC"}
+            value={zone}
+            onChange={(e) => {
+              setZone(e.target.value);
+              setDetected(false);
+            }}
             aria-invalid={errors.timezone ? true : undefined}
             aria-describedby={errors.timezone ? "timezone-error" : "timezone-hint"}
             className={FIELD}
@@ -148,7 +159,7 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
             </p>
           ) : (
             <p id="timezone-hint" className={HINT}>
-              {timezone ? "The hour is in this time zone." : "We picked the time zone of this device."}
+              {detected ? "We picked the time zone of this device." : "The hour is in this time zone."}
             </p>
           )}
         </div>
