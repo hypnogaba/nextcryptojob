@@ -87,7 +87,14 @@ describe("currentUser", () => {
   it("returns the person behind the cookie", async () => {
     addUser();
     await createSession("u1");
-    await expect(currentUser()).resolves.toEqual({ id: "u1", email: "ada@example.com", channel: "email" });
+    await expect(currentUser()).resolves.toEqual({ id: "u1", email: "ada@example.com", channel: "email", method: null });
+  });
+
+  it.each(["email", "telegram"] as const)("says the session was opened by %s", async (method) => {
+    addUser();
+    await createSession("u1", method);
+    expect(rows("SELECT method FROM sessions")).toEqual([{ method }]);
+    await expect(currentUser()).resolves.toMatchObject({ id: "u1", method });
   });
 
   it("rejects a token that is not in the database", async () => {

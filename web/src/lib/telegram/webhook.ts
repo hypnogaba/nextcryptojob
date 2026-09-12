@@ -16,8 +16,10 @@ import type { SendDeps } from "./send";
  *   би запис у D1 на кожен сміттєвий запит.
  * - Кожен update_id обробляється один раз (webhook_updates): Telegram повторює
  *   оновлення, на яке не почув 200.
- * - Після перевірки секрету відповідь завжди 200: виняток усередині інакше
- *   означав би той самий апдейт по колу.
+ * - Помилка ДО claim (база недоступна) дає 500: апдейт ще ніхто не взяв, і
+ *   Telegram надішле його знову. Після claim відповідь завжди 200: виняток
+ *   усередині інакше означав би той самий апдейт по колу, а повтор однаково
+ *   відкинула б дедуплікація.
  */
 
 /** Оновлення з одного чату: 20 за хвилину, далі 5 хвилин тиші. */
@@ -43,7 +45,13 @@ export async function claimUpdate(d: D1Database, updateId: number): Promise<bool
     .run();
   if (res.meta.changes !== 1) return false;
   if (updateId % 100 === 0) {
-    await d.prepare("DELETE FROM webhook_updates WHERE seen_at < datetime('now', '-3 days')").run();
+    // Апдейт уже взято: невдале прибирання не має перетворитися на 500 і повтор,
+    // який дедуплікація потім мовчки відкине.
+    try {
+      await d.prepare("DELETE FROM webhook_updates WHERE seen_at < datetime('now', '-3 days')").run();
+    } catch (err) {
+      console.warn(`telegram webhook prune failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   return true;
 }
@@ -70,9 +78,16 @@ export async function handleWebhookRequest(request: Request, env: TelegramEnv, d
   }
   if (!isUpdate(update)) return ok();
 
+  // До claim апдейт ще ніхто не взяв: 500 просить Telegram надіслати його знову.
   try {
-    const d = db();
-    if (!(await claimUpdate(d, update.update_id))) return ok();
+    if (!(await claimUpdate(db(), update.update_id))) return ok();
+  } catch (err) {
+    console.error(`telegram webhook claim failed: ${err instanceof Error ? err.message : String(err)}`);
+    return Response.json({ ok: false }, { status: 500 });
+  }
+
+  // Після claim лише 200: повтор цього апдейта вже відкинула б дедуплікація.
+  try {
     const chatId = chatOf(update);
     if (chatId !== null && !(await consume(`tg-chat:${chatId}`, BOT_CHAT_LIMITS)).allowed) return ok();
     await handleUpdate(update, { token: env.TELEGRAM_BOT_TOKEN, origin: new URL(request.url).origin, deps });

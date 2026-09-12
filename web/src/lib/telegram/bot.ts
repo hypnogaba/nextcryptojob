@@ -1,6 +1,6 @@
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
-import { setChannel } from "./channel";
+import type { Channel } from "./channel";
 import { answerCallbackQuery, escapeHtml, sendMessage, type SendDeps } from "./send";
 
 /**
@@ -28,22 +28,27 @@ function link(origin: string, path: string): string {
   return `<a href="${escapeHtml(url.toString())}">${escapeHtml(url.host + url.pathname)}</a>`;
 }
 
+/** Посилання зі своїм словом замість адреси. */
+function named(origin: string, path: string, label: string): string {
+  return `<a href="${escapeHtml(new URL(path, origin).toString())}">${escapeHtml(label)}</a>`;
+}
+
 export const BOT_TEXT = {
   startKnown: (origin: string) =>
     `Welcome back to NextCryptoJob.\n\nYour score, profile and daily jobs live on the site: ${link(origin, "/account")}\n\n/help lists what I can do here.`,
+  startResumed: (origin: string, channel: Channel) =>
+    `Daily jobs are back on. ${channel === "telegram" ? "They come to this chat." : "They go to your email."}\n\n` +
+    `Change the time or the channel in ${named(origin, "/settings", "Settings")}.`,
   startNew: (origin: string) =>
     `Hi! NextCryptoJob turns your public crypto work into a score and sends you jobs that fit it.\n\n` +
     `Create your profile on the site: ${link(origin, "/login")}\n` +
     `Then connect this Telegram in your account to get daily jobs here.\n\n/help lists what I can do here.`,
   help: (origin: string) =>
-    `What I can do:\n/start: what NextCryptoJob is\n/help: this list\n/stop: stop daily jobs in Telegram\n\n` +
+    `What I can do:\n/start: what NextCryptoJob is, or turn daily jobs back on\n/help: this list\n/stop: pause daily jobs\n\n` +
     `Your profile and settings live on the site: ${link(origin, "/account")}`,
   stopNotLinked: () => "This Telegram is not connected to a NextCryptoJob profile, so there is nothing to stop.",
-  stopAlreadyEmail: () => "Daily jobs already go to your email, not here.",
   stopDone: (origin: string) =>
-    `Done. Daily jobs will go to your email from now on.\n\nTo get them here again, switch Telegram back on in your account: ${link(origin, "/account")}`,
-  stopNoEmail: (origin: string) =>
-    `Your profile has no email, so daily jobs cannot move there.\n\nTo change how you get them, open your account on the site: ${link(origin, "/account")}`,
+    `Daily jobs are paused. Send /start to resume, or change it in ${named(origin, "/settings", "Settings")}.`,
   unknown: () => "I understand /start, /help and /stop.",
   unknownAction: "Unknown action",
 } as const;
@@ -54,29 +59,43 @@ export function parseCommand(text: string | undefined): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
-async function profileByTelegram(telegramId: number) {
+type Profile = { id: string; channel: Channel; digest_paused: number };
+
+async function profileByTelegram(telegramId: number): Promise<Profile | null> {
   return db()
-    .prepare("SELECT id, channel FROM users WHERE telegram_id = ?")
+    .prepare("SELECT id, channel, digest_paused FROM users WHERE telegram_id = ?")
     .bind(String(telegramId))
-    .first<{ id: string; channel: "email" | "telegram" }>();
+    .first<Profile>();
 }
 
+/**
+ * Пауза щоденних вакансій (users.digest_paused), той самий прапор, що в /settings.
+ * Канал не чіпаємо: після /start вакансії підуть туди ж, куди йшли. true, якщо
+ * прапор справді змінився (тоді й запис у журнал).
+ */
+async function setPaused(userId: string, paused: boolean): Promise<boolean> {
+  const res = await db()
+    .prepare("UPDATE users SET digest_paused = ?2 WHERE id = ?1 AND digest_paused <> ?2")
+    .bind(userId, paused ? 1 : 0)
+    .run();
+  return res.meta.changes === 1;
+}
+
+/** /stop завжди зупиняє розсилку, хоч би куди вона йшла: пошта чи цей чат. */
 async function stop(from: TgUser, origin: string): Promise<string> {
   const user = await profileByTelegram(from.id);
   if (!user) return BOT_TEXT.stopNotLinked();
-  if (user.channel === "email") return BOT_TEXT.stopAlreadyEmail();
-  const result = await setChannel(db(), user.id, "email");
-  switch (result) {
-    case "changed":
-      await audit(user.id, "bot.stop", user.id, { channel: "email" });
-      return BOT_TEXT.stopDone(origin);
-    case "unchanged":
-      return BOT_TEXT.stopAlreadyEmail();
-    case "no_email":
-      return BOT_TEXT.stopNoEmail(origin);
-    default:
-      return BOT_TEXT.stopNotLinked();
-  }
+  if (await setPaused(user.id, true)) await audit(user.id, "bot.stop", user.id, { digest_paused: true });
+  return BOT_TEXT.stopDone(origin);
+}
+
+/** /start: незнайомцю привітання, своєму знімає паузу, якщо вона була. */
+async function start(from: TgUser, origin: string): Promise<string> {
+  const user = await profileByTelegram(from.id);
+  if (!user) return BOT_TEXT.startNew(origin);
+  if (user.digest_paused !== 1) return BOT_TEXT.startKnown(origin);
+  if (await setPaused(user.id, false)) await audit(user.id, "bot.start", user.id, { digest_paused: false });
+  return BOT_TEXT.startResumed(origin, user.channel);
 }
 
 export async function handleMessage(message: TgMessage, ctx: BotContext): Promise<void> {
@@ -86,7 +105,7 @@ export async function handleMessage(message: TgMessage, ctx: BotContext): Promis
   let reply: string;
   switch (parseCommand(message.text)) {
     case "start":
-      reply = (await profileByTelegram(from.id)) ? BOT_TEXT.startKnown(ctx.origin) : BOT_TEXT.startNew(ctx.origin);
+      reply = await start(from, ctx.origin);
       break;
     case "help":
       reply = BOT_TEXT.help(ctx.origin);

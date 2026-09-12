@@ -4,14 +4,15 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { loadAnswers } from "@/lib/onboarding/store";
+import { AddEmailForm } from "./add-email-form";
+import { TelegramPanel } from "./telegram-panel";
 
 const LINK =
   "flex min-h-12 items-center justify-between rounded-lg border border-line bg-surface px-4 text-base font-medium text-ink hover:border-line-strong";
-import { TelegramPanel } from "./telegram-panel";
 
 export const metadata: Metadata = { title: "Account", robots: { index: false } };
 
-// Кабінет: пошта, профіль з балом, анкета, вихід.
+// Кабінет: пошта (або «Add email», якщо її ще немає), профіль з балом, анкета, вихід.
 export default async function AccountPage() {
   const user = await requireUser();
   const { step } = await loadAnswers(db(), user.id);
@@ -23,6 +24,11 @@ export default async function AccountPage() {
         <dt className="font-mono text-xs tracking-widest text-ink-muted uppercase">Email</dt>
         <dd className="text-ink">{user.email ?? "Not added yet"}</dd>
       </dl>
+      {user.email ? null : (
+        <div className="mt-4 max-w-md">
+          <AddEmailForm intro="We send a code to check it's yours. Then daily jobs can go there, and you can sign in with it." />
+        </div>
+      )}
       <nav aria-label="Your account" className="mt-8 grid max-w-md gap-2">
         <Link href="/profile" className={LINK}>
           Your score and sources

@@ -8,6 +8,7 @@ import { loadSettings } from "@/lib/account/settings";
 import { timezoneList } from "@/lib/account/timezones";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { AddEmailForm } from "../account/add-email-form";
 import { ContactForm } from "./contact-form";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
@@ -48,6 +49,11 @@ export default async function SettingsPage() {
       </div>
 
       <Section id="daily" title="Daily jobs" intro="Up to 5 jobs that match your roles, once a day at the hour you choose.">
+        {s.email ? null : (
+          <div className="border-b border-line pb-4">
+            <AddEmailForm intro="To get daily jobs by email, add an email first. We send a code to check it's yours." />
+          </div>
+        )}
         <DailyJobsForm
           email={s.email}
           telegramLinked={s.telegramLinked}

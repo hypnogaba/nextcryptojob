@@ -38,8 +38,11 @@ export const FLOW_TTL_SECONDS = 10 * 60;
 
 /** Допуск розбіжності годинників для exp і iat. */
 const CLOCK_SKEW_SECONDS = 60;
-/** ID-токен, виданий раніше за добу, не приймаємо, хоч би що казав exp. */
-const MAX_TOKEN_AGE_SECONDS = 24 * 60 * 60;
+/**
+ * ID-токен, виданий раніше за 10 хвилин, не приймаємо, хоч би що казав exp:
+ * стільки ж живе кука стану, а токен ми отримуємо одразу після повернення.
+ */
+export const MAX_TOKEN_AGE_SECONDS = 10 * 60;
 const TOKEN_TIMEOUT_MS = 8_000;
 
 export type OidcClient = { clientId: string; clientSecret: string };
@@ -382,9 +385,10 @@ export type VerifyOptions = {
  * Перевіряє ID-токен і віддає, хто це в Telegram. Будь-яка вада дає OidcError.
  *
  * nonce: якщо claim є, він мусить збігтися з куки. Якщо його немає, токен
- * приймаємо: Telegram не називає nonce серед claims_supported, а токен тут
- * приходить не з браузера, а прямим запитом сервера з секретом клієнта й
- * PKCE, тож підкласти чужий токен у цей шлях нема як.
+ * приймаємо з попередженням у журнал: Telegram не називає nonce серед
+ * claims_supported, а токен тут приходить не з браузера, а прямим запитом
+ * сервера з секретом клієнта й PKCE, тож підкласти чужий токен у цей шлях нема
+ * як. Перший справжній вхід покаже в журналі, чи nonce є.
  */
 export async function verifyIdToken(token: string, opts: VerifyOptions): Promise<TelegramIdentity> {
   const parts = token.split(".");
@@ -418,7 +422,10 @@ export async function verifyIdToken(token: string, opts: VerifyOptions): Promise
   if (claims.iat > now + CLOCK_SKEW_SECONDS) throw new OidcError("issued_in_future");
   if (now - claims.iat > MAX_TOKEN_AGE_SECONDS) throw new OidcError("too_old");
 
-  if (claims.nonce !== undefined && (typeof claims.nonce !== "string" || !safeEqual(claims.nonce, opts.nonce))) {
+  if (claims.nonce === undefined) {
+    // Приймаємо (див. вище), але хочемо бачити в журналі, чи Telegram справді його не кладе.
+    console.warn("telegram oidc: id token has no nonce claim");
+  } else if (typeof claims.nonce !== "string" || !safeEqual(claims.nonce, opts.nonce)) {
     throw new OidcError("wrong_nonce");
   }
 

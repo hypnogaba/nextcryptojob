@@ -137,33 +137,105 @@ describe("commands", () => {
   });
 });
 
+/** Видимий текст повідомлення бота, без розмітки HTML. */
+const plain = (i = 0) => String(sent[i].body.text).replace(/<[^>]+>/g, "");
+
 describe("/stop", () => {
-  it("moves daily jobs back to email when the person has one", async () => {
-    exec("INSERT INTO users (id, email, telegram_id, channel) VALUES ('u1', 'ada@example.com', '555', 'telegram')");
+  it.each([
+    ["Telegram, no email", "INSERT INTO users (id, telegram_id, channel) VALUES ('u1', '555', 'telegram')"],
+    [
+      "Telegram, with email",
+      "INSERT INTO users (id, email, telegram_id, channel) VALUES ('u1', 'ada@example.com', '555', 'telegram')",
+    ],
+    [
+      "email",
+      "INSERT INTO users (id, email, telegram_id, channel) VALUES ('u1', 'ada@example.com', '555', 'email')",
+    ],
+  ])("pauses daily jobs whatever the channel (%s) and keeps the channel", async (_name, insert) => {
+    exec(insert);
+    const [{ channel }] = rows<{ channel: string }>("SELECT channel FROM users");
     await post(message("/stop"));
-    expect(rows("SELECT channel FROM users")).toEqual([{ channel: "email" }]);
-    expect(sent[0].body.text).toBe(BOT_TEXT.stopDone(ORIGIN));
-    expect(rows("SELECT action, meta_json FROM audit_log")).toEqual([
-      { action: "bot.stop", meta_json: '{"channel":"email"}' },
+    expect(rows("SELECT digest_paused, channel FROM users")).toEqual([{ digest_paused: 1, channel }]);
+    expect(plain()).toBe("Daily jobs are paused. Send /start to resume, or change it in Settings.");
+    expect(String(sent[0].body.text)).toContain(`<a href="${ORIGIN}/settings">Settings</a>`);
+    expect(rows("SELECT actor, action, meta_json FROM audit_log")).toEqual([
+      { actor: "u1", action: "bot.stop", meta_json: '{"digest_paused":true}' },
     ]);
   });
 
-  it("explains how to change it on the site when there is no email", async () => {
-    exec("INSERT INTO users (id, telegram_id, channel) VALUES ('u1', '555', 'telegram')");
+  it("answers the same when already paused, without another audit entry", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, digest_paused) VALUES ('u1', '555', 'telegram', 1)");
     await post(message("/stop"));
-    expect(rows("SELECT channel FROM users")).toEqual([{ channel: "telegram" }]);
-    expect(sent[0].body.text).toBe(BOT_TEXT.stopNoEmail(ORIGIN));
-  });
-
-  it("says so when daily jobs already go to email", async () => {
-    exec("INSERT INTO users (id, email, telegram_id, channel) VALUES ('u1', 'a@example.com', '555', 'email')");
-    await post(message("/stop"));
-    expect(sent[0].body.text).toBe(BOT_TEXT.stopAlreadyEmail());
+    expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 1 }]);
+    expect(plain()).toBe("Daily jobs are paused. Send /start to resume, or change it in Settings.");
+    expect(rows("SELECT action FROM audit_log")).toEqual([]);
   });
 
   it("says there is nothing to stop for a stranger", async () => {
+    exec("INSERT INTO users (id, telegram_id) VALUES ('u1', '777')");
     await post(message("/stop"));
     expect(sent[0].body.text).toBe(BOT_TEXT.stopNotLinked());
+    expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
+  });
+});
+
+describe("/start after /stop", () => {
+  it("clears the pause and says where daily jobs go", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, digest_paused) VALUES ('u1', '555', 'telegram', 1)");
+    await post(message("/start"));
+    expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
+    expect(sent[0].body.text).toBe(BOT_TEXT.startResumed(ORIGIN, "telegram"));
+    expect(plain()).toContain("Daily jobs are back on. They come to this chat.");
+    expect(rows("SELECT actor, action, meta_json FROM audit_log")).toEqual([
+      { actor: "u1", action: "bot.start", meta_json: '{"digest_paused":false}' },
+    ]);
+  });
+
+  it("names email when that is the channel", async () => {
+    exec(
+      "INSERT INTO users (id, email, telegram_id, channel, digest_paused) VALUES ('u1', 'a@example.com', '555', 'email', 1)",
+    );
+    await post(message("/start"));
+    expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
+    expect(plain()).toContain("Daily jobs are back on. They go to your email.");
+  });
+
+  it("a stop then a start leaves daily jobs on", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel) VALUES ('u1', '555', 'telegram')");
+    await post(message("/stop"));
+    await post(message("/start"));
+    expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
+    expect(rows("SELECT action FROM audit_log ORDER BY id")).toEqual([{ action: "bot.stop" }, { action: "bot.start" }]);
+  });
+});
+
+describe("errors", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("answers 500 when the update cannot be claimed, so Telegram sends it again", async () => {
+    exec("DROP TABLE webhook_updates");
+    const res = await post(message("/start", { updateId: 42 }));
+    expect(res.status).toBe(500);
+    expect(sent).toEqual([]);
+  });
+
+  it("handles the retried update once the database is back", async () => {
+    const update = message("/start", { updateId: 43 });
+    exec("ALTER TABLE webhook_updates RENAME TO webhook_updates_off");
+    expect((await post(update)).status).toBe(500);
+    exec("ALTER TABLE webhook_updates_off RENAME TO webhook_updates");
+    expect((await post(update)).status).toBe(200);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("answers 200 when handling fails after the claim, so the update is not replayed", async () => {
+    exec("DROP TABLE auth_attempts");
+    const update = message("/start", { updateId: 44 });
+    expect((await post(update)).status).toBe(200);
+    expect(rows("SELECT update_id FROM webhook_updates")).toEqual([{ update_id: 44 }]);
+    expect(sent).toEqual([]);
   });
 });
 

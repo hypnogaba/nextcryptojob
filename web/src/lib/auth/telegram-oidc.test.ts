@@ -154,10 +154,25 @@ describe("verifyIdToken", () => {
     });
   });
 
-  it("accepts aud as a list and a token without nonce (back-channel code flow)", async () => {
+  it("accepts aud as a list and a token without nonce (back-channel code flow), with a warning in the log", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const claims = telegramClaims(NONCE, { aud: ["other", CLIENT_ID] });
     delete claims.nonce;
     await expect(verify(await signer.sign(claims))).resolves.toMatchObject({ telegramId: "987654321" });
+    expect(warn).toHaveBeenCalledWith("telegram oidc: id token has no nonce claim");
+    warn.mockRestore();
+  });
+
+  it("does not warn when the nonce is there", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await verify(await signer.sign(telegramClaims(NONCE)));
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("accepts a token issued up to 10 minutes ago and rejects an older one", async () => {
+    await expect(verify(await signer.sign(telegramClaims(NONCE, { iat: NOW - 600 })))).resolves.toBeTruthy();
+    expect(await failure(verify(await signer.sign(telegramClaims(NONCE, { iat: NOW - 601 }))))).toBe("too_old");
   });
 
   it("drops a malformed username and builds the name from its parts", async () => {
@@ -172,7 +187,7 @@ describe("verifyIdToken", () => {
     ["expired", { exp: NOW - 61 }, "expired"],
     ["no exp", { exp: undefined }, "expired"],
     ["issued in the future", { iat: NOW + 120 }, "issued_in_future"],
-    ["issued too long ago", { iat: NOW - 2 * 86_400 }, "too_old"],
+    ["issued too long ago", { iat: NOW - 11 * 60 }, "too_old"],
     ["wrong nonce", { nonce: "m".repeat(43) }, "wrong_nonce"],
     ["non-string nonce", { nonce: 42 }, "wrong_nonce"],
     ["no Telegram id", { id: undefined }, "no_user_id"],

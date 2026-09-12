@@ -28,14 +28,22 @@ export function sessionCookieOptions() {
 // Токен з randomToken(): 43 символи base64url. Інше навіть не шукаємо в базі.
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 
+/** Чим відкрито сесію (sessions.method, 0013). Адмінка пускає лише 'email'. */
+export type SessionMethod = "email" | "telegram";
+
 export type SessionUser = {
   id: string;
   email: string | null;
   channel: "email" | "telegram";
+  /** null у сесій, відкритих до 0013: вони живуть далі, але адміном не роблять. */
+  method: SessionMethod | null;
 };
 
-/** Створює сесію для людини й ставить куку. Лише в Server Action або Route Handler. */
-export async function createSession(userId: string): Promise<void> {
+/**
+ * Створює сесію для людини й ставить куку. Лише в Server Action або Route Handler.
+ * Вхід мусить назвати свій метод; без нього сесія звичайна, але не адмінська.
+ */
+export async function createSession(userId: string, method: SessionMethod | null = null): Promise<void> {
   const token = randomToken();
   const id = await sha256Hex(token);
   const d = db();
@@ -43,8 +51,8 @@ export async function createSession(userId: string): Promise<void> {
     // Протерміновані сесії цієї людини більше не потрібні.
     d.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at <= datetime('now')").bind(userId),
     d
-      .prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime('now', ?))")
-      .bind(id, userId, `+${SESSION_DAYS} days`),
+      .prepare("INSERT INTO sessions (id, user_id, expires_at, method) VALUES (?, ?, datetime('now', ?), ?)")
+      .bind(id, userId, `+${SESSION_DAYS} days`, method),
   ]);
   (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions());
 }
@@ -60,13 +68,19 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
   const d = db();
   const row = await d
     .prepare(
-      `SELECT u.id, u.email, u.channel,
+      `SELECT u.id, u.email, u.channel, s.method,
               u.last_active_at < datetime('now', '-1 hour') AS stale
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.id = ? AND s.expires_at > datetime('now')`,
     )
     .bind(await sha256Hex(token))
-    .first<{ id: string; email: string | null; channel: SessionUser["channel"]; stale: number }>();
+    .first<{
+      id: string;
+      email: string | null;
+      channel: SessionUser["channel"];
+      method: string | null;
+      stale: number;
+    }>();
   if (!row) return null;
 
   // last_active_at пишемо не частіше разу на годину: запис на кожен запит
@@ -79,7 +93,8 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
       .bind(row.id)
       .run();
   }
-  return { id: row.id, email: row.email, channel: row.channel };
+  const method = row.method === "email" || row.method === "telegram" ? row.method : null;
+  return { id: row.id, email: row.email, channel: row.channel, method };
 });
 
 /** Людина або перехід на /login. Для сторінок і дій, де без входу нічого робити. */
