@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
   // web/: незакомічені файли з довгим тире, яке ламає тест no-em-dash.
   agentRules: false,
 
+  // stripe має окрему збірку для Workers (умова "workerd": fetch і WebCrypto).
+  // Next збирає сервер з умовою node і вшив би збірку для Node (fs, os, http).
+  // Зовнішній пакет OpenNext копіює цілим і збирає з умовою workerd.
+  // https://opennext.js.org/cloudflare/howtos/workerd
+  serverExternalPackages: ["stripe"],
+
   // Заголовки безпеки й CSP живуть у src/lib/csp.ts (там же, як додати джерело).
   headers() {
     return Promise.resolve([{ source: "/:path*", headers: securityHeaders() }]);

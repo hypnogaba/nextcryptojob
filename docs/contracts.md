@@ -164,12 +164,13 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0003_crm.sql | web: CRM | companies, company_members, saved_searches, pipeline, pipeline_events, intros, company_jobs, agency_applications |
 | 0004_billing.sql | web: оплата й агенти | subscriptions, api_keys, x402_payments, usage_events |
 | 0005_cards.sql | web: картки | cards |
-| 0006_digest.sql | engine: добірка | sent, digest_runs |
+| 0006_digest.sql | engine: добірка | sent, digest_runs (накочує controller) |
 | 0007_admin.sql | web: адмінка | appeals, admin_flags |
 | 0008_sources_v5.sql | controller | перебудова identities і source_facts (sherlock, audits, dune) |
 | 0009_users_email_lower.sql | controller | індекс users(lower(email)) |
 | 0010_score_jobs_user.sql | controller | індекс score_jobs(user_id, id) |
 | 0011_user_settings.sql | web: налаштування | users.digest_paused |
+| 0012_access_views.sql | web: оплата | перебудова в'ю company_access і company_jobs_live (past_due 7 днів від початку періоду) |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)
@@ -196,3 +197,5 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `ADMIN_EMAILS` (кома-список адмінів; без нього лише hypnogaba@gmail.com); прив'язки лімітів `RL_*` за специфікацією CRM. Дозволено два
 лише-індексні доповнення до ядра (індекси на `scores` і `users` у 0003). Двигун для добірок читає
 `company_jobs_live` (0004) і пише вакансії компаній у `sent`.
+- ІНВАРІАНТ (12.09): `users.email` пишеться ЛИШЕ після перевірки коду з пошти. Жодна інша доріжка (Telegram, бот,
+  імпорт) не пише `users.email`, бо адмінський доступ спирається на пошту сесії.
