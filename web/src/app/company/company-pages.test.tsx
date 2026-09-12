@@ -42,7 +42,13 @@ async function signIn(email: string | null, o: { telegram?: string } = {}): Prom
   const existing = email ? rows<{ id: string }>("SELECT id FROM users WHERE email = ?", email)[0]?.id : undefined;
   const id = existing ?? addUser(harness.raw, { email, telegram: o.telegram ?? null });
   const token = randomToken();
-  exec("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime('now', '+1 day'))", await sha256Hex(token), id);
+  // Вхід поштою або Telegram (0013 sessions.method): адмінка пускає лише поштову сесію.
+  exec(
+    "INSERT INTO sessions (id, user_id, expires_at, method) VALUES (?, ?, datetime('now', '+1 day'), ?)",
+    await sha256Hex(token),
+    id,
+    email ? "email" : "telegram",
+  );
   harness.jar = (await import("@/test/harness")).fakeCookieJar();
   harness.jar.set(SESSION_COOKIE, token);
   return id;
@@ -143,7 +149,11 @@ describe("agency: from application to access", () => {
 
     // Агенція знову: доступ є, плашки немає, команда відкрита.
     const token = randomToken();
-    exec("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime('now', '+1 day'))", await sha256Hex(token), ann);
+    exec(
+      "INSERT INTO sessions (id, user_id, expires_at, method) VALUES (?, ?, datetime('now', '+1 day'), 'email')",
+      await sha256Hex(token),
+      ann,
+    );
     harness.jar.set(SESSION_COOKIE, token);
     const after = await html(CrmLayout({ children: null }));
     expect(after).not.toContain("Application received");

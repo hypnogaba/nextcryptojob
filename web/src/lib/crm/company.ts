@@ -3,7 +3,7 @@ import type { StripeApi } from "@/lib/billing/stripe";
 import { normalizeX } from "@/lib/identity/normalize";
 import { newId } from "@/lib/ids";
 import { sqlTime } from "@/lib/time";
-import { auditActor, auditStatement, companyAuditRange, type AuditEntry } from "./audit";
+import { auditStatement, auditValues, companyAuditRange, guardedAuditStatement, type AuditEntry } from "./audit";
 import { actorRole, type ActionContext, type Actor, type CompanyInfo } from "./context";
 import { countryCode } from "./countries";
 import { companySite, emailProvesDomain } from "./domain";
@@ -66,7 +66,8 @@ export class CompanyError extends Error {
   }
 }
 
-export const LAST_OWNER_TEXT = "Make someone else an owner or close the company first.";
+/** Той самий текст, що блокує видалення акаунта останнього власника (visibility.ts). */
+export { LAST_OWNER_TEXT } from "./visibility";
 
 /** Помилка, яку інтерфейс показує людині: код і текст. Решта летить далі. */
 export function userFacingError(error: unknown): { code: string; message: string; fields?: Record<string, string> } | null {
@@ -86,22 +87,14 @@ type AuditCtx = Pick<ActionContext, "db" | "actor" | "company" | "channel" | "re
 /**
  * Рядок журналу, що пишеться, лише коли `guard` (SQL-вираз з `?`) істинний у
  * мить виконання пакета: зміна не відбулась (гонка, межа місць), то й рядка немає.
- * Формат той самий, що в auditStatement (crm/audit.ts).
+ * Обгортка над guardedAuditStatement (crm/audit.ts) з контекстом дії.
  */
 export function guardedAudit(
   ctx: AuditCtx,
   entry: AuditEntry,
   guard: { sql: string; params: (string | number | null)[] },
 ): D1PreparedStatement {
-  const meta = {
-    company_id: ctx.company?.id ?? null,
-    channel: ctx.channel,
-    request_id: ctx.requestId,
-    ...entry.meta,
-  };
-  return ctx.db
-    .prepare(`INSERT INTO audit_log (actor, action, target, meta_json, at) SELECT ?, ?, ?, ?, ? WHERE ${guard.sql}`)
-    .bind(auditActor(ctx.actor), entry.action, entry.target ?? null, JSON.stringify(meta), sqlTime(ctx.now), ...guard.params);
+  return guardedAuditStatement(ctx.db, auditValues(ctx, entry), guard);
 }
 
 /** Контекст для дій поза реєстром: людина вже член `companyId` (або щойно стане ним). */
