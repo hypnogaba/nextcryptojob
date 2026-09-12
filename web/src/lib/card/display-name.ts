@@ -34,6 +34,28 @@ export function normalizeDisplayName(raw: string): string {
   return name;
 }
 
+/**
+ * Ім'я, яке пропонуємо в полі перед створенням картки: перевірений X як
+ * «@handle», інакше перша частина пошти. Людина може його змінити. Якщо з
+ * пошти не виходить дозволене ім'я, поле лишається порожнім.
+ */
+export function suggestDisplayName(verifiedX: string | null, email: string | null): string {
+  const candidates = [
+    verifiedX ? `@${verifiedX}` : null,
+    // ada.lovelace+jobs@… → «ada lovelace»: крапка між словами виглядала б як домен.
+    email ? email.split("@")[0].split("+")[0].replace(/[._-]+/g, " ").slice(0, DISPLAY_NAME_MAX) : null,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return normalizeDisplayName(candidate);
+    } catch {
+      // Наступний варіант.
+    }
+  }
+  return "";
+}
+
 /** Чи дозволений окремий символ: для перевірки покриття шрифтом у тестах. */
 export function isAllowedDisplayNameChar(char: string): boolean {
   return ALLOWED.test(char);
