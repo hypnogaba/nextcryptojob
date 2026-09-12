@@ -58,7 +58,8 @@ type HyperliquidFacts = { [address: string]: { volumeUsd: number|null; fillsRece
 
 type SolanaFacts = { [address: string]: { sigs: number; sigsOk: number; sigsCapped: boolean;
   firstTs: number|null; sampleSeen: number; sampleSwaps: number; swaps: number|null } };
-// swaps = null, якщо sampleSeen < 50 (замала вибірка = прогалина)
+// swaps = null, якщо sampleSeen < 50 (замала вибірка = прогалина); ВИНЯТОК: якщо перевірено всі успішні
+// транзакції (sampleSeen = sigsOk) і список не обрізаний (sigsCapped = false), кількість точна → swaps = sampleSwaps
 
 type YoutubeFacts = { channelId: string; subscribers: number|null; hiddenSubscribers: boolean;
   avgViewsRecent: number|null; videos90d: number|null };
