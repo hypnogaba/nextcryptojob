@@ -10,8 +10,8 @@ import { saveWalletsAction } from "../actions/wallets";
 import type { StepState } from "../flow";
 
 const CHIP: Record<WalletKind, { label: string; className: string }> = {
-  evm: { label: "EVM", className: "bg-wash text-ink" },
-  solana: { label: "Solana", className: "bg-brand-soft text-ink" },
+  evm: { label: "EVM", className: "border border-line-strong text-ink" },
+  solana: { label: "Solana", className: "border border-brand bg-brand-soft text-ink" },
 };
 
 export function WalletsForm({ initial, editing }: { initial: string; editing: boolean }) {

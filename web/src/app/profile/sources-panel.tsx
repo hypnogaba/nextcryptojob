@@ -71,7 +71,7 @@ export function SourcesPanel({ identities }: { identities: Identity[] }) {
                 href={`/welcome?step=${g.step}`}
                 className="-mr-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-brand"
               >
-                {items.length > 0 ? "Edit sources" : "Add"}
+                {items.length > 0 ? "Edit" : "Add"}
               </Link>
             </div>
             {items.length === 0 ? (
