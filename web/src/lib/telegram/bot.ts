@@ -1,4 +1,5 @@
 import { audit } from "@/lib/audit";
+import { handleIntroCallback } from "@/lib/crm/intro-callbacks";
 import { db } from "@/lib/db";
 import type { Channel } from "./channel";
 import { answerCallbackQuery, escapeHtml, sendMessage, type SendDeps } from "./send";
@@ -123,14 +124,23 @@ export async function handleMessage(message: TgMessage, ctx: BotContext): Promis
  * Натискання кнопок під повідомленнями бота. Диспетчер за префіксом
  * callback_data ("<дія>:<аргументи>").
  *
- * CRM intros (наступна задача) додасть тут свої дії, наприклад
- * `case "intro":` для прийняти / відхилити знайомство. Кожна гілка мусить
- * сама відповісти answerCallbackQuery. Поки що дій немає: будь-яка кнопка
- * отримує «Unknown action».
+ * Кожна гілка мусить сама відповісти answerCallbackQuery.
+ * - `ia:` / `id:` / `ib:<intro_id>`: відповідь на запит знайомства (CRM 5.5):
+ *   Accept, Decline, Decline and block (lib/crm/intro-callbacks.ts). Бот
+ *   відповідає на натискання й пише результат у чат.
+ * Решта кнопок отримує «Unknown action».
  */
 export async function handleCallbackQuery(query: TgCallbackQuery, ctx: BotContext): Promise<void> {
   const action = (query.data ?? "").split(":", 1)[0];
   switch (action) {
+    case "ia":
+    case "id":
+    case "ib": {
+      const r = await handleIntroCallback(query, ctx);
+      await answerCallbackQuery(ctx.token, query.id, r.answer, ctx.deps);
+      if (r.reply) await sendMessage(ctx.token, query.from.id, r.reply, {}, ctx.deps);
+      break;
+    }
     default:
       await answerCallbackQuery(ctx.token, query.id, BOT_TEXT.unknownAction, ctx.deps);
   }

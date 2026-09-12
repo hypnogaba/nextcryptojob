@@ -60,7 +60,7 @@ describe("answerIntroAction (POST from /intro/[id])", () => {
     const alice = await emailed();
     const wrong = await answerIntroAction({}, form({ intro_id: alice.introId, t: "A".repeat(43), decision: "accept" }));
     expect(wrong).toEqual({ done: true, tone: "error", text: "This link is not valid or has already been used." });
-    await createSession(c.ownerId);
+    await createSession(c.ownerId, "email");
     const stranger = await answerIntroAction({}, form({ intro_id: alice.introId, decision: "accept" }));
     expect(stranger.text).toBe("This link is not valid or has already been used.");
     expect(statusOf(alice.introId)).toBe("pending");
@@ -68,7 +68,7 @@ describe("answerIntroAction (POST from /intro/[id])", () => {
 
   it("the candidate's own session needs no token", async () => {
     const alice = await emailed();
-    await createSession(alice.id);
+    await createSession(alice.id, "email");
     const res = await answerIntroAction({}, form({ intro_id: alice.introId, decision: "block" }));
     expect(res).toEqual({ done: true, tone: "success", text: "Declined. Acme Labs will not contact you again." });
     expect(rows("SELECT status, candidate_blocked FROM intros WHERE id = ?", alice.introId)).toEqual([
@@ -106,7 +106,7 @@ describe("answerIntroAction (POST from /intro/[id])", () => {
   it("without a handle and an email the candidate is asked to add one, and can still decline", async () => {
     const ghost = addCandidate(db, { telegram: null, email: null, telegramId: null });
     const intro = (await ask(c.agent, ghost.id)).output;
-    await createSession(ghost.id);
+    await createSession(ghost.id, "email");
     const res = await answerIntroAction({}, form({ intro_id: intro.intro_id, decision: "accept" }));
     expect(res).toEqual({ tone: "error", text: "Add a Telegram username or an email to your account first, then accept." });
     expect((await answerIntroAction({}, form({ intro_id: intro.intro_id, decision: "decline" }))).tone).toBe("success");
