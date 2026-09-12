@@ -30,6 +30,7 @@
 - `site`: `https://` + хост + шлях без кінцевого `/`, хост нижній регістр.
 - `evm`: адреса `0x` + 40 hex, нижній регістр (перевірка формату, без checksum-вимоги).
 - `solana`: base58, 32–44 символи, як є.
+- `sherlock` (v5): нік Sherlock, нижній регістр; приймається, лише якщо `github_handle` або `twitter_handle` у профілі Sherlock збігається з GitHub або X людини (`verified_via = 'profile_link'`).
 Визначення типу гаманця з вставленого тексту: `0x[0-9a-fA-F]{40}` → evm; base58 32–44 → solana;
 ENS `*.eth` / SNS `*.sol` у релізі 1 не розвʼязуємо (поле просить адресу).
 
@@ -64,9 +65,15 @@ type YoutubeFacts = { channelId: string; subscribers: number|null; hiddenSubscri
 
 type SiteFacts = { reachable: boolean; feedItems: number; items90d: number; sitemapUrls: number;
   latestTs: number|null };
+
+// v5
+type AuditsFacts = { earningsUsd: number|null; high: number|null; contests: number|null;
+  providers: { [p: string]: { earningsUsd: number; high: number; medium: number; contests: number } };
+  verifiedBy: 'github'|'x'; gap?: string };   // 0 конкурсів або немає перевіреного профілю → gap, earningsUsd = null
+type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  // злиті PR у duneanalytics/spellbook (за GitHub людини)
 ```
 
-## 4. Формула v4 (`formula_version = "v4"`)
+## 4. Формула v5 (`formula_version = "v5"`; v4 + зміни в кінці розділу)
 `logn(x, cap) = min(1, log10(1+max(0,x)) / log10(1+cap))`, `lin(x, cap) = min(1, max(0,x)/cap)`;
 `null` на вході дає `null`. `combine([(w, v)…]) = 100 · Σ w·v / Σ w` лише по не-`null` v;
 якщо всі `null` → `null`.
@@ -110,9 +117,20 @@ type SiteFacts = { reachable: boolean; feedItems: number; items90d: number; site
 `cover = Σ w` по ядру з не-null джерелами. Без головного джерела → `score = null`,
 `reason = 'missing_anchor:<ключі>'`. Рівень картки: `level = min(10, floor(score/10) + 1)`.
 
+Зміни v5 (дослідження 12.09: 85% в межах сусіднього рівня на еталоні з 49 людей):
+- `audits` = earningsUsd = null або gap → null; інакше combine(60·logn(earningsUsd/1000, 1000), 40·logn(high, 150)).
+- `dune` = spellbookPrs = null або 0 → null; інакше combine(70·logn(spellbookPrs, 300), 30·logn(spellbookPrs12m, 50)).
+- `output` = max(site, gh_eng, dune) з не-null.
+- security_auditor: ядро = більше з двох шляхів: (audits 60, gh_eng 25, x 15) або (gh_eng 70, x 30);
+  додатки site 5, onchain 5; головні: audits, gh_eng. `breakdown_json.reason = 'path:audits'` або `'path:gh_eng+x'`.
+- data_research: головні output, x; якщо output = null → core = 0.8·x і `reason = 'x_only'`; інакше як у v4.
+- Джерела фактів додаються: `audits` (Sherlock watson JSON: /watson/<h>, /stats/stats/<h>, /stats/resume/<h>),
+  `dune` (GitHub search: злиті PR автора в duneanalytics/spellbook, усього й за 12 міс.).
+  Code4rena, Immunefi, профілі Dune не збираємо: їхні умови забороняють автоматичний збір.
+
 `breakdown_json`:
 ```json
-{ "formula": "v4", "sources": {"x": 46.3, "gh_eng": 28.9, "...": null},
+{ "formula": "v5", "sources": {"x": 46.3, "gh_eng": 28.9, "...": null},
   "core": {"x": {"weight": 50, "value": 46.3}}, "bonus": {"onchain": {"max": 5, "value": 91.7}},
   "cover": 100, "level": 7, "reason": null, "gaps": {"solana": "sample too small"} }
 ```
@@ -131,3 +149,34 @@ type SiteFacts = { reachable: boolean; feedItems: number; items90d: number; site
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
   `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`; binding `DB` = D1 `nextcryptojob`
   (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `crypto-jobs-agent` (лише читання в коді).
+
+## 7. Номери міграцій (щоб доріжки не зіткнулись)
+| Файл | Власник | Таблиці |
+|---|---|---|
+| 0001_core.sql | controller | users, identities, source_facts, scores, score_jobs, quality_runs |
+| 0002_auth.sql | web: вхід | sessions, login_codes, auth_attempts, consents, consent_events, webhook_updates, audit_log |
+| 0003_crm.sql | web: CRM | companies, company_members, saved_searches, pipeline, pipeline_events, intros, company_jobs, agency_applications |
+| 0004_billing.sql | web: оплата й агенти | subscriptions, api_keys, x402_payments, usage_events |
+| 0005_cards.sql | web: картки | cards |
+| 0006_digest.sql | engine: добірка | sent, digest_runs |
+| 0007_admin.sql | web: адмінка | appeals, admin_flags |
+| 0008_sources_v5.sql | controller | перебудова identities і source_facts (sherlock, audits, dune) |
+Нова таблиця поза цим списком лише через controller.
+
+## 8. Ключі, яких ще немає (власник додасть у кінці)
+Код мусить працювати без них у тестовому режимі і явно казати, чого бракує:
+`HELIUS_KEY`, `BLOCKSCOUT_KEY`, `YOUTUBE_KEY`, `GITHUB_TOKEN`, `TELEGRAM_OIDC_CLIENT_ID`,
+`TELEGRAM_OIDC_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `CDP_API_KEY_ID`,
+`CDP_API_KEY_SECRET`, пошта (Cloudflare Email Service після переїзду NS). Без ключа: джерело дає
+прогалину з причиною `not configured: <KEY>`, вхід через Telegram ховає кнопку, оплата показує
+«скоро», пошта в розробці пише код у журнал (лише не в продакшені).
+
+## 9. Час у базі (обидві доріжки)
+- Усі мітки часу: TEXT у форматі SQLite `YYYY-MM-DD HH:MM:SS`, UTC (як `datetime('now')`).
+  ISO з `T` і `Z` у базу НЕ пишемо: `'T'` сортується після `' '`, і прострочене виглядає дійсним.
+- Краще рахувати в SQL: `datetime('now', '+10 minutes')`. Якщо час приходить з коду, лише через
+  спільний помічник `sqlTime(date)` = `date.toISOString().replace('T', ' ').slice(0, 19)`.
+- Згоди: `consents` = поточний стан, `consent_events` (0002) = незмінна історія (GDPR ст. 7(1)):
+  кожна зміна згоди пише подію в тій самій пакетній транзакції.
+- Секрети в базі лише як хеш: `sessions.id` = SHA-256 токена сесії; `login_codes.code_hash` =
+  HMAC-SHA256(`SESSION_SECRET`, email + ':' + code).
