@@ -10,10 +10,10 @@ export type RoleKey =
   | "designer" | "operations_support" | "finance" | "legal_compliance" | "hr_recruiting";
 
 /** Джерела, з яких engine збирає факти (`source_facts.source`). */
-export type SourceKey = "x" | "github" | "evm" | "hyperliquid" | "solana" | "youtube" | "site";
+export type SourceKey = "x" | "github" | "evm" | "hyperliquid" | "solana" | "youtube" | "site" | "audits" | "dune";
 
 /** §2. `identities.kind`. */
-export type IdentityKind = "x" | "github" | "youtube" | "site" | "evm" | "solana";
+export type IdentityKind = "x" | "github" | "youtube" | "site" | "evm" | "solana" | "sherlock";
 
 /** Результат збирача: факти або людська причина прогалини (`gap_reason`). */
 export type Fetched<T> = { ok: true; facts: T } | { ok: false; gap: string };
@@ -46,3 +46,15 @@ export type YoutubeFacts = { channelId: string; subscribers: number|null; hidden
 
 export type SiteFacts = { reachable: boolean; feedItems: number; items90d: number; sitemapUrls: number;
   latestTs: number|null };
+
+// v5 (docs/contracts.md §3)
+export type AuditsFacts = {
+  earningsUsd: number | null;
+  high: number | null;
+  contests: number | null;
+  providers: { [provider: string]: { earningsUsd: number; high: number; medium: number; contests: number } };
+  verifiedBy: "github" | "x";
+  gap?: string;
+};
+
+export type DuneFacts = { spellbookPrs: number | null; spellbookPrs12m: number | null };
