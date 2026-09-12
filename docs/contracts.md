@@ -180,3 +180,10 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
   кожна зміна згоди пише подію в тій самій пакетній транзакції.
 - Секрети в базі лише як хеш: `sessions.id` = SHA-256 токена сесії; `login_codes.code_hash` =
   HMAC-SHA256(`SESSION_SECRET`, email + ':' + code).
+
+## 10. Налаштування CRM і оплати (з проєкту CRM, 12.09)
+Секрети й змінні Worker: `WEBHOOK_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
+`X402_NETWORK` ('base-sepolia'|'base'|'solana-devnet'|'solana'), `X402_PAY_TO_EVM`, `X402_PAY_TO_SOLANA`,
+`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`; прив'язки лімітів `RL_*` за специфікацією CRM. Дозволено два
+лише-індексні доповнення до ядра (індекси на `scores` і `users` у 0003). Двигун для добірок читає
+`company_jobs_live` (0004) і пише вакансії компаній у `sent`.
