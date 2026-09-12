@@ -58,3 +58,20 @@ export type AuditsFacts = {
 };
 
 export type DuneFacts = { spellbookPrs: number | null; spellbookPrs12m: number | null };
+
+/**
+ * Усі факти однієї людини для формули (§4). Джерело, яке людина не підключила, відсутнє або null.
+ * Джерело, яке не відповіло, теж null, а його причина лежить у `gaps` (`source_facts.gap_reason`).
+ */
+export type PersonFacts = {
+  x?: XFacts | null;
+  github?: GithubFacts | null;
+  evm?: EvmFacts | null;
+  hyperliquid?: HyperliquidFacts | null;
+  solana?: SolanaFacts | null;
+  youtube?: YoutubeFacts | null;
+  site?: SiteFacts | null;
+  audits?: AuditsFacts | null;
+  dune?: DuneFacts | null;
+  gaps?: Partial<Record<SourceKey, string>>;
+};
