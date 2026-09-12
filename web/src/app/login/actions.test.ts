@@ -1,0 +1,78 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RedirectCalled, exec, harness, resetHarness } from "@/test/harness";
+import { loginAction, type LoginState } from "./actions";
+
+vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
+vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
+vi.mock("next/navigation", async () => (await import("@/test/harness")).navigationModule);
+
+let outbox: { subject: string }[] = [];
+const EMAIL_STEP: LoginState = { step: "email", email: "" };
+
+function form(fields: Record<string, string>): FormData {
+  const data = new FormData();
+  for (const [k, v] of Object.entries(fields)) data.set(k, v);
+  return data;
+}
+
+/** Запитати код через дію й повернути його з листа. */
+async function codeFor(email: string): Promise<string> {
+  const state = await loginAction(EMAIL_STEP, form({ intent: "send", email }));
+  expect(state.step).toBe("code");
+  return outbox.at(-1)!.subject.match(/(\d{6})$/)![1];
+}
+
+async function signIn(email: string): Promise<string> {
+  const code = await codeFor(email);
+  const err = await loginAction({ step: "code", email }, form({ intent: "verify", email, code })).catch((e) => e);
+  expect(err).toBeInstanceOf(RedirectCalled);
+  return (err as RedirectCalled).url;
+}
+
+beforeEach(() => {
+  outbox = [];
+  resetHarness({
+    EMAIL: { send: async (m: { subject: string }) => (outbox.push(m), { messageId: "m" }) } as unknown as SendEmail,
+  });
+  harness.headers = new Headers({ "cf-connecting-ip": "203.0.113.7" });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
+describe("loginAction", () => {
+  it("sends a new person to /welcome", async () => {
+    await expect(signIn("new@example.com")).resolves.toBe("/welcome");
+  });
+
+  it("sends a returning person to /account", async () => {
+    exec("INSERT INTO users (id, email) VALUES ('u1', 'back@example.com')");
+    await expect(signIn("back@example.com")).resolves.toBe("/account");
+  });
+
+  it("tells the person email sign-in opens soon when there is no mail service", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    harness.env.EMAIL = undefined;
+    await expect(loginAction(EMAIL_STEP, form({ intent: "send", email: "ada@example.com" }))).resolves.toEqual({
+      step: "email",
+      email: "ada@example.com",
+      message: { tone: "info", text: "Email sign-in opens soon." },
+    });
+  });
+
+  it("shows how many tries are left after a wrong code", async () => {
+    const code = await codeFor("ada@example.com");
+    const bad = String((Number(code) + 1) % 1_000_000).padStart(6, "0");
+    const state = await loginAction(
+      { step: "code", email: "ada@example.com" },
+      form({ intent: "verify", email: "ada@example.com", code: bad }),
+    );
+    expect(state).toEqual({
+      step: "code",
+      email: "ada@example.com",
+      message: { tone: "error", text: "That code is not right. 4 tries left." },
+    });
+  });
+});

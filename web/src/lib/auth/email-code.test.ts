@@ -175,9 +175,57 @@ describe("requestCode", () => {
     await expect(requestCode("p20@example.com", "198.51.100.1")).resolves.toMatchObject({ ok: true });
   });
 
+  it("a burst of 30 parallel requests for one address sends at most five emails", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 30 }, (_, i) => requestCode("ada@example.com", `198.51.100.${i}`)),
+    );
+    // Не «до п'яти», а рівно п'ять: ліміт і не пропускає зайвих, і не глухне.
+    expect(outbox).toHaveLength(5);
+    expect(results.filter((r) => r.ok)).toHaveLength(5);
+    expect(results.filter((r) => !r.ok && r.reason === "rate_limited")).toHaveLength(25);
+  });
+
+  it("a burst of 30 parallel requests from one IP sends at most twenty emails", async () => {
+    await Promise.all(Array.from({ length: 30 }, (_, i) => requestCode(`p${i}@example.com`, IP)));
+    expect(outbox).toHaveLength(20);
+  });
+
+  it("allows ten codes per address per day, even spread over hours", async () => {
+    const sendFive = async () => {
+      for (let i = 0; i < 5; i++) await requestCode("ada@example.com", IP);
+      // Година минула: погодинний ліміт відпускає, добовий ні.
+      exec(
+        `UPDATE auth_attempts SET window_start = datetime('now', '-61 minutes'), blocked_until = NULL
+          WHERE key IN ('code:email:ada@example.com', 'code:ip:${IP}')`,
+      );
+    };
+    await sendFive();
+    await sendFive();
+    expect(outbox).toHaveLength(10);
+    await expect(requestCode("ada@example.com", IP)).resolves.toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(outbox).toHaveLength(10);
+  });
+
   it("reports a failed send instead of pretending", async () => {
     harness.env.EMAIL = { send: async () => Promise.reject(new Error("E_SENDER_NOT_VERIFIED")) } as unknown as SendEmail;
     await expect(requestCode("ada@example.com", IP)).resolves.toEqual({ ok: false, reason: "send_failed" });
+  });
+
+  it("a failed send keeps the previous code working", async () => {
+    await requestCode("ada@example.com", IP);
+    const previous = lastCode();
+    harness.env.EMAIL = { send: async () => Promise.reject(new Error("E_RATE_LIMIT_EXCEEDED")) } as unknown as SendEmail;
+    await expect(requestCode("ada@example.com", IP)).resolves.toEqual({ ok: false, reason: "send_failed" });
+    expect(rows("SELECT id FROM login_codes WHERE used_at IS NULL")).toHaveLength(1);
+    await expect(verifyCode("ada@example.com", previous)).resolves.toMatchObject({ ok: true });
+  });
+
+  it("refuses a SESSION_SECRET shorter than 32 characters", async () => {
+    harness.env.SESSION_SECRET = "x".repeat(31);
+    await expect(requestCode("ada@example.com", IP)).resolves.toEqual({ ok: false, reason: "email_unavailable" });
+    await expect(verifyCode("ada@example.com", "123456")).resolves.toEqual({ ok: false, reason: "email_unavailable" });
+    expect(outbox).toHaveLength(0);
+    expect(rows("SELECT id FROM login_codes")).toHaveLength(0);
   });
 
   it("in production without the mail binding says email is unavailable", async () => {
@@ -253,6 +301,29 @@ describe("verifyCode", () => {
     const res = await verifyCode("ada@example.com", await sendCode());
     expect(res).toMatchObject({ ok: true, userId: "tg-user", created: false });
     expect(rows("SELECT channel FROM users")).toEqual([{ channel: "telegram" }]);
+  });
+
+  it("finds a person whose stored address has capitals instead of creating a twin", async () => {
+    exec("INSERT INTO users (id, email) VALUES ('legacy', 'Ada@Example.com')");
+    const res = await verifyCode("ada@example.com", await sendCode());
+    expect(res).toMatchObject({ ok: true, userId: "legacy", created: false });
+    expect(rows("SELECT id FROM users")).toHaveLength(1);
+  });
+
+  it("a failed audit write leaves nobody half signed in", async () => {
+    const code = await sendCode();
+    exec("DROP TABLE audit_log");
+    await expect(verifyCode("ada@example.com", code)).rejects.toThrow();
+    expect(harness.jar.store.has(SESSION_COOKIE)).toBe(false);
+    expect(rows("SELECT id FROM sessions")).toHaveLength(0);
+  });
+
+  it("30 parallel wrong guesses count exactly five tries", async () => {
+    const bad = wrong(await sendCode());
+    const results = await Promise.all(Array.from({ length: 30 }, () => verifyCode("ada@example.com", bad)));
+    expect(results.some((r) => r.ok)).toBe(false);
+    expect(rows("SELECT attempts FROM login_codes")).toEqual([{ attempts: 5 }]);
+    expect(results.filter((r) => !r.ok && r.reason === "wrong_code")).toHaveLength(4);
   });
 
   it("a code works once", async () => {

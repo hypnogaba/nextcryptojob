@@ -4,13 +4,14 @@ import { getMailer } from "@/lib/mail";
 import { loginCodeEmail } from "@/lib/mail/login-code";
 import { hmacSha256Hex, hmacSha256Verify } from "./hash";
 import {
+  CODE_EMAIL_DAY_LIMITS,
   CODE_EMAIL_LIMITS,
   CODE_IP_LIMITS,
   VERIFY_EMAIL_LIMITS,
-  checkRate,
   clearRate,
+  consume,
   pruneRateStatement,
-  recordAttempt,
+  type Limits,
 } from "./ratelimit";
 import { createSession } from "./session";
 
@@ -24,6 +25,8 @@ import { createSession } from "./session";
 
 export const CODE_TTL_MINUTES = 10;
 export const MAX_CODE_ATTEMPTS = 5;
+/** Коротший ключ HMAC не приймаємо: вхід поштою вимикається (fail closed). */
+export const MIN_SECRET_LENGTH = 32;
 
 export type RequestCodeResult =
   | { ok: true; email: string }
@@ -79,7 +82,23 @@ function secret(): string | null {
     console.error("Email sign-in is off: not configured: SESSION_SECRET");
     return null;
   }
+  if (value.length < MIN_SECRET_LENGTH) {
+    console.error(`Email sign-in is off: SESSION_SECRET is shorter than ${MIN_SECRET_LENGTH} characters`);
+    return null;
+  }
   return value;
+}
+
+/**
+ * Рахує спробу за кожним ключем по черзі й зупиняється на першій відмові:
+ * заблокована IP не з'їдає ліміт чужої адреси.
+ */
+async function consumeAll(keys: [string, Limits][]): Promise<{ allowed: boolean; retryAfterMinutes: number }> {
+  for (const [key, limits] of keys) {
+    const verdict = await consume(key, limits);
+    if (!verdict.allowed) return verdict;
+  }
+  return { allowed: true, retryAfterMinutes: 0 };
 }
 
 /** Надсилає код на адресу. ip для ліміту беремо з cf-connecting-ip. */
@@ -91,34 +110,46 @@ export async function requestCode(rawEmail: unknown, ip: string): Promise<Reques
   const email = normaliseEmail(rawEmail);
   if (!email) return { ok: false, reason: "invalid_email" };
 
-  const emailKey = `code:email:${email}`;
-  const ipKey = `code:ip:${ip}`;
-  const gate = await checkRate(emailKey, ipKey);
+  // Ліміти рахуються ДО надсилання, одною інструкцією кожен (див. consume).
+  const gate = await consumeAll([
+    [`code:ip:${ip}`, CODE_IP_LIMITS],
+    [`code:email:${email}`, CODE_EMAIL_LIMITS],
+    [`code:email:day:${email}`, CODE_EMAIL_DAY_LIMITS],
+  ]);
   if (!gate.allowed) {
     return { ok: false, reason: "rate_limited", retryAfterMinutes: gate.retryAfterMinutes };
   }
-  await recordAttempt(emailKey, CODE_EMAIL_LIMITS);
-  await recordAttempt(ipKey, CODE_IP_LIMITS);
 
   const code = randomCode();
   const codeHash = await hmacSha256Hex(key, `${email}:${code}`);
   const d = db();
-  await d.batch([
-    // Новий код скасовує всі попередні невикористані для цієї адреси.
-    d.prepare("DELETE FROM login_codes WHERE email = ? AND used_at IS NULL").bind(email),
+  const [, , inserted] = await d.batch<{ id: number }>([
     d.prepare("DELETE FROM login_codes WHERE expires_at < datetime('now', '-1 day')"),
     pruneRateStatement(d),
     d
-      .prepare("INSERT INTO login_codes (email, code_hash, expires_at) VALUES (?, ?, datetime('now', ?))")
+      .prepare(
+        "INSERT INTO login_codes (email, code_hash, expires_at) VALUES (?, ?, datetime('now', ?)) RETURNING id",
+      )
       .bind(email, codeHash, `+${CODE_TTL_MINUTES} minutes`),
   ]);
+  const newId = inserted.results[0]?.id;
+  if (newId === undefined) throw new Error("login code insert returned no id");
 
   try {
     await mailer.send({ to: email, ...loginCodeEmail(code, CODE_TTL_MINUTES) });
   } catch (err) {
     console.error("Login code email failed:", err instanceof Error ? err.message : String(err));
+    // Лист не дійшов: новий код ніхто не знає, а попередній лишається дійсним.
+    await d.prepare("DELETE FROM login_codes WHERE id = ?").bind(newId).run();
     return { ok: false, reason: "send_failed" };
   }
+
+  // Лист пішов: попередні невикористані коди цієї адреси більше не діють.
+  // Лише старші за новий, щоб паралельний запит не стер свіжіший код.
+  await d
+    .prepare("DELETE FROM login_codes WHERE email = ? AND used_at IS NULL AND id < ?")
+    .bind(email, newId)
+    .run();
   return { ok: true, email };
 }
 
@@ -126,7 +157,7 @@ type CodeRow = { id: number; code_hash: string; attempts: number };
 
 /**
  * Перевіряє код і, якщо він правильний, входить: знаходить або створює
- * людину, відкриває сесію (кука), пише audit_log. Лише в Server Action.
+ * людину, пише audit_log, відкриває сесію (кука). Лише в Server Action.
  */
 export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<VerifyCodeResult> {
   const email = normaliseEmail(rawEmail);
@@ -136,8 +167,9 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
   const key = secret();
   if (!key) return { ok: false, reason: "email_unavailable" };
 
+  // Кожна перевірка рахується до порівняння; вдалий вхід лічильник стирає.
   const limitKey = `verify:email:${email}`;
-  const gate = await checkRate(limitKey);
+  const gate = await consume(limitKey, VERIFY_EMAIL_LIMITS);
   if (!gate.allowed) {
     return { ok: false, reason: "rate_limited", retryAfterMinutes: gate.retryAfterMinutes };
   }
@@ -167,7 +199,6 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
   if (!counted) return { ok: false, reason: "too_many_attempts" };
 
   if (!(await hmacSha256Verify(key, `${email}:${code}`, row.code_hash))) {
-    await recordAttempt(limitKey, VERIFY_EMAIL_LIMITS);
     const attemptsLeft = MAX_CODE_ATTEMPTS - counted.attempts;
     return attemptsLeft > 0
       ? { ok: false, reason: "wrong_code", attemptsLeft }
@@ -183,16 +214,28 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
 
   const { userId, created } = await findOrCreateUser(d, email);
   await clearRate(limitKey);
-  await createSession(userId);
+  // Журнал до сесії: якщо запис упаде, людина не лишиться з кукою і
+  // повідомленням про помилку водночас. Після createSession нічого не падає.
   await audit(userId, "auth.login_email", userId, { created });
+  await createSession(userId);
   return { ok: true, userId, created };
 }
 
-/** Людина з цією поштою або нова. Безпечно при повторі й паралельних входах. */
+/**
+ * Людина з цією поштою або нова. Шукаємо без огляду на регістр (старі рядки
+ * могли лягти з великими літерами), нові пишемо лише в нижньому регістрі.
+ * ON CONFLICT робить повтор і паралельний вхід безпечними.
+ */
 async function findOrCreateUser(
   d: D1Database,
   email: string,
 ): Promise<{ userId: string; created: boolean }> {
+  const find = () =>
+    d.prepare("SELECT id FROM users WHERE lower(email) = ? LIMIT 1").bind(email).first<{ id: string }>();
+
+  const existing = await find();
+  if (existing) return { userId: existing.id, created: false };
+
   const fresh = crypto.randomUUID();
   const inserted = await d
     .prepare("INSERT INTO users (id, email, channel) VALUES (?, ?, 'email') ON CONFLICT(email) DO NOTHING")
@@ -200,7 +243,7 @@ async function findOrCreateUser(
     .run();
   if (inserted.meta.changes === 1) return { userId: fresh, created: true };
 
-  const existing = await d.prepare("SELECT id FROM users WHERE email = ?").bind(email).first<{ id: string }>();
-  if (!existing) throw new Error("user row missing after insert");
-  return { userId: existing.id, created: false };
+  const raced = await find();
+  if (!raced) throw new Error("user row missing after insert");
+  return { userId: raced.id, created: false };
 }

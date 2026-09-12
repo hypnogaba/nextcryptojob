@@ -75,8 +75,9 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
       console.error("verifyCode failed:", err instanceof Error ? err.message : String(err));
       return { step: "code", email, message: GENERIC };
     }
-    // redirect кидає виняток, тож стоїть поза try.
-    if (res.ok) redirect("/welcome");
+    // redirect кидає виняток, тож стоїть поза try. Новий акаунт іде
+    // налаштовувати профіль, той, хто повернувся, у свій кабінет.
+    if (res.ok) redirect(res.created ? "/welcome" : "/account");
     if (res.reason === "invalid_email") return { step: "email", email, message: verifyMessage(res) };
     return { step: "code", email, message: verifyMessage(res) };
   }
