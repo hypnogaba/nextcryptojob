@@ -2,7 +2,7 @@
 import type { D1Statement } from "../d1.js";
 import { FORMULA_VERSION, scorePerson } from "../formula/score.js";
 import type { RoleKey, SourceKey } from "../types.js";
-import { collectPerson, DEFAULT_DEADLINE_MS, type Outcomes, toPersonFacts } from "./collect.js";
+import { collectPerson, DEFAULT_DEADLINE_MS, type Outcomes, partialReason, toPersonFacts } from "./collect.js";
 import type { Db } from "./db.js";
 import { groupIdentities, loadIdentities, plannedSources } from "./identities.js";
 import type { CollectorRegistry, EngineEnv } from "./registry.js";
@@ -46,7 +46,7 @@ const UPSERT_SCORE =
  * Зібрати факти людини й перерахувати бал.
  *
  * Запис один пакетом (одна транзакція D1): рядки `source_facts` для кожного доречного джерела
- * (факти або NULL і `gap_reason`), видалення рядків джерел, яких людина вже не має, і `scores`
+ * (факти або NULL і `gap_reason`; часткова відповідь гаманців: факти і `gap_reason` "partial: …"), видалення рядків джерел, яких людина вже не має, і `scores`
  * за всіма ролями. Або все, або нічого: половини запису після збою не буває.
  */
 export async function scoreUser(userId: string, o: ScoreUserOptions): Promise<ScoreSummary> {
@@ -68,8 +68,10 @@ export async function scoreUser(userId: string, o: ScoreUserOptions): Promise<Sc
         params: [userId, ...planned] }
     : { sql: "DELETE FROM source_facts WHERE user_id = ?", params: [userId] });
   for (const source of planned) {
-    const r = outcomes[source]!.result;
-    statements.push({ sql: UPSERT_FACTS, params: [userId, source, r.ok ? JSON.stringify(r.facts) : null, r.ok ? null : r.gap] });
+    const { result: r, partial } = outcomes[source]!;
+    // Часткова відповідь: факти пишуться, а адреси без відповіді чи з невідомим видно в gap_reason.
+    statements.push({ sql: UPSERT_FACTS,
+      params: [userId, source, r.ok ? JSON.stringify(r.facts) : null, r.ok ? partialReason(partial) : r.gap] });
   }
   for (const [role, rr] of Object.entries(result.roles) as Array<[RoleKey, (typeof result.roles)[RoleKey]]>) {
     statements.push({ sql: UPSERT_SCORE,

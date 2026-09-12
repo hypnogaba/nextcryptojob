@@ -161,13 +161,17 @@ export function parseReferencePeople(json: unknown): ReferencePerson[] {
   });
 }
 
-/** Входи збирачів з рядка еталону. X у еталоні вважається підтвердженим: це публічні люди з дослідження. */
+/**
+ * Входи збирачів з рядка еталону. X і GitHub у еталоні вважаються підтвердженими: це публічні люди
+ * з дослідження, чиї профілі звірено вручну (так само Sherlock звіряється з ними).
+ */
 export function inputsFromReference(p: ReferencePerson): CollectorInputs {
   const x = p.x ? p.x.replace(/^@/, "").toLowerCase() : null;
+  const github = p.github ? p.github.replace(/^@/, "").toLowerCase() : null;
   const site = p.site ? (/^https?:\/\//i.test(p.site) ? p.site : `https://${p.site}`).replace(/\/+$/, "") : null;
   return {
     x: x ? { handle: x, verified: true } : null,
-    github: p.github ? p.github.replace(/^@/, "").toLowerCase() : null,
+    github: github ? { login: github, verified: true } : null,
     youtube: p.youtube ?? null,
     site,
     evm: [...new Set((p.evm ?? []).map((a) => (/^0x[0-9a-f]{40}$/i.test(a) ? a.toLowerCase() : a)))],
