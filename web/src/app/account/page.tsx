@@ -36,6 +36,10 @@ export default async function AccountPage() {
           Settings
           <span aria-hidden className="text-ink-muted">&rarr;</span>
         </Link>
+        <Link href="/company/start" className={LINK}>
+          Hiring? Company account
+          <span aria-hidden className="text-ink-muted">&rarr;</span>
+        </Link>
       </nav>
       <TelegramPanel userId={user.id} />
       <div className="mt-8">
