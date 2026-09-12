@@ -6,3 +6,4 @@ research/harness/selectors.json
 node_modules/
 .wrangler/
 .open-next/
+.worktrees/
