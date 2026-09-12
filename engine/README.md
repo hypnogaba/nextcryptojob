@@ -28,7 +28,12 @@
 (усі 9 збирачів; межа збору = старт + `ENGINE_DEADLINE_MS` іде кожному). Профіль Sherlock звіряється
 лише з підтвердженими GitHub і X (`verified_at`).
 `src/main.ts` worker, `src/cli.ts` команди (`worker`, `score-user`, `enqueue-refresh`,
-`quality-gate`, `score-facts`). Встановлення на VPS: `deploy/README.md`.
+`quality-gate`, `score-facts`, `digest-due`). Встановлення на VPS: `deploy/README.md`.
+
+`src/digest/` щоденна добірка вакансій (`digest-due`, щогодинний таймер): кеш NextRole лише для
+читання (`jobs-db.ts`), чистка не-крипто (`clean.ts`, `roles.ts`), підбір (`match.ts`), доставка
+Telegram або листом через сайт (`deliver.ts`), розклад і запис `sent`/`digest_runs` (`schedule.ts`).
+Контракт листа й правила підбору: `src/digest/README.md`.
 
 Живий прогін без D1 (лише для людей, що погодились; X і GitHub тут вважаються підтвердженими):
 

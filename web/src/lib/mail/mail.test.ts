@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getMailer } from "./index";
 import { logMailer } from "./log";
-import { loginCodeEmail } from "./login-code";
+import { addEmailCodeEmail, loginCodeEmail } from "./login-code";
 
 const MESSAGE = { to: "ada@example.com", subject: "s", text: "t", html: "<p>t</p>" };
 
@@ -59,9 +59,22 @@ describe("loginCodeEmail", () => {
     const mail = loginCodeEmail("042917", 10);
     expect(mail.subject).toBe("Your NextCryptoJob code: 042917");
     expect(mail.text).toBe(
-      "Your NextCryptoJob sign-in code is 042917.\n\nIt expires in 10 minutes.\n\nIf you did not ask for it, ignore this email.\n",
+      "Your NextCryptoJob sign-in code is 042917.\n\nIt expires in 10 minutes.\n\nIf you did not ask for it, ignore this email.\n\nNever share this code. NextCryptoJob will never ask you for it.\n",
     );
     expect(mail.html).toContain("042917");
     expect(mail.html).toContain("It expires in 10 minutes.");
+    expect(mail.html).toContain("Never share this code. NextCryptoJob will never ask you for it.");
+  });
+});
+
+describe("addEmailCodeEmail", () => {
+  it("uses its own subject, not the sign-in one, and warns not to share the code", () => {
+    const mail = addEmailCodeEmail("042917", 10);
+    expect(mail.subject).toBe("Confirm your email for NextCryptoJob");
+    expect(mail.text).toBe(
+      "Your code to add this email to your NextCryptoJob profile is 042917.\n\nIt expires in 10 minutes.\n\nIf you did not ask for it, ignore this email. Nobody can add your email without this code.\n\nNever share this code. NextCryptoJob will never ask you for it.\n",
+    );
+    expect(mail.html).toContain("042917");
+    expect(mail.html).toContain("Never share this code. NextCryptoJob will never ask you for it.");
   });
 });

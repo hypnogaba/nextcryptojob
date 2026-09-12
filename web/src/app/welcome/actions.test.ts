@@ -35,7 +35,7 @@ async function run<T>(p: Promise<T>): Promise<string | T> {
 async function signInAt(id: string, step: string | null, roles = "[]") {
   exec("INSERT INTO users (id, email, onboarding_step, roles) VALUES (?, ?, ?, ?)", id, `${id}@example.com`, step, roles);
   harness.jar = fakeCookieJar();
-  await createSession(id);
+  await createSession(id, null);
 }
 
 beforeEach(() => {

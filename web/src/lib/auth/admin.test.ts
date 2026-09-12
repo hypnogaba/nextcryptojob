@@ -35,7 +35,7 @@ describe("currentAdmin", () => {
   });
 
   it("refuses a session from before sign-in methods were recorded", async () => {
-    await createSession("boss");
+    await createSession("boss", null);
     await expect(currentAdmin()).resolves.toBeNull();
   });
 

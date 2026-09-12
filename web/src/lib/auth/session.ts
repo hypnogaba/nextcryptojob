@@ -41,9 +41,9 @@ export type SessionUser = {
 
 /**
  * Створює сесію для людини й ставить куку. Лише в Server Action або Route Handler.
- * Вхід мусить назвати свій метод; без нього сесія звичайна, але не адмінська.
+ * Метод називає виклик явно; null теж підходить, але тоді сесія звичайна, не адмінська.
  */
-export async function createSession(userId: string, method: SessionMethod | null = null): Promise<void> {
+export async function createSession(userId: string, method: SessionMethod | null): Promise<void> {
   const token = randomToken();
   const id = await sha256Hex(token);
   const d = db();

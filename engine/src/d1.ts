@@ -15,9 +15,13 @@ export interface StatementOptions {
   idempotent?: boolean;
 }
 
+/** Що D1 каже про виконання інструкції (частина полів meta відповіді REST). */
+export interface D1Meta { rowsRead: number | null; rowsWritten: number | null; durationMs: number | null }
+
 interface D1Envelope<T> {
   success: boolean;
-  result: Array<{ success: boolean; results?: T[]; meta?: { changes?: unknown } }>;
+  result: Array<{ success: boolean; results?: T[];
+    meta?: { changes?: unknown; rows_read?: unknown; rows_written?: unknown; duration?: unknown } }>;
   errors: Array<{ code: number; message: string }>;
 }
 
@@ -89,6 +93,17 @@ export class D1Client {
   async query<T>(sql: string, params: unknown[] = [], opts: StatementOptions = {}): Promise<T[]> {
     const env = await this.post<T>({ sql, params }, opts.idempotent ?? isReadOnly(sql));
     return env.result[0]?.results ?? [];
+  }
+
+  /** Як query, але ще й з meta D1 (скільки рядків прочитано, скільки тривало на сервері). */
+  async queryWithMeta<T>(sql: string, params: unknown[] = [], opts: StatementOptions = {}): Promise<{ results: T[]; meta: D1Meta }> {
+    const env = await this.post<T>({ sql, params }, opts.idempotent ?? isReadOnly(sql));
+    const first = env.result[0];
+    const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    return {
+      results: first?.results ?? [],
+      meta: { rowsRead: num(first?.meta?.rows_read), rowsWritten: num(first?.meta?.rows_written), durationMs: num(first?.meta?.duration) },
+    };
   }
 
   async execute(sql: string, params: unknown[] = [], opts: StatementOptions = {}): Promise<void> {

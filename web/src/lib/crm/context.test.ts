@@ -156,7 +156,7 @@ describe("session actor", () => {
     const b = addCompany(db.raw);
     addMember(db.raw, a, user, "owner");
     addMember(db.raw, b, user, "member");
-    await createSession(user);
+    await createSession(user, null);
     harness.jar.set(COMPANY_COOKIE, b);
     const ctx = await resolveWebActor();
     expect(ctx.channel).toBe("web");
