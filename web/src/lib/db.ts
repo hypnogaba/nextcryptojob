@@ -14,8 +14,10 @@ export type AppEnv = Omit<CloudflareEnv, "SESSION_SECRET" | "EMAIL" | "TWITTER_T
   TWITTER_TOKEN?: string;
   /** Необов'язковий ключ GitHub: без нього перевірка GitHub іде без ключа (60 запитів/год). */
   GITHUB_TOKEN?: string;
-  /** Cloudflare Email Service. Блок send_email у wrangler.jsonc поки закоментований. */
+  /** Cloudflare Email Service (send_email у wrangler.jsonc). Без нього лист добірки відповідає 503. */
   EMAIL?: SendEmail;
+  /** Спільний з engine ключ підпису внутрішніх запитів (engine/src/digest/README.md). Worker secret. */
+  INTERNAL_API_SECRET?: string;
 };
 
 /** Оточення Worker. Викликати лише під час запиту. */

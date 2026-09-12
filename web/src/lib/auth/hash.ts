@@ -59,15 +59,17 @@ export async function hmacSha256Hex(secret: string, message: string): Promise<st
 /**
  * Чи збігається HMAC повідомлення з очікуваним (hex). Порівнює сам
  * crypto.subtle.verify, за сталий час: рядки через === видали б, скільки
- * перших символів збіглося.
+ * перших символів збіглося. Повідомлення рядком (UTF-8) або сирими байтами:
+ * підпис тіла запиту рахують над байтами, як вони прийшли, до будь-якого розбору.
  */
 export async function hmacSha256Verify(
   secret: string,
-  message: string,
+  message: string | Uint8Array<ArrayBuffer>,
   expectedHex: string,
 ): Promise<boolean> {
   const expected = fromHex(expectedHex);
   if (!expected || expected.length !== 32) return false;
   const key = await hmacKey(secret, "verify");
-  return crypto.subtle.verify("HMAC", key, expected, encoder.encode(message));
+  const bytes = typeof message === "string" ? encoder.encode(message) : message;
+  return crypto.subtle.verify("HMAC", key, expected, bytes);
 }

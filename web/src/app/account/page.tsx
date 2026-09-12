@@ -34,6 +34,10 @@ export default async function AccountPage() {
           Your score and sources
           <span aria-hidden className="text-ink-muted">&rarr;</span>
         </Link>
+        <Link href="/jobs" className={LINK}>
+          Jobs we sent you
+          <span aria-hidden className="text-ink-muted">&rarr;</span>
+        </Link>
         <Link href="/welcome" className={LINK}>
           {step === "done" ? "Edit your answers" : "Finish setting up"}
           <span aria-hidden className="text-ink-muted">&rarr;</span>
