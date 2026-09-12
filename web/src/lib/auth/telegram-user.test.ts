@@ -69,6 +69,28 @@ describe("linkTelegram", () => {
   });
 });
 
+describe("users.email invariant", () => {
+  it("is never written or changed by Telegram sign-in, linking, conflicts or the channel switch", async () => {
+    exec("INSERT INTO users (id, email) VALUES ('mail', 'ada@example.com'), ('nomail', NULL)");
+    exec("INSERT INTO users (id, email, telegram_id) VALUES ('other', 'bob@example.com', '222')");
+    const emails = () => t.raw.prepare("SELECT id, email FROM users WHERE id IN ('mail', 'nomail', 'other') ORDER BY id").all();
+    const before = emails();
+
+    await linkTelegram(t.d1, "mail", ada);
+    await linkTelegram(t.d1, "nomail", { ...ada, telegramId: "333" });
+    await linkTelegram(t.d1, "mail", { ...ada, telegramId: "222" });
+    await signInWithTelegram(t.d1, ada);
+    await signInWithTelegram(t.d1, { ...ada, telegramId: "222" });
+    await setChannel(t.d1, "mail", "telegram");
+    await setChannel(t.d1, "mail", "email");
+    await setChannel(t.d1, "nomail", "email");
+
+    expect(emails()).toEqual(before);
+    const created = await signInWithTelegram(t.d1, { ...ada, telegramId: "444" });
+    expect(user(created.userId)).toMatchObject({ email: null });
+  });
+});
+
 describe("homeFor", () => {
   it("sends people who finished onboarding to /profile, others to /account", async () => {
     exec("INSERT INTO users (id, onboarding_step) VALUES ('done', 'done'), ('mid', 'roles'), ('new', NULL)");

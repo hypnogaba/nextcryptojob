@@ -3,6 +3,10 @@ import type { TelegramIdentity } from "./telegram-oidc";
 /**
  * Людина за Telegram: знайти, створити або прив'язати до профілю, де вже є сесія.
  * users.telegram_id UNIQUE (0001_core): один Telegram належить одному профілю.
+ *
+ * users.email тут НЕ пишеться ніколи (docs/contracts.md): пошта з'являється
+ * лише після перевірки коду з листа, і на ній тримається доступ адміна.
+ * Вхід і прив'язка через Telegram чіпають лише telegram_id і telegram_username.
  */
 
 /** Нік міняється в Telegram; пишемо, лише коли він справді інший (жодного запису на кожен вхід). */
