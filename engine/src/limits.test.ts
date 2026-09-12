@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLimiter, limiterFor } from "./limits.js";
+import { __resetLimiters, backoffFor, budgetKey, createLimiter, limiterFor, NestedRunError } from "./limits.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] }); });
+beforeEach(() => {
+  __resetLimiters();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
+});
 afterEach(() => { vi.useRealTimers(); });
 
 describe("createLimiter: паралелізм", () => {
@@ -36,6 +39,17 @@ describe("createLimiter: паралелізм", () => {
     await vi.runAllTimersAsync();
     await all;
     expect(log).toEqual(["a:start", "a:end", "b:start", "b:end", "c:start", "c:end"]);
+  });
+
+  it("pending() показує, скільки викликів чекає в черзі", async () => {
+    const limiter = createLimiter({ concurrency: 2, minIntervalMs: 0 });
+    expect(limiter.pending()).toBe(0);
+    const calls = Array.from({ length: 5 }, () => limiter.run(() => sleep(10)));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(limiter.pending()).toBe(3);
+    await vi.runAllTimersAsync();
+    await Promise.all(calls);
+    expect(limiter.pending()).toBe(0);
   });
 });
 
@@ -75,11 +89,106 @@ describe("createLimiter: інтервал між стартами", () => {
     const t0 = Date.now();
     const calls = Array.from({ length: 6 }, () => limiter.run(async () => {
       starts.push(Date.now() - t0);
-      await sleep(20);   // коротше за інтервал: у польоті рідко буває двоє
+      await sleep(20);
     }));
     await vi.runAllTimersAsync();
     await Promise.all(calls);
     expect(starts).toEqual([0, 50, 100, 150, 200, 250]);
+  });
+});
+
+describe("createLimiter: backoff", () => {
+  it("backoff відсуває наступний старт для всіх слотів бюджету", async () => {
+    const limiter = createLimiter({ concurrency: 4, minIntervalMs: 0 });
+    const t0 = Date.now();
+    limiter.backoff(1_000);
+    const starts: number[] = [];
+    const calls = Array.from({ length: 4 }, () => limiter.run(async () => { starts.push(Date.now() - t0); }));
+    await vi.runAllTimersAsync();
+    await Promise.all(calls);
+    expect(starts).toEqual([1_000, 1_000, 1_000, 1_000]);
+  });
+
+  it("коротший backoff не скорочує вже призначену паузу", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const t0 = Date.now();
+    limiter.backoff(2_000);
+    limiter.backoff(500);
+    let startedAt = -1;
+    const p = limiter.run(async () => { startedAt = Date.now() - t0; });
+    await vi.runAllTimersAsync();
+    await p;
+    expect(startedAt).toBe(2_000);
+  });
+
+  it("backoff під час очікування продовжує вже взведений таймер", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 100 });
+    const t0 = Date.now();
+    await limiter.run(async () => undefined);
+    let startedAt = -1;
+    const p = limiter.run(async () => { startedAt = Date.now() - t0; });
+    await vi.advanceTimersByTimeAsync(50);
+    limiter.backoff(3_000);   // з моменту t0 + 50
+    await vi.runAllTimersAsync();
+    await p;
+    expect(startedAt).toBe(3_050);
+  });
+
+  it("backoffFor приймає адресу й діє на бюджет її хоста", async () => {
+    const t0 = Date.now();
+    backoffFor("https://api.etherscan.io/v2/api?module=account", 1_500);
+    let startedAt = -1;
+    const p = limiterFor("etherscan").run(async () => { startedAt = Date.now() - t0; });
+    await vi.runAllTimersAsync();
+    await p;
+    expect(startedAt).toBe(1_500);
+  });
+
+  it("backoffFor не чекає довше хвилини, хоч би що попросили", async () => {
+    const t0 = Date.now();
+    backoffFor("api.github.com", 10 * 60_000);
+    let startedAt = -1;
+    const p = limiterFor("api.github.com").run(async () => { startedAt = Date.now() - t0; });
+    await vi.runAllTimersAsync();
+    await p;
+    expect(startedAt).toBe(60_000);
+  });
+});
+
+describe("createLimiter: скасування", () => {
+  it("скасований виклик у черзі знімається з неї, fn не викликається, решта йде далі", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const ran: string[] = [];
+    const first = limiter.run(async () => { ran.push("a"); await sleep(100); });
+    const ac = new AbortController();
+    const second = limiter.run(async () => { ran.push("b"); }, { signal: ac.signal });
+    const third = limiter.run(async () => { ran.push("c"); });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(limiter.pending()).toBe(2);
+    ac.abort();
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(limiter.pending()).toBe(1);
+    await vi.runAllTimersAsync();
+    await Promise.all([first, third]);
+    expect(ran).toEqual(["a", "c"]);
+  });
+
+  it("уже скасований сигнал відмовляє одразу, без виклику fn", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const fn = vi.fn(async () => 1);
+    await expect(limiter.run(fn, { signal: AbortSignal.abort() })).rejects.toMatchObject({ name: "AbortError" });
+    expect(fn).not.toHaveBeenCalled();
+    expect(limiter.pending()).toBe(0);
+  });
+
+  it("скасування після старту не обриває fn: це вже її справа", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const ac = new AbortController();
+    const p = limiter.run(async () => { await sleep(10); return "готово"; }, { signal: ac.signal });
+    await vi.advanceTimersByTimeAsync(1);
+    ac.abort();
+    await vi.runAllTimersAsync();
+    await expect(p).resolves.toBe("готово");
   });
 });
 
@@ -102,6 +211,23 @@ describe("createLimiter: помилки", () => {
     await expect(failing).rejects.toBeInstanceOf(TypeError);
     await vi.runAllTimersAsync();
     await expect(next).resolves.toBe(42);
+  });
+
+  it("10 000 синхронних відмов поспіль не переповнюють стек", async () => {
+    vi.useRealTimers();
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    // Слот зайнятий, тож 10 000 викликів справді стоять у черзі й стартують
+    // один за одним, коли він звільниться.
+    let open!: () => void;
+    const closed = new Promise<void>((r) => { open = r; });
+    const gate = limiter.run(() => closed);
+    const calls = Array.from({ length: 10_000 }, (_, i) =>
+      limiter.run((() => { throw new Error(`#${i}`); }) as () => Promise<never>));
+    open();
+    await gate;
+    const out = await Promise.allSettled(calls);
+    expect(out.every((r) => r.status === "rejected" && !(r.reason instanceof RangeError))).toBe(true);
+    await expect(limiter.run(async () => "ще живий")).resolves.toBe("ще живий");
   });
 
   it("після серії відмов ліміт однаково тримається", async () => {
@@ -130,14 +256,65 @@ describe("createLimiter: помилки", () => {
   });
 });
 
-describe("limiterFor", () => {
-  it("один хост ділить один обмежувач, регістр не має значення", () => {
-    expect(limiterFor("api.github.com")).toBe(limiterFor("API.GitHub.com"));
-    expect(limiterFor("api.github.com")).not.toBe(limiterFor("www.googleapis.com"));
+describe("createLimiter: вкладений run", () => {
+  it("run усередині run того самого обмежувача відмовляє зрозумілою помилкою, а не зависає", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const outer = limiter.run(() => limiter.run(async () => 1));
+    await expect(outer).rejects.toBeInstanceOf(NestedRunError);
+    await expect(limiter.run(async () => 2)).resolves.toBe(2);
   });
 
-  it("незнайомий хост отримує власний обмежувач, не спільний з іншими незнайомими", () => {
+  it("вкладений run іншого обмежувача дозволений", async () => {
+    const a = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const b = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    await expect(a.run(() => b.run(async () => "ок"))).resolves.toBe("ок");
+  });
+
+  it("послідовні run в одній функції і відкладений виклик після завершення не вважаються вкладеними", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    await limiter.run(async () => undefined);
+    await expect(limiter.run(async () => "другий")).resolves.toBe("другий");
+    let late: Promise<number> | undefined;
+    await limiter.run(async () => { setTimeout(() => { late = limiter.run(async () => 7); }, 10); });
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(late).resolves.toBe(7);
+  });
+
+  it("виклик, що чекав у черзі, не успадковує контекст того, хто звільнив слот", async () => {
+    const limiter = createLimiter({ concurrency: 1, minIntervalMs: 0 });
+    const first = limiter.run(() => sleep(10));
+    const second = limiter.run(async () => "без хибної тривоги");
+    await vi.runAllTimersAsync();
+    await first;
+    await expect(second).resolves.toBe("без хибної тривоги");
+  });
+});
+
+describe("budgetKey і limiterFor", () => {
+  it("хост нормалізується: регістр, крапка в кінці, порт", () => {
+    expect(budgetKey("API.GitHub.com.")).toBe("api.github.com");
+    expect(budgetKey("api.github.com:443")).toBe("api.github.com");
+    expect(budgetKey("[2606:4700::1111]:8443")).toBe("2606:4700::1111");
+    expect(limiterFor("api.github.com")).toBe(limiterFor("API.GitHub.com.:443"));
+  });
+
+  it("різні хости одного провайдера ділять один бюджет", () => {
+    expect(budgetKey("eth.blockscout.com")).toBe("blockscout");
+    expect(limiterFor("base.blockscout.com")).toBe(limiterFor("api.blockscout.com"));
+    expect(limiterFor("mainnet.helius-rpc.com")).toBe(limiterFor("api.helius.xyz"));
+    expect(limiterFor("api.etherscan.io")).toBe(limiterFor("etherscan"));
+    expect(budgetKey("ai.6551.io")).toBe("6551");
+    expect(budgetKey("api.cloudflare.com")).toBe("cloudflare");
+  });
+
+  it("схожий, але чужий домен не потрапляє в бюджет провайдера", () => {
+    expect(budgetKey("evilblockscout.com")).toBe("evilblockscout.com");
+    expect(budgetKey("helius-rpc.com.attacker.net")).toBe("helius-rpc.com.attacker.net");
+  });
+
+  it("незнайомі хости не ділять обмежувач між собою", () => {
     expect(limiterFor("a.example.com")).not.toBe(limiterFor("b.example.com"));
+    expect(limiterFor("api.github.com")).not.toBe(limiterFor("www.googleapis.com"));
   });
 
   it("etherscan пропускає по одному запиту, публічний Solana RPC теж", async () => {
@@ -169,5 +346,34 @@ describe("limiterFor", () => {
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThan(8);
     expect(starts.filter((s) => s === 0).length).toBe(peak);
+  });
+});
+
+describe("limiterFor: прибирання незнайомих хостів", () => {
+  it("простійний обмежувач незнайомого хоста прибирається, зайнятий лишається", async () => {
+    const idle = limiterFor("idle.example.com");
+    await idle.run(async () => undefined);
+    const busy = limiterFor("busy.example.com");
+    const long = busy.run(() => sleep(1_000));
+    limiterFor("newcomer.example.com");   // нова адреса запускає прибирання
+    expect(limiterFor("idle.example.com")).not.toBe(idle);
+    expect(limiterFor("busy.example.com")).toBe(busy);
+    await vi.runAllTimersAsync();
+    await long;
+  });
+
+  it("незнайомий хост під backoff не прибирається, інакше пауза загубилась би", () => {
+    const throttled = limiterFor("throttled.example.com");
+    throttled.backoff(5_000);
+    limiterFor("other.example.com");
+    expect(limiterFor("throttled.example.com")).toBe(throttled);
+  });
+
+  it("відомі бюджети не прибираються ніколи", async () => {
+    const eth = limiterFor("etherscan");
+    await eth.run(async () => undefined);
+    await vi.advanceTimersByTimeAsync(10_000);
+    limiterFor("another.example.com");
+    expect(limiterFor("api.etherscan.io")).toBe(eth);
   });
 });
