@@ -20,6 +20,11 @@
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "1.55.0",
+    "@solana/kit": "8.3.0",
+    "@x402/core": "2.25.0",
+    "@x402/evm": "2.25.0",
+    "@x402/svm": "2.25.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "lucide-react": "^1.45.0",
