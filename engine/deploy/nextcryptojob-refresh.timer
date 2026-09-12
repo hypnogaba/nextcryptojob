@@ -1,0 +1,11 @@
+[Unit]
+Description=NextCryptoJob engine: hourly enqueue-refresh
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=300
+Persistent=true
+Unit=nextcryptojob-refresh.service
+
+[Install]
+WantedBy=timers.target

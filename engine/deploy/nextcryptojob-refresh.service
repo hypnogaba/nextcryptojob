@@ -1,0 +1,19 @@
+[Unit]
+Description=NextCryptoJob engine: queue weekly refreshes (enqueue-refresh)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=nextcryptojob
+Group=nextcryptojob
+WorkingDirectory=/opt/nextcryptojob-engine
+EnvironmentFile=/etc/nextcryptojob-engine.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/cli.js enqueue-refresh
+TimeoutStartSec=120
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true

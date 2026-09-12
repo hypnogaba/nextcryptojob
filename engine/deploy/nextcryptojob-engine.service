@@ -1,0 +1,37 @@
+[Unit]
+Description=NextCryptoJob engine worker (score_jobs queue)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=nextcryptojob
+Group=nextcryptojob
+WorkingDirectory=/opt/nextcryptojob-engine
+EnvironmentFile=/etc/nextcryptojob-engine.env
+Environment=NODE_ENV=production
+# Кеш селекторів EVM (збирач collect-b) пише сюди, а не в /opt.
+Environment=SELECTOR_CACHE=/var/lib/nextcryptojob-engine/selectors.json
+ExecStart=/usr/bin/node dist/cli.js worker
+Restart=always
+RestartSec=10
+# Перший SIGTERM: нових завдань не брати, поточні закінчити (ENGINE_SHUTDOWN_GRACE_MS, типово 60 с),
+# решту повернути в чергу. Тому systemd чекає довше за grace.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+StateDirectory=nextcryptojob-engine
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
