@@ -46,23 +46,18 @@
   "routes": [{ "pattern": "nextcryptojob.xyz", "custom_domain": true }],
   "workers_dev": true,
   // Пошта для кодів входу: Cloudflare Email Service (бета, тариф Workers Paid).
-  // ВИМКНЕНО: домен nextcryptojob.xyz ще не підключено до Email Service, а
-  // відправник мусить бути на підключеному домені (інакше E_SENDER_NOT_VERIFIED).
-  // Поки блоку немає, у продакшені вхід поштою каже «Email sign-in opens soon.»,
+  // Домен nextcryptojob.xyz підключено 12.09 (API email/sending/subdomains):
+  // записи MX і SPF на cf-bounce, DKIM cf-bounce._domainkey, DMARC на _dmarc.
+  // Без цього блоку у продакшені вхід поштою каже «Email sign-in opens soon.»,
   // а в `next dev` код пишеться в журнал (src/lib/mail/log.ts).
-  // Щоб увімкнути:
-  //   1. Зона nextcryptojob.xyz active на Cloudflare (NS у Porkbun міняє власник).
-  //   2. Dashboard → Email Service → Onboard domain: nextcryptojob.xyz, дочекатися
-  //      записів SPF, DKIM і DMARC.
-  //   3. Розкоментувати блок нижче й задеплоїти. Код сам побачить env.EMAIL.
   // Адреса та сама, що MAIL_FROM у src/lib/mail/cloudflare.ts.
   // Документація: https://developers.cloudflare.com/email-service/configuration/send-bindings/
-  // "send_email": [
-  //   {
-  //     "name": "EMAIL",
-  //     "allowed_sender_addresses": ["login@nextcryptojob.xyz"]
-  //   }
-  // ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["login@nextcryptojob.xyz"]
+    }
+  ],
   "observability": {
     "enabled": true
   }
