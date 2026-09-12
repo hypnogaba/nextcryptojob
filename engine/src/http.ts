@@ -1,6 +1,8 @@
 // Перенесено з NextRole (написано до запуску 14.09.2026).
+import type { LookupAddress } from "node:dns";
 import { lookup as dnsLookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { isIP, type LookupFunction } from "node:net";
+import { Agent, fetch as undiciFetch } from "undici";
 import { limiterFor, MAX_BACKOFF_MS, NestedRunError } from "./limits.js";
 
 /**
@@ -27,11 +29,36 @@ const isPrivateV4 = (ip: string): boolean => {
     (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
 };
 
+/** IPv6 у вісім 16-бітних груп ("::" розгорнуто, IPv4 у хвості перетворено). null, якщо не розібрати. */
+function v6Groups(v: string): number[] | null {
+  let s = v;
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
+  if (tail) {
+    const o = tail[1]!.split(".").map(Number);
+    s = s.slice(0, -tail[1]!.length) + `${((o[0]! << 8) | o[1]!).toString(16)}:${((o[2]! << 8) | o[3]!).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const rest = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const fill = halves.length === 2 ? 8 - head.length - rest.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const groups = [...head, ...Array(fill).fill("0"), ...rest].map((g) => parseInt(g, 16));
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
 const isPrivateV6 = (ip: string): boolean => {
-  const v = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  const v = ip.toLowerCase().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
   if (v === "::" || v === "::1") return true;
   if (v.startsWith("::ffff:")) { const tail = v.slice(7); return isIP(tail) === 4 ? isPrivateV4(tail) : true; }
-  return /^(fc|fd|fe[89ab]|ff)/.test(v);
+  const g = v6Groups(v);
+  if (!g) return true;
+  // Обгортки IPv4, за якими може стояти будь-яка, зокрема приватна, IPv4:
+  // NAT64 64:ff9b::/96 і 64:ff9b:1::/48 (RFC 6052, 8215), 6to4 2002::/16 (RFC 3056).
+  if (g[0] === 0x64 && g[1] === 0xff9b && (g[2] === 1 || g.slice(2, 6).every((x) => x === 0))) return true;
+  if (g[0] === 0x2002) return true;
+  // fc00::/7 (ULA), fe80::/10 (link-local), ff00::/8 (multicast).
+  return (g[0]! & 0xfe00) === 0xfc00 || (g[0]! & 0xffc0) === 0xfe80 || (g[0]! & 0xff00) === 0xff00;
 };
 
 export const isPrivateIp = (ip: string): boolean =>
@@ -97,8 +124,57 @@ export async function assertSafeUrl(raw: string, lookup: Lookup | null): Promise
   return u;
 }
 
+/**
+ * lookup для net.connect: розвʼязує ім'я і відмовляє, якщо хоч одна адреса приватна.
+ *
+ * Перевірка перед запитом (assertSafeUrl) і з'єднання питають DNS окремо, і між ними
+ * ім'я може почати вказувати в приватну мережу (DNS rebinding). Тому з'єднання
+ * бере адреси лише звідси: сокет відкривається на ту IP, яку щойно перевірено.
+ */
+export function guardedLookup(resolve: Lookup): LookupFunction {
+  return (hostname, options, callback) => {
+    resolve(hostname).then((addrs) => {
+      const all: LookupAddress[] = addrs.map((address) => ({ address, family: isIP(address) }));
+      if (all.length === 0) throw new SourceUnavailableError(`${hostname}: DNS порожній`);
+      if (all.some((a) => a.family === 0 || isPrivateIp(a.address))) {
+        throw new UnsafeUrlError(`${hostname} вказує в приватну мережу`);
+      }
+      const family = options.family === 4 || options.family === 6 ? options.family : 0;
+      const fit = family ? all.filter((a) => a.family === family) : all;
+      if (fit.length === 0) throw new SourceUnavailableError(`${hostname}: немає адрес IPv${family}`);
+      if (options.all) callback(null, fit);
+      else callback(null, fit[0]!.address, fit[0]!.family);
+    }).catch((e: unknown) => {
+      callback(e instanceof Error ? e : new Error(String(e)), "", 0);
+    });
+  };
+}
+
+/** Один пул з'єднань на функцію DNS: у роботі це завжди realLookup. */
+const pinnedAgents = new WeakMap<Lookup, Agent>();
+
+/** fetch, у якого кожне з'єднання йде лише на адресу, перевірену guardedLookup. */
+function pinnedFetch(resolve: Lookup): typeof fetch {
+  let agent = pinnedAgents.get(resolve);
+  if (!agent) {
+    agent = new Agent({ connect: { lookup: guardedLookup(resolve) } });
+    pinnedAgents.set(resolve, agent);
+  }
+  const dispatcher = agent;
+  return ((input: string | URL, init?: RequestInit) =>
+    undiciFetch(input, { ...(init as object), dispatcher })) as unknown as typeof fetch;
+}
+
+/** Відмова guardedLookup приходить загорнутою в TypeError("fetch failed"); дістаємо її. */
+function unsafeCause(e: unknown): UnsafeUrlError | null {
+  for (let c: unknown = e, depth = 0; c instanceof Error && depth < 5; c = c.cause, depth++) {
+    if (c instanceof UnsafeUrlError) return c;
+  }
+  return null;
+}
+
 /** Читає тіло зі стелею замість того, щоб довіряти Content-Length. */
-async function readCapped(res: Response, cap: number, shownUrl: string): Promise<string> {
+export async function readCapped(res: Response, cap: number, shownUrl: string): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const parts: Uint8Array[] = [];
@@ -166,6 +242,8 @@ export interface FetchOptions {
   maxBodyBytes?: number;
   /** Пауза для всього бюджету після 429 без Retry-After. fetchJson і fetchXml ставлять її самі, зростаючою. */
   backoffOn429Ms?: number;
+  /** Стеля паузи бюджету після 429 (типово MAX_BACKOFF_MS): джерело, що просить години, не зупиняє інших надовго. */
+  maxBackoffMs?: number;
 }
 
 /** Retry-After у секундах або як дата. null, якщо заголовка немає чи він незрозумілий. */
@@ -205,11 +283,11 @@ function mergeHeaders(base: Record<string, string>, extra: RequestInit["headers"
  * з внутрішнім хостом, і повіз би туди токени.
  */
 export async function safeFetch(url: string, init: RequestInit = {}, o: FetchOptions = {}): Promise<Response> {
-  const fetchImpl = o.fetchImpl ?? fetch;
-  // TODO(збирачі, SSRF): з підміненим fetchImpl перевірка DNS вимикається, а зі справжнім
-  // між перевіркою і з'єднанням DNS може відповісти інакше (rebinding). Прив'язати
-  // з'єднання до перевіреної IP через undici dispatcher.
+  // Підмінений fetchImpl (тести) мережі не має: DNS перевіряється, лише якщо тест дав lookup.
+  // Справжній fetch відкриває з'єднання тільки на IP, перевірену guardedLookup, тож
+  // відповідь DNS між перевіркою і з'єднанням (rebinding) нічого не змінює.
   const lookup = o.lookup === undefined ? (o.fetchImpl ? null : realLookup) : o.lookup;
+  const fetchImpl = o.fetchImpl ?? (lookup ? pinnedFetch(lookup) : fetch);
   const timeoutMs = o.timeoutMs ?? 25_000;
   const userSignal = init.signal ?? undefined;
   const method = (init.method ?? "GET").toUpperCase();
@@ -224,9 +302,9 @@ export async function safeFetch(url: string, init: RequestInit = {}, o: FetchOpt
       const r = await fetchImpl(u.toString(), {
         ...init, method, headers, redirect: "manual",
         signal: userSignal ? AbortSignal.any([userSignal, timeout]) : timeout,
-      });
+      }).catch((e: unknown) => { throw unsafeCause(e) ?? e; });
       if (r.status === 429) {
-        limiter.backoff(Math.min(retryAfterMs(r.headers) ?? o.backoffOn429Ms ?? 2_000, MAX_BACKOFF_MS));
+        limiter.backoff(Math.min(retryAfterMs(r.headers) ?? o.backoffOn429Ms ?? 2_000, o.maxBackoffMs ?? MAX_BACKOFF_MS));
       }
       return r;
     }, { signal: userSignal });

@@ -12,6 +12,12 @@
 з `breakdown_json`. `npm run parity` звіряє її з Python-еталоном `research/harness/score_v5.py`,
 якщо поруч є дані дослідження (`research/data/`, у git їх немає: це реальні люди).
 
+Збирачі живуть у `src/collectors/` (по файлу на джерело: x, github, site, youtube, audits, dune).
+Кожен повертає `Fetched<Facts>` і приймає `{ env, signal }`; без ключа джерело дає прогалину
+`not configured: <KEY>`. Мережа лише через `safeFetch`: з'єднання йде тільки на IP, перевірену
+в момент підключення (захист від DNS rebinding). Жива перевірка одного збирача на справжніх ключах:
+`npm run smoke -- <x|github|site|youtube|dune|audits> <значення>` (у тестах не запускається).
+
 ```sh
 npm install       # потрібен Node 24
 npm test          # vitest run
