@@ -4,9 +4,11 @@ import { ALL_MIGRATIONS } from "@/test/crm-fixtures";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
 import { eraseAccount } from "./erase";
 
+type CrmErasure = { statements: D1PreparedStatement[]; afterCommit: () => Promise<void> };
+const noCrm = async (_userId: string, _d?: D1Database): Promise<CrmErasure> => ({ statements: [], afterCommit: async () => {} });
 const hooks = vi.hoisted(() => ({
-  notifyCrmErasure: vi.fn(async (_userId: string) => {}),
-  crmErasureBlock: vi.fn(async (_userId: string): Promise<string | null> => null),
+  notifyCrmErasure: vi.fn(async (_userId: string, _d?: D1Database): Promise<CrmErasure> => ({ statements: [], afterCommit: async () => {} })),
+  crmErasureBlock: vi.fn(async (_userId: string, _d?: D1Database): Promise<string | null> => null),
   notifyCrmVisibility: vi.fn(async () => {}),
 }));
 vi.mock("./hooks", () => hooks);
@@ -76,8 +78,9 @@ function seed(raw: DatabaseSync) {
 beforeEach(() => {
   t = migratedD1(ALL_MIGRATIONS);
   seed(t.raw);
-  hooks.notifyCrmErasure.mockClear();
-  hooks.crmErasureBlock.mockClear();
+  hooks.notifyCrmErasure.mockReset();
+  hooks.notifyCrmErasure.mockImplementation(noCrm);
+  hooks.crmErasureBlock.mockReset();
   hooks.crmErasureBlock.mockResolvedValue(null);
 });
 
@@ -147,9 +150,45 @@ describe("eraseAccount", () => {
   it("tells the CRM before the rows are gone", async () => {
     hooks.notifyCrmErasure.mockImplementationOnce(async (userId: string) => {
       expect(count("SELECT count(*) AS n FROM intros WHERE user_id = ?", userId)).toBe(1);
+      return { statements: [], afterCommit: async () => {} };
     });
     await eraseAccount(t.d1, "a");
-    expect(hooks.notifyCrmErasure).toHaveBeenCalledWith("a");
+    expect(hooks.notifyCrmErasure).toHaveBeenCalledWith("a", t.d1);
+  });
+
+  it("writes the CRM rows in the same batch as the delete, and the CRM mails only after the commit", async () => {
+    const order: string[] = [];
+    hooks.notifyCrmErasure.mockImplementationOnce(async (userId: string, d?: D1Database) => ({
+      statements: [d!.prepare("INSERT INTO audit_log (actor, action, target) VALUES ('co_1:system', 'candidate.erased', ?)").bind(userId)],
+      afterCommit: async () => {
+        order.push(`mail, user rows left: ${count("SELECT count(*) AS n FROM users WHERE id = ?", userId)}`);
+      },
+    }));
+    await eraseAccount(t.d1, "a");
+    expect(order).toEqual(["mail, user rows left: 0"]);
+    expect(count("SELECT count(*) AS n FROM audit_log WHERE action = 'candidate.erased' AND target = 'a'")).toBe(1);
+  });
+
+  it("a failing CRM row rolls the whole delete back, and nobody is mailed", async () => {
+    const afterCommit = vi.fn(async () => {});
+    hooks.notifyCrmErasure.mockImplementationOnce(async (_userId: string, d?: D1Database) => ({
+      statements: [d!.prepare("INSERT INTO no_such_table (x) VALUES (1)")],
+      afterCommit,
+    }));
+    await expect(eraseAccount(t.d1, "a")).rejects.toThrow();
+    expect(count("SELECT count(*) AS n FROM users WHERE id = 'a'")).toBe(1);
+    expect(afterCommit).not.toHaveBeenCalled();
+  });
+
+  it("removes the bot's per-chat counter of this person's Telegram", async () => {
+    t.raw.exec(`
+      UPDATE users SET telegram_id = '777' WHERE id = 'a';
+      UPDATE users SET telegram_id = '888' WHERE id = 'b';
+      INSERT INTO auth_attempts (key, attempts, window_start) VALUES ('tg-chat:777', 1, datetime('now')), ('tg-chat:888', 1, datetime('now'));
+    `);
+    await eraseAccount(t.d1, "a");
+    expect(count("SELECT count(*) AS n FROM auth_attempts WHERE key = 'tg-chat:777'")).toBe(0);
+    expect(count("SELECT count(*) AS n FROM auth_attempts WHERE key = 'tg-chat:888'")).toBe(1);
   });
 
   it("deletes nothing when the CRM hook fails or blocks", async () => {
@@ -164,6 +203,34 @@ describe("eraseAccount", () => {
       message: "Hand over your company first.",
     });
     expect(count("SELECT count(*) AS n FROM sessions WHERE user_id = 'a'")).toBe(1);
+  });
+
+  it("with the real CRM: the last owner of an active company cannot delete and sees why; a member can", async () => {
+    const actual = await vi.importActual<typeof import("./hooks")>("./hooks");
+    hooks.crmErasureBlock.mockImplementation(actual.crmErasureBlock);
+    hooks.notifyCrmErasure.mockImplementation(actual.notifyCrmErasure);
+
+    await expect(eraseAccount(t.d1, "a")).resolves.toEqual({
+      ok: false,
+      reason: "blocked",
+      message: "Make someone else an owner or close the company first.",
+    });
+    expect(count("SELECT count(*) AS n FROM users WHERE id = 'a'")).toBe(1);
+
+    await expect(eraseAccount(t.d1, "b")).resolves.toEqual({ ok: true });
+    expect(count("SELECT count(*) AS n FROM users WHERE id = 'b'")).toBe(0);
+    // b мав картку в co_1: компанія має рядок журналу про видалення, без особистих даних.
+    expect(t.raw.prepare("SELECT actor, target, meta_json FROM audit_log WHERE action = 'candidate.erased'").all().map((r) => ({ ...r }))).toEqual([
+      {
+        actor: "co_1:system",
+        target: "b",
+        meta_json: JSON.stringify({ company_id: "co_1", contact_shared: false, intro_canceled: true }),
+      },
+    ]);
+
+    // Компанію закрито: останній власник може піти.
+    t.raw.exec("UPDATE companies SET status = 'closed' WHERE id = 'co_1'");
+    await expect(eraseAccount(t.d1, "a")).resolves.toEqual({ ok: true });
   });
 
   it("reports an unknown person", async () => {

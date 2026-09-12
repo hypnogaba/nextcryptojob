@@ -21,7 +21,6 @@ import { ROLES } from "@/lib/card/roles";
 import { appEnv, db as requestDb } from "@/lib/db";
 import { getMailer, type Mailer } from "@/lib/mail";
 import { sqlTime } from "@/lib/time";
-import { systemAuditActor } from "./audit";
 import { candidateLabel } from "./project";
 
 export interface SqlFragment {

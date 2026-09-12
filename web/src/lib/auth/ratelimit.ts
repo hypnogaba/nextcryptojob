@@ -25,6 +25,9 @@ export const CODE_IP_LIMITS: Limits = { windowMinutes: 60, maxAttempts: 20, bloc
 /** `verify:email:<email>`: 10 перевірок коду за 15 хвилин, на всі коди разом. */
 export const VERIFY_EMAIL_LIMITS: Limits = { windowMinutes: 15, maxAttempts: 10, blockMinutes: 15 };
 
+/** `export:<user id>`: 10 вивантажень своїх даних на годину (файл збирається з багатьох таблиць). */
+export const EXPORT_LIMITS: Limits = { windowMinutes: 60, maxAttempts: 10, blockMinutes: 60 };
+
 export type RateVerdict = { allowed: boolean; retryAfterMinutes: number };
 
 /**
