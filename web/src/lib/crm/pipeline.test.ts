@@ -23,6 +23,7 @@ import {
   introTransitionStatements,
   INTRO_EVENTS,
   normalizeTags,
+  removeFromPipeline,
   updateCard,
   type PipelineCard,
   type PipelineEventList,
@@ -373,6 +374,65 @@ describe("every change is one batch: event, audit row, timestamps", () => {
   });
 });
 
+describe("writes touch only what changed", () => {
+  /** База, що перед першим пакетом виконує `before` (зміна, яка сталась між читанням і записом). */
+  function racing(before: () => void): D1Database {
+    let done = false;
+    return {
+      prepare: (sql: string) => db.d1.prepare(sql),
+      batch: async (statements: D1PreparedStatement[]) => {
+        if (!done) before();
+        done = true;
+        return db.d1.batch(statements);
+      },
+    } as unknown as D1Database;
+  }
+
+  it("a tags-only change does not rewrite declined_by or stage_changed_at", async () => {
+    const c = await company();
+    const id = candidate();
+    await add(c.agent, id);
+    setStage(c.co, id, "declined");
+    const raced = racing(() =>
+      run(db.raw, "UPDATE pipeline SET declined_by = 'company', stage_changed_at = '2026-01-01 00:00:00' WHERE user_id = ?", id),
+    );
+    await updateCard({ ...c.agent, db: raced, now: LATER }, { candidate_id: id, tags: ["later"] });
+    expect(row(c.co, id)).toMatchObject({
+      stage: "declined",
+      declined_by: "company",
+      stage_changed_at: "2026-01-01 00:00:00",
+      tags: '["later"]',
+      updated_at: "2026-09-13 09:30:00",
+    });
+  });
+
+  it("an intro event that does not move the card leaves the stage fields alone", async () => {
+    const c = await company();
+    const id = candidate();
+    await add(c.agent, id);
+    setStage(c.co, id, "declined");
+    const introId = addIntro(c.co, id);
+    const statements = await introTransitionStatements(db.d1, { companyId: c.co, candidateId: id, event: "intro_expired", introId, now: LATER });
+    run(db.raw, "UPDATE pipeline SET declined_by = 'company', stage_changed_at = '2026-01-01 00:00:00' WHERE user_id = ?", id);
+    await db.d1.batch(statements);
+    expect(row(c.co, id)).toMatchObject({ stage: "declined", declined_by: "company", stage_changed_at: "2026-01-01 00:00:00" });
+    expect(events(c.co, id).at(-1)).toMatchObject({ kind: "intro_expired", from_stage: null, to_stage: null });
+  });
+
+  it("removing a card that another request already removed cancels no intro and logs nothing", async () => {
+    const c = await company();
+    const id = candidate();
+    await add(c.agent, id);
+    const introId = addIntro(c.co, id);
+    const raced = racing(() => run(db.raw, "DELETE FROM pipeline WHERE user_id = ?", id));
+    const auditBefore = audit().length;
+    const err = await rejection(removeFromPipeline({ ...c.agent, db: raced }, { candidate_id: id }));
+    expect([err.code, err.status]).toEqual(["not_found", 404]);
+    expect(all(db.raw, "SELECT status FROM intros WHERE id = ?", introId)).toEqual([{ status: "pending" }]);
+    expect(audit()).toHaveLength(auditBefore);
+  });
+});
+
 describe("add_to_pipeline", () => {
   it("creates the card at Found (201), then returns it unchanged (200)", async () => {
     const c = await company();
@@ -436,6 +496,18 @@ describe("tags", () => {
     const ten = Array.from({ length: 10 }, (_, i) => `tag${i}`);
     ten[0] = "y".repeat(32);
     expect(card(await runAction("update_stage", { candidate_id: id, tags: ten }, c.agent)).tags).toEqual(ten);
+  });
+
+  it("the registry and normalizeTags agree: case duplicates do not count toward the limit of 10", async () => {
+    const c = await company();
+    const id = candidate();
+    await add(c.agent, id);
+    const tags = [...Array.from({ length: 10 }, (_, i) => `t${i}`), "T0", " t1 "];
+    const res = await runAction("update_stage", { candidate_id: id, tags }, c.agent);
+    expect(card(res).tags).toEqual(Array.from({ length: 10 }, (_, i) => `t${i}`));
+    expect(normalizeTags(tags)).toEqual(card(res).tags);
+    const added = await add(c.agent, candidate(), { tags: [...tags, "T9"] });
+    expect(card(added).tags).toHaveLength(10);
   });
 
   it("are case-insensitive: duplicates collapse to the first spelling, the filter ignores case in any alphabet", async () => {

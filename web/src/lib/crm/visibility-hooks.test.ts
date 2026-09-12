@@ -23,10 +23,12 @@ import type { PipelineEventList, PipelineList } from "./pipeline";
 import { ActionError, CandidateView, HIDDEN_NOTICE, type SearchResponse } from "./types";
 import {
   beforeCandidateErased,
+  candidateErasurePlan,
   ERASED_SUBJECT,
   erasureBlockReason,
   LAST_OWNER_TEXT,
   onVisibilityChanged,
+  syncVisibilityEvents,
 } from "./visibility";
 
 let db: TestDb;
@@ -59,6 +61,19 @@ function acceptedIntro(co: string, user: string, contact = "@alice_eth"): string
     contact,
   );
   return id;
+}
+
+/** «Decline and block this company»: відхилене знайомство з candidate_blocked = 1. */
+function blockCompany(co: string, user: string): void {
+  run(
+    db.raw,
+    `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, expires_at, candidate_blocked, responded_at)
+     VALUES (?, ?, ?, 'approval', 'declined', 'We would like to talk to you about a role.', 'rest', datetime('now', '+14 days'), 1,
+             '2026-09-12 11:00:00')`,
+    newId("int"),
+    co,
+    user,
+  );
 }
 
 function pendingIntro(co: string, user: string): string {
@@ -199,18 +214,85 @@ describe("onVisibilityChanged", () => {
   });
 });
 
-describe("beforeCandidateErased", () => {
-  function recorder(fail = false): Mailer & { sent: MailMessage[] } {
-    const sent: MailMessage[] = [];
-    return {
-      sent,
-      async send(m) {
-        if (fail) throw new Error("E_RATE_LIMIT_EXCEEDED");
-        sent.push(m);
-      },
-    };
-  }
+describe("visibility events follow the live rule for each card's company", () => {
+  const kinds = async (ctx: ActionContext, id: string) => (await history(ctx, id)).map((e) => e.kind);
 
+  it("a company the candidate blocked never gets visibility_restored when the flag comes back", async () => {
+    const blocked = await company("Acme");
+    const other = await company("Beta");
+    const id = addUser(db.raw);
+    addScore(db.raw, id, "engineer", 70);
+    await runAction("add_to_pipeline", { candidate_id: id }, blocked.ctx);
+    await runAction("add_to_pipeline", { candidate_id: id }, other.ctx);
+    blockCompany(blocked.co, id);
+
+    await hide(id);
+    await show(id);
+
+    expect((await list(blocked.ctx)).data[0].visibility).toBe("hidden");
+    expect(await kinds(blocked.ctx, id)).toEqual(["added", "visibility_lost"]);
+    expect((await list(other.ctx)).data[0].visibility).toBe("visible");
+    expect(await kinds(other.ctx, id)).toEqual(["added", "visibility_lost", "visibility_restored"]);
+  });
+
+  it("Decline and block alone is picked up by syncVisibilityEvents, for that company only", async () => {
+    const blocked = await company("Acme");
+    const other = await company("Beta");
+    const id = addUser(db.raw);
+    await runAction("add_to_pipeline", { candidate_id: id }, blocked.ctx);
+    await runAction("add_to_pipeline", { candidate_id: id }, other.ctx);
+    blockCompany(blocked.co, id);
+
+    expect(await syncVisibilityEvents(id, db.d1, NOW)).toEqual({ cards: 1 });
+    expect(await syncVisibilityEvents(id, db.d1, NOW)).toEqual({ cards: 0 });
+    expect(await kinds(blocked.ctx, id)).toEqual(["added", "visibility_lost"]);
+    expect(await kinds(other.ctx, id)).toEqual(["added"]);
+    expect(all(db.raw, "SELECT actor FROM audit_log WHERE action = 'pipeline.visibility_lost'")).toEqual([
+      { actor: `${blocked.co}:system` },
+    ]);
+  });
+
+  it("the flag back on without a consent or without a role restores nothing", async () => {
+    const a = await company("Acme");
+    const id = addUser(db.raw);
+    await runAction("add_to_pipeline", { candidate_id: id }, a.ctx);
+    await hide(id);
+
+    run(db.raw, "UPDATE users SET visible_to_companies = 1 WHERE id = ?", id);
+    setConsent(db.raw, id, "visibility", false);
+    expect(await onVisibilityChanged(id, true, db.d1, NOW)).toEqual({ cards: 0 });
+    setConsent(db.raw, id, "visibility", true);
+    run(db.raw, "UPDATE users SET roles = '[]' WHERE id = ?", id);
+    expect(await onVisibilityChanged(id, true, db.d1, NOW)).toEqual({ cards: 0 });
+    expect((await list(a.ctx)).data[0].visibility).toBe("hidden");
+
+    run(db.raw, `UPDATE users SET roles = '["engineer"]' WHERE id = ?`, id);
+    expect(await onVisibilityChanged(id, true, db.d1, NOW)).toEqual({ cards: 1 });
+    expect(await kinds(a.ctx, id)).toEqual(["added", "visibility_lost", "visibility_restored"]);
+  });
+
+  it("the visible argument is only a hint: the saved state decides", async () => {
+    const a = await company("Acme");
+    const id = addUser(db.raw);
+    await runAction("add_to_pipeline", { candidate_id: id }, a.ctx);
+    run(db.raw, "UPDATE users SET visible_to_companies = 0 WHERE id = ?", id);
+    expect(await onVisibilityChanged(id, true, db.d1, NOW)).toEqual({ cards: 1 });
+    expect(await kinds(a.ctx, id)).toEqual(["added", "visibility_lost"]);
+  });
+});
+
+function recorder(fail = false): Mailer & { sent: MailMessage[] } {
+  const sent: MailMessage[] = [];
+  return {
+    sent,
+    async send(m) {
+      if (fail) throw new Error("E_RATE_LIMIT_EXCEEDED");
+      sent.push(m);
+    },
+  };
+}
+
+describe("beforeCandidateErased", () => {
   it("logs candidate.erased, cancels open intros, mails owners who had the contact; the delete cascades, the log stays", async () => {
     const shared = await company("Acme");
     const cardOnly = await company("Beta");
@@ -225,7 +307,8 @@ describe("beforeCandidateErased", () => {
 
     const mailer = recorder();
     const result = await beforeCandidateErased(id, { db: db.d1, mailer, now: NOW });
-    expect(result).toEqual({ companies: 3, contactShared: 1, mailed: 1, mailFailed: 0 });
+    expect(result).toEqual({ companies: 3, contactShared: 1, mailed: 1, mailFailed: 0, ownersWithoutEmail: 0 });
+    expect(all(db.raw, "SELECT visible_to_companies FROM users WHERE id = ?", id)).toEqual([{ visible_to_companies: 0 }]);
     expect(all(db.raw, "SELECT status FROM intros WHERE id = ?", open)).toEqual([{ status: "canceled" }]);
 
     const erased = all<{ actor: string; target: string; meta_json: string }>(
@@ -278,8 +361,58 @@ describe("beforeCandidateErased", () => {
       contactShared: 0,
       mailed: 0,
       mailFailed: 0,
+      ownersWithoutEmail: 0,
     });
     expect(all(db.raw, "SELECT id FROM audit_log")).toEqual([]);
+  });
+
+  it("the plan goes into the caller's DELETE batch; mail goes out only after that commit", async () => {
+    const shared = await company("Acme");
+    const telegramOnly = addUser(db.raw, { visible: false, email: null, telegram: "owner_tg" });
+    addMember(db.raw, shared.co, telegramOnly, "owner");
+    const id = addUser(db.raw);
+    await runAction("add_to_pipeline", { candidate_id: id }, shared.ctx);
+    acceptedIntro(shared.co, id);
+
+    const mailer = recorder();
+    const plan = await candidateErasurePlan(id, { db: db.d1, mailer, now: NOW });
+    expect({ companies: plan.companies, contactShared: plan.contactShared }).toEqual({ companies: 1, contactShared: 1 });
+    expect(mailer.sent).toEqual([]);
+    expect(all(db.raw, "SELECT action FROM audit_log WHERE action = 'candidate.erased'")).toEqual([]);
+
+    await db.d1.batch([...plan.statements, db.d1.prepare("DELETE FROM users WHERE id = ?").bind(id)]);
+    expect(mailer.sent).toEqual([]);
+    expect(all(db.raw, "SELECT target FROM audit_log WHERE action = 'candidate.erased'")).toEqual([{ target: id }]);
+
+    expect(await plan.notify()).toEqual({ mailed: 1, mailFailed: 0, ownersWithoutEmail: 1 });
+    expect(mailer.sent.map((m) => m.to)).toEqual(["owner@acme.io"]);
+  });
+
+  it("the first statement hides the person at once, before anything else", async () => {
+    const a = await company("Acme");
+    const id = addUser(db.raw);
+    addScore(db.raw, id, "engineer", 70);
+    await runAction("add_to_pipeline", { candidate_id: id }, a.ctx);
+    const plan = await candidateErasurePlan(id, { db: db.d1, mailer: null, now: NOW });
+    await db.d1.batch(plan.statements.slice(0, 1));
+    const search = (await runAction("search_candidates", {}, a.ctx)).output as SearchResponse;
+    expect(search.data).toEqual([]);
+  });
+
+  it("a failed batch sends no mail and the error stops the deletion", async () => {
+    const shared = await company("Acme");
+    const id = addUser(db.raw);
+    await runAction("add_to_pipeline", { candidate_id: id }, shared.ctx);
+    acceptedIntro(shared.co, id);
+    const failing = {
+      prepare: (sql: string) => db.d1.prepare(sql),
+      batch: async () => {
+        throw new Error("D1_ERROR: network");
+      },
+    } as unknown as D1Database;
+    const mailer = recorder();
+    await expect(beforeCandidateErased(id, { db: failing, mailer, now: NOW })).rejects.toThrow("D1_ERROR");
+    expect(mailer.sent).toEqual([]);
   });
 });
 
@@ -296,5 +429,20 @@ describe("erasureBlockReason", () => {
     const solo = await company("Solo");
     run(db.raw, "UPDATE companies SET status = 'closed' WHERE id = ?", solo.co);
     expect(await erasureBlockReason(solo.ownerId, db.d1)).toBeNull();
+  });
+
+  it("only an active or pending company holds its last owner back; suspended and rejected do not", async () => {
+    const { co, ownerId } = await company("Agency");
+    const expected: Record<string, string | null> = {
+      active: LAST_OWNER_TEXT,
+      pending_review: LAST_OWNER_TEXT,
+      suspended: null,
+      rejected: null,
+      closed: null,
+    };
+    for (const [status, reason] of Object.entries(expected)) {
+      run(db.raw, "UPDATE companies SET status = ? WHERE id = ?", status, co);
+      expect({ status, reason: await erasureBlockReason(ownerId, db.d1) }).toEqual({ status, reason });
+    }
   });
 });

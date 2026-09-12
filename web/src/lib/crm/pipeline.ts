@@ -16,6 +16,7 @@ import {
 import {
   ActionError,
   STAGES,
+  tagKey,
   type Contact,
   type PipelineCard as PipelineCardSchema,
   type PipelineEvent as PipelineEventSchema,
@@ -134,10 +135,7 @@ export function introStageMove(from: Stage, event: IntroEvent): StageMove | null
 // ---------------------------------------------------------------------------
 // Теги
 
-/** Ключ порівняння тегу: без розрізнення регістру для будь-якої абетки. */
-export function tagKey(tag: string): string {
-  return tag.normalize("NFKC").trim().toLowerCase();
-}
+export { tagKey };
 
 function tagsError(message: string): ActionError {
   return new ActionError("validation_failed", 422, "Some fields are not valid.", { fields: { tags: message } });
@@ -550,23 +548,27 @@ export async function updateCard(rawCtx: ActionContext, input: UpdateInput): Pro
       eventStatement(ctx.db, row.id, { kind: "job_linked", meta: { job_id: jobId }, actor, at }, row.stage),
     );
   }
+  // Лише змінені колонки: незмінене поле не переписуємо значенням, прочитаним до пакета.
+  const set: string[] = [];
+  const values: (string | null)[] = [];
+  if (stageChanged) {
+    set.push("stage = ?", "declined_by = ?", "stage_changed_at = ?");
+    values.push(stage, declinedBy, at);
+  }
+  if (tagsChanged) {
+    set.push("tags = ?");
+    values.push(JSON.stringify(tags));
+  }
+  if (jobChanged) {
+    set.push("job_id = ?");
+    values.push(jobId);
+  }
+  set.push("updated_at = ?");
+  values.push(at);
   writes.push(
     ctx.db
-      .prepare(
-        `UPDATE pipeline SET stage = ?, declined_by = ?, stage_changed_at = ?, tags = ?, job_id = ?, updated_at = ?
-          WHERE id = ? AND company_id = ? AND stage = ?`,
-      )
-      .bind(
-        stage,
-        declinedBy,
-        stageChanged ? at : row.stage_changed_at,
-        JSON.stringify(tags),
-        jobId,
-        at,
-        row.id,
-        company.id,
-        row.stage,
-      ),
+      .prepare(`UPDATE pipeline SET ${set.join(", ")} WHERE id = ? AND company_id = ? AND stage = ?`)
+      .bind(...values, row.id, company.id, row.stage),
   );
   const results = await ctx.db.batch(writes);
   if ((results.at(-1)?.meta.changes ?? 0) !== 1) throw conflict();
@@ -628,15 +630,16 @@ export async function removeFromPipeline(rawCtx: ActionContext, input: { candida
       .prepare(
         `INSERT INTO audit_log (actor, action, target, meta_json, at)
          SELECT ?, ?, ?, json_set(?, '$.intro_id', i.id), ?
-           FROM intros i WHERE i.company_id = ? AND i.user_id = ? AND i.status = 'pending'`,
+           FROM intros i WHERE i.company_id = ? AND i.user_id = ? AND i.status = 'pending' AND ${cardGuard(row.id).sql}`,
       )
-      .bind(...cancelValues, company.id, target),
+      .bind(...cancelValues, company.id, target, ...cardGuard(row.id).params),
+    // Картку вже прибрав інший запит: знайомство не чіпаємо (DELETE нижче дасть 404).
     ctx.db
       .prepare(
         `UPDATE intros SET status = 'canceled', respond_token_hash = NULL, updated_at = ?
-          WHERE company_id = ? AND user_id = ? AND status = 'pending'`,
+          WHERE company_id = ? AND user_id = ? AND status = 'pending' AND ${cardGuard(row.id).sql}`,
       )
-      .bind(at, company.id, target),
+      .bind(at, company.id, target, ...cardGuard(row.id).params),
     guardedAuditStatement(ctx.db, auditValues(ctx, { action: "pipeline.remove", target }), cardGuard(row.id)),
     ctx.db.prepare("DELETE FROM pipeline WHERE id = ? AND company_id = ?").bind(row.id, company.id),
   ]);
@@ -685,17 +688,24 @@ function openHistoryCursor(cursor: string): number {
 
 /** Усі написання тегу в цій компанії (Solidity, solidity…), з якими збігається фільтр. */
 async function tagSpellings(db: D1Database, companyId: string, tag: string): Promise<string[]> {
+  // Кандидати звужує SQL: латиниця збігається через lower(), решту (кирилиця,
+  // повноширинні літери) звіряє tagKey у TS. Межа на випадок тисяч різних тегів.
   const res = await db
     .prepare(
       `SELECT DISTINCT t.value AS tag
          FROM pipeline p, json_each(CASE WHEN json_valid(p.tags) THEN p.tags ELSE '[]' END) t
-        WHERE p.company_id = ? AND t.type = 'text'`,
+        WHERE p.company_id = ? AND t.type = 'text'
+          AND (lower(trim(t.value)) = lower(trim(?)) OR t.value GLOB '*[^ -~]*')
+        LIMIT ${MAX_SPELLINGS}`,
     )
-    .bind(companyId)
+    .bind(companyId, tag)
     .all<{ tag: string }>();
   const want = tagKey(tag);
   return res.results.map((r) => r.tag).filter((t) => tagKey(t) === want);
 }
+
+/** Скільки різних написань тегу розглядає фільтр (межа запиту, не продукту). */
+const MAX_SPELLINGS = 500;
 
 export interface ListInput {
   stage?: Stage;
@@ -738,25 +748,45 @@ export async function listPipeline(rawCtx: ActionContext, input: ListInput): Pro
     params.push(after.u, after.u, after.id);
   }
 
-  const sel = cardSelect(company.id);
-  const [countRes, rowRes] = await ctx.db.batch([
+  // Спершу лише id сторінки (індекс company_id, stage, updated_at), потім
+  // видимість, знайомство й бали тільки для цих карток.
+  const [countRes, pageRes] = await ctx.db.batch([
     ctx.db.prepare("SELECT stage, COUNT(*) AS n FROM pipeline WHERE company_id = ? GROUP BY stage").bind(company.id),
     ctx.db
-      .prepare(`${sel.sql}${where.map((w) => ` AND (${w})`).join("")} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?`)
-      .bind(...sel.params, ...params, noMatch ? 0 : limit + 1),
+      .prepare(
+        `SELECT p.id, p.updated_at FROM pipeline p WHERE p.company_id = ?${where.map((w) => ` AND (${w})`).join("")}
+          ORDER BY p.updated_at DESC, p.id DESC LIMIT ?`,
+      )
+      .bind(company.id, ...params, noMatch ? 0 : limit + 1),
   ]);
 
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
   for (const r of countRes.results as { stage: Stage; n: number }[]) counts[r.stage] = r.n;
 
-  const rows = rowRes.results as CardRow[];
-  const page = rows.slice(0, limit);
+  const found = pageRes.results as { id: number; updated_at: string }[];
+  const page = found.slice(0, limit);
   const last = page.at(-1);
   return {
-    data: await projectCards(ctx.db, company.id, page),
-    next_cursor: rows.length > limit && last ? encodeCursor({ v: 1, u: last.updated_at, id: last.id }) : null,
+    data: await cardsByIds(ctx.db, company.id, page.map((p) => p.id)),
+    next_cursor: found.length > limit && last ? encodeCursor({ v: 1, u: last.updated_at, id: last.id }) : null,
     counts,
   };
+}
+
+/** Картки за id у заданому порядку (лише цієї компанії). */
+async function cardsByIds(db: D1Database, companyId: string, ids: number[]): Promise<PipelineCard[]> {
+  if (ids.length === 0) return [];
+  const sel = cardSelect(companyId);
+  const res = await db
+    .prepare(`${sel.sql} AND p.id IN (SELECT value FROM json_each(?))`)
+    .bind(...sel.params, JSON.stringify(ids))
+    .all<CardRow>();
+  const byId = new Map(res.results.map((r) => [r.id, r]));
+  const rows = ids.flatMap((id) => {
+    const r = byId.get(id);
+    return r ? [r] : [];
+  });
+  return projectCards(db, companyId, rows);
 }
 
 interface EventRow {
@@ -888,19 +918,15 @@ export async function introTransitionStatements(db: D1Database, t: IntroTransiti
       { kind: t.event, from: move ? row.stage : null, to: move?.to ?? null, meta: { intro_id: t.introId }, actor, at },
       row.stage,
     ),
-    db
-      .prepare(
-        `UPDATE pipeline SET stage = ?, declined_by = ?, stage_changed_at = ?, updated_at = ?
-          WHERE id = ? AND stage = ?`,
-      )
-      .bind(
-        move?.to ?? row.stage,
-        move ? move.declinedBy : row.declined_by,
-        move ? at : row.stage_changed_at,
-        at,
-        row.id,
-        row.stage,
-      ),
+    move
+      ? db
+          .prepare(
+            `UPDATE pipeline SET stage = ?, declined_by = ?, stage_changed_at = ?, updated_at = ?
+              WHERE id = ? AND stage = ?`,
+          )
+          .bind(move.to, move.declinedBy, at, at, row.id, row.stage)
+      : // Етап лишається: поля етапу не чіпаємо, лише свіжа активність.
+        db.prepare("UPDATE pipeline SET updated_at = ? WHERE id = ? AND stage = ?").bind(at, row.id, row.stage),
   );
   return writes;
 }
