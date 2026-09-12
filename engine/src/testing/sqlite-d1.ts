@@ -10,13 +10,13 @@ import type { Db } from "../pipeline/db.js";
 const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../db/migrations");
 /** Міграції, від яких залежить конвеєр (ядро і перебудова джерел v5). */
 export const PIPELINE_MIGRATIONS = ["0001_core.sql", "0008_sources_v5.sql"];
-/** Міграції добірки: ядро, вакансії компаній і подання доступу (0003, 0004, 0012), sent і digest_runs (0006). */
-export const DIGEST_MIGRATIONS = ["0001_core.sql", "0003_crm.sql", "0004_billing.sql", "0006_digest.sql", "0012_access_views.sql"];
 /**
- * 0011_user_settings.sql (доріжка web) у цій гілці ще немає; тут та сама інструкція,
- * що в track/web (db/migrations/0011_user_settings.sql), щоб перевірити обидва стани бази.
+ * Міграції добірки: ядро, вакансії компаній і подання доступу (0003, 0004, 0012), sent і digest_runs
+ * (0006), пауза добірки users.digest_paused (0011).
  */
-export const USER_SETTINGS_0011 = "ALTER TABLE users ADD COLUMN digest_paused INTEGER NOT NULL DEFAULT 0";
+export const DIGEST_MIGRATIONS = [
+  "0001_core.sql", "0003_crm.sql", "0004_billing.sql", "0006_digest.sql", "0011_user_settings.sql", "0012_access_views.sql",
+];
 
 type Param = string | number | bigint | Buffer | null;
 const bind = (params: unknown[] = []): Param[] =>

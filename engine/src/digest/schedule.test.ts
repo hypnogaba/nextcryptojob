@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../cli.js";
 import { __resetLimiters } from "../limits.js";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
-import { DIGEST_MIGRATIONS, SqliteD1, USER_SETTINGS_0011 } from "../testing/sqlite-d1.js";
+import { DIGEST_MIGRATIONS, SqliteD1 } from "../testing/sqlite-d1.js";
 import { readOnlyJobsDb } from "./jobs-db.js";
 import { INTERRUPTED, isDueHour, localClock, runDigestDue, type DigestDeps } from "./schedule.js";
 
@@ -169,19 +169,31 @@ describe("runDigestDue", () => {
     expect(sent()).toHaveLength(0);
   });
 
-  it("пауза (0011): digest_paused = 1 не отримує; без колонки пауза просто не діє", async () => {
+  it("пауза (/stop у боті, users.digest_paused = 1): людина з робочим каналом нічого не отримує; /start знімає", async () => {
+    // Робочий канал: Telegram прив'язаний, токен бота є, пошта теж є.
+    addUser("paused", { channel: "telegram", telegram: "777", email: "p@example.com" });
+    addJobs(5);
+    db.exec("UPDATE users SET digest_paused = 1 WHERE id = 'paused'");
+    const s = await runDigestDue(deps());
+    expect(s).toMatchObject({ eligible: 0, due: 0, sent: 0 });
+    expect(runs()).toHaveLength(0);
+    expect(sent()).toHaveLength(0);
+    expect(tgCalls).toHaveLength(0);
+    expect(emailCalls).toHaveLength(0);
+    expect(jobs.seen).toHaveLength(0); // навіть пул не читали
+
+    db.exec("UPDATE users SET digest_paused = 0 WHERE id = 'paused'");
+    expect((await runDigestDue(deps())).sent).toBe(1);
+    expect(tgCalls).toHaveLength(1);
+  });
+
+  it("база без 0011: пауза не діє, добірка йде, у журналі видно чому", async () => {
+    db.close();
+    db = new SqliteD1(DIGEST_MIGRATIONS.filter((m) => m !== "0011_user_settings.sql"));
     addUser("u1");
     addJobs(5);
-    const noColumn = await runDigestDue(deps({}, NOW));
-    expect(noColumn.sent).toBe(1);
+    expect((await runDigestDue(deps())).sent).toBe(1);
     expect(log.join("\n")).toMatch(/digest_paused missing/);
-
-    db.exec(USER_SETTINGS_0011);
-    addUser("paused");
-    db.exec("UPDATE users SET digest_paused = 1 WHERE id = 'paused'");
-    const s = await runDigestDue(deps({}, NOW));
-    expect(s.eligible).toBe(1); // лише u1, і в нього вже є добірка
-    expect(runs().map((r) => r.user_id)).toEqual(["u1"]);
   });
 
   it("вакансія компанії: не більше однієї, перша, job_ref co:, лічильник digest_shown", async () => {
