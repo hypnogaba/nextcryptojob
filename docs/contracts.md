@@ -164,7 +164,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0003_crm.sql | web: CRM | companies, company_members, saved_searches, pipeline, pipeline_events, intros, company_jobs, agency_applications |
 | 0004_billing.sql | web: оплата й агенти | subscriptions, api_keys, x402_payments, usage_events |
 | 0005_cards.sql | web: картки | cards |
-| 0006_digest.sql | engine: добірка | sent, digest_runs |
+| 0006_digest.sql | engine: добірка | sent, digest_runs (накочує controller) |
 | 0007_admin.sql | web: адмінка | appeals, admin_flags |
 | 0008_sources_v5.sql | controller | перебудова identities і source_facts (sherlock, audits, dune) |
 | 0009_users_email_lower.sql | controller | індекс users(lower(email)) |
