@@ -43,7 +43,16 @@ describe("content security policy", () => {
     );
     expect(csp.get("frame-src")).toContain("https://oauth.telegram.org");
     expect(csp.get("connect-src")).toContain("https://oauth.telegram.org");
-    expect(csp.get("form-action")).toEqual(["'self'", "https://oauth.telegram.org"]);
+    expect(csp.get("form-action")).toContain("https://oauth.telegram.org");
+  });
+
+  it("lets billing forms continue to Stripe Checkout and the customer portal, and nowhere else", () => {
+    expect(csp.get("form-action")).toEqual([
+      "'self'",
+      "https://oauth.telegram.org",
+      "https://checkout.stripe.com",
+      "https://billing.stripe.com",
+    ]);
   });
 
   it("allows avatars from X and GitHub but no other image hosts", () => {
