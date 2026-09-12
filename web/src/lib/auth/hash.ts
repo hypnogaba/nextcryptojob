@@ -24,6 +24,19 @@ export function randomToken(): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/**
+ * Порівняння рядків без раннього виходу: час не каже, скільки перших символів
+ * збіглося. Довжину видає, але секрети тут однієї відомої довжини.
+ */
+export function safeEqual(a: string, b: string): boolean {
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
 export async function sha256Hex(text: string): Promise<string> {
   return toHex(await crypto.subtle.digest("SHA-256", encoder.encode(text)));
 }

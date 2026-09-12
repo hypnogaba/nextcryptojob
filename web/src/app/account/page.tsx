@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SignOutButton } from "@/components/sign-out-button";
 import { requireUser } from "@/lib/auth/session";
+import { TelegramPanel } from "./telegram-panel";
 
 export const metadata: Metadata = { title: "Account", robots: { index: false } };
 
@@ -15,6 +16,7 @@ export default async function AccountPage() {
         <dt className="font-mono text-xs tracking-widest text-ink-muted uppercase">Email</dt>
         <dd className="text-ink">{user.email ?? "Not added yet"}</dd>
       </dl>
+      <TelegramPanel userId={user.id} />
       <div className="mt-8">
         <SignOutButton />
       </div>
