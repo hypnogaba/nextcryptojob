@@ -170,6 +170,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0009_users_email_lower.sql | controller | індекс users(lower(email)) |
 | 0010_score_jobs_user.sql | controller | індекс score_jobs(user_id, id) |
 | 0011_user_settings.sql | web: налаштування | users.digest_paused |
+| 0013_session_method.sql | web: Telegram-доробки | sessions.method ('email'|'telegram') |
 | 0012_access_views.sql | web: оплата | перебудова в'ю company_access і company_jobs_live (past_due 7 днів від початку періоду) |
 Нова таблиця поза цим списком лише через controller.
 
