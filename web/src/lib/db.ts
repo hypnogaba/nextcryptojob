@@ -7,9 +7,13 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
  * перевірити й чесно сказати, чого бракує (розділ 8). Omit, бо `wrangler types`
  * бере секрети з локального .dev.vars і зробив би їх обов'язковими.
  */
-export type AppEnv = Omit<CloudflareEnv, "SESSION_SECRET" | "EMAIL"> & {
+export type AppEnv = Omit<CloudflareEnv, "SESSION_SECRET" | "EMAIL" | "TWITTER_TOKEN" | "GITHUB_TOKEN"> & {
   /** Ключ HMAC для кодів входу (contracts §9). Worker secret, у розробці .dev.vars. */
   SESSION_SECRET?: string;
+  /** Ключ 6551 для перевірки коду в X. Worker secret; без нього перевірка X вимкнена. */
+  TWITTER_TOKEN?: string;
+  /** Необов'язковий ключ GitHub: без нього перевірка GitHub іде без ключа (60 запитів/год). */
+  GITHUB_TOKEN?: string;
   /** Cloudflare Email Service. Блок send_email у wrangler.jsonc поки закоментований. */
   EMAIL?: SendEmail;
 };

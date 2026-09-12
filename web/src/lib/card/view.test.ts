@@ -30,6 +30,13 @@ describe("cardView", () => {
     expect(view.patternSrc).toMatch(/^data:image\/svg\+xml;base64,/);
   });
 
+  it("marks a trader card as wallets not verified, and no other card", () => {
+    const trader = cardView({ ...FIXTURE, role: "trader" });
+    expect(trader.marker).toBe("Wallets not verified");
+    expect(trader.summary).toMatch(/Wallets not verified\.$/);
+    expect(cardView(FIXTURE).marker).toBeNull();
+  });
+
   it("gives two cards of the same level different patterns", () => {
     const a = cardView(FIXTURE);
     const b = cardView({ ...FIXTURE, displayName: "bob" });
