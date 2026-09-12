@@ -151,7 +151,29 @@ export const SavedSearchId = z.string().regex(/^ss_[A-Za-z0-9]{20}$/);
 export const Cursor = z.string().max(512);
 const Limit50 = z.number().int().min(1).max(50);
 const Limit20 = z.number().int().min(1).max(20);
-const Tags = z.array(z.string().min(1).max(32)).max(10);
+/** Ключ порівняння тегу: без розрізнення регістру для будь-якої абетки (Solidity = solidity = ＳＯＬＩＤＩＴＹ). */
+export function tagKey(tag: string): string {
+  return tag.normalize("NFKC").trim().toLowerCase();
+}
+
+/**
+ * Повтори без огляду на регістр прибираються ДО межі в 10 (лишається перше
+ * написання): 10 різних тегів і "T0" поруч з "t0" це 10 тегів, як і в
+ * normalizeTags (pipeline.ts). Не масив чи не рядки лишаються як є: їх відкине схема.
+ */
+function dedupeTags(value: unknown): unknown {
+  if (!Array.isArray(value) || !value.every((t) => typeof t === "string")) return value;
+  const seen = new Set<string>();
+  return value.filter((t: string) => {
+    const key = tagKey(t);
+    if (key === "") return true; // порожній тег лишаємо: його відкине min(1) чи normalizeTags
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const Tags = z.preprocess(dedupeTags, z.array(z.string().min(1).max(32)).max(10));
 const WorkModes = z.array(z.enum(["remote", "city"])).min(1);
 
 function uniqueItems<T>(list: readonly T[] | undefined): boolean {

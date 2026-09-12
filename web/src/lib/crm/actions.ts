@@ -5,6 +5,7 @@ import type { SettleTiming } from "@/lib/x402/server";
 import { auditStatement, type AuditMeta } from "./audit";
 import { actorRole, type AccessMode, type ActionContext, type Channel } from "./context";
 import { assertCan, type Permission } from "./permissions";
+import { addNote, addToPipeline, listHistory, listPipeline, removeFromPipeline, updateCard } from "./pipeline";
 import { loadCandidates, projectHidden, projectIntro, projectProfile, contactFromIntro, INTRO_COLUMNS, type IntroRow } from "./project";
 import {
   finishUsageStatement,
@@ -36,8 +37,8 @@ import { isVisibleTo } from "./visibility";
  * (docs/api/mcp-tools.md). Вихід = тіло успішної відповіді REST.
  * Тест actions.test.ts звіряє реєстр з openapi.yaml і mcp-tools.md.
  *
- * Обробники (handler) є в діях T2–T3 (get_account, search_candidates,
- * get_candidate); решту допишуть T4–T12. Дія без обробника відповідає 501
+ * Обробники (handler) є в діях T2–T4 (get_account, search_candidates,
+ * get_candidate, воронка); решту допишуть T5–T12. Дія без обробника відповідає 501
  * not_implemented ще до перевірки оплати.
  */
 
@@ -51,6 +52,11 @@ export interface HandlerResult<O> {
   results?: number | null;
   /** Уточнення запису журналу: інша назва дії, ціль, meta. */
   audit?: { action?: string; target?: string | null; meta?: AuditMeta };
+  /**
+   * Обробник сам записав журнал у тому самому пакеті, що й ефект (воронка, 5.4:
+   * подія + журнал однією транзакцією), або змін не було. commit журналу не пише.
+   */
+  auditWritten?: boolean;
 }
 
 export interface ActionDef<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> {
@@ -168,6 +174,7 @@ export const ACTIONS = [
     output: T.PipelineList,
     permission: "pipeline.read",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => ({ output: await listPipeline(ctx, input) }),
   }),
   defineAction({
     name: "add_to_pipeline",
@@ -180,6 +187,11 @@ export const ACTIONS = [
     access: ALL_ACCESS,
     audit: "pipeline.add",
     touchesCandidate: true,
+    handler: async (ctx, input) => {
+      const { card, created } = await addToPipeline(ctx, input);
+      // Уже була: нічого не змінилось, журнал не пишемо (як і для порожньої зміни етапу).
+      return { output: card, status: created ? 201 : 200, auditWritten: true };
+    },
   }),
   defineAction({
     name: "update_stage",
@@ -195,6 +207,7 @@ export const ACTIONS = [
     access: ALL_ACCESS,
     audit: "pipeline.stage",
     touchesCandidate: true,
+    handler: async (ctx, input) => ({ output: await updateCard(ctx, input), auditWritten: true }),
   }),
   defineAction({
     name: "remove_from_pipeline",
@@ -207,6 +220,10 @@ export const ACTIONS = [
     access: ALL_ACCESS,
     audit: "pipeline.remove",
     touchesCandidate: true,
+    handler: async (ctx, input) => {
+      await removeFromPipeline(ctx, input);
+      return { output: {}, auditWritten: true };
+    },
   }),
   defineAction({
     name: "list_candidate_history",
@@ -217,6 +234,7 @@ export const ACTIONS = [
     output: T.PipelineEventList,
     permission: "pipeline.read",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => ({ output: await listHistory(ctx, input) }),
   }),
   defineAction({
     name: "add_note",
@@ -229,6 +247,7 @@ export const ACTIONS = [
     access: ALL_ACCESS,
     audit: "pipeline.note",
     touchesCandidate: true,
+    handler: async (ctx, input) => ({ output: await addNote(ctx, input), auditWritten: true }),
   }),
   defineAction({
     name: "request_intro",
@@ -646,7 +665,7 @@ export async function commit(reservation: Reservation, result: HandlerResult<unk
   } else if (usage) {
     writes.push(usageStatement(ctx.db, { ...usage, status, results: result.results ?? null }, ctx.now));
   }
-  const auditAction = result.audit?.action ?? def.audit;
+  const auditAction = result.auditWritten ? undefined : (result.audit?.action ?? def.audit);
   if (auditAction) {
     const target = result.audit?.target !== undefined ? result.audit.target : candidateOf(input);
     writes.push(auditStatement(ctx, { action: auditAction, target, meta: result.audit?.meta }));
