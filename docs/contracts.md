@@ -165,6 +165,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0007_admin.sql | web: адмінка | appeals, admin_flags |
 | 0008_sources_v5.sql | controller | перебудова identities і source_facts (sherlock, audits, dune) |
 | 0009_users_email_lower.sql | controller | індекс users(lower(email)) |
+| 0010_score_jobs_user.sql | controller | індекс score_jobs(user_id, id) |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)
