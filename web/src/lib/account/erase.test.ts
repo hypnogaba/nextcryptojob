@@ -64,6 +64,10 @@ function seed(raw: DatabaseSync) {
     INSERT INTO intros (id, company_id, user_id, pipeline_id, mode, message, requested_via, requested_by_user_id, expires_at) VALUES
       ('int_1', 'co_1', 'a', 1, 'approval', 'We would like to talk about a role.', 'web', 'b', datetime('now', '+14 days')),
       ('int_2', 'co_1', 'b', 2, 'approval', 'We would like to talk about a role.', 'web', 'a', datetime('now', '+14 days'));
+    INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES
+      ('dg_a', 'a', '2026-09-12', 'sent', 1, 'telegram'), ('dg_b', 'b', '2026-09-12', 'sent', 1, 'email');
+    INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel) VALUES
+      ('a', 'nr:1', 'nextrole', 'dg_a', 1, 'sent', 'telegram'), ('b', 'nr:1', 'nextrole', 'dg_b', 1, 'sent', 'email');
 
     INSERT INTO login_codes (email, code_hash, expires_at) VALUES
       ('a@example.com', 'x', datetime('now', '+10 minutes')), ('b@example.com', 'y', datetime('now', '+10 minutes'));

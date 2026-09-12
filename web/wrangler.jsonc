@@ -39,10 +39,11 @@
     // 10 запитів на хвилину з однієї IP для гостей x402.
     { "name": "RL_IP", "namespace_id": "4103", "simple": { "limit": 10, "period": 60 } }
   ],
-  // Власного домену ще немає: NS зони nextcryptojob.xyz чекають на Cloudflare.
-  // До того сайт живе лише на workers.dev. Коли зона стане active, тут
-  // з'являться routes з custom_domain, а workers_dev варто вимкнути (як у
+  // Власний домен: зона nextcryptojob.xyz active на Cloudflare з 12.09.
+  // workers_dev поки лишаємо: на ньому вебхук бота й адреси входу Telegram.
+  // Коли вони переїдуть на nextcryptojob.xyz, workers_dev варто вимкнути (як у
   // NextRole), щоб правила WAF зони не можна було обійти другою адресою.
+  "routes": [{ "pattern": "nextcryptojob.xyz", "custom_domain": true }],
   "workers_dev": true,
   // Пошта для кодів входу: Cloudflare Email Service (бета, тариф Workers Paid).
   // ВИМКНЕНО: домен nextcryptojob.xyz ще не підключено до Email Service, а
