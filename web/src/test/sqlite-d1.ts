@@ -14,6 +14,7 @@ export const APPLIED_MIGRATIONS = [
   "0005_cards.sql",
   "0008_sources_v5.sql",
   "0009_users_email_lower.sql",
+  "0010_score_jobs_user.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

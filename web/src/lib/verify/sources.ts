@@ -9,7 +9,9 @@ export type ReadResult<T> =
   /** Джерело не відповіло як слід: ліміт, тайм-аут, порожні дані. Спробувати пізніше. */
   | { status: "busy" }
   /** Ключ відхилено: сайт налаштований неправильно. */
-  | { status: "unavailable" };
+  | { status: "unavailable" }
+  /** Вичерпано годинний ліміт джерела (GitHub): чекати кілька хвилин, а не хвилину. */
+  | { status: "source_limited" };
 
 type Fetch = typeof fetch;
 
@@ -51,7 +53,28 @@ export async function readXBio(handle: string, token: string, fetchImpl: Fetch =
   return { status: "ok", data: typeof data.description === "string" ? data.description : "" };
 }
 
-/** Тексти останніх 20 власних постів X. */
+type Post = { id?: unknown; conversationId?: unknown; text?: unknown; userScreenName?: unknown };
+
+/**
+ * Власний пост, як у рушія (docs/contracts.md §3): не ретвіт («RT @…») і не
+ * відповідь (conversationId = id). Ретвіт чужого поста з кодом не доводить,
+ * що акаунт твій: інакше досить було б попросити власника ретвітнути.
+ */
+export function isOwnPost(post: Post, handle: string): boolean {
+  if (typeof post?.text !== "string" || post.text.startsWith("RT @")) return false;
+  if (typeof post.userScreenName === "string" && post.userScreenName.toLowerCase() !== handle.toLowerCase()) {
+    return false;
+  }
+  if (post.conversationId !== undefined && post.id !== undefined && String(post.conversationId) !== String(post.id)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Тексти власних постів з останніх 20 X. Порожній список 6551 віддає і на
+ * ліміт, тож це «busy», а не «коду немає».
+ */
 export async function readXPosts(
   handle: string,
   token: string,
@@ -65,10 +88,8 @@ export async function readXPosts(
     X_POSTS_TIMEOUT_MS,
   );
   if (res.status !== "ok") return res;
-  if (!Array.isArray(res.data)) return { status: "busy" };
-  const texts = (res.data as { text?: unknown; userScreenName?: unknown }[])
-    .filter((t) => typeof t?.userScreenName !== "string" || t.userScreenName.toLowerCase() === handle.toLowerCase())
-    .map((t) => (typeof t?.text === "string" ? t.text : ""));
+  if (!Array.isArray(res.data) || res.data.length === 0) return { status: "busy" };
+  const texts = (res.data as Post[]).filter((p) => isOwnPost(p, handle)).map((p) => p.text as string);
   return { status: "ok", data: texts };
 }
 
@@ -94,6 +115,9 @@ export async function readGithubBio(
     });
     if (res.status === 404) return { status: "not_found" };
     if (res.status === 401) return { status: "unavailable" };
+    if (res.status === 429 || (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0")) {
+      return { status: "source_limited" };
+    }
     if (!res.ok) return { status: "busy" };
     const data = (await res.json()) as { login?: unknown; bio?: unknown };
     if (typeof data?.login !== "string" || data.login.toLowerCase() !== login.toLowerCase()) return { status: "busy" };

@@ -6,10 +6,14 @@
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const SHAPE = /^ncj-[a-z2-7]{6}$/;
 
+/** Код з 6 байтів: 256 ділиться на 32 без остачі, тож & 31 дає рівномірний символ. */
+export function codeFromBytes(bytes: Uint8Array): string {
+  if (bytes.length < 6) throw new RangeError("need 6 bytes");
+  return `ncj-${Array.from(bytes.slice(0, 6), (b) => ALPHABET[b & 31]).join("")}`;
+}
+
 export function newVerifyCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(6));
-  // 256 ділиться на 32 без остачі, тож & 31 дає рівномірний символ.
-  return `ncj-${Array.from(bytes, (b) => ALPHABET[b & 31]).join("")}`;
+  return codeFromBytes(crypto.getRandomValues(new Uint8Array(6)));
 }
 
 export function isVerifyCode(value: string | null | undefined): value is string {

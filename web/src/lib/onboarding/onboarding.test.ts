@@ -58,6 +58,15 @@ describe("parsePlace", () => {
     });
   });
 
+  it("does not take inherited object keys as a choice", () => {
+    for (const where of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(parsePlace({ where, city: "", salary: "", currency: "USD" })).toMatchObject({
+        ok: false,
+        errors: { where: expect.any(String) },
+      });
+    }
+  });
+
   it("falls back to USD for an unknown currency", () => {
     expect(parsePlace({ where: "remote", city: "", salary: "100000", currency: "BTC" })).toMatchObject({
       place: { salaryCurrency: "USD" },

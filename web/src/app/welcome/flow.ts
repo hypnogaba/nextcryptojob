@@ -5,7 +5,9 @@ import { requireUser, type SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { loadAnswers, type Answers } from "@/lib/onboarding/store";
 import { canVisit, nextStep, type Step } from "@/lib/onboarding/steps";
+import { markSourcesChanged, type ChangeKind } from "@/lib/score/changes";
 import { enqueueScoreJob } from "@/lib/score/queue";
+import { profileStatus } from "@/lib/score/status";
 
 /**
  * Спільне для дій анкети: хто, чи можна на цей крок, куди далі.
@@ -34,17 +36,45 @@ export async function stepContext(step: Step): Promise<StepContext> {
   return { user, d, answers, wasDone: answers.step === "done" };
 }
 
+/** Ставить бал у чергу; секунди до наступної спроби, якщо «зарано», інакше null. */
+async function rescoreNow(ctx: StepContext): Promise<number | null> {
+  const res = await enqueueScoreJob(ctx.d, ctx.user.id, "connect");
+  return !res.ok && res.reason === "too_soon" ? res.retryAfterSeconds : null;
+}
+
+/**
+ * Записує зміну джерел чи ролей. Якщо анкету вже завершено, одразу пробує
+ * поставити бал у чергу й повертає, скільки секунд чекати, якщо зарано.
+ * Навіть тоді перерахунок не губиться: профіль бачить мітку зміни й пропонує
+ * «Update my score».
+ */
+export async function recordChange(ctx: StepContext, what: ChangeKind): Promise<number | null> {
+  await markSourcesChanged(ctx.d, ctx.user.id, what);
+  return ctx.wasDone ? rescoreNow(ctx) : null;
+}
+
+/** Додає ?wait=N (скільки секунд до перерахунку), якщо є що чекати. */
+export function withWait(url: string, wait: number | null): string {
+  return wait ? `${url}${url.includes("?") ? "&" : "?"}wait=${wait}` : url;
+}
+
 /**
  * Після збереження кроку: під час анкети на наступний крок; після неї назад
- * у профіль, і якщо змінились джерела чи ролі, бал ставиться в чергу.
+ * у профіль, і якщо після останнього перерахунку щось змінилось, бал іде в чергу.
  */
-export async function goNext(ctx: StepContext, completed: Step, rescore: boolean): Promise<never> {
+export async function goNext(ctx: StepContext, completed: Step): Promise<never> {
   if (ctx.wasDone) {
-    if (rescore) await enqueueScoreJob(ctx.d, ctx.user.id, "connect");
-    redirect("/profile");
+    const status = await profileStatus(ctx.d, ctx.user.id);
+    redirect(withWait("/profile", status.sourcesChanged ? await rescoreNow(ctx) : null));
   }
   const next = nextStep(completed);
   redirect(next === "done" ? "/profile" : `/welcome?step=${next}`);
+}
+
+/** Секунди очікування з адреси (?wait=), лише розумне ціле. */
+export function parseWait(raw: unknown): number | null {
+  const n = typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isInteger(n) && n > 0 && n <= 3600 ? n : null;
 }
 
 /** 30 змін джерел на годину: цього досить людині й мало, щоб перебирати чужі адреси. */

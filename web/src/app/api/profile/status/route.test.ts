@@ -31,7 +31,11 @@ describe("GET /api/profile/status", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     const body = await res.json();
-    expect(body).toEqual({ job: { status: "queued", waitedSeconds: expect.any(Number) }, scored: false });
+    expect(body).toEqual({
+      job: { status: "queued", waitedSeconds: expect.any(Number) },
+      scored: false,
+      sourcesChanged: false,
+    });
     expect(JSON.stringify(body)).not.toMatch(/me@example|them|"me"/);
   });
 

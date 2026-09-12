@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
-import { listIdentities, markVerified, removeIdentities, setSingleIdentity, setWallets } from "./store";
+import { listIdentities, markVerified, removeIdentities, setSingleIdentity, setWallets, takeOverIdentity } from "./store";
 
 let t: TestDb;
 const EVM = "0xe6b532e63f228087e26a5897131f2e1d043e27f2";
@@ -48,16 +48,15 @@ describe("setSingleIdentity", () => {
     expect(identities("a")).toEqual([]);
   });
 
-  it("waits a day before releasing another profile's unverified X claim", async () => {
+  it("never hands over another profile's unverified X claim, however old", async () => {
     await setSingleIdentity(t.d1, "b", "x", "ada", "ncj-bbbbbb");
+    ageRow("x", "ada", "-30 days");
     await expect(setSingleIdentity(t.d1, "a", "x", "ada", "ncj-aaaaaa")).resolves.toEqual({
       ok: false,
       reason: "pending",
     });
-    ageRow("x", "ada");
-    await expect(setSingleIdentity(t.d1, "a", "x", "ada", "ncj-aaaaaa")).resolves.toEqual({ ok: true });
-    expect(identities("b")).toEqual([]);
-    expect(identities("a")[0]).toMatchObject({ value: "ada", verify_code: "ncj-aaaaaa" });
+    expect(identities("b")).toHaveLength(1);
+    expect(identities("a")).toEqual([]);
   });
 
   it("never releases sources that cannot be verified here", async () => {
@@ -80,6 +79,26 @@ describe("setSingleIdentity", () => {
     await setSingleIdentity(t.d1, "a", "youtube", "@ada");
     await removeIdentities(t.d1, "a", "youtube");
     expect(identities("a")).toEqual([]);
+  });
+});
+
+describe("takeOverIdentity", () => {
+  it("moves an unverified claim to the proven owner, verified, replacing the owner's old row", async () => {
+    await setSingleIdentity(t.d1, "b", "x", "ada", "ncj-bbbbbb");
+    await setSingleIdentity(t.d1, "a", "x", "old_handle", "ncj-aaaaaa");
+    await expect(takeOverIdentity(t.d1, "a", "x", "ada", "bio_code")).resolves.toBe(true);
+    expect(identities("b")).toEqual([]);
+    expect(identities("a")).toEqual([{ kind: "x", value: "ada", verify_code: null, verified_via: "bio_code" }]);
+  });
+
+  it("rolls back when the other profile verified first", async () => {
+    await setSingleIdentity(t.d1, "b", "x", "ada", "ncj-bbbbbb");
+    await markVerified(t.d1, "b", "x", "ada", "bio_code");
+    await setSingleIdentity(t.d1, "a", "x", "mine", "ncj-aaaaaa");
+    await expect(takeOverIdentity(t.d1, "a", "x", "ada", "bio_code")).resolves.toBe(false);
+    expect(identities("b")[0]).toMatchObject({ value: "ada", verified_via: "bio_code" });
+    // Свій попередній рядок теж лишився: пакет відкотився цілком.
+    expect(identities("a")).toEqual([{ kind: "x", value: "mine", verify_code: "ncj-aaaaaa", verified_via: null }]);
   });
 });
 

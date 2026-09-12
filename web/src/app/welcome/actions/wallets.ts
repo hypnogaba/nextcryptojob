@@ -3,7 +3,7 @@
 import { setWallets } from "@/lib/identity/store";
 import { parseWallets } from "@/lib/identity/wallets";
 import { saveStep } from "@/lib/onboarding/store";
-import { field, goNext, identityWriteGuard, stepContext, type StepState } from "../flow";
+import { field, goNext, identityWriteGuard, recordChange, stepContext, type StepState } from "../flow";
 
 // Крок гаманців: одне поле, багато адрес. Помилка кожної адреси окремо.
 
@@ -36,5 +36,6 @@ export async function saveWalletsAction(_prev: StepState, form: FormData): Promi
     return { errors: byInput, values };
   }
   await saveStep(ctx.d, ctx.user.id, "wallets", {}, ctx.answers.step);
-  return goNext(ctx, "wallets", res.added + res.removed > 0);
+  if (res.added + res.removed > 0) await recordChange(ctx, "wallets");
+  return goNext(ctx, "wallets");
 }

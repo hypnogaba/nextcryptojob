@@ -17,10 +17,9 @@ export type Identity = {
 export type SingleKind = "x" | "github" | "youtube" | "site" | "sherlock";
 
 /**
- * Ті, що сайт сам перевіряє кодом у біо. Неперевірену заявку іншого акаунта
- * на такий нік через добу можна забрати: інакше будь-хто міг би назавжди
- * заблокувати чужий X, просто ввівши його нік. Гаманці так не звільняємо: їх
- * ще нічим підтвердити, і «звільнення» дало б забрати чужу справжню адресу.
+ * Ті, що сайт сам перевіряє кодом у біо. Неперевірену заявку іншого акаунта на
+ * такий нік власник забирає кодом заявки (lib/verify/claim.ts). Гаманці так
+ * не забираються: їх ще нічим підтвердити.
  */
 export const VERIFIABLE: ReadonlySet<IdentityKind> = new Set(["x", "github"]);
 
@@ -71,7 +70,7 @@ export type SetResult =
   | { ok: true }
   /** Уже в іншому профілі (перевірене або таке, що не звільняється). */
   | { ok: false; reason: "taken" }
-  /** Інший профіль почав підтверджувати цей нік менше доби тому. */
+  /** Нік в іншого профілю без підтвердження: власник може забрати його кодом заявки. */
   | { ok: false; reason: "pending" };
 
 /**
@@ -88,28 +87,16 @@ export async function setSingleIdentity(
   verifyCode: string | null = null,
 ): Promise<SetResult> {
   const existing = await db
-    .prepare(
-      "SELECT user_id, verified_at, verify_code, created_at <= datetime('now', '-1 day') AS stale " +
-        "FROM identities WHERE kind = ? AND value = ?",
-    )
+    .prepare("SELECT user_id, verified_at, verify_code FROM identities WHERE kind = ? AND value = ?")
     .bind(kind, value)
-    .first<{ user_id: string; verified_at: string | null; verify_code: string | null; stale: number }>();
+    .first<{ user_id: string; verified_at: string | null; verify_code: string | null }>();
 
-  const stmts: D1PreparedStatement[] = [];
+  // Чужий рядок не чіпаємо ніколи: давність нічого не доводить (його можна
+  // прибрати й додати знову), доводить лише код заявки.
   if (existing && existing.user_id !== userId) {
-    if (existing.verified_at || !VERIFIABLE.has(kind)) return { ok: false, reason: "taken" };
-    if (!existing.stale) return { ok: false, reason: "pending" };
-    // Умова в самому DELETE: якщо той профіль тим часом підтвердив нік, рядок
-    // лишиться, INSERT нижче впаде на UNIQUE, і batch відкотиться цілком.
-    stmts.push(
-      db
-        .prepare(
-          "DELETE FROM identities WHERE kind = ? AND value = ? AND user_id <> ? AND verified_at IS NULL " +
-            "AND created_at <= datetime('now', '-1 day')",
-        )
-        .bind(kind, value, userId),
-    );
+    return { ok: false, reason: existing.verified_at || !VERIFIABLE.has(kind) ? "taken" : "pending" };
   }
+  const stmts: D1PreparedStatement[] = [];
   stmts.push(
     db.prepare("DELETE FROM identities WHERE user_id = ? AND kind = ? AND value <> ?").bind(userId, kind, value),
   );
@@ -158,6 +145,38 @@ export async function markVerified(
     .bind(via, userId, kind, value)
     .run();
   return (res.meta.changes ?? 0) > 0;
+}
+
+/**
+ * Передає нік людині перевіреним після коду заявки, одним пакетом: прибрати
+ * неперевірений рядок іншого профілю, свій попередній рядок цього джерела й
+ * вставити свій перевірений. Якщо той профіль тим часом підтвердив нік, його
+ * рядок лишається, INSERT падає на UNIQUE, і пакет відкочується цілком.
+ */
+export async function takeOverIdentity(
+  db: D1Database,
+  userId: string,
+  kind: SingleKind,
+  value: string,
+  via: "bio_code" | "post_code",
+): Promise<boolean> {
+  try {
+    await db.batch([
+      db
+        .prepare("DELETE FROM identities WHERE kind = ? AND value = ? AND user_id <> ? AND verified_at IS NULL")
+        .bind(kind, value, userId),
+      db.prepare("DELETE FROM identities WHERE user_id = ? AND kind = ?").bind(userId, kind),
+      db
+        .prepare(
+          "INSERT INTO identities (user_id, kind, value, verified_via, verified_at) VALUES (?, ?, ?, ?, datetime('now'))",
+        )
+        .bind(userId, kind, value, via),
+    ]);
+  } catch (err) {
+    if (isUniqueViolation(err)) return false;
+    throw err;
+  }
+  return true;
 }
 
 export type WalletsResult =

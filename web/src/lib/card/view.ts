@@ -1,5 +1,6 @@
 // Усе, що треба для показу картки, одним об'єктом: його бере і сторінка /c/<slug>,
 // і картинка для X, тож вони не розходяться в цифрах, кольорах чи візерунку.
+import { walletMarker } from "./eligibility";
 import { makePattern, patternDataUri, patternSeed } from "./pattern";
 import { ROLES } from "./roles";
 import type { PublicCard } from "./store";
@@ -27,6 +28,8 @@ export type CardView = {
   issuedOn: string;
   /** Одним реченням для alt і aria-label. */
   summary: string;
+  /** Позначка на картці («Wallets not verified» для трейдера) або null. */
+  marker: string | null;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -42,6 +45,7 @@ export function cardView(card: PublicCard): CardView {
   const tier = tierFor(card.level);
   const roleName = ROLES[card.role].name;
   const score = displayScore(card.score);
+  const marker = walletMarker(card.role);
   return {
     slug: card.slug,
     roleName,
@@ -55,6 +59,9 @@ export function cardView(card: PublicCard): CardView {
     patternSrc: patternDataUri(makePattern(patternSeed(card.displayName, card.role)), tier.ink, PATTERN_OPACITY),
     formulaVersion: card.formulaVersion,
     issuedOn: formatIssuedOn(card.createdAt),
-    summary: `${card.displayName}: ${roleName}, score ${score} of 100, level ${tier.level} of ${MAX_LEVEL}`,
+    summary:
+      `${card.displayName}: ${roleName}, score ${score} of 100, level ${tier.level} of ${MAX_LEVEL}` +
+      (marker ? `. ${marker}.` : ""),
+    marker,
   };
 }

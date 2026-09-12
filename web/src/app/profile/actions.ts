@@ -5,6 +5,7 @@ import type { FormMessage } from "@/components/form/form-message";
 import { audit } from "@/lib/audit";
 import { consume } from "@/lib/auth/ratelimit";
 import { requireUser } from "@/lib/auth/session";
+import { cardEligibility } from "@/lib/card/eligibility";
 import { isRoleKey } from "@/lib/card/roles";
 import { CardInputError, createCard } from "@/lib/card/store";
 import { db } from "@/lib/db";
@@ -28,6 +29,15 @@ export async function rescoreAction(_prev: ProfileActionState): Promise<ProfileA
   }
 }
 
+function breakdownReason(json: string): string | null {
+  try {
+    const reason = (JSON.parse(json) as { reason?: unknown })?.reason;
+    return typeof reason === "string" ? reason : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 20 карток на годину: кожна нова відкликає попередню тієї ж ролі. */
 const CARD_LIMITS = { windowMinutes: 60, maxAttempts: 20, blockMinutes: 60 };
 
@@ -41,14 +51,20 @@ export async function createCardAction(_prev: ProfileActionState, form: FormData
 
   const row = await d
     .prepare(
-      `SELECT s.score, s.formula_version, u.roles FROM scores s JOIN users u ON u.id = s.user_id
+      `SELECT s.score, s.formula_version, s.breakdown_json, u.roles,
+              EXISTS (SELECT 1 FROM identities WHERE user_id = s.user_id AND kind = 'x' AND verified_at IS NOT NULL) AS x,
+              EXISTS (SELECT 1 FROM identities WHERE user_id = s.user_id AND kind = 'github' AND verified_at IS NOT NULL) AS github
+         FROM scores s JOIN users u ON u.id = s.user_id
         WHERE s.user_id = ? AND s.role = ?`,
     )
     .bind(user.id, role)
-    .first<{ score: number | null; formula_version: string; roles: string }>();
+    .first<{ score: number | null; formula_version: string; breakdown_json: string; roles: string; x: number; github: number }>();
   if (!row || row.score === null || !parseRoles(row.roles).includes(role)) {
     return { message: { tone: "error", text: "There is no score for this role yet." }, name };
   }
+  // Те саме правило, що вимикає кнопку на сторінці: дію можна викликати й напряму.
+  const eligible = cardEligibility(role, breakdownReason(row.breakdown_json), { x: row.x === 1, github: row.github === 1 });
+  if (!eligible.ok) return { message: { tone: "error", text: eligible.reason }, name };
   const verdict = await consume(`card:${user.id}`, CARD_LIMITS, d);
   if (!verdict.allowed) {
     return { message: { tone: "error", text: `Too many cards. Try again in ${verdict.retryAfterMinutes} minutes.` }, name };

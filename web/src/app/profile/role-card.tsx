@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import type { Eligibility } from "@/lib/card/eligibility";
 import type { RoleView } from "@/lib/score/explain";
 import { CreateCardForm } from "./create-card-form";
 import { ScoreBar } from "./score-bar";
@@ -23,8 +25,43 @@ const EDIT_SOURCES = (
   </Link>
 );
 
+/** Картка лише з підтвердженим головним джерелом; інакше вимкнена кнопка й пояснення. */
+function CardArea({ view, defaultName, eligibility }: { view: RoleView; defaultName: string; eligibility: Eligibility }) {
+  if (view.state !== "scored") return null;
+  if (!eligibility.ok) {
+    return (
+      <div className="grid gap-2 border-t border-line pt-4">
+        <Button disabled className="h-11 w-full px-5 text-base sm:w-fit" aria-describedby={`card-why-${view.role}`}>
+          Create my card
+        </Button>
+        <p id={`card-why-${view.role}`} className="text-sm text-ink-muted">
+          {eligibility.reason}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <>
+      {eligibility.walletsUnverified ? (
+        <p className="border-t border-line pt-4 text-sm text-ink-muted">
+          Your card will say Wallets not verified until you can prove your wallets with a signature.
+        </p>
+      ) : null}
+      <CreateCardForm role={view.role} defaultName={defaultName} />
+    </>
+  );
+}
+
 /** Одна роль на сторінці балу: бал і рівень, за що він, прогалини, поради, картка. */
-export function RoleCard({ view, defaultName }: { view: RoleView; defaultName: string }) {
+export function RoleCard({
+  view,
+  defaultName,
+  eligibility,
+}: {
+  view: RoleView;
+  defaultName: string;
+  eligibility: Eligibility;
+}) {
   return (
     <article className="grid gap-5 rounded-xl border border-line bg-surface p-4 sm:p-6">
       <header className="flex items-start justify-between gap-4">
@@ -75,7 +112,7 @@ export function RoleCard({ view, defaultName }: { view: RoleView; defaultName: s
           </p>
           <Notes title="Could not read" items={view.gaps} />
           <Notes title="Tips" items={view.tips} />
-          <CreateCardForm role={view.role} defaultName={defaultName} />
+          <CardArea view={view} defaultName={defaultName} eligibility={eligibility} />
         </>
       ) : null}
     </article>

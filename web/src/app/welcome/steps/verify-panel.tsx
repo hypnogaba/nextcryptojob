@@ -11,10 +11,13 @@ import type { StepState } from "../flow";
 export function VerifyPanel({
   kind,
   code,
+  claim,
   children,
 }: {
   kind: "x" | "github";
   code: string;
+  /** Нік, який людина забирає в неперевіреного профілю (код заявки), або нічого. */
+  claim?: string;
   /** Інструкція: куди поставити код. */
   children: React.ReactNode;
 }) {
@@ -42,6 +45,7 @@ export function VerifyPanel({
       <div className="text-sm text-ink-muted">{children}</div>
       <form action={action} className="grid gap-2">
         <input type="hidden" name="kind" value={kind} />
+        {claim ? <input type="hidden" name="claim" value={claim} /> : null}
         <SubmitButton pendingLabel="Checking..." className="h-11 text-base">
           Check
         </SubmitButton>

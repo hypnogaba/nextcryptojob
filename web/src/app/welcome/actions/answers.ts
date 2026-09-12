@@ -4,7 +4,7 @@ import { isRoleKey, type RoleKey } from "@/lib/card/roles";
 import { parsePlace } from "@/lib/onboarding/place";
 import { placeFields, rolesFields, saveStep, TARGET_MAX, targetFields } from "@/lib/onboarding/store";
 import { MAX_ROLES } from "@/lib/roles/catalog";
-import { field, goNext, stepContext, type StepState } from "../flow";
+import { field, goNext, recordChange, stepContext, type StepState } from "../flow";
 
 // Кроки про намір: що шукає людина, які ролі, де працювати.
 
@@ -19,7 +19,7 @@ export async function saveTargetAction(_prev: StepState, form: FormData): Promis
   }
   await saveStep(ctx.d, ctx.user.id, "target", targetFields(text), ctx.answers.step);
   // Слова й ролі йдуть парою: і після анкети далі крок ролей, а не профіль.
-  return goNext({ ...ctx, wasDone: false }, "target", false);
+  return goNext({ ...ctx, wasDone: false }, "target");
 }
 
 export async function saveRolesAction(_prev: StepState, form: FormData): Promise<StepState> {
@@ -29,7 +29,8 @@ export async function saveRolesAction(_prev: StepState, form: FormData): Promise
   if (roles.length > MAX_ROLES) return { errors: { role: `Pick up to ${MAX_ROLES} roles.` } };
   const changed = JSON.stringify(roles) !== JSON.stringify(ctx.answers.roles);
   await saveStep(ctx.d, ctx.user.id, "roles", rolesFields(roles), ctx.answers.step);
-  return goNext(ctx, "roles", changed);
+  if (changed) await recordChange(ctx, "roles");
+  return goNext(ctx, "roles");
 }
 
 export async function savePlaceAction(_prev: StepState, form: FormData): Promise<StepState> {
@@ -44,5 +45,5 @@ export async function savePlaceAction(_prev: StepState, form: FormData): Promise
   if (!parsed.ok) return { errors: parsed.errors, values };
   await saveStep(ctx.d, ctx.user.id, "place", placeFields(parsed.place), ctx.answers.step);
   // Місце й зарплата на бал не впливають.
-  return goNext(ctx, "place", false);
+  return goNext(ctx, "place");
 }

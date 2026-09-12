@@ -6,7 +6,7 @@ import { CHECK_LIMITS, checkIdentity } from "./check";
 let t: TestDb;
 const CODE = "ncj-k7qx2a";
 
-type Reply = { status?: number; body?: unknown } | Error;
+type Reply = { status?: number; body?: unknown; headers?: Record<string, string> } | Error;
 
 /** Замінник fetch: відповіді по черзі, запити записуються. */
 function stubFetch(...replies: Reply[]) {
@@ -16,7 +16,7 @@ function stubFetch(...replies: Reply[]) {
     const reply = replies.shift();
     if (!reply) throw new Error("unexpected fetch");
     if (reply instanceof Error) throw reply;
-    return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200 });
+    return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200, headers: reply.headers });
   });
   return { impl: impl as unknown as typeof fetch, calls };
 }
@@ -25,7 +25,10 @@ const xInfo = (description: string, screenName = "Ada") => ({
   body: { success: true, data: { screenName, description, followersCount: 1 } },
 });
 const xPosts = (...texts: string[]) => ({
-  body: { success: true, data: texts.map((text, i) => ({ id: String(i), text, userScreenName: "ada" })) },
+  body: {
+    success: true,
+    data: texts.map((text, i) => ({ id: String(i), conversationId: String(i), text, userScreenName: "ada" })),
+  },
 });
 
 function row() {
@@ -83,6 +86,39 @@ describe("checkIdentity for X", () => {
     });
   });
 
+  it("does not count a retweet or a reply that carries the code", async () => {
+    const f = stubFetch(xInfo("nothing"), {
+      body: {
+        data: [
+          { id: "1", conversationId: "1", text: `RT @attacker: grab ${CODE}`, userScreenName: "ada" },
+          { id: "2", conversationId: "99", text: `@attacker ${CODE}`, userScreenName: "ada" },
+          { id: "3", conversationId: "3", text: "gm", userScreenName: "ada" },
+        ],
+      },
+    });
+    await expect(checkIdentity(t.d1, "a", "x", { twitterToken: "tok", fetch: f.impl })).resolves.toEqual({
+      status: "code_missing",
+    });
+    expect(row().verified_at).toBeNull();
+  });
+
+  it("counts an own post, with or without conversation ids", async () => {
+    const f = stubFetch(xInfo("nothing"), {
+      body: { data: [{ id: "7", conversationId: "7", text: `proof ${CODE}`, userScreenName: "ada" }] },
+    });
+    await expect(checkIdentity(t.d1, "a", "x", { twitterToken: "tok", fetch: f.impl })).resolves.toMatchObject({
+      status: "verified",
+      via: "post_code",
+    });
+  });
+
+  it("treats an empty post list from 6551 as busy", async () => {
+    const f = stubFetch(xInfo("nothing"), { body: { success: true, data: [] } });
+    await expect(checkIdentity(t.d1, "a", "x", { twitterToken: "tok", fetch: f.impl })).resolves.toEqual({
+      status: "busy",
+    });
+  });
+
   it("treats empty data from 6551 as busy, not as a failure", async () => {
     const f = stubFetch({ body: { success: true, data: { success: true } } });
     await expect(checkIdentity(t.d1, "a", "x", { twitterToken: "tok", fetch: f.impl })).resolves.toEqual({
@@ -129,7 +165,7 @@ describe("checkIdentity for X", () => {
 
   it("limits checks per person", async () => {
     const replies = Array.from({ length: CHECK_LIMITS.maxAttempts * 2 }, () => xInfo("nothing"));
-    const f = stubFetch(...replies.flatMap((r) => [r, xPosts()]));
+    const f = stubFetch(...replies.flatMap((r) => [r, xPosts("gm")]));
     for (let i = 0; i < CHECK_LIMITS.maxAttempts; i++) {
       expect((await checkIdentity(t.d1, "a", "x", { twitterToken: "tok", fetch: f.impl })).status).toBe(
         "code_missing",
@@ -181,9 +217,19 @@ describe("checkIdentity for GitHub", () => {
     });
   });
 
-  it("treats GitHub rate limits as busy", async () => {
+  it("treats other GitHub errors as busy", async () => {
     await expect(checkIdentity(t.d1, "a", "github", { fetch: stubFetch({ status: 403 }).impl })).resolves.toEqual({
       status: "busy",
+    });
+  });
+
+  it("tells a spent GitHub rate limit apart", async () => {
+    const limited = stubFetch({ status: 403, headers: { "x-ratelimit-remaining": "0" } });
+    await expect(checkIdentity(t.d1, "a", "github", { fetch: limited.impl })).resolves.toEqual({
+      status: "source_limited",
+    });
+    await expect(checkIdentity(t.d1, "a", "github", { fetch: stubFetch({ status: 429 }).impl })).resolves.toEqual({
+      status: "source_limited",
     });
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IdentityKind } from "@/lib/identity/normalize";
-import { explainRole, gapSentence, type ScoreRow } from "./explain";
+import { explainRole, gapSentence, sourceState, type ScoreRow } from "./explain";
 
 const row = (score: number | null, breakdown: object): ScoreRow => ({
   role: "engineer",
@@ -9,7 +9,8 @@ const row = (score: number | null, breakdown: object): ScoreRow => ({
   formula_version: "v5",
   computed_at: "2026-09-12 10:00:00",
 });
-const kinds = (...k: IdentityKind[]) => new Set<IdentityKind>(k);
+/** Усі перелічені джерела рахуються (перевірені або такі, що не потребують перевірки). */
+const kinds = (...k: IdentityKind[]) => ({ counted: new Set<IdentityKind>(k), unverified: new Set<IdentityKind>() });
 
 describe("explainRole", () => {
   it("shows core sources as weighted bars, bonuses, cover and level", () => {
@@ -130,6 +131,50 @@ describe("explainRole", () => {
     expect(explainRole("bd", null, kinds())).toEqual({ role: "bd", name: "BD & partnerships", state: "waiting" });
     const broken = { ...row(55, {}), breakdown_json: "not json" };
     expect(explainRole("bd", broken, kinds())).toMatchObject({ state: "scored", score: 55, level: 6, core: [] });
+  });
+});
+
+describe("unverified X and GitHub", () => {
+  it("counts X and GitHub only when verified, other sources as they are", () => {
+    const state = sourceState([
+      { kind: "x", verifiedAt: null },
+      { kind: "github", verifiedAt: "2026-09-12 10:00:00" },
+      { kind: "evm", verifiedAt: null },
+      { kind: "site", verifiedAt: null },
+    ]);
+    expect([...state.counted].sort()).toEqual(["evm", "github", "site"]);
+    expect([...state.unverified]).toEqual(["x"]);
+  });
+
+  it("asks to verify, not to connect, a source that waits for its code", () => {
+    const state = sourceState([{ kind: "github", verifiedAt: null }]);
+    expect(explainRole("engineer", row(null, { reason: "missing_anchor:gh_eng" }), state)).toMatchObject({
+      reason: "Verify GitHub to get an Engineer score.",
+    });
+    expect(
+      explainRole(
+        "product_manager",
+        row(30, { core: { x: { weight: 50, value: 40 }, gh_builder: { weight: 25, value: null } } }),
+        sourceState([{ kind: "x", verifiedAt: "2026-09-12 10:00:00" }, { kind: "github", verifiedAt: null }]),
+      ),
+    ).toMatchObject({ tips: ["Verify GitHub: it counts for 25% of this score."] });
+  });
+
+  it("mixes verify and connect when both are missing", () => {
+    const state = sourceState([{ kind: "github", verifiedAt: null }]);
+    expect(explainRole("security_auditor", row(null, { reason: "missing_anchor:audits,gh_eng" }), state)).toMatchObject({
+      reason: "Connect Sherlock or verify GitHub to get a Security auditor score.",
+    });
+  });
+
+  it("words the engine's 'not verified' gap as a code to check", () => {
+    const view = explainRole(
+      "bd",
+      row(null, { core: { x: { weight: 100, value: null } }, reason: "missing_anchor:x", gaps: { x: "not verified" } }),
+      sourceState([{ kind: "x", verifiedAt: null }]),
+    );
+    expect(view).toMatchObject({ reason: "Verify X to get a BD & partnerships score.", gaps: ["X: check your code to count it."] });
+    expect(gapSentence("github", "not verified")).toBe("GitHub: check your code to count it.");
   });
 });
 

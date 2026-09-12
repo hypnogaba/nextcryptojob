@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { grantConsent } from "@/lib/consent";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
 import { ENQUEUE_SPACING_SECONDS, enqueueScoreJob } from "./queue";
+import { markSourcesChanged } from "./changes";
 import { isActive, profileStatus } from "./status";
 
 let t: TestDb;
@@ -63,9 +64,58 @@ describe("enqueueScoreJob", () => {
   });
 });
 
+describe("sources changed since the last score", () => {
+  const setJob = (status: string, startedAgo: number | null, queuedAgo: number) =>
+    t.raw.exec(
+      `UPDATE score_jobs SET status = '${status}', queued_at = datetime('now', '-${queuedAgo} seconds'), ` +
+        `started_at = ${startedAgo === null ? "NULL" : `datetime('now', '-${startedAgo} seconds')`}`,
+    );
+  const changeAgo = (seconds: number) =>
+    t.raw.exec(`UPDATE audit_log SET at = datetime('now', '-${seconds} seconds') WHERE action = 'sources.change'`);
+
+  it("is true when a change came after the last job started", async () => {
+    await enqueueScoreJob(t.d1, "a", "connect");
+    setJob("done", 100, 120);
+    await markSourcesChanged(t.d1, "a", "wallets");
+    changeAgo(50);
+    await expect(profileStatus(t.d1, "a")).resolves.toMatchObject({ sourcesChanged: true });
+  });
+
+  it("is false when the last job started after the change", async () => {
+    await markSourcesChanged(t.d1, "a", "x");
+    changeAgo(200);
+    await enqueueScoreJob(t.d1, "a", "connect");
+    setJob("done", 100, 120);
+    await expect(profileStatus(t.d1, "a")).resolves.toMatchObject({ sourcesChanged: false });
+  });
+
+  it("is false while a job is still queued: it will read the fresh sources", async () => {
+    await enqueueScoreJob(t.d1, "a", "connect");
+    await markSourcesChanged(t.d1, "a", "roles");
+    await expect(profileStatus(t.d1, "a")).resolves.toMatchObject({ sourcesChanged: false });
+  });
+
+  it("is true for a change during a running job, and for a change with no job at all", async () => {
+    await enqueueScoreJob(t.d1, "a", "connect");
+    setJob("running", 30, 40);
+    await markSourcesChanged(t.d1, "a", "github");
+    changeAgo(10);
+    await expect(profileStatus(t.d1, "a")).resolves.toMatchObject({ sourcesChanged: true });
+    await markSourcesChanged(t.d1, "b", "x");
+    await expect(profileStatus(t.d1, "b")).resolves.toMatchObject({ sourcesChanged: true });
+  });
+
+  it("records the change without personal data", async () => {
+    await markSourcesChanged(t.d1, "a", "wallets");
+    expect(t.raw.prepare("SELECT actor, action, target, meta_json FROM audit_log").all().map((r) => ({ ...r }))).toEqual([
+      { actor: "a", action: "sources.change", target: "a", meta_json: '{"what":"wallets"}' },
+    ]);
+  });
+});
+
 describe("profileStatus", () => {
   it("is empty before anything happens", async () => {
-    await expect(profileStatus(t.d1, "a")).resolves.toEqual({ job: null, scored: false });
+    await expect(profileStatus(t.d1, "a")).resolves.toEqual({ job: null, scored: false, sourcesChanged: false });
   });
 
   it("reports the latest job of the person only", async () => {

@@ -117,6 +117,37 @@ const GAP_KIND: Record<string, { label: string; kinds: IdentityKind[] }> = {
   audits: { label: "Sherlock", kinds: ["sherlock"] },
 };
 
+/**
+ * Що з підключеного рахується. X і GitHub лише підтверджені кодом (рушій
+ * неперевірені не бере); решту сайт поки не перевіряє, вона рахується як є.
+ */
+export type SourceState = { counted: Set<IdentityKind>; unverified: Set<IdentityKind> };
+
+const NEEDS_CODE: ReadonlySet<IdentityKind> = new Set(["x", "github"]);
+
+export function sourceState(identities: { kind: IdentityKind; verifiedAt: string | null }[]): SourceState {
+  const counted = new Set<IdentityKind>();
+  const unverified = new Set<IdentityKind>();
+  for (const i of identities) {
+    if (!NEEDS_CODE.has(i.kind) || i.verifiedAt) counted.add(i.kind);
+    else unverified.add(i.kind);
+  }
+  for (const k of counted) unverified.delete(k);
+  return { counted, unverified };
+}
+
+/** «Verify GitHub», «Connect X or YouTube», «Connect Sherlock or verify GitHub». */
+function actionFor(kinds: IdentityKind[], state: SourceState): string {
+  const verify = kinds.filter((k) => state.unverified.has(k));
+  const connect = kinds.filter((k) => !state.unverified.has(k) && !state.counted.has(k));
+  const parts = [
+    connect.length > 0 ? `connect ${namesFor(connect)}` : null,
+    verify.length > 0 ? `verify ${namesFor(verify)}` : null,
+  ].filter(Boolean) as string[];
+  const text = parts.join(" or ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function sourceLabel(key: string): string {
   return SOURCE_LABEL[key] ?? key;
 }
@@ -137,23 +168,24 @@ function round(v: number | null | undefined): number | null {
 export function gapSentence(key: string, reason: string): string {
   const base = key.split(".")[0];
   const label = GAP_KIND[base]?.label ?? base;
+  if (/not verified/i.test(reason)) return `${label}: check your code to count it.`;
   if (/sample too small/i.test(reason)) return `${label}: not enough transactions yet to judge trading.`;
   if (/^not configured/i.test(reason)) return `${label}: we do not collect this source yet. It does not lower your score.`;
   return `${label}: we could not read it this time. It does not lower your score.`;
 }
 
 /** Причина без балу (missing_anchor:…) або пояснення шляху. */
-function reasonSentence(role: RoleKey, reason: string | null | undefined, connected: Set<IdentityKind>): string | null {
+function reasonSentence(role: RoleKey, reason: string | null | undefined, state: SourceState): string | null {
   if (!reason) return null;
   const name = ROLES[role].name;
   if (reason.startsWith("missing_anchor:")) {
-    const kinds = anchorKinds({ reason });
-    const have = kinds.filter((k) => connected.has(k));
+    const kinds = [...new Set(anchorKinds({ reason }))];
+    const have = kinds.filter((k) => state.counted.has(k));
     if (have.length > 0) {
       const own = [...new Set(have.map((k) => OWN_NAME[k]))].join(" or ");
       return `We found nothing to score for ${name} in your ${own} yet.`;
     }
-    return `Connect ${namesFor(kinds)} to get ${article(name)} ${name} score.`;
+    return `${actionFor(kinds, state)} to get ${article(name)} ${name} score.`;
   }
   if (reason === "path:audits") return "Scored on your audit contest results.";
   if (reason === "path:gh_eng+x") return "Scored on GitHub and X.";
@@ -164,19 +196,19 @@ function reasonSentence(role: RoleKey, reason: string | null | undefined, connec
 type Candidate = { kinds: IdentityKind[]; text: string; rank: number };
 
 /** Поради: джерела ролі, яких людина ще не підключила, найважчі спершу. */
-function tipsFor(role: RoleKey, breakdown: Breakdown, connected: Set<IdentityKind>): string[] {
+function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): string[] {
   const out: Candidate[] = [];
   for (const [key, { weight }] of Object.entries(breakdown.core ?? {})) {
-    const kinds = (FEEDS[key] ?? []).filter((k) => !connected.has(k));
+    const kinds = (FEEDS[key] ?? []).filter((k) => !state.counted.has(k));
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
-    out.push({ kinds, text: `Connect ${namesFor(kinds)}: it counts for ${weight}% of this score.`, rank: 1000 + weight });
+    out.push({ kinds, text: `${actionFor(kinds, state)}: it counts for ${weight}% of this score.`, rank: 1000 + weight });
   }
   for (const [key, { max }] of Object.entries(breakdown.bonus ?? {})) {
-    const kinds = (FEEDS[key] ?? []).filter((k) => !connected.has(k));
+    const kinds = (FEEDS[key] ?? []).filter((k) => !state.counted.has(k));
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
-    out.push({ kinds, text: `Connect ${namesFor(kinds)}: it can add up to ${max} points.`, rank: max });
+    out.push({ kinds, text: `${actionFor(kinds, state)}: it can add up to ${max} points.`, rank: max });
   }
-  if (role === "security_auditor" && breakdown.reason !== "path:audits" && !connected.has("sherlock")) {
+  if (role === "security_auditor" && breakdown.reason !== "path:audits" && !state.counted.has("sherlock")) {
     out.push({ kinds: ["sherlock"], text: "Connect Sherlock: audit contest results can raise this score.", rank: 999 });
   }
   // Без головного джерела про нього вже каже причина; порада повторила б її.
@@ -225,7 +257,7 @@ function parseBreakdown(json: string): Breakdown {
 }
 
 /** Вигляд ролі на сторінці балу. `row` = рядок scores або null, якщо балу ще немає. */
-export function explainRole(role: RoleKey, row: ScoreRow | null, connected: Set<IdentityKind>): RoleView {
+export function explainRole(role: RoleKey, row: ScoreRow | null, state: SourceState): RoleView {
   const name = ROLES[role].name;
   const note = unscoredNote(role);
   if (note) return { role, name, state: "unscored", note };
@@ -233,10 +265,10 @@ export function explainRole(role: RoleKey, row: ScoreRow | null, connected: Set<
 
   const breakdown = parseBreakdown(row.breakdown_json);
   const gaps = gapsFor(breakdown);
-  const tips = tipsFor(role, breakdown, connected);
+  const tips = tipsFor(role, breakdown, state);
   if (row.score === null || !Number.isFinite(row.score)) {
     const reason =
-      reasonSentence(role, breakdown.reason, connected) ?? `We could not compute ${article(name)} ${name} score yet.`;
+      reasonSentence(role, breakdown.reason, state) ?? `We could not compute ${article(name)} ${name} score yet.`;
     return { role, name, state: "missing", reason, tips, gaps };
   }
 
@@ -254,7 +286,7 @@ export function explainRole(role: RoleKey, row: ScoreRow | null, connected: Set<
     core: bars(breakdown.core, (e) => e.weight),
     bonus: bars(breakdown.bonus, (e) => e.max),
     cover: Math.round(breakdown.cover ?? 0),
-    reason: reasonSentence(role, breakdown.reason, connected),
+    reason: reasonSentence(role, breakdown.reason, state),
     gaps,
     tips,
     formulaVersion: row.formula_version,

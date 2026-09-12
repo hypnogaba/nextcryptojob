@@ -7,12 +7,15 @@ export function StepShell({
   step,
   editing,
   lead,
+  notice,
   children,
 }: {
   step: Step;
   /** Анкету вже завершено: людина правує відповіді. */
   editing: boolean;
   lead?: ReactNode;
+  /** Короткий рядок над кроком, наприклад, коли можна буде оновити бал. */
+  notice?: string | null;
   children: ReactNode;
 }) {
   const n = stepNumber(step);
@@ -43,6 +46,11 @@ export function StepShell({
         <div className="h-full rounded-full bg-brand" style={{ width: `${(n / STEPS.length) * 100}%` }} />
       </div>
 
+      {notice ? (
+        <p role="status" className="mt-6 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink">
+          {notice}
+        </p>
+      ) : null}
       <h1 className="mt-8 text-2xl font-semibold tracking-tight sm:text-3xl">{STEP_TITLES[step]}</h1>
       {lead ? <div className="mt-3 text-ink-muted">{lead}</div> : null}
       <div className="mt-8">{children}</div>

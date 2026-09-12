@@ -47,7 +47,8 @@ export function parsePlace(form: {
   currency: unknown;
 }): { ok: true; place: Place } | { ok: false; errors: PlaceErrors } {
   const errors: PlaceErrors = {};
-  const where = typeof form.where === "string" && form.where in MODE ? (form.where as WhereChoice) : null;
+  // Object.hasOwn, а не `in`: інакше «toString» чи «constructor» з форми пройшли б як вибір.
+  const where = typeof form.where === "string" && Object.hasOwn(MODE, form.where) ? (form.where as WhereChoice) : null;
   if (!where) errors.where = "Choose remote, a city or both.";
 
   const cityRaw = typeof form.city === "string" ? form.city.trim().replace(/\s+/g, " ") : "";
