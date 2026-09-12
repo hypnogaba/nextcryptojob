@@ -1,9 +1,11 @@
 import Link from "next/link";
 
 const LINKS = [
-  { href: "/login", label: "Sign in" },
+  { href: "/how-scoring-works", label: "How scoring works" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/terms/companies", label: "Company terms" },
+  { href: "/login", label: "Sign in" },
 ] as const;
 
 export function SiteFooter() {
