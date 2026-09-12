@@ -1,5 +1,5 @@
 import { checkUrlShape, safeFetch, UnsafeUrlError } from "../http.js";
-import type { Fetched, SiteFacts } from "../types.js";
+import type { Collected, SiteFacts } from "../types.js";
 import { collect, DAY_MS, fetchOpts, GapError, nowMs, type CollectorContext } from "./context.js";
 
 /**
@@ -179,7 +179,7 @@ async function feedStats(base: string, homeHtml: string, ctx: CollectorContext, 
   return parsed.find((p) => p !== null && p.items > 0) ?? { items: 0, dates: [] };
 }
 
-export async function collectSite(url: string, ctx: CollectorContext): Promise<Fetched<SiteFacts>> {
+export async function collectSite(url: string, ctx: CollectorContext): Promise<Collected<SiteFacts>> {
   return collect("site", ctx, async () => {
     const base = normalizeSite(url);
     let home: Got;

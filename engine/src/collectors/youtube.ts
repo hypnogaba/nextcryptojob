@@ -1,5 +1,5 @@
 import { fetchJson } from "../http.js";
-import type { Fetched, YoutubeFacts } from "../types.js";
+import type { Collected, YoutubeFacts } from "../types.js";
 import {
   collect, DAY_MS, describeError, fetchOpts, GapError, notConfigured, nowMs, num, type CollectorContext,
 } from "./context.js";
@@ -34,7 +34,7 @@ export function channelSelector(handleOrId: string): { id: string } | { forHandl
 const url = (path: string, params: Record<string, string>, key: string): string =>
   `${API}/${path}?${new URLSearchParams({ ...params, key })}`;
 
-export async function collectYoutube(handleOrId: string, ctx: CollectorContext): Promise<Fetched<YoutubeFacts>> {
+export async function collectYoutube(handleOrId: string, ctx: CollectorContext): Promise<Collected<YoutubeFacts>> {
   return collect("youtube", ctx, async () => {
     const key = ctx.env.YOUTUBE_KEY;
     if (!key) throw notConfigured("YOUTUBE_KEY");

@@ -1,6 +1,6 @@
 import { fetchJson } from "../http.js";
 import { backoffFor } from "../limits.js";
-import type { Fetched, XFacts } from "../types.js";
+import type { Collected, XFacts } from "../types.js";
 import {
   collect, DAY_MS, describeError, fetchOpts, fitsDeadline, GapError, isEmpty, notConfigured, nowMs, num,
   type CollectorContext,
@@ -102,7 +102,7 @@ export function xFacts(info: UserInfo, kolData: unknown, tweets: Tweet[], now: n
 /** Нік X за §2: без "@", нижній регістр. */
 export const normalizeHandle = (h: string): string => h.trim().replace(/^@/, "").toLowerCase();
 
-export async function collectX(handle: string, ctx: CollectorContext): Promise<Fetched<XFacts>> {
+export async function collectX(handle: string, ctx: CollectorContext): Promise<Collected<XFacts>> {
   return collect("x", ctx, async () => {
     const token = ctx.env.TWITTER_TOKEN;
     if (!token) throw notConfigured("TWITTER_TOKEN");

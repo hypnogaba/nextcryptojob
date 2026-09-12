@@ -58,10 +58,32 @@ describe("прогалина не нуль", () => {
     expect(r.breakdown.gaps).toMatchObject({ x: "6551 timeout" });
   });
 
-  it("Solana з замалою вибіркою пише причину в gaps", () => {
-    const r = scorePerson({ solana: { S1: { sigs: 30, sigsOk: 30, sigsCapped: false, firstTs: null, sampleSeen: 30,
-      sampleSwaps: 5, swaps: 5 } } }, NOW).roles.trader;
+  it("X без KOL (kolSourceGap): бал X є, а причина видна як x.kol", () => {
+    const r = scorePerson({ x: x({ kol: null, kolSourceGap: true }) }, NOW).roles.bd;
+    expect(r.score).not.toBeNull();
+    expect(r.breakdown.gaps).toEqual({ "x.kol": "KOL followers unavailable" });
+    expect(scorePerson({ x: x() }, NOW).roles.bd.breakdown.gaps).toEqual({});
+  });
+
+  it("Solana з замалою неповною вибіркою пише причину в gaps", () => {
+    const r = scorePerson({ solana: { S1: { sigs: 300, sigsOk: 300, sigsCapped: false, firstTs: null, sampleSeen: 30,
+      sampleSwaps: 5, swaps: null } } }, NOW).roles.trader;
     expect(r.breakdown.gaps.solana).toBe("sample too small");
+  });
+
+  it("Solana з повною вибіркою менше 50 (договір §3, виняток): без прогалини, обміни рахуються", () => {
+    const r = scorePerson({ solana: { S1: { sigs: 30, sigsOk: 30, sigsCapped: false, firstTs: null, sampleSeen: 30,
+      sampleSwaps: 5, swaps: 5 } } }, NOW);
+    expect(r.roles.trader.breakdown.gaps.solana).toBeUndefined();
+    expect(r.sources.trading).toBeGreaterThan(0);
+    expect(r.roles.trader.score).not.toBeNull();
+  });
+
+  it("примітки часткових гаманців (`solana.<адреса…>`) доходять до breakdown.gaps поруч із фактами", () => {
+    const r = scorePerson({ solana: { S1: { sigs: 300, sigsOk: 300, sigsCapped: false, firstTs: null, sampleSeen: 150,
+      sampleSwaps: 50, swaps: 100 } }, gaps: { "solana.S2abcdef": "Solana: HTTP 429" } }, NOW).roles.trader;
+    expect(r.breakdown.gaps).toEqual({ "solana.S2abcdef": "Solana: HTTP 429" });
+    expect(r.score).not.toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
-import type { Fetched, GithubFacts } from "../types.js";
-import { collect, DAY_MS, GapError, notConfigured, nowMs, type CollectorContext } from "./context.js";
+import type { Collected, GithubFacts } from "../types.js";
+import { collect, DAY_MS, fitsDeadline, GapError, notConfigured, nowMs, type CollectorContext } from "./context.js";
 import { GITHUB_API, GITHUB_LOGIN, githubJson, normalizeLogin } from "./github-api.js";
 
 /**
@@ -23,6 +23,16 @@ export type GithubUser = {
 
 type GraphqlResponse = { data?: { user?: GithubUser | null } | null; errors?: Array<{ type?: string; message?: string }> };
 
+/**
+ * GraphQL GitHub на важкому профілі (багато репозиторіїв і PR) часом падає на своєму боці:
+ * 200, `user: null` і помилка без `type` ("Something went wrong while executing your query"),
+ * приблизно за 10 с. Живий прогін 12.09: 2 з 3 викликів на одному профілі. Такий збій повторюємо,
+ * поки повтор встигає до межі збору людини.
+ */
+export const GRAPHQL_RETRIES = 2;
+/** Оцінка одного важкого виклику GraphQL для рішення «чи встигне повтор». */
+export const GRAPHQL_CALL_ESTIMATE_MS = 12_000;
+
 /** GithubFacts з відповіді GraphQL. Чиста функція. */
 export function githubFacts(u: GithubUser, login: string, now: number): GithubFacts {
   const repos = u.repositories.nodes.filter((r): r is NonNullable<typeof r> => r != null);
@@ -44,22 +54,27 @@ export function githubFacts(u: GithubUser, login: string, now: number): GithubFa
   };
 }
 
-export async function collectGithub(login: string, ctx: CollectorContext): Promise<Fetched<GithubFacts>> {
+export async function collectGithub(login: string, ctx: CollectorContext): Promise<Collected<GithubFacts>> {
   return collect("github", ctx, async () => {
     if (!ctx.env.GITHUB_TOKEN) throw notConfigured("GITHUB_TOKEN");
     const me = normalizeLogin(login);
     if (!GITHUB_LOGIN.test(me)) throw new GapError("invalid login");
-    const res = await githubJson<GraphqlResponse>(`${GITHUB_API}/graphql`, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ query: GITHUB_QUERY, variables: { login: me } }),
-    }, ctx);
-    const user = res?.data?.user;
-    if (!user) {
-      const types = (res?.errors ?? []).map((e) => e?.type).filter(Boolean);
+    for (let attempt = 0; ; attempt++) {
+      const res = await githubJson<GraphqlResponse>(`${GITHUB_API}/graphql`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ query: GITHUB_QUERY, variables: { login: me } }),
+      }, ctx);
+      const user = res?.data?.user;
+      if (user) return githubFacts(user, me, nowMs(ctx));
+      const errors = res?.errors ?? [];
+      const types = errors.map((e) => e?.type).filter(Boolean);
       if (types.includes("NOT_FOUND")) throw new GapError("user not found");
+      // Збій на боці GitHub (помилка без type): повтор, якщо встигне.
+      const serverSide = errors.length > 0 && types.length === 0;
+      if (serverSide && attempt < GRAPHQL_RETRIES && fitsDeadline(ctx, GRAPHQL_CALL_ESTIMATE_MS)) continue;
+      if (serverSide) throw new GapError(`GraphQL failed on GitHub's side after ${attempt + 1} attempt(s)`);
       throw new GapError(`GraphQL returned no user${types.length ? ` (${types.join(", ")})` : ""}`);
     }
-    return githubFacts(user, me, nowMs(ctx));
   });
 }

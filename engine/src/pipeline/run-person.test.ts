@@ -7,7 +7,6 @@ import {
   sampleSolana, sampleX,
 } from "./fake-registry.js";
 import { groupIdentities, type IdentityRow } from "./identities.js";
-import { createRealRegistry } from "./realRegistry.js";
 import { scoreUser } from "./run-person.js";
 
 const USER = "user-0001-aaaa";
@@ -29,9 +28,9 @@ const scores = (): Record<string, ScoreRow> =>
 beforeEach(() => { db = new SqliteD1(); db.addUser(USER); });
 afterEach(() => db.close());
 
-const fullIdentities = (xVerified = true): void => {
+const fullIdentities = (xVerified = true, githubVerified = true): void => {
   db.addIdentity(USER, "x", "alice", xVerified);
-  db.addIdentity(USER, "github", "alice-gh");
+  db.addIdentity(USER, "github", "alice-gh", githubVerified);
   db.addIdentity(USER, "site", "https://alice.dev");
   db.addIdentity(USER, "evm", EVM_A, true);
   db.addIdentity(USER, "evm", EVM_B);          // вставлений без підпису: однаково рахується
@@ -90,6 +89,43 @@ describe("scoreUser", () => {
     expect(facts().x).toMatchObject({ facts_json: null, gap_reason: "not verified" });
   });
 
+  it("БЕЗПЕКА: непідтверджений GitHub рахується як GitHub, але Sherlock з ним не звіряється", async () => {
+    fullIdentities(true, false);
+    const registry = fakeRegistry();
+    await scoreUser(USER, { registry, db, env: {}, now: () => NOW });
+    const inputs = Object.fromEntries(registry.calls.map((c) => [c.collector, c.input]));
+    expect(inputs.collectGithub).toBe("alice-gh");
+    expect(inputs.collectDune).toBe("alice-gh");
+    expect(inputs.collectAudits).toEqual({ sherlock: "alice", github: null, x: "alice" });
+    expect(JSON.parse(facts().github!.facts_json!)).toEqual(sampleGithub());
+    expect(scores().engineer!.score).toBeGreaterThan(0);
+  });
+
+  it("БЕЗПЕКА: ні GitHub, ні X не підтверджені: collectAudits не отримує жодного ніка для звірки", async () => {
+    fullIdentities(false, false);
+    const registry = fakeRegistry({ collectAudits: async (_h: string, links: { github: string | null; x: string | null }) =>
+      (links.github || links.x ? { ok: true, facts: sampleAudits() } : { ok: false, gap: "audits: no GitHub or X to verify the Sherlock profile against" }) });
+    await scoreUser(USER, { registry, db, env: {} });
+    expect(registry.calls.find((c) => c.collector === "collectAudits")!.input).toEqual({ sherlock: "alice", github: null, x: null });
+    expect(facts().audits).toMatchObject({ facts_json: null, gap_reason: expect.stringMatching(/no GitHub or X/) });
+    expect(JSON.parse(scores().security_auditor!.breakdown_json).sources.audits).toBeNull();
+  });
+
+  it("збирачі отримують межу збору: старт + deadlineMs, і годинник", async () => {
+    fullIdentities();
+    const registry = fakeRegistry();
+    const before = Date.now();
+    await scoreUser(USER, { registry, db, env: {}, deadlineMs: 20_000 });
+    const after = Date.now();
+    expect(registry.calls.length).toBeGreaterThan(5);
+    for (const c of registry.calls) {
+      expect(c.ctx.deadline).toBeGreaterThanOrEqual(before + 20_000);
+      expect(c.ctx.deadline).toBeLessThanOrEqual(after + 20_000);
+      expect(typeof c.ctx.now()).toBe("number");
+    }
+    expect(new Set(registry.calls.map((c) => c.ctx.deadline)).size).toBe(1);
+  });
+
   it("дедлайн: повільні збирачі стають прогалиною 'timeout', отримують abort, а завдання не падає", async () => {
     fullIdentities();
     const registry = fakeRegistry({ collectGithub: hangUntilAborted(), collectSolana: neverResolves() });
@@ -125,17 +161,32 @@ describe("scoreUser", () => {
     expect(f.dune).toMatchObject({ facts_json: null, gap_reason: "invalid collector result" });
   });
 
-  it("часткова відповідь гаманців: факти пишуться, адреси без відповіді видно в підсумку", async () => {
+  it("часткова відповідь гаманців: факти пишуться, примітки адрес ідуть у gap_reason і breakdown.gaps", async () => {
     db.addIdentity(USER, "evm", EVM_A);
     db.addIdentity(USER, "evm", EVM_B);
+    db.addIdentity(USER, "solana", SOL);
     const registry = fakeRegistry({
       collectEvm: async () => ({ ok: true, facts: sampleEvm([EVM_A]), partial: { [EVM_B]: "etherscan: HTTP 502" } }),
+      collectSolana: async () => ({ ok: true, facts: sampleSolana([SOL]), partial: { [SOL]: "swaps: not configured: HELIUS_KEY" } }),
     });
     const summary = await scoreUser(USER, { registry, db, env: {} });
     expect(summary.sources.evm).toMatchObject({ partial: 1 });
     expect(summary.sources.evm!.gap).toBeUndefined();
+    expect(summary.gaps).toEqual([]);
+    const f = facts();
+    expect(f.evm).toMatchObject({ gap_reason: "partial: 0xbbbbbb: etherscan: HTTP 502" });
+    expect(JSON.parse(f.evm!.facts_json!)).toEqual(sampleEvm([EVM_A]));
+    expect(f.solana).toMatchObject({ gap_reason: "partial: So111111: swaps: not configured: HELIUS_KEY" });
+    expect(JSON.parse(f.solana!.facts_json!)).toEqual(sampleSolana([SOL]));
+    const b = JSON.parse(scores().trader!.breakdown_json);
+    expect(b.gaps).toMatchObject({ "evm.0xbbbbbb": "etherscan: HTTP 502", "solana.So111111": "swaps: not configured: HELIUS_KEY" });
+    expect(b.sources.trading).not.toBeNull();
+  });
+
+  it("часткова відповідь без приміток пише gap_reason = NULL", async () => {
+    db.addIdentity(USER, "evm", EVM_A);
+    await scoreUser(USER, { registry: fakeRegistry(), db, env: {} });
     expect(facts().evm).toMatchObject({ gap_reason: null });
-    expect(JSON.parse(facts().evm!.facts_json!)).toEqual(sampleEvm([EVM_A]));
   });
 
   it("джерела, яких людина вже не має, прибираються з source_facts", async () => {
@@ -184,8 +235,12 @@ describe("groupIdentities", () => {
       row(1, "x", "first"), row(2, "x", "second", true), row(3, "github", "gh"), row(4, "evm", EVM_A),
       row(5, "evm", EVM_B), row(6, "evm", EVM_A), row(7, "solana", SOL), row(8, "youtube", "@chan"), row(9, "site", "https://a.b"),
     ]);
-    expect(got).toEqual({ x: { handle: "second", verified: true }, github: "gh", youtube: "@chan", site: "https://a.b",
-      evm: [EVM_A, EVM_B], solana: [SOL], sherlock: null });
+    expect(got).toEqual({ x: { handle: "second", verified: true }, github: { login: "gh", verified: false }, youtube: "@chan",
+      site: "https://a.b", evm: [EVM_A, EVM_B], solana: [SOL], sherlock: null });
+  });
+
+  it("GitHub: підтверджений важить більше за раніший непідтверджений", () => {
+    expect(groupIdentities([row(1, "github", "old"), row(2, "github", "proven", true)]).github).toEqual({ login: "proven", verified: true });
   });
 
   it("без ідентичностей порожньо", () => {
@@ -193,8 +248,3 @@ describe("groupIdentities", () => {
   });
 });
 
-describe("realRegistry", () => {
-  it("поки збирачі не під'єднані, відмовляє одразу і ясно", () => {
-    expect(() => createRealRegistry()).toThrow(/collectors not wired/);
-  });
-});

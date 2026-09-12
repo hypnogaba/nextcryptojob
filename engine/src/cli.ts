@@ -4,6 +4,7 @@
 //   node dist/cli.js score-user <user-id>
 //   node dist/cli.js enqueue-refresh [--per-hour N]
 //   node dist/cli.js quality-gate <people.json> [raw-cache-dir] [--no-db] [--deadline-ms N]
+//   node dist/cli.js score-facts --x <h> --github <l> --site <url> --evm <a,...> --solana <a,...> [--sherlock <h>]
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { intEnv, startWorker } from "./main.js";
@@ -15,6 +16,7 @@ import { JobQueue } from "./pipeline/queue.js";
 import { createRealRegistry } from "./pipeline/realRegistry.js";
 import type { CollectorRegistry, EngineEnv } from "./pipeline/registry.js";
 import { scoreUser } from "./pipeline/run-person.js";
+import { formatScoreFacts, type ScoreFactsArgs, scoreFacts } from "./pipeline/score-facts.js";
 
 export const USAGE = `usage: nextcryptojob-engine <command>
   worker                                   run the score_jobs worker until SIGTERM
@@ -22,7 +24,10 @@ export const USAGE = `usage: nextcryptojob-engine <command>
   enqueue-refresh [--per-hour N]           queue weekly refreshes (hourly timer)
   quality-gate <people.json> [cache-dir]   run the reference set, write quality_runs, exit 1 if the gate fails
       [--no-db]                            do not write quality_runs
-      [--deadline-ms N]                    per-person collection deadline (default ENGINE_DEADLINE_MS or 45000)`;
+      [--deadline-ms N]                    per-person collection deadline (default ENGINE_DEADLINE_MS or 45000)
+  score-facts [--x h] [--github l] [--youtube h] [--site url] [--evm a,b] [--solana a,b] [--sherlock h]
+      [--json] [--deadline-ms N]           collect and score identities given here, without D1; X and GitHub
+                                           count as verified (run it only for people who agreed)`;
 
 /** Залежності команд: у тестах підставні, у продукті з оточення. */
 export interface CliDeps {
@@ -100,6 +105,28 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
           concurrency: intEnv(deps.env, "ENGINE_CONCURRENCY", 3), log: out,
         });
         return report.passed ? 0 : 1;
+      }
+      case "score-facts": {
+        const deadlineMs = posInt(flag(args, "--deadline-ms"), "--deadline-ms")
+          ?? intEnv(deps.env, "ENGINE_DEADLINE_MS", DEFAULT_DEADLINE_MS);
+        const json = has(args, "--json");
+        const csv = (v: string | undefined): string[] => (v ?? "").split(",").map((a) => a.trim()).filter(Boolean);
+        const a: ScoreFactsArgs = {
+          x: flag(args, "--x") ?? null, github: flag(args, "--github") ?? null, youtube: flag(args, "--youtube") ?? null,
+          site: flag(args, "--site") ?? null, evm: csv(flag(args, "--evm")), solana: csv(flag(args, "--solana")),
+          sherlock: flag(args, "--sherlock") ?? null,
+        };
+        const none = !a.x && !a.github && !a.youtube && !a.site && !a.evm!.length && !a.solana!.length && !a.sherlock;
+        if (args.length || none) { err(USAGE); return 2; }
+        const r = await scoreFacts(a, { registry: registry(), env: deps.env, deadlineMs });
+        if (json) {
+          out(JSON.stringify({ collectMs: r.collectMs, outcomes: r.outcomes, sources: r.score.sources,
+            roles: Object.fromEntries(Object.entries(r.score.roles).map(([k, v]) => [k, { score: v.score, level: v.level, cover: v.cover,
+              reason: v.breakdown.reason }])), gaps: r.score.roles.engineer.breakdown.gaps }, null, 2));
+        } else {
+          for (const line of formatScoreFacts(r, deps.env, deadlineMs)) out(line);
+        }
+        return 0;
       }
       case undefined: case "help": case "--help": case "-h":
         out(USAGE);
