@@ -7,3 +7,5 @@ node_modules/
 .wrangler/
 .open-next/
 .worktrees/
+# Кеш селекторів engine (SELECTOR_CACHE), живе на машині, не в git.
+engine/data/
