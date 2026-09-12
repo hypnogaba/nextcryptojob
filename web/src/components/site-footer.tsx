@@ -9,15 +9,15 @@ const LINKS = [
 export function SiteFooter() {
   return (
     <footer className="border-t border-line">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-8 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <p className="font-mono text-xs">© {new Date().getFullYear()} NextCryptoJob</p>
+      <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-6 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <p className="font-mono text-xs">NextCryptoJob</p>
         <nav aria-label="Footer">
-          <ul className="flex flex-wrap gap-x-6 gap-y-2">
+          <ul className="-mx-3 flex flex-wrap">
             {LINKS.map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="rounded-sm transition-colors hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  className="inline-flex min-h-11 items-center rounded-md px-3 transition-colors hover:text-ink"
                 >
                   {link.label}
                 </Link>

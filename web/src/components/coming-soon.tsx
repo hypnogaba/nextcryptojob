@@ -10,7 +10,7 @@ export function ComingSoon({ title }: { title: string }) {
       </p>
       <Link
         href="/"
-        className="mt-8 inline-block rounded-sm text-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="mt-6 inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-brand underline-offset-4 hover:underline"
       >
         Back to home
       </Link>

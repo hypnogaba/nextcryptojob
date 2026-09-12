@@ -5,7 +5,7 @@ export function Wordmark() {
     <Link
       href="/"
       aria-label="NextCryptoJob home"
-      className="rounded-md font-heading text-sm font-semibold tracking-tight text-ink focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      className="inline-flex min-h-11 items-center rounded-md font-heading text-sm font-semibold tracking-tight text-ink"
     >
       Next<span className="text-brand">Crypto</span>Job
     </Link>

@@ -16,9 +16,11 @@
 # debug
 npm-debug.log*
 
-# env files
+# env files (приклади без значень комітимо)
 .env*
 .dev.vars*
+!.env.example
+!.dev.vars.example
 
 # typescript
 *.tsbuildinfo

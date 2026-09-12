@@ -30,9 +30,11 @@
   --ink:       #141a1b;
   --ink-muted: #58646a;
   --line:      #d5dcda;
+  --line-strong: #7f8c8a;  /* межа полів: >= 3:1 до surface і ground */
   --brand:     #0b6e63;
   --brand-ink: #ffffff;
   --brand-soft: #e1efec;
+  --brand-hover: color-mix(in oklab, var(--brand), black 12%);
   --wash:      #e8eceb;
   --danger:    #b3261e;
 
@@ -48,6 +50,7 @@
     --ink:       #e4eae8;
     --ink-muted: #95a2a1;
     --line:      #2a3436;
+    --line-strong: #617071;
     --brand:     #4cc2ae;
     --brand-ink: #0e1213;
     --brand-soft: #16302c;
@@ -64,6 +67,7 @@
   --ink:       #e4eae8;
   --ink-muted: #95a2a1;
   --line:      #2a3436;
+  --line-strong: #617071;
   --brand:     #4cc2ae;
   --brand-ink: #0e1213;
   --brand-soft: #16302c;
@@ -89,7 +93,7 @@
   --accent-foreground: var(--ink);
   --destructive: var(--danger);
   --border: var(--line);
-  --input: var(--line);
+  --input: var(--line-strong);
   --ring: var(--brand);
 }
 
@@ -105,9 +109,11 @@
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-hover: var(--brand-hover);
 
   /* Утиліти shadcn/ui. */
   --color-background: var(--background);
@@ -138,7 +144,12 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
+  }
+  /* Одне кільце фокуса для всього: колір бренду на повну (>= 3:1 в обох темах). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
   html {
     @apply font-sans;

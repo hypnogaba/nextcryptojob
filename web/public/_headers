@@ -1,0 +1,7 @@
+# Заголовки для файлів, які Worker віддає зі static assets напряму (повз Next).
+# Файли в /_next/static мають хеш у назві, тож їх можна кешувати назавжди.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  X-Content-Type-Options: nosniff

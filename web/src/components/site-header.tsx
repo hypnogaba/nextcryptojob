@@ -8,7 +8,7 @@ export function SiteHeader() {
         <Wordmark />
         <Link
           href="/login"
-          className="-mr-2 rounded-md px-2 py-1 text-sm font-medium text-ink-muted transition-colors hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="-mr-3 inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
         >
           Sign in
         </Link>

@@ -26,6 +26,9 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  // SITE_URL задає адресу для абсолютних посилань (Open Graph, canonical).
+  // Поки DNS не готовий, workers.dev може передати свою; за замовчуванням домен.
+  metadataBase: new URL(process.env.SITE_URL ?? "https://nextcryptojob.xyz"),
   title: {
     default: "NextCryptoJob",
     template: "%s | NextCryptoJob",
@@ -50,8 +53,16 @@ export default function RootLayout({
       className={`${unbounded.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
       <body className="flex min-h-dvh flex-col">
+        <a
+          href="#main"
+          className="sr-only z-50 rounded-md border border-line bg-surface text-sm font-medium text-ink focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-4 focus:py-3"
+        >
+          Skip to content
+        </a>
         <SiteHeader />
-        <main className="flex-1">{children}</main>
+        <main id="main" tabIndex={-1} className="flex-1 focus:outline-none">
+          {children}
+        </main>
         <SiteFooter />
       </body>
     </html>
