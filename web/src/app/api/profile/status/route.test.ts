@@ -26,7 +26,7 @@ describe("GET /api/profile/status", () => {
   });
 
   it("returns only the caller's job and scores, and nothing personal", async () => {
-    await createSession("me");
+    await createSession("me", null);
     const res = await GET();
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
@@ -40,7 +40,7 @@ describe("GET /api/profile/status", () => {
   });
 
   it("gives the other person their own state", async () => {
-    await createSession("them");
+    await createSession("them", null);
     expect(await (await GET()).json()).toMatchObject({ job: { status: "running" }, scored: true });
     expect(harness.jar.store.size).toBe(1);
   });

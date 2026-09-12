@@ -77,22 +77,22 @@ describe("beginTelegramLogin", () => {
 
   it("remembers who is connecting Telegram from the account page", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
+    await createSession("u1", null);
     await begin();
     expect(lastFlow!.linkUserId).toBe("u1");
   });
 
-  it("refuses to start connecting Telegram when another site sent the signed-in person here", async () => {
+  it.each(["cross-site", "same-site"])("refuses to start connecting Telegram when %s sent the signed-in person here", async (site) => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
-    harness.headers.set("sec-fetch-site", "cross-site");
+    await createSession("u1", null);
+    harness.headers.set("sec-fetch-site", site);
     await expect(beginTelegramLogin(ORIGIN, deps())).resolves.toBe(`${ORIGIN}/auth/telegram/error?reason=cross_site`);
     expect(harness.jar.get(FLOW_COOKIE)).toBeUndefined();
   });
 
   it.each(["same-origin", "none", null])("lets a signed-in person connect Telegram from %s", async (site) => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
+    await createSession("u1", null);
     if (site) harness.headers.set("sec-fetch-site", site);
     const url = await begin();
     expect(url.origin).toBe("https://oauth.telegram.org");
@@ -188,7 +188,7 @@ describe("finishTelegramLogin", () => {
   it("refuses to link a Telegram that belongs to another profile", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
     exec("INSERT INTO users (id, telegram_id) VALUES ('u2', '987654321')");
-    await createSession("u1");
+    await createSession("u1", null);
     const sessionBefore = harness.jar.get(SESSION_COOKIE)?.value;
     await expect(roundTrip()).resolves.toBe("/auth/telegram/error?reason=linked_elsewhere");
     expect(rows("SELECT id, telegram_id FROM users ORDER BY id")).toEqual([
@@ -201,7 +201,7 @@ describe("finishTelegramLogin", () => {
 
   it("does not link or sign in when the session changed during the flow", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
+    await createSession("u1", null);
     const url = await begin();
     harness.jar.delete(SESSION_COOKIE);
     await expect(finish({ code: "c", state: url.searchParams.get("state")! })).resolves.toBe(

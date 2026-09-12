@@ -64,9 +64,10 @@ const nowSec = () => Math.floor(Date.now() / 1000);
  * Крок 1: кука стану й адреса Telegram, куди перенаправити людину. null, якщо
  * ключів OIDC ще немає. Хто вже ввійшов, той прив'язує Telegram до свого профілю.
  *
- * Прив'язку починаємо лише з нашого ж сайту: якщо браузер каже, що перехід
- * прийшов з чужого (Sec-Fetch-Site: cross-site), замість Telegram віддаємо
- * адресу сторінки помилки. Чужа сторінка не має запускати прив'язку до профілю
+ * Прив'язку починаємо лише з нашого ж сайту: дозволяємо тільки same-origin
+ * і none (Sec-Fetch-Site), а cross-site і same-site відмовляємо, замість
+ * Telegram віддаємо адресу сторінки помилки. Чужа сторінка (чи навіть інша
+ * сторінка того ж власника, same-site) не має запускати прив'язку до профілю
  * людини, що ввійшла. Без заголовка (старі браузери) пускаємо: state і PKCE
  * все одно не дають підкласти чужий вхід. Звичайний вхід без сесії приймаємо
  * звідки завгодно.
@@ -75,8 +76,9 @@ export async function beginTelegramLogin(origin: string, deps: Deps = {}): Promi
   const client = oidcClient(telegramEnv());
   if (!client) return null;
   const user = await currentUser();
-  if (user && (await headers()).get("sec-fetch-site") === "cross-site") {
-    console.warn("telegram link refused: cross-site start");
+  const secFetchSite = (await headers()).get("sec-fetch-site");
+  if (user && secFetchSite !== null && secFetchSite !== "same-origin" && secFetchSite !== "none") {
+    console.warn(`telegram link refused: ${secFetchSite} start`);
     return new URL(errorPath("cross_site"), origin).toString();
   }
   const flow = newFlow(user?.id ?? null, deps.nowSeconds ?? nowSec());
