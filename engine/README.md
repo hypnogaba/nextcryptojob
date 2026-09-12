@@ -9,6 +9,12 @@
 перенесено з NextRole, написано до запуску 14.09.2026. `src/limits.ts` дає бюджет
 запитів на провайдера (єдиний дросель для http і d1), `src/types.ts` типи фактів.
 
+Збирачі живуть у `src/collectors/` (по файлу на джерело: x, github, site, youtube, audits, dune).
+Кожен повертає `Fetched<Facts>` і приймає `{ env, signal }`; без ключа джерело дає прогалину
+`not configured: <KEY>`. Мережа лише через `safeFetch`: з'єднання йде тільки на IP, перевірену
+в момент підключення (захист від DNS rebinding). Жива перевірка одного збирача на справжніх ключах:
+`npm run smoke -- <x|github|site|youtube|dune|audits> <значення>` (у тестах не запускається).
+
 ```sh
 npm install       # потрібен Node 24
 npm test          # vitest run
