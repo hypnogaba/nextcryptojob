@@ -33,7 +33,7 @@ async function run<T>(p: Promise<T>): Promise<T | string> {
   }
 }
 
-const lastCode = () => outbox.at(-1)!.subject.match(/(\d{6})$/)![1];
+const lastCode = () => outbox.at(-1)!.text.match(/(\d{6})/)![1];
 
 const send = (email: string) => addEmailAction(EMAIL_STEP, form({ intent: "send", email }));
 const verify = (email: string, code: string) =>

@@ -420,7 +420,7 @@ export async function verifyIdToken(token: string, opts: VerifyOptions): Promise
   if (typeof claims.exp !== "number" || now > claims.exp + CLOCK_SKEW_SECONDS) throw new OidcError("expired");
   if (typeof claims.iat !== "number") throw new OidcError("malformed_token", "no iat");
   if (claims.iat > now + CLOCK_SKEW_SECONDS) throw new OidcError("issued_in_future");
-  if (now - claims.iat > MAX_TOKEN_AGE_SECONDS) throw new OidcError("too_old");
+  if (now - claims.iat > MAX_TOKEN_AGE_SECONDS + CLOCK_SKEW_SECONDS) throw new OidcError("too_old");
 
   if (claims.nonce === undefined) {
     // Приймаємо (див. вище), але хочемо бачити в журналі, чи Telegram справді його не кладе.

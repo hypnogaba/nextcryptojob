@@ -18,7 +18,7 @@ describe("GET /api/me/export", () => {
   });
 
   it("allows 10 downloads an hour per person, then answers 429 with Retry-After", async () => {
-    await createSession("me");
+    await createSession("me", null);
     for (let i = 0; i < 10; i++) expect((await GET()).status).toBe(200);
     const res = await GET();
     expect(res.status).toBe(429);
@@ -29,7 +29,7 @@ describe("GET /api/me/export", () => {
 
     // Лічильник свій у кожної людини.
     harness.jar.store.clear();
-    await createSession("them");
+    await createSession("them", null);
     expect((await GET()).status).toBe(200);
   });
 });
