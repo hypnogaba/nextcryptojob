@@ -6,8 +6,13 @@ import { currentUser, type SessionUser } from "./session";
  *
  * Змінна Worker `ADMIN_EMAILS`: пошти через кому, без розрізнення регістру.
  * Не задано або порожньо → лише власник продукту. Пошта в users.email
- * з'являється тільки після входу кодом з листа (lib/auth/email-code.ts), тож
- * вона підтверджена; людина, що ввійшла лише через Telegram, адміном не буде.
+ * з'являється тільки після перевірки коду з листа (lib/auth/email-code.ts), тож
+ * вона підтверджена.
+ *
+ * Крім пошти зі списку, сама сесія мусить бути відкрита входом поштою
+ * (sessions.method = 'email'). Адмін, що має й Telegram, увійшовши через
+ * Telegram, адміном у цій сесії не буде: доступ до адмінки тримається лише на
+ * скриньці, а не на акаунті Telegram, прив'язаному до того ж профілю.
  */
 
 export const DEFAULT_ADMIN_EMAILS: readonly string[] = ["hypnogaba@gmail.com"];
@@ -25,10 +30,15 @@ export function isAdminEmail(email: string | null | undefined, raw: string | und
   return adminEmails(raw).includes(email.trim().toLowerCase());
 }
 
+/** Адмін: пошта зі списку і сесія, відкрита кодом з листа. */
+export function isAdminSession(user: SessionUser, raw: string | undefined): boolean {
+  return user.method === "email" && isAdminEmail(user.email, raw);
+}
+
 /** Людина з сесії, якщо вона адмін; інакше null. Кожна сторінка й дія адмінки перевіряє це сама. */
 export async function currentAdmin(): Promise<SessionUser | null> {
   const user = await currentUser();
   if (!user) return null;
   const raw = (appEnv() as { ADMIN_EMAILS?: string }).ADMIN_EMAILS;
-  return isAdminEmail(user.email, raw) ? user : null;
+  return isAdminSession(user, raw) ? user : null;
 }
