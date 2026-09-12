@@ -32,6 +32,10 @@ export default async function AccountPage() {
           {step === "done" ? "Edit your answers" : "Finish setting up"}
           <span aria-hidden className="text-ink-muted">&rarr;</span>
         </Link>
+        <Link href="/settings" className={LINK}>
+          Settings
+          <span aria-hidden className="text-ink-muted">&rarr;</span>
+        </Link>
       </nav>
       <TelegramPanel userId={user.id} />
       <div className="mt-8">

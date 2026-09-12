@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
-import { ComingSoon } from "@/components/coming-soon";
+import { LegalPage, legalMetadata } from "@/components/legal-page";
+import { LEGAL_DOCS } from "@/lib/legal/docs";
 
-export const metadata: Metadata = { title: "Privacy" };
+export const metadata = legalMetadata(LEGAL_DOCS.privacy);
 
 export default function PrivacyPage() {
-  return <ComingSoon title="Privacy policy" />;
+  return <LegalPage doc={LEGAL_DOCS.privacy} />;
 }
