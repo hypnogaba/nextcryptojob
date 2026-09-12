@@ -146,7 +146,9 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 
 ## 6. Змінні оточення (лише назви)
 - engine (`/etc/nextcryptojob-engine.env` на VPS): `CF_ACCOUNT_ID`, `CF_D1_DATABASE_ID`, `CF_API_TOKEN`,
-  `TWITTER_TOKEN` (6551), `ETHERSCAN_KEY`, `BLOCKSCOUT_KEY`, `HELIUS_KEY`, `YOUTUBE_KEY`, `GITHUB_TOKEN`.
+  `TWITTER_TOKEN` (6551), `ETHERSCAN_KEY`, `BLOCKSCOUT_KEY`, `HELIUS_KEY`, `YOUTUBE_KEY`, `GITHUB_TOKEN`;
+  необов'язкові: `ENGINE_CONCURRENCY` (3), `ENGINE_DEADLINE_MS` (45000), `ENGINE_SHUTDOWN_GRACE_MS` (60000),
+  `SELECTOR_CACHE` (/var/lib/nextcryptojob-engine/selectors.json).
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
   `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`; binding `DB` = D1 `nextcryptojob`
   (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `crypto-jobs-agent` (лише читання в коді).
