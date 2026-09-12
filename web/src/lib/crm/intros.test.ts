@@ -19,10 +19,20 @@ import {
   type TestCompany,
 } from "@/test/intro-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
-import { commit, prepareAction, release, reserve, run as runHandler, runAction, type PreparedAction, type Reservation } from "./actions";
+import {
+  commit,
+  getAction,
+  prepareAction,
+  release,
+  reserve,
+  run as runHandler,
+  runAction,
+  type PreparedAction,
+  type Reservation,
+} from "./actions";
 import type { ActionContext } from "./context";
 import { findIntroByPayment, loadIntroForCandidate } from "./intros";
-import { NOT_REACHED_TEXT } from "./notify";
+import { companyIntroNotice } from "./notify";
 import { ActionError, type Intro } from "./types";
 
 let db: TestDb;
@@ -112,6 +122,8 @@ describe("request_intro in approval mode", () => {
         "",
         "Company site: acme.io (domain verified)",
         "This request expires on Sep 26, 2026.",
+        "",
+        "If you accept, Acme Labs will see your Telegram handle @alice_eth. They will not see your email or wallets.",
       ].join("\n"),
     );
     expect(sent.payload.reply_markup).toEqual({
@@ -146,6 +158,34 @@ describe("request_intro in approval mode", () => {
     expect(JSON.stringify(snapshot())).not.toContain(token);
   });
 
+  it("the Telegram request says which contact Accept will share: the handle, or the masked email", async () => {
+    const c = await addTestCompany(db, net);
+    const noHandle = addCandidate(db, { telegram: null, email: "bob.smith@proton.me" });
+    await ask(c.agent, noHandle.id);
+    expect(String(net.messagesTo(noHandle.telegramId!)[0].payload.text)).toContain(
+      "If you accept, Acme Labs will see your email address b***@proton.me. They will not see your wallets.",
+    );
+    expect(String(net.messagesTo(noHandle.telegramId!)[0].payload.text)).not.toContain("bob.smith");
+    const nothing = addCandidate(db, { telegram: null, email: null });
+    await ask(c.agent, nothing.id);
+    expect(String(net.messagesTo(nothing.telegramId!)[0].payload.text)).toContain(
+      "Add a Telegram username or an email to your account first, then accept.",
+    );
+    // Те, що обіцяно, і відкривається.
+    const intro = all<{ id: string }>(db.raw, "SELECT id FROM intros WHERE user_id = ?", noHandle.id)[0];
+    const { respondToIntro } = await import("./intros");
+    await respondToIntro(db.d1, {
+      introId: intro.id,
+      userId: noHandle.id,
+      decision: "accept",
+      via: "telegram",
+      notifier: { mailer: null, origin: "https://nextcryptojob.xyz" },
+    });
+    expect(all(db.raw, "SELECT contact_kind, contact_value FROM intros WHERE id = ?", intro.id)).toEqual([
+      { contact_kind: "email", contact_value: "bob.smith@proton.me" },
+    ]);
+  });
+
   it("a candidate whose channel is email gets the email first, with Telegram as the fallback", async () => {
     const c = await addTestCompany(db, net);
     const alice = addCandidate(db, { channel: "email" });
@@ -171,7 +211,11 @@ describe("request_intro in approval mode", () => {
     expect(card(c.co, alice.id).stage).toBe("intro_requested");
     const status = await runAction("intro_status", { intro_id: res.output.intro_id }, c.agent);
     expect((status.output as Intro).candidate_notified).toBe(false);
-    expect(NOT_REACHED_TEXT).toBe("We could not reach the candidate yet.");
+    // Компанія бачить, що кандидата не вдалося сповістити; сповіщеному запиту плашка не потрібна.
+    expect(companyIntroNotice(status.output as Intro)).toBe("We could not reach the candidate yet.");
+    vi.unstubAllEnvs();
+    const reached = await ask((await addTestCompany(db, net, { name: "Reached" })).agent, addCandidate(db).id);
+    expect(companyIntroNotice(reached.output)).toBeNull();
   });
 
   it("a failing email binding is recorded without the address", async () => {
@@ -361,6 +405,12 @@ describe("request_intro checks, all before anything is written", () => {
       details: { fields: { job_id: "Link one of your open jobs." } },
     });
     expect(await refused(c.agent, { candidate_id: alice.id, job_id: job(c.co, "closed") })).toMatchObject({ code: "validation_failed" });
+    const hidden = job(c.co, "open");
+    run(db.raw, "UPDATE company_jobs SET hidden_by_admin_at = datetime('now') WHERE id = ?", hidden);
+    expect(await refused(c.agent, { candidate_id: alice.id, job_id: hidden })).toMatchObject({
+      code: "validation_failed",
+      details: { fields: { job_id: "Link one of your open jobs." } },
+    });
   });
 
   it("agencies must say who they are hiring for; companies do not pass it on", async () => {
@@ -387,12 +437,13 @@ describe("paid request_intro (company without a subscription, settle before effe
   const RESOURCE = { url: "https://nextcryptojob.xyz/api/v1/intros", description: "NextCryptoJob intro request" };
   let nonce = 0;
 
-  function evmPayment(set: PaymentRequirementsSet): PaymentPayload {
+  function evmPayment(set: PaymentRequirementsSet, paymentIdentifier?: string): PaymentPayload {
     nonce++;
     return {
       x402Version: 2,
       resource: set.resource,
       accepted: set.accepts[0],
+      ...(paymentIdentifier ? { extensions: { "payment-identifier": { info: { required: false, id: paymentIdentifier } } } } : {}),
       payload: {
         signature: `0x${nonce.toString(16).padStart(130, "0")}`,
         authorization: {
@@ -407,8 +458,13 @@ describe("paid request_intro (company without a subscription, settle before effe
     };
   }
 
+  async function signedPayment(ctx: ActionContext, paymentIdentifier?: string): Promise<string> {
+    const gate = createPaymentGate({ db: db.d1, config: readX402Config(ctx.env, "development") });
+    return encodePaymentSignatureHeader(evmPayment(await gate.requirementsFor("request_intro", RESOURCE), paymentIdentifier));
+  }
+
   /** Той самий порядок, що в маршруті REST: prepare → reserve (validate) → settle → run → commit. */
-  async function paidCall(prepared: PreparedAction) {
+  async function paidCall(prepared: PreparedAction, payment?: string) {
     const gate = createPaymentGate({ db: db.d1, config: readX402Config(prepared.ctx.env, "development") });
     const set = await gate.requirementsFor(prepared.payment!.action, RESOURCE);
     let reservation: Reservation | undefined;
@@ -424,7 +480,7 @@ describe("paid request_intro (company without a subscription, settle before effe
       effect: () => runHandler(prepared),
     });
     const out = await paid({
-      payment: encodePaymentSignatureHeader(evmPayment(set)),
+      payment: payment ?? encodePaymentSignatureHeader(evmPayment(set)),
       input: prepared.input,
       resource: RESOURCE,
       context: { channel: "rest", companyId: prepared.ctx.company?.id ?? null },
@@ -436,16 +492,103 @@ describe("paid request_intro (company without a subscription, settle before effe
 
   it("a refused check (not visible, cooldown, open intro) settles nothing and frees the payment", async () => {
     const c = await addTestCompany(db, net, { subscribed: false });
+    const sub = await addTestCompany(db, net, { name: "Subscribed" });
     const hidden = addCandidate(db, { visible: false });
-    const prepared = prepareAction("request_intro", { candidate_id: hidden.id, message: MESSAGE }, c.agent);
-    expect(prepared.payment).toMatchObject({ usd: "5.00", settle: "before_effect" });
-    const { out } = await paidCall(prepared);
-    expect(out).toMatchObject({ kind: "rejected", error: { code: "candidate_not_available" } });
-    expect(net.verify).toBe(1);
+    const declined = addCandidate(db);
+    const first = (await ask(sub.agent, declined.id)).output;
+    run(db.raw, "UPDATE intros SET company_id = ?, status = 'declined', responded_at = '2026-09-10 08:00:00' WHERE id = ?", c.co, first.intro_id);
+    const open = addCandidate(db);
+    const openIntro = (await ask(sub.agent, open.id)).output;
+    run(db.raw, "UPDATE intros SET company_id = ? WHERE id = ?", c.co, openIntro.intro_id);
+    run(db.raw, "INSERT INTO pipeline (company_id, user_id, stage, added_via) VALUES (?, ?, 'intro_requested', 'rest')", c.co, open.id);
+
+    const cases: [string, string][] = [
+      [hidden.id, "candidate_not_available"],
+      [declined.id, "intro_cooldown"],
+      [open.id, "intro_already_open"],
+    ];
+    const introsBefore = all(db.raw, "SELECT * FROM intros");
+    for (const [candidate, code] of cases) {
+      const verifyBefore = net.verify;
+      const prepared = prepareAction("request_intro", { candidate_id: candidate, message: MESSAGE }, c.agent);
+      expect(prepared.payment).toMatchObject({ usd: "5.00", settle: "before_effect" });
+      const { out } = await paidCall(prepared);
+      expect(out).toMatchObject({ kind: "rejected", error: { code } });
+      expect(net.verify).toBe(verifyBefore + 1);
+    }
     expect(net.settle).toBe(0);
     expect(all(db.raw, "SELECT id FROM x402_payments")).toEqual([]);
-    expect(intros()).toEqual([]);
-    expect(net.tg).toEqual([]);
+    expect(all(db.raw, "SELECT * FROM usage_events WHERE company_id = ?", c.co)).toEqual([]);
+    expect(all(db.raw, "SELECT * FROM intros")).toEqual(introsBefore);
+  });
+
+  it("two concurrent paid requests for the same pair with different payments settle exactly once", async () => {
+    const c = await addTestCompany(db, net, { subscribed: false });
+    const alice = addCandidate(db);
+    // Обидві перевірки проходять раніше за будь-яку бронь: друга впирається саме в бронь пари.
+    const def = getAction("request_intro")!;
+    const original = def.precheck!;
+    let passed = 0;
+    let bothPassed!: () => void;
+    const barrier = new Promise<void>((resolve) => (bothPassed = resolve));
+    def.precheck = async (ctx, input) => {
+      await original(ctx, input);
+      if (++passed === 2) bothPassed();
+      await barrier;
+    };
+    try {
+      const a = prepareAction("request_intro", { candidate_id: alice.id, message: MESSAGE }, c.agent);
+      const b = prepareAction("request_intro", { candidate_id: alice.id, message: `${MESSAGE} (retry)` }, c.agent);
+      const [pa, pb] = [await signedPayment(c.agent), await signedPayment(c.agent)];
+      const outs = await Promise.all([paidCall(a, pa), paidCall(b, pb)]);
+      expect(passed).toBe(2);
+      expect(outs.map((o) => o.out.kind).sort()).toEqual(["ok", "rejected"]);
+      expect(outs.find((o) => o.out.kind === "rejected")!.out).toMatchObject({
+        kind: "rejected",
+        error: { code: "intro_already_open", status: 409 },
+      });
+    } finally {
+      def.precheck = original;
+    }
+    expect(net.settle).toBe(1);
+    expect(all(db.raw, "SELECT status FROM x402_payments")).toEqual([{ status: "settled" }]);
+    expect(all(db.raw, "SELECT status FROM intros")).toEqual([{ status: "pending" }]);
+    expect(all(db.raw, "SELECT status FROM usage_events WHERE company_id = ?", c.co)).toEqual([{ status: 201 }]);
+    expect(net.messagesTo(alice.telegramId!)).toHaveLength(1);
+  });
+
+  it("while a paid request holds the pair, the candidate sees nothing and a cancelled payment frees the pair", async () => {
+    const c = await addTestCompany(db, net, { subscribed: false });
+    const alice = addCandidate(db);
+    const prepared = prepareAction("request_intro", { candidate_id: alice.id, message: MESSAGE }, c.agent);
+    net.settleOk = false;
+    const { out } = await paidCall(prepared);
+    expect(out.kind).toBe("payment_required");
+    // Settle не пройшов: бронь знято, нікого не сповіщено, пара вільна.
+    expect(all(db.raw, "SELECT * FROM intros")).toEqual([]);
+    expect(net.messagesTo(alice.telegramId!)).toEqual([]);
+    net.settleOk = true;
+    const again = await paidCall(prepareAction("request_intro", { candidate_id: alice.id, message: MESSAGE }, c.agent));
+    expect(again.out.kind).toBe("ok");
+  });
+
+  it("a replay of the same payment and payment-identifier returns the stored intro, with no second intro or message", async () => {
+    const c = await addTestCompany(db, net, { subscribed: false });
+    const alice = addCandidate(db);
+    const payment = await signedPayment(c.agent, "intro_retry_0123456789");
+    const input = { candidate_id: alice.id, message: MESSAGE };
+    const first = await paidCall(prepareAction("request_intro", input, c.agent), payment);
+    expect(first.out.kind).toBe("ok");
+    const introId = (first.result!.output as Intro).intro_id;
+
+    const replay = await paidCall(prepareAction("request_intro", input, c.agent), payment);
+    expect(replay.out.kind).toBe("replay");
+    if (replay.out.kind !== "replay") throw new Error("expected a replay");
+    const stored = await findIntroByPayment(db.d1, c.co, replay.out.payment.id);
+    expect(stored).toMatchObject({ intro_id: introId, status: "pending" });
+    expect(net.settle).toBe(1);
+    expect(all(db.raw, "SELECT id FROM intros")).toEqual([{ id: introId }]);
+    expect(net.messagesTo(alice.telegramId!)).toHaveLength(1);
   });
 
   it("without a payment the unpaid path learns about a refused check before any 402", async () => {
@@ -479,6 +622,99 @@ describe("paid request_intro (company without a subscription, settle before effe
     const c = await addTestCompany(db, net, { subscribed: false });
     const alice = addCandidate(db);
     expect(await rejection(ask(c.owner, alice.id))).toMatchObject({ code: "subscription_required", status: 403 });
+  });
+});
+
+describe("expiry without a scheduler", () => {
+  it("after expires_at the company sees expired, gets one message, and can ask again", async () => {
+    const c = await addTestCompany(db, net);
+    const alice = addCandidate(db);
+    const first = (await ask(c.agent, alice.id)).output;
+    const late = { ...c.agent, now: new Date("2026-09-27T09:00:00Z") };
+    const toOwner = () => net.messagesTo(c.ownerTelegram);
+
+    const status = (await runAction("intro_status", { intro_id: first.intro_id }, late)).output as Intro;
+    expect(status.status).toBe("expired");
+    expect(card(c.co, alice.id).stage).toBe("found");
+    expect(toOwner()).toHaveLength(1);
+    expect(String(toOwner()[0].payload.text)).toContain("in 14 days.");
+
+    // Ще одне читання: вже expired, другого повідомлення немає.
+    const list = (await runAction("list_intros", {}, late)).output as { data: Intro[] };
+    expect(list.data.map((i) => i.status)).toEqual(["expired"]);
+    expect(toOwner()).toHaveLength(1);
+
+    const again = await ask(late, alice.id);
+    expect(again.output.status).toBe("pending");
+    expect(card(c.co, alice.id).stage).toBe("intro_requested");
+  });
+
+  it("a new request after expires_at expires the old one first, without anyone reading it", async () => {
+    const c = await addTestCompany(db, net);
+    const alice = addCandidate(db);
+    const first = (await ask(c.agent, alice.id)).output;
+    const again = await ask({ ...c.agent, now: new Date("2026-09-27T09:00:00Z") }, alice.id);
+    expect(again.output.status).toBe("pending");
+    expect(all(db.raw, "SELECT id, status FROM intros ORDER BY created_at")).toEqual([
+      { id: first.intro_id, status: "expired" },
+      { id: again.output.intro_id, status: "pending" },
+    ]);
+  });
+});
+
+describe("the pair hold", () => {
+  it("direct mode shares the handle the candidate has at the moment of writing", async () => {
+    const c = await addTestCompany(db, net);
+    const alice = addCandidate(db, { contactMode: "direct", contactConsent: true, telegram: "old_handle" });
+    const def = getAction("request_intro")!;
+    const original = def.precheck!;
+    def.precheck = async (ctx, input) => {
+      await original(ctx, input);
+      run(db.raw, "UPDATE users SET telegram_username = 'new_handle' WHERE id = ?", alice.id);
+    };
+    try {
+      const res = await ask(c.agent, alice.id);
+      expect(res.output.contact).toMatchObject({ kind: "telegram", value: "@new_handle" });
+    } finally {
+      def.precheck = original;
+    }
+  });
+
+  it("a dead hold (process died before the write) does not block the pair for long", async () => {
+    const c = await addTestCompany(db, net);
+    const alice = addCandidate(db);
+    run(
+      db.raw,
+      `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, expires_at, created_at, updated_at)
+       VALUES ('int_DEADHOLDDEADHOLD000', ?, ?, 'approval', 'pending', 'held by a request that died', 'rest',
+               '2026-09-26 11:00:00', '2026-09-12 11:00:00', '2026-09-12 11:00:00')`,
+      c.co,
+      alice.id,
+    );
+    // Бронь не видно ні компанії, ні кандидату.
+    expect((await runAction("list_intros", {}, c.agent)).output).toEqual({ data: [], next_cursor: null });
+    expect(await loadIntroForCandidate(db.d1, "int_DEADHOLDDEADHOLD000", { sessionUserId: alice.id, now: NOW })).toEqual({
+      state: "invalid",
+    });
+    // Бронь з 11:00 о 12:00 старша за 10 хв, тож мертва: новий запит проходить.
+    const res = await ask(c.agent, alice.id);
+    expect(res.output.status).toBe("pending");
+    expect(all(db.raw, "SELECT id FROM intros")).toEqual([{ id: res.output.intro_id }]);
+  });
+
+  it("a live hold refuses a second request with intro_already_open before anything is paid", async () => {
+    const c = await addTestCompany(db, net);
+    const alice = addCandidate(db);
+    run(
+      db.raw,
+      `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, expires_at, created_at, updated_at)
+       VALUES ('int_LIVEHOLDLIVEHOLD00', ?, ?, 'approval', 'pending', 'held by a request in flight', 'rest',
+               '2026-09-26 11:59:00', '2026-09-12 11:59:00', '2026-09-12 11:59:00')`,
+      c.co,
+      alice.id,
+    );
+    expect(await rejection(ask(c.agent, alice.id))).toMatchObject({ code: "intro_already_open", status: 409 });
+    expect(net.tg).toEqual([]);
   });
 });
 

@@ -5,7 +5,7 @@ import type { SettleTiming } from "@/lib/x402/server";
 import { auditStatement, type AuditMeta } from "./audit";
 import { actorRole, type AccessMode, type ActionContext, type Channel } from "./context";
 import { assertCan, type Permission } from "./permissions";
-import { cancelIntro, checkIntroRequest, getIntro, listIntros, requestIntro } from "./intros";
+import { cancelIntro, checkIntroRequest, getIntro, heldSql, holdIntro, listIntros, releaseHold, requestIntro } from "./intros";
 import { addNote, addToPipeline, listHistory, listPipeline, removeFromPipeline, updateCard } from "./pipeline";
 import { loadCandidates, projectHidden, projectIntro, projectProfile, contactFromIntro, INTRO_COLUMNS, type IntroRow } from "./project";
 import {
@@ -90,6 +90,14 @@ export interface ActionDef<I extends z.ZodType = z.ZodType, O extends z.ZodType 
    * settle x402: відмова тут нічого не списує (специфікація 5.5 і 7.4, крок 4).
    */
   precheck?: (ctx: ActionContext, input: z.output<I>) => Promise<void>;
+  /**
+   * Бронь ресурсу дії в reserve() після квоти й ДО settle (знайомство: пара
+   * компанія + кандидат). Друга паралельна дія впирається в бронь і отримує
+   * відмову до розрахунку. Повертає id броні: run() дає його обробнику як ctx.held,
+   * release() знімає через unhold.
+   */
+  hold?: (ctx: ActionContext, input: z.output<I>) => Promise<string>;
+  unhold?: (ctx: ActionContext, held: string) => Promise<void>;
   handler?: (ctx: ActionContext, input: z.output<I>) => Promise<HandlerResult<z.output<O>>>;
 }
 
@@ -274,6 +282,9 @@ export const ACTIONS = [
     precheck: async (ctx, input) => {
       await checkIntroRequest(ctx, input);
     },
+    // Бронь пари до settle: два оплачені запити на ту саму пару не розрахуються обидва.
+    hold: (ctx, input) => holdIntro(ctx, input),
+    unhold: (ctx, held) => releaseHold(ctx.db, held),
     handler: async (ctx, input) => {
       const { intro } = await requestIntro(ctx, input);
       // intro.request або contact.reveal пише сам пакет знайомства.
@@ -518,6 +529,8 @@ export interface PreparedAction {
   payment: { action: PaidAction; usd: string; settle: SettleTiming } | null;
   /** Платіж, яким оплачено виклик (ставить reserve); run() дає його обробнику як ctx.payment. */
   paidWith?: PaymentRef | null;
+  /** Бронь дії (ставить reserve); run() дає її обробнику як ctx.held. */
+  held?: string | null;
 }
 
 /** Платіж, який дав шлюз x402 після verify: id рядка x402_payments і адреса платника. */
@@ -536,6 +549,8 @@ export interface Reservation {
   usageId: number | null;
   /** Денна квота дії (для RateLimit-* і _meta["ncj/quota"]). */
   quota: QuotaState | null;
+  /** Бронь дії (hold); release() її знімає. */
+  held: string | null;
 }
 
 export interface ActionResult {
@@ -551,14 +566,16 @@ export interface ActionResult {
  *
  *   prepareAction  вхід, право, стан компанії, доступ, канал, чи є обробник (501);
  *                  нічого не пише. Кидає до будь-якої 402.
- *   reserve        precheck дії (видимість, кулдауни, вакансія) і квоти (атомарна
- *                  бронь рядка usage_events). Для платної дії це `validate` шлюзу
- *                  x402: усе перевірено ДО settle.
+ *   reserve        precheck дії (видимість, кулдауни, вакансія), квоти (атомарна
+ *                  бронь рядка usage_events) і hold (бронь ресурсу дії, напр. пари
+ *                  для знайомства). Для платної дії це `validate` шлюзу x402: усе
+ *                  перевірено й заброньовано ДО settle.
  *   run            обробник + перевірка виходу; облік і журнал НЕ пише. Для
  *                  before_response (пошук) це `effect` шлюзу; для before_effect
  *                  (знайомство, місяць USDC) `effect` теж run, і пише лише сам обробник.
  *   commit         облік і журнал одним пакетом, лише після вдалого settle.
- *   release        відмова після броні (settle не пройшов, обробник упав).
+ *   release        відмова після броні (settle не пройшов, обробник упав): квоту
+ *                  повернуто, hold знято.
  *
  * Шлюз x402 (T9/T10):
  *   const prepared = prepareAction(name, input, ctx);           // 404/401/403/422/501
@@ -655,19 +672,34 @@ export async function reserve(prepared: PreparedAction, payment: PaymentRef | nu
   const usage = usageRecord(def, ctx, payment);
   const plan = quotaPlan(ctx.actor, ctx.company);
 
+  let reservation: Reservation = { prepared, ctx, usage, usageId: null, quota: null, held: null };
   if (def.quota && usage && plan) {
     const booked = await reserveUsage(ctx.db, usage, plan, def.quota, ctx.company?.subscription ?? null, ctx.now);
     if (!booked.ok) throw quotaError(booked.exceeded, plan);
-    return { prepared, ctx, usage, usageId: booked.usageId, quota: booked.quotas[0] ?? null };
+    reservation = { ...reservation, usageId: booked.usageId, quota: booked.quotas[0] ?? null };
   }
-  return { prepared, ctx, usage, usageId: null, quota: null };
+  if (def.hold) {
+    try {
+      reservation.held = await def.hold(payment ? { ...ctx, payment } : ctx, prepared.input);
+    } catch (error) {
+      // Бронь не взялась (напр. 409 intro_already_open): квоту повертаємо, і з платежем, і без.
+      await release(reservation, payment ? 402 : error instanceof ActionError ? error.status : 500);
+      throw error;
+    }
+  }
+  prepared.held = reservation.held;
+  return reservation;
 }
 
 /** Обробник і перевірка виходу за схемою. Облік і журнал не пише (це commit). */
 export async function run(prepared: PreparedAction): Promise<HandlerResult<unknown>> {
   const { def } = prepared;
   if (!def.handler) throw new ActionError("not_implemented", 501, "This action is not available yet.");
-  const ctx = prepared.paidWith ? { ...prepared.ctx, payment: prepared.paidWith } : prepared.ctx;
+  const ctx: ActionContext = {
+    ...prepared.ctx,
+    ...(prepared.paidWith ? { payment: prepared.paidWith } : {}),
+    ...(prepared.held ? { held: prepared.held } : {}),
+  };
   const result = await def.handler(ctx, prepared.input);
   const checked = def.output.safeParse(result.output);
   if (!checked.success) {
@@ -705,6 +737,16 @@ export async function commit(reservation: Reservation, result: HandlerResult<unk
  * виклику не було. Інша помилка: рядок лишається з цим статусом і не рахується в квоту.
  */
 export async function release(reservation: Reservation, status: number): Promise<void> {
+  const { def } = reservation.prepared;
+  if (reservation.held && def.unhold) {
+    try {
+      await def.unhold(reservation.ctx, reservation.held);
+    } catch (error) {
+      // Бронь, яку не вдалося зняти, мертвіє сама (HOLD_MINUTES).
+      console.error(`crm: hold of ${def.name} not released`, error instanceof Error ? error.message : error);
+    }
+    reservation.held = null;
+  }
   if (reservation.usageId === null) return;
   const { db } = reservation.ctx;
   if (status === 402) {
@@ -813,7 +855,8 @@ async function getCandidate(
     ctx.db.prepare("SELECT stage, tags FROM pipeline WHERE company_id = ? AND user_id = ?").bind(company.id, id),
     ctx.db
       .prepare(
-        `SELECT ${INTRO_COLUMNS} FROM intros WHERE company_id = ? AND user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+        `SELECT ${INTRO_COLUMNS} FROM intros WHERE company_id = ? AND user_id = ? AND NOT ${heldSql()}
+          ORDER BY created_at DESC, id DESC LIMIT 1`,
       )
       .bind(company.id, id),
     // Контакт лишається, навіть коли людина потім сховалась (знімок у мить згоди).

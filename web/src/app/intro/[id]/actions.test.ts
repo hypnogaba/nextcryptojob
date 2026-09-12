@@ -82,7 +82,9 @@ describe("answerIntroAction (POST from /intro/[id])", () => {
     harness.raw.prepare("UPDATE intros SET expires_at = datetime('now', '-1 minute') WHERE id = ?").run(alice.introId);
     const res = await answerIntroAction({}, form({ intro_id: alice.introId, t: alice.token, decision: "accept" }));
     expect(res).toEqual({ done: true, tone: "info", text: "This request has expired." });
-    expect(statusOf(alice.introId)).toBe("pending");
+    // Без планувальника прострочення робить саме це читання: картка знову found.
+    expect(statusOf(alice.introId)).toBe("expired");
+    expect(rows("SELECT stage FROM pipeline WHERE user_id = ?", alice.id)).toEqual([{ stage: "found" }]);
   });
 
   it("a withdrawn request says so", async () => {

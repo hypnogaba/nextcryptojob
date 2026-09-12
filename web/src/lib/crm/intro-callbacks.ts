@@ -3,7 +3,7 @@ import { getMailer, type Mailer } from "@/lib/mail";
 import type { TgCallbackQuery } from "@/lib/telegram/bot";
 import { callTelegram, escapeHtml, type SendDeps } from "@/lib/telegram/send";
 import { answerText, candidateIntroRow, respondToIntro, type IntroDecision, type RespondOutcome } from "./intros";
-import { ANSWER_TEXT } from "./notify";
+import { ANSWER_TEXT, siteOrigin, type NotifyEnv } from "./notify";
 
 /**
  * Кнопки під запитом на знайомство в Telegram (специфікація CRM, 5.5):
@@ -29,8 +29,6 @@ const ANSWER_MAX = 200;
 export interface IntroCallbackEnv {
   /** TELEGRAM_BOT_TOKEN: прибрати кнопки й сповістити компанію. */
   token?: string;
-  /** Походження сайту для посилань у повідомленнях компанії. */
-  origin: string;
   deps?: SendDeps;
   /** Типово база й пошта поточного запиту Worker. */
   db?: D1Database;
@@ -48,11 +46,12 @@ export interface IntroCallbackResult {
 /** Відповіді, після яких кнопки більше не потрібні. */
 const FINAL: ReadonlySet<RespondOutcome["kind"]> = new Set(["accepted", "declined", "answered", "expired", "withdrawn"]);
 
-function defaultMailer(): Mailer | null {
+/** Оточення Worker, якщо воно є (поза запитом Worker, напр. у тестах, порожнє). */
+function workerEnv(): NotifyEnv {
   try {
-    return getMailer(appEnv());
+    return appEnv() as unknown as NotifyEnv;
   } catch {
-    return null;
+    return {};
   }
 }
 
@@ -78,8 +77,9 @@ export async function handleIntroCallback(query: TgCallbackQuery, env: IntroCall
     now: env.now,
     notifier: {
       botToken: env.token,
-      mailer: env.mailer !== undefined ? env.mailer : defaultMailer(),
-      origin: env.origin,
+      mailer: env.mailer !== undefined ? env.mailer : getMailer(workerEnv()),
+      // Посилання для компанії завжди на SITE_URL, не на адресу, з якої прийшов вебхук.
+      origin: siteOrigin(workerEnv()),
       send: env.deps,
     },
   });

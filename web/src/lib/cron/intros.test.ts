@@ -47,10 +47,10 @@ describe("expireIntros", () => {
     const before = net.tg.length;
 
     // Ще не час: нічого.
-    expect(await expireIntros(db.d1, { notifier, now: new Date("2026-09-26T11:59:59Z") })).toEqual({ expired: 0, skipped: 0, notified: 0 });
+    expect(await expireIntros(db.d1, { notifier, now: new Date("2026-09-26T11:59:59Z") })).toEqual({ expired: 0, holdsPurged: 0 });
     expect(intro(id).status).toBe("pending");
 
-    expect(await expireIntros(db.d1, { notifier, now: AFTER_14_DAYS })).toEqual({ expired: 1, skipped: 0, notified: 1 });
+    expect(await expireIntros(db.d1, { notifier, now: AFTER_14_DAYS })).toEqual({ expired: 1, holdsPurged: 0 });
     expect(intro(id)).toMatchObject({ status: "expired", respond_token_hash: null, webhook_state: "none", webhook_event: "intro.expired" });
     expect(stage(alice.id)).toBe("found");
     expect(
@@ -65,7 +65,7 @@ describe("expireIntros", () => {
     expect(String(told[0].payload.text)).toContain(`No answer from ${candidateLabel(alice.id)} in 14 days.`);
 
     // Повторний запуск нічого не робить; компанія може спитати знову (1 запит за 90 днів).
-    expect(await expireIntros(db.d1, { notifier, now: AFTER_14_DAYS })).toEqual({ expired: 0, skipped: 0, notified: 0 });
+    expect(await expireIntros(db.d1, { notifier, now: AFTER_14_DAYS })).toEqual({ expired: 0, holdsPurged: 0 });
     const again = await ask({ ...c.agent, now: AFTER_14_DAYS }, alice.id);
     expect(again.output.status).toBe("pending");
   });
@@ -100,6 +100,21 @@ describe("expireIntros", () => {
     expect(net.tg.slice(before).filter((m) => m.method === "sendMessage").map((m) => String(m.payload.chat_id))).toEqual([danaTg]);
   });
 
+  it("frees pairs whose hold died before the write", async () => {
+    const alice = addCandidate(db);
+    run(
+      db.raw,
+      `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, expires_at, created_at, updated_at)
+       VALUES ('int_DEADHOLDDEADHOLD000', ?, ?, 'approval', 'pending', 'held by a request that died', 'rest',
+               '2026-09-26 11:00:00', '2026-09-12 11:00:00', '2026-09-12 11:00:00')`,
+      c.co,
+      alice.id,
+    );
+    expect(await expireIntros(db.d1, { notifier, now: new Date("2026-09-12T11:05:00Z") })).toEqual({ expired: 0, holdsPurged: 0 });
+    expect(await expireIntros(db.d1, { notifier, now: NOW })).toEqual({ expired: 0, holdsPurged: 1 });
+    expect(all(db.raw, "SELECT id FROM intros")).toEqual([]);
+  });
+
   it("an answer that lands at the same moment wins over the expiry", async () => {
     const alice = addCandidate(db);
     const id = (await ask(c.agent, alice.id)).output.intro_id;
@@ -110,7 +125,7 @@ describe("expireIntros", () => {
     ]);
     const final = intro(id).status;
     expect(["declined", "expired"]).toContain(final);
-    expect(result.expired + result.skipped).toBe(1);
+    expect(result.expired).toBe(final === "expired" ? 1 : 0);
     expect(stage(alice.id)).toBe(final === "declined" ? "declined" : "found");
   });
 });

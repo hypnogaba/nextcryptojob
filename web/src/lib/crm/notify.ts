@@ -209,9 +209,32 @@ export function introReviewUrl(origin: string, introId: string, token: string): 
   return url.toString();
 }
 
-/** Запит кандидату: Telegram з кнопками і лист з посиланням на /intro/{id}?t={token}. */
-export function introRequestMessage(d: IntroRequestDetails, origin: string, token: string | null): OutgoingMessage {
-  const lines = introRequestLines(d, origin);
+/** Що побачить компанія після «так»: Telegram-нік, або пошта (маскована для показу), або нічого. */
+export type ContactPreview = { kind: "telegram" | "email"; shown: string } | null;
+
+/** Рядок «що буде відкрито» (запит у Telegram і листі, сторінка /intro/[id]). */
+export function contactPreviewText(companyName: string, contact: ContactPreview): string {
+  const company = oneLine(companyName);
+  if (contact?.kind === "telegram") {
+    return `If you accept, ${company} will see your Telegram handle ${contact.shown}. They will not see your email or wallets.`;
+  }
+  if (contact?.kind === "email") {
+    return `If you accept, ${company} will see your email address ${contact.shown}. They will not see your wallets.`;
+  }
+  return ANSWER_TEXT.noContact;
+}
+
+/**
+ * Запит кандидату: Telegram з кнопками і лист з посиланням на /intro/{id}?t={token}.
+ * Наприкінці рядок про контакт, щоб людина знала, що саме відкриє «Accept».
+ */
+export function introRequestMessage(
+  d: IntroRequestDetails,
+  origin: string,
+  token: string | null,
+  contact: ContactPreview,
+): OutgoingMessage {
+  const lines = [...introRequestLines(d, origin), { text: "" }, { text: contactPreviewText(d.companyName, contact) }];
   const company = oneLine(d.companyName);
   const review = token ? introReviewUrl(origin, d.introId, token) : new URL(`/intro/${d.introId}`, origin).toString();
   const text = `${lines.map((l) => l.text).join("\n")}\n\nReview the request: ${review}\n`;
@@ -263,6 +286,14 @@ export function introExpiredMessage(candidateId: string, origin: string): Outgoi
   return companyMessage(`No answer from ${label} in 14 days.`, `No answer from ${label}`, origin);
 }
 
+/**
+ * Плашка для компанії біля знайомства (воронка, профіль): кандидата ще не
+ * вдалося сповістити. null, коли сказати нічого.
+ */
+export function companyIntroNotice(intro: { status: string; candidate_notified?: boolean }): string | null {
+  return intro.status === "pending" && intro.candidate_notified === false ? NOT_REACHED_TEXT : null;
+}
+
 /** Відповіді кандидату (бот і сторінка /intro/[id]). Простий текст: викликач екранує для HTML. */
 export const ANSWER_TEXT = {
   accepted: (company: string, kind: "telegram" | "email") =>
@@ -274,5 +305,6 @@ export const ANSWER_TEXT = {
   withdrawn: "This request was withdrawn.",
   noContact: "Add a Telegram username or an email to your account first, then accept.",
   notYours: "This request is for another account.",
+  companyInactive: "This company can no longer receive contacts.",
   invalid: "This link is not valid or has already been used.",
 } as const;

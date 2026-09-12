@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 const LATER = new Date("2026-09-13T09:00:00Z");
-const env = (now = LATER): IntroCallbackEnv => ({ token: BOT_TOKEN, origin: "https://nextcryptojob.xyz", db: db.d1, mailer: null, now });
+const env = (now = LATER): IntroCallbackEnv => ({ token: BOT_TOKEN, db: db.d1, mailer: null, now });
 
 function press(data: string, fromId: string | number, messageId = 42): TgCallbackQuery {
   return {
@@ -101,16 +101,30 @@ describe("intro buttons in Telegram", () => {
     expect(edits()).toEqual([]);
   });
 
-  it("expired and withdrawn requests say so and lose their buttons", async () => {
+  it("expired and withdrawn requests say so and lose their buttons; a late press expires the intro once", async () => {
     const alice = await requested();
     const late = await handleIntroCallback(press(`ia:${alice.introId}`, alice.telegramId!), env(new Date("2026-10-01T00:00:00Z")));
     expect(late.answer).toBe("This request has expired.");
-    expect(status(alice.introId).status).toBe("pending");
+    expect(status(alice.introId).status).toBe("expired");
+    expect(all(db.raw, "SELECT stage FROM pipeline WHERE user_id = ?", alice.id)).toEqual([{ stage: "found" }]);
 
-    await runAction("cancel_intro", { intro_id: alice.introId }, c.agent);
-    const gone = await handleIntroCallback(press(`ia:${alice.introId}`, alice.telegramId!), env());
+    const bob = await requested();
+    await runAction("cancel_intro", { intro_id: bob.introId }, c.agent);
+    const gone = await handleIntroCallback(press(`ia:${bob.introId}`, bob.telegramId!), env());
     expect(gone.answer).toBe("This request was withdrawn.");
     expect(edits()).toHaveLength(2);
+  });
+
+  it("a suspended company gets no contact; the candidate can still decline", async () => {
+    const alice = await requested();
+    run(db.raw, "UPDATE companies SET status = 'suspended' WHERE id = ?", c.co);
+    const r = await handleIntroCallback(press(`ia:${alice.introId}`, alice.telegramId!), env());
+    expect(r.answer).toBe("This company can no longer receive contacts.");
+    expect(status(alice.introId).status).toBe("pending");
+    expect(edits()).toEqual([]);
+    expect((await handleIntroCallback(press(`id:${alice.introId}`, alice.telegramId!), env())).answer).toBe(
+      "Declined. Acme Labs will not contact you.",
+    );
   });
 
   it("ignores data it does not own and unknown ids", async () => {

@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { HINT } from "@/components/form/styles";
 import { currentUser } from "@/lib/auth/session";
-import { requestOrigin } from "@/lib/billing/origin";
 import { loadIntroForCandidate, type CandidateIntroView } from "@/lib/crm/intros";
-import { ANSWER_TEXT, introRequestLines } from "@/lib/crm/notify";
-import { db } from "@/lib/db";
+import { ANSWER_TEXT, contactPreviewText, introRequestLines, notifierFromEnv, siteOrigin, type NotifyEnv } from "@/lib/crm/notify";
+import { appEnv, db } from "@/lib/db";
 import { isId } from "@/lib/ids";
 import { IntroAnswerForm } from "./answer-form";
 
@@ -73,13 +71,14 @@ export default async function IntroPage({
   const { id } = await params;
   const token = first((await searchParams).t);
   const user = await currentUser();
+  const env = appEnv() as unknown as NotifyEnv;
   const view: CandidateIntroView = isId("int", id)
-    ? await loadIntroForCandidate(db(), id, { token, sessionUserId: user?.id ?? null })
+    ? await loadIntroForCandidate(db(), id, { token, sessionUserId: user?.id ?? null, notifier: notifierFromEnv(env) })
     : { state: "invalid" };
   if (view.state !== "pending") return <Closed view={view} />;
 
   const { details, contact } = view;
-  const origin = requestOrigin(await headers());
+  const origin = siteOrigin(env);
   const [headline, , quote, , ...facts] = introRequestLines(details, origin);
   const company = details.companyName;
 
@@ -113,23 +112,11 @@ export default async function IntroPage({
         introId={details.introId}
         token={view.auth === "token" ? token : null}
         acceptLabel={contact?.kind === "email" ? "Accept and share my email" : "Accept and share my Telegram"}
-        canAccept={contact !== null}
+        canAccept={contact !== null && view.companyActive}
         preview={
           <div className="grid gap-2 rounded-md border border-line bg-wash p-4">
             <p className="text-base text-ink">
-              {contact?.kind === "telegram" ? (
-                <>
-                  If you accept, {company} will see your Telegram handle <strong>{contact.shown}</strong>. They will not
-                  see your email or wallets.
-                </>
-              ) : contact?.kind === "email" ? (
-                <>
-                  If you accept, {company} will see your email address <strong>{contact.shown}</strong>. They will not
-                  see your wallets.
-                </>
-              ) : (
-                ANSWER_TEXT.noContact
-              )}
+              {view.companyActive ? contactPreviewText(company, contact) : ANSWER_TEXT.companyInactive}
             </p>
           </div>
         }

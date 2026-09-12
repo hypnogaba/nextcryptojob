@@ -14,7 +14,7 @@ import {
 } from "@/test/intro-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
 import { runAction } from "./actions";
-import { answerText, loadIntroForCandidate, respondToIntro, type IntroDecision, type RespondOutcome } from "./intros";
+import { answerText, authorizeCandidate, loadIntroForCandidate, respondToIntro, type IntroDecision, type RespondOutcome } from "./intros";
 import { candidateLabel } from "./project";
 import { searchCandidates } from "./search";
 import type { CandidateView, Intro } from "./types";
@@ -252,12 +252,11 @@ describe("decline", () => {
 });
 
 describe("answers after the fact", () => {
-  it("expired by time, withdrawn, answered, another account: nothing changes", async () => {
+  it("another account or an unknown id changes nothing; withdrawn says so", async () => {
     const alice = await pending();
     const bob = addCandidate(db);
     const before = snapshot();
     expect(await respond(alice.intro.intro_id, bob.id, "accept")).toEqual({ kind: "not_yours" });
-    expect(await respond(alice.intro.intro_id, alice.id, "accept", new Date("2026-09-27T12:00:00Z"))).toEqual({ kind: "expired" });
     expect(await respond("int_00000000000000000000", alice.id, "accept")).toEqual({ kind: "not_found" });
     expect(snapshot()).toEqual(before);
 
@@ -266,6 +265,30 @@ describe("answers after the fact", () => {
     expect(withdrawn).toEqual({ kind: "withdrawn" });
     expect(answerText(withdrawn)).toBe("This request was withdrawn.");
     expect(introRow(alice.intro.intro_id).status).toBe("canceled");
+  });
+
+  it("an answer after expires_at expires the intro there and then: card back to found, requester told once", async () => {
+    const alice = await pending();
+    const before = net.tg.length;
+    const late = new Date("2026-09-27T12:00:00Z");
+    expect(await respond(alice.intro.intro_id, alice.id, "accept", late)).toEqual({ kind: "expired" });
+    expect(introRow(alice.intro.intro_id)).toMatchObject({ status: "expired", contact_value: null, respond_token_hash: null });
+    expect(stageOf(c.co, alice.id).stage).toBe("found");
+    expect(await respond(alice.intro.intro_id, alice.id, "accept", late)).toEqual({ kind: "expired" });
+    const told = net.tg.slice(before).filter((m) => m.method === "sendMessage");
+    expect(told.map((m) => String(m.payload.chat_id))).toEqual([c.ownerTelegram]);
+    expect(String(told[0].payload.text)).toContain(`No answer from ${candidateLabel(alice.id)} in 14 days.`);
+  });
+
+  it("a suspended or closed company cannot receive the contact", async () => {
+    const alice = await pending();
+    run(db.raw, "UPDATE companies SET status = 'closed' WHERE id = ?", c.co);
+    const before = snapshot();
+    const outcome = await respond(alice.intro.intro_id, alice.id, "accept");
+    expect(outcome).toEqual({ kind: "company_inactive" });
+    expect(answerText(outcome)).toBe("This company can no longer receive contacts.");
+    expect(snapshot()).toEqual(before);
+    expect(await respond(alice.intro.intro_id, alice.id, "decline")).toMatchObject({ kind: "declined" });
   });
 });
 
@@ -314,9 +337,19 @@ describe("the response page data (GET)", () => {
     const res = await ask(c.agent, alice.id);
     const id = res.output.intro_id;
     const token = tokenFromMail(net.mail[0]);
-    expect(await loadIntroForCandidate(db.d1, id, { token, now: new Date("2026-09-26T12:00:01Z") })).toEqual({ state: "expired" });
     await respond(id, alice.id, "decline");
     expect(await loadIntroForCandidate(db.d1, id, { token, now: LATER })).toEqual({ state: "answered" });
+    expect(await authorizeCandidate(introRow(id) as { user_id: string; respond_token_hash: string | null }, { token })).toBeNull();
+
+    // Після expires_at сторінка сама робить запит простроченим (картка → found).
+    const bob = addCandidate(db, { telegramId: null });
+    const second = await ask(c.agent, bob.id);
+    const bobToken = tokenFromMail(net.mail.at(-1)!);
+    expect(await loadIntroForCandidate(db.d1, second.output.intro_id, { token: bobToken, now: new Date("2026-09-26T12:00:01Z") })).toEqual({
+      state: "expired",
+    });
+    expect(introRow(second.output.intro_id).status).toBe("expired");
+    expect(stageOf(c.co, bob.id).stage).toBe("found");
   });
 
   it("a direct-mode reveal has nothing to answer", async () => {

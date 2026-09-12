@@ -1,13 +1,12 @@
 "use server";
 
-import { headers } from "next/headers";
 import { currentUser } from "@/lib/auth/session";
-import { requestOrigin } from "@/lib/billing/origin";
 import {
   answerText,
   authorizeCandidate,
   candidateIntroRow,
   candidateState,
+  expireIfDue,
   outcomeForState,
   respondToIntro,
   type IntroDecision,
@@ -47,26 +46,23 @@ export async function answerIntroAction(_prev: IntroAnswerState, form: FormData)
 
   const d = db();
   const now = new Date();
+  // Посилання в повідомленнях компанії завжди на SITE_URL, не на адресу запиту.
+  const notifier = notifierFromEnv(appEnv() as unknown as NotifyEnv);
   const row = await candidateIntroRow(d, introId);
   if (!row) return { done: true, tone: "error", text: ANSWER_TEXT.invalid };
   const state = candidateState(row, now);
-  if (state !== "pending") return { done: true, tone: "info", text: answerText(outcomeForState(state)) };
+  if (state !== "pending") {
+    await expireIfDue(d, row, now, notifier);
+    return { done: true, tone: "info", text: answerText(outcomeForState(state)) };
+  }
 
   const user = await currentUser();
   const auth = await authorizeCandidate(row, { token: field(form, "t"), sessionUserId: user?.id ?? null });
   if (!auth) return { done: true, tone: "error", text: ANSWER_TEXT.invalid };
 
-  const origin = requestOrigin(await headers());
-  const outcome = await respondToIntro(d, {
-    introId,
-    userId: row.user_id,
-    decision,
-    via: "web",
-    now,
-    notifier: notifierFromEnv(appEnv() as unknown as NotifyEnv, { origin }),
-  });
+  const outcome = await respondToIntro(d, { introId, userId: row.user_id, decision, via: "web", now, notifier });
   const text = answerText(outcome);
   if (outcome.kind === "accepted" || outcome.kind === "declined") return { done: true, tone: "success", text };
-  if (outcome.kind === "no_contact") return { tone: "error", text };
+  if (outcome.kind === "no_contact" || outcome.kind === "company_inactive") return { tone: "error", text };
   return { done: true, tone: "info", text };
 }

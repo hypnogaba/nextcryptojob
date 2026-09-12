@@ -88,6 +88,8 @@ export interface ActionContext {
    * run() з броні; обробник пише його id у свій рядок (intros.x402_payment_id).
    */
   payment?: { id: string; payer: string | null } | null;
+  /** Бронь дії з reserve() (знайомство: id рядка intros у стані броні). */
+  held?: string | null;
 }
 
 export function actorRole(actor: Actor): ActorRole {

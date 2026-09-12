@@ -314,6 +314,19 @@ describe("intro buttons (CRM 5.5)", () => {
     });
   });
 
+  it("a failure inside the intro flow still answers the button", async () => {
+    seedIntro();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    exec("ALTER TABLE intros RENAME TO intros_broken");
+    expect((await post(press(`ia:${INTRO}`))).status).toBe(200);
+    expect(sent).toEqual([
+      {
+        method: "answerCallbackQuery",
+        body: { callback_query_id: "cb-intro", text: "Something went wrong. Try again from the link in the message." },
+      },
+    ]);
+  });
+
   it("a press from another Telegram account changes nothing and only answers the button", async () => {
     seedIntro();
     await post(press(`id:${INTRO}`, 556));

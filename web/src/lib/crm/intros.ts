@@ -14,6 +14,7 @@ import {
   introExpiredMessage,
   introRequestMessage,
   notifierFromEnv,
+  type ContactPreview,
   type IntroRequestDetails,
   type Notifier,
   type OutgoingMessage,
@@ -29,37 +30,49 @@ import { isVisibleTo, visibilitySyncStatements, visibleToSql } from "./visibilit
  * контакт відкривається лише після «так» (або одразу в режимі direct, який
  * кандидат увімкнув сам).
  *
- * Створення (request_intro). checkIntroRequest робить УСІ перевірки й нічого не
- * пише; реєстр кличе його в reserve(), тобто до квоти й до розрахунку x402:
- * 1. видимість для компанії (3.4): інакше 409 candidate_not_visible (картка є)
- *    або 404 candidate_not_available;
- * 2. відкритого немає (intro_already_open); відмови за 90 днів немає і запитів
- *    за 90 днів менше 2 (intro_cooldown з details.retry_after);
- * 3. повідомлення 20–600 символів без пробілів по краях; агенція мусить назвати
- *    "Hiring for"; job_id лише своя відкрита вакансія; картку можна перевести
- *    (introStageMove кидає, якщо картка не на found);
- * 4. режим: direct, коли contact_mode = 'direct', є Telegram-нік і чинна згода
- *    contact; інакше approval.
- * Потім (після settle) один DB.batch: INSERT intros (expires_at +14 днів,
- * SHA-256 одноразового токена відповіді), журнал, подія й етап картки.
- * Сповіщення кандидату йде після коміту; не дійшло нікуди → notify_error.
+ * Створення (request_intro) іде трьома кроками реєстру:
+ * 1. precheck = checkIntroRequest: усі перевірки 5.5 (видимість 404/409,
+ *    intro_already_open, кулдаун 90 днів і 2 запити за 90 днів, повідомлення
+ *    20–600, своя відкрита вакансія, "Hiring for" агенції, перехід картки).
+ * 2. hold = holdIntro (у reserve, ДО settle x402): бронь пари (компанія,
+ *    кандидат) рядком intros у стані «бронь» = status 'pending' без токена
+ *    відповіді. Унікальний індекс uq_intros_open (одне pending на пару) відмовляє
+ *    другому паралельному запиту чистою 409 intro_already_open, тож двох
+ *    розрахунків за одну пару не буває. Бронь ніхто не бачить і нікого не
+ *    сповіщає: кандидат відповідає лише токеном чи сесією на живий запит, а всі
+ *    читання тут пропускають броні (LIVE). Невдача після броні знімає її
+ *    (unhold); бронь, старша за HOLD_MINUTES (процес упав), вважається мертвою.
+ * 3. handler = requestIntro (після settle): бронь стає живим запитом
+ *    (токен, або status 'direct' з ніком з users у мить запису), картка,
+ *    журнал, подія одним пакетом; потім сповіщення кандидату.
+ * Інваріант: живий pending завжди має respond_token_hash; pending без нього
+ * буває лише як бронь (скасування, відповідь і прострочення стирають токен,
+ * але разом зі зміною статусу).
  *
- * Пакети знайомства атомарні: умови, які могли змінитися між читанням і
- * записом, перевіряє сам пакет, і хибна умова дає NOT NULL у рядку intros
- * (CASE WHEN умова THEN значення END). Така помилка відкочує ВЕСЬ пакет
- * (D1 batch = одна транзакція), тож не буває знайомства без руху картки,
- * руху картки без знайомства чи двох відповідей на одне знайомство.
+ * Пакети атомарні: хибна умова в мить запису дає NOT NULL у рядку intros
+ * (CASE WHEN умова THEN значення END або guardStatement) і відкочує ВЕСЬ
+ * пакет. Не буває знайомства без руху картки, руху картки без знайомства чи
+ * двох відповідей на одне знайомство.
  *
- * Відповідь кандидата (respondToIntro): Telegram-кнопка, сторінка /intro/[id]
- * з токеном з листа або з сесією. UPDATE ставить новий статус лише з pending
- * і не пізніше expires_at (інакше NOT NULL і відкат): подвійне натискання дає
- * один успіх, друге бачить "You already answered this request.".
+ * Прострочення: cron (expireIntros, T11) і ліниво при кожному читанні
+ * (intro_status, list_intros, checkIntroRequest, сторінка кандидата, кнопки):
+ * pending після expires_at одразу стає expired, картка повертається в found,
+ * повідомлення тому, хто просив, іде рівно раз (лише той, чий пакет пройшов).
  */
 
 export const INTRO_TTL_DAYS = 14;
 export const INTRO_COOLDOWN_DAYS = 90;
 export const MAX_INTROS_PER_COOLDOWN = 2;
+/** Бронь без продовження довше за це вважаємо мертвою (процес упав між settle і записом). */
+export const HOLD_MINUTES = 10;
 const DAY_MS = 86_400_000;
+
+/** Бронь пари: pending без токена відповіді. */
+export function heldSql(a = "intros"): string {
+  return `(${a}.status = 'pending' AND ${a}.respond_token_hash IS NULL)`;
+}
+/** Усе, крім броні: те, що бачать компанія, кандидат і cron. */
+const LIVE = (a = "intros") => `NOT ${heldSql(a)}`;
 
 type CompanyCtx = ActionContext & { company: CompanyInfo };
 type EventActor = NonNullable<IntroTransition["actor"]>;
@@ -80,8 +93,16 @@ function daysBefore(now: Date, days: number): string {
   return sqlTime(new Date(now.getTime() - days * DAY_MS));
 }
 
+function holdCutoff(now: Date): string {
+  return sqlTime(new Date(now.getTime() - HOLD_MINUTES * 60_000));
+}
+
 function isConstraintError(error: unknown): boolean {
   return error instanceof Error && /constraint failed/i.test(error.message);
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Error && /UNIQUE constraint failed/i.test(error.message);
 }
 
 const conflict = () =>
@@ -110,6 +131,12 @@ export function maskEmail(email: string): string {
   return `${email[0]}***${email.slice(at)}`;
 }
 
+/** Контакт для показу кандидату: нік як є, пошта маскована. */
+export function contactPreview(u: { telegram_username: string | null; email: string | null }): ContactPreview {
+  const c = candidateContact(u);
+  return c ? { kind: c.kind, shown: c.kind === "email" ? maskEmail(c.value) : c.value } : null;
+}
+
 // ---------------------------------------------------------------------------
 // Картка й пакет знайомства
 
@@ -127,24 +154,26 @@ async function readCard(db: D1Database, companyId: string, candidateId: string):
 }
 
 /**
- * Запобіжник пакета: хибна умова ставить intros.message у NULL, NOT NULL
- * кидає, і D1 відкочує весь пакет.
+ * Запобіжник пакета: коли умова хибна, вставляє рядок intros з message = NULL,
+ * NOT NULL кидає, і D1 відкочує весь пакет. Спрацьовує й тоді, коли рядка, про
+ * який умова, уже немає.
  */
-function assertion(db: D1Database, introId: string, condition: string, params: (string | number)[]): D1PreparedStatement {
+function guardStatement(db: D1Database, condition: string, params: (string | number)[]): D1PreparedStatement {
   return db
-    .prepare(`UPDATE intros SET message = CASE WHEN ${condition} THEN message END WHERE id = ?`)
-    .bind(...params, introId);
+    .prepare(
+      `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, expires_at)
+       SELECT 'int_guard', '', '', 'approval', 'canceled', NULL, 'web', '' WHERE NOT (${condition})`,
+    )
+    .bind(...params);
 }
 
 /**
  * Пакет знайомства: свої записи (lead), перехід картки з pipeline.ts
  * (introTransitionStatements: подія, журнал pipeline.stage, етап), хвіст і
- * наприкінці запобіжник «картка стоїть там, куди мала стати». Картку
- * змінили між читанням і пакетом → запобіжник кидає → нічого не записано.
+ * наприкінці запобіжник «картка стоїть там, куди мала стати».
  */
 async function runIntroBatch(
   db: D1Database,
-  introId: string,
   lead: D1PreparedStatement[],
   transition: IntroTransition,
   tail: D1PreparedStatement[] = [],
@@ -154,7 +183,7 @@ async function runIntroBatch(
   const writes = [...lead, ...moves, ...tail];
   if (card) {
     const expected = introStageMove(card.stage, transition.event)?.to ?? card.stage;
-    writes.push(assertion(db, introId, "EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ?)", [card.id, expected]));
+    writes.push(guardStatement(db, "EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ?)", [card.id, expected]));
   }
   await db.batch(writes);
 }
@@ -168,6 +197,111 @@ function webhookQueue(event: "intro.accepted" | "intro.declined" | "intro.expire
           webhook_last_error = NULL, webhook_next_at = CASE WHEN ${hook} THEN ? END`,
     params: [event, at],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Прострочення (cron і ліниве)
+
+/**
+ * Прострочити одне знайомство: expired, токен стерто, картка → found (якщо
+ * досі intro_requested), вебхук intro.expired у чергу, журнал системи.
+ * false, якщо його вже немає в pending (відповідь чи скасування встигли).
+ */
+export async function expireIntro(db: D1Database, introId: string, now: Date): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT company_id, user_id, status, expires_at FROM intros WHERE id = ? AND ${LIVE()}`)
+    .bind(introId)
+    .first<{ company_id: string; user_id: string; status: string; expires_at: string }>();
+  const at = sqlTime(now);
+  if (!row || row.status !== "pending" || row.expires_at > at) return false;
+  const hook = webhookQueue("intro.expired", at);
+  const update = db
+    .prepare(
+      `UPDATE intros SET status = CASE WHEN status = 'pending' AND expires_at <= ? THEN 'expired' END,
+              respond_token_hash = NULL, updated_at = ?, ${hook.sql}
+        WHERE id = ?`,
+    )
+    .bind(at, at, ...hook.params, introId);
+  const audit = db
+    .prepare("INSERT INTO audit_log (actor, action, target, meta_json, at) VALUES (?, ?, ?, ?, ?)")
+    .bind(
+      systemAuditActor(row.company_id),
+      "intro.expire",
+      row.user_id,
+      JSON.stringify({ company_id: row.company_id, intro_id: introId }),
+      at,
+    );
+  try {
+    await runIntroBatch(db, [update, audit], {
+      companyId: row.company_id,
+      candidateId: row.user_id,
+      event: "intro_expired",
+      introId,
+      now,
+    });
+  } catch (error) {
+    if (!isConstraintError(error)) throw error;
+    return false;
+  }
+  return true;
+}
+
+export interface DueFilter {
+  companyId?: string;
+  candidateId?: string;
+  introId?: string;
+}
+
+/**
+ * Прострочити всі живі pending після expires_at за фільтром (до `limit`) і
+ * сповістити тих, хто просив. Сповіщення лише за знайомства, які прострочив
+ * саме цей виклик, тож паралельні читання не шлють двох листів.
+ */
+export async function expireDue(
+  db: D1Database,
+  filter: DueFilter,
+  now: Date,
+  notifier: Notifier | null,
+  limit = 50,
+): Promise<number> {
+  const where = ["status = 'pending'", "respond_token_hash IS NOT NULL", "expires_at <= ?"];
+  const params: (string | number)[] = [sqlTime(now)];
+  if (filter.companyId) {
+    where.push("company_id = ?");
+    params.push(filter.companyId);
+  }
+  if (filter.candidateId) {
+    where.push("user_id = ?");
+    params.push(filter.candidateId);
+  }
+  if (filter.introId) {
+    where.push("id = ?");
+    params.push(filter.introId);
+  }
+  const { results } = await db
+    .prepare(`SELECT id FROM intros WHERE ${where.join(" AND ")} ORDER BY expires_at LIMIT ?`)
+    .bind(...params, limit)
+    .all<{ id: string }>();
+  let expired = 0;
+  for (const { id } of results) {
+    if (!(await expireIntro(db, id, now))) continue;
+    expired++;
+    if (notifier) await notifyRequester(db, id, "expired", notifier);
+  }
+  return expired;
+}
+
+/** Мертві броні (процес упав між бронею і записом): звільнити пари. */
+export async function purgeStaleHolds(db: D1Database, now: Date): Promise<number> {
+  const res = await db
+    .prepare(`DELETE FROM intros WHERE ${heldSql()} AND created_at < ?`)
+    .bind(holdCutoff(now))
+    .run();
+  return res.meta.changes ?? 0;
+}
+
+function companyNotifier(ctx: ActionContext): Notifier {
+  return notifierFromEnv(ctx.env);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,8 +322,6 @@ export interface IntroPlan {
   role: RoleKey | null;
   jobId: string | null;
   hiringFor: string | null;
-  /** Знімок контакту для режиму direct ('@handle'). */
-  contactValue: string | null;
 }
 
 function cooldownError(retry: Date, text: string): ActionError {
@@ -200,13 +332,19 @@ function cooldownError(retry: Date, text: string): ActionError {
 }
 
 /**
- * Усі перевірки створення (5.5, кроки 1–4) без жодного запису. Кидає ActionError
- * з кодом договору; інакше план для requestIntro.
+ * Усі перевірки створення (5.5, кроки 1–4). Пише лише ліниве прострочення цієї
+ * пари. Кидає ActionError з кодом договору; інакше план для requestIntro.
+ * `heldId`: власна бронь цього виклику, яка не рахується як «відкрите знайомство».
  */
-export async function checkIntroRequest(rawCtx: ActionContext, input: IntroInput): Promise<IntroPlan> {
+export async function checkIntroRequest(
+  rawCtx: ActionContext,
+  input: IntroInput,
+  opts: { heldId?: string | null } = {},
+): Promise<IntroPlan> {
   const { ctx } = companyActor(rawCtx);
   const { db, company } = ctx;
   const id = input.candidate_id;
+  await expireDue(db, { companyId: company.id, candidateId: id }, ctx.now, companyNotifier(ctx));
   const card = await readCard(db, company.id, id);
 
   // 1. Видимість. Блок і членство в команді виглядають так само, як невидимість.
@@ -216,10 +354,17 @@ export async function checkIntroRequest(rawCtx: ActionContext, input: IntroInput
       : new ActionError("candidate_not_available", 404, "This candidate is not available.");
   }
 
-  // 2. Відкрите знайомство і кулдауни.
+  // 2. Відкрите знайомство (і чужа свіжа бронь) і кулдауни. Мертві броні не рахуються.
   const cutoff = daysBefore(ctx.now, INTRO_COOLDOWN_DAYS);
+  const notStaleHold = `NOT (${heldSql()} AND created_at < ?)`;
+  const own = opts.heldId ?? "";
+  const stale = holdCutoff(ctx.now);
   const [openRes, declinedRes, recentRes] = await db.batch([
-    db.prepare("SELECT id FROM intros WHERE company_id = ? AND user_id = ? AND status = 'pending' LIMIT 1").bind(company.id, id),
+    db
+      .prepare(
+        `SELECT id FROM intros WHERE company_id = ? AND user_id = ? AND status = 'pending' AND id <> ? AND ${notStaleHold} LIMIT 1`,
+      )
+      .bind(company.id, id, own, stale),
     db
       .prepare(
         `SELECT MAX(COALESCE(responded_at, updated_at)) AS at FROM intros
@@ -228,10 +373,10 @@ export async function checkIntroRequest(rawCtx: ActionContext, input: IntroInput
       .bind(company.id, id, cutoff),
     db
       .prepare(
-        `SELECT created_at FROM intros WHERE company_id = ? AND user_id = ? AND created_at > ?
+        `SELECT created_at FROM intros WHERE company_id = ? AND user_id = ? AND created_at > ? AND id <> ? AND ${notStaleHold}
           ORDER BY created_at DESC LIMIT ${MAX_INTROS_PER_COOLDOWN}`,
       )
-      .bind(company.id, id, cutoff),
+      .bind(company.id, id, cutoff, own, stale),
   ]);
   const open = openRes.results[0] as { id: string } | undefined;
   if (open) {
@@ -271,11 +416,11 @@ export async function checkIntroRequest(rawCtx: ActionContext, input: IntroInput
   let jobRoles: string[] = [];
   if (input.job_id) {
     const job = await db
-      .prepare("SELECT status, expires_at, roles FROM company_jobs WHERE id = ? AND company_id = ?")
+      .prepare("SELECT status, expires_at, hidden_by_admin_at, roles FROM company_jobs WHERE id = ? AND company_id = ?")
       .bind(input.job_id, company.id)
-      .first<{ status: string; expires_at: string | null; roles: string }>();
+      .first<{ status: string; expires_at: string | null; hidden_by_admin_at: string | null; roles: string }>();
     if (!job) throw new ActionError("not_found", 404, "This job was not found.");
-    if (job.status !== "open" || !job.expires_at || job.expires_at <= sqlTime(ctx.now)) {
+    if (job.status !== "open" || job.hidden_by_admin_at || !job.expires_at || job.expires_at <= sqlTime(ctx.now)) {
       throw new ActionError("validation_failed", 422, "Some fields are not valid.", {
         fields: { job_id: "Link one of your open jobs." },
       });
@@ -312,118 +457,198 @@ export async function checkIntroRequest(rawCtx: ActionContext, input: IntroInput
     role: input.role ?? cardRole ?? jobRole ?? null,
     jobId: input.job_id ?? null,
     hiringFor,
-    contactValue: mode === "direct" ? handle : null,
   };
 }
 
-async function introRowFor(db: D1Database, companyId: string, introId: string): Promise<IntroRow | null> {
-  return db
-    .prepare(`SELECT ${INTRO_COLUMNS} FROM intros WHERE id = ? AND company_id = ?`)
-    .bind(introId, companyId)
-    .first<IntroRow>();
+async function openIntroId(db: D1Database, companyId: string, candidateId: string): Promise<string | null> {
+  const row = await db
+    .prepare("SELECT id FROM intros WHERE company_id = ? AND user_id = ? AND status = 'pending' LIMIT 1")
+    .bind(companyId, candidateId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
 }
 
 /**
- * Створити знайомство (обробник request_intro). Викликати після reserve()
- * (перевірки й квота) і після settle, якщо платить x402. Без картки спершу
- * додає кандидата у воронку (found), далі один пакет: знайомство, журнал,
- * подія, етап intro_requested (або contact_shared для direct). Потім сповіщення.
+ * Бронь пари ДО settle x402 (крок reserve реєстру). Рядок intros у стані броні
+ * (pending без токена): ніхто не сповіщений, кандидат нічого не бачить. Другий
+ * запит на ту саму пару впирається в uq_intros_open і отримує 409 intro_already_open
+ * до будь-якого розрахунку. Повертає id броні.
  */
-export async function requestIntro(rawCtx: ActionContext, input: IntroInput): Promise<{ intro: Intro; mode: IntroPlan["mode"] }> {
+export async function holdIntro(rawCtx: ActionContext, input: IntroInput): Promise<string> {
   const { ctx, actor } = companyActor(rawCtx);
   const { db, company } = ctx;
-  let plan = await checkIntroRequest(ctx, input);
-  if (!plan.card) {
-    await addToPipeline(ctx, { candidate_id: input.candidate_id, role: plan.role ?? undefined, job_id: plan.jobId ?? undefined });
-    plan = await checkIntroRequest(ctx, input);
-  }
-  const card = plan.card;
-  if (!card) throw conflict();
-
-  const direct = plan.mode === "direct";
-  const introId = newId("int");
+  const heldId = newId("int");
   const at = sqlTime(ctx.now);
-  const token = direct ? null : randomToken();
-  const tokenHash = token ? await sha256Hex(token) : null;
-  const expiresAt = sqlTime(new Date(ctx.now.getTime() + INTRO_TTL_DAYS * DAY_MS));
   const cutoff = daysBefore(ctx.now, INTRO_COOLDOWN_DAYS);
-
-  // Ті самі правила, що в checkIntroRequest, у мить запису (відкрите знайомство ловить uq_intros_open).
   const v = visibleToSql(company.id);
+  // Правила видимості й кулдауну в мить запису (перевірка могла застаріти).
   const guards = [
     v.sql,
-    "EXISTS (SELECT 1 FROM pipeline gp WHERE gp.id = ? AND gp.stage = ?)",
     `NOT EXISTS (SELECT 1 FROM intros gd WHERE gd.company_id = ? AND gd.user_id = u.id AND gd.status = 'declined'
                    AND COALESCE(gd.responded_at, gd.updated_at) > ?)`,
     "(SELECT COUNT(*) FROM intros gc WHERE gc.company_id = ? AND gc.user_id = u.id AND gc.created_at > ?) < ?",
   ];
   const guardParams: (string | number)[] = [
     ...(v.params as (string | number)[]),
-    card.id,
-    card.stage,
     company.id,
     cutoff,
     company.id,
     cutoff,
     MAX_INTROS_PER_COOLDOWN,
   ];
+  try {
+    await db.batch([
+      db
+        .prepare(`DELETE FROM intros WHERE company_id = ? AND user_id = ? AND ${heldSql()} AND created_at < ?`)
+        .bind(company.id, input.candidate_id, holdCutoff(ctx.now)),
+      db
+        .prepare(
+          `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, requested_by_user_id,
+                               requested_by_key_id, x402_payment_id, respond_token_hash, expires_at, created_at, updated_at)
+           SELECT ?, ?, u.id, 'approval', 'pending', CASE WHEN ${guards.map((g) => `(${g})`).join(" AND ")} THEN ? END,
+                  ?, ?, ?, ?, NULL, ?, ?, ?
+             FROM (SELECT 1) AS one LEFT JOIN users u ON u.id = ?`,
+        )
+        .bind(
+          heldId,
+          company.id,
+          ...guardParams,
+          input.message.trim(),
+          ctx.channel,
+          actor.userId,
+          actor.keyId,
+          ctx.payment?.id ?? null,
+          sqlTime(new Date(ctx.now.getTime() + INTRO_TTL_DAYS * DAY_MS)),
+          at,
+          at,
+          input.candidate_id,
+        ),
+    ]);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      const open = await openIntroId(db, company.id, input.candidate_id);
+      throw new ActionError("intro_already_open", 409, "An intro to this candidate is already open. Wait for the answer or withdraw it.", {
+        ...(open ? { intro_id: open } : {}),
+      });
+    }
+    if (!isConstraintError(error)) throw error;
+    await checkIntroRequest(ctx, input);
+    throw conflict();
+  }
+  return heldId;
+}
+
+/** Зняти бронь (невдача після reserve). Живий запит не чіпає. */
+export async function releaseHold(db: D1Database, heldId: string): Promise<void> {
+  await db.prepare(`DELETE FROM intros WHERE id = ? AND ${heldSql()}`).bind(heldId).run();
+}
+
+async function introRowFor(db: D1Database, companyId: string, introId: string): Promise<IntroRow | null> {
+  return db
+    .prepare(`SELECT ${INTRO_COLUMNS} FROM intros WHERE id = ? AND company_id = ? AND ${LIVE()}`)
+    .bind(introId, companyId)
+    .first<IntroRow>();
+}
+
+/**
+ * Створити знайомство (обробник request_intro), після reserve (перевірки,
+ * квота, бронь) і після settle, якщо платить x402. Бронь з ctx.held стає живим
+ * запитом; без броні (виклик поза reserve) бере свою і знімає її при невдачі.
+ */
+export async function requestIntro(rawCtx: ActionContext, input: IntroInput): Promise<{ intro: Intro; mode: IntroPlan["mode"] }> {
+  const { ctx, actor } = companyActor(rawCtx);
+  let heldId = ctx.held ?? null;
+  const ownHold = !heldId;
+  if (!heldId) heldId = await holdIntro(ctx, input);
+  try {
+    return await activateIntro(ctx, actor, input, heldId);
+  } catch (error) {
+    if (ownHold) await releaseHold(ctx.db, heldId);
+    throw error;
+  }
+}
+
+async function activateIntro(
+  ctx: CompanyCtx,
+  actor: EventActor,
+  input: IntroInput,
+  heldId: string,
+): Promise<{ intro: Intro; mode: IntroPlan["mode"] }> {
+  const { db, company } = ctx;
+  let plan = await checkIntroRequest(ctx, input, { heldId });
+  if (!plan.card) {
+    await addToPipeline(ctx, { candidate_id: input.candidate_id, role: plan.role ?? undefined, job_id: plan.jobId ?? undefined });
+    plan = await checkIntroRequest(ctx, input, { heldId });
+  }
+  const card = plan.card;
+  if (!card) throw conflict();
+
+  const direct = plan.mode === "direct";
+  const at = sqlTime(ctx.now);
+  const token = direct ? null : randomToken();
+  const tokenHash = token ? await sha256Hex(token) : null;
+  const v = visibleToSql(company.id);
+  const guards = [
+    heldSql(),
+    `EXISTS (SELECT 1 FROM users u WHERE u.id = intros.user_id AND ${v.sql})`,
+    "EXISTS (SELECT 1 FROM pipeline gp WHERE gp.id = ? AND gp.stage = ?)",
+  ];
+  const guardParams: (string | number)[] = [...(v.params as (string | number)[]), card.id, card.stage];
   if (direct) {
     guards.push(
-      `u.contact_mode = 'direct' AND trim(COALESCE(u.telegram_username, '')) <> ''
-       AND EXISTS (SELECT 1 FROM consents gk WHERE gk.user_id = u.id AND gk.kind = 'contact' AND gk.granted = 1)`,
+      `EXISTS (SELECT 1 FROM users u WHERE u.id = intros.user_id AND u.contact_mode = 'direct'
+                 AND trim(COALESCE(u.telegram_username, '')) <> ''
+                 AND EXISTS (SELECT 1 FROM consents gk WHERE gk.user_id = u.id AND gk.kind = 'contact' AND gk.granted = 1))`,
     );
   }
-  const insert = db
+  // Нік для direct береться з users у мить запису, а не з раннього читання.
+  const handleSql = `(SELECT '@' || ltrim(trim(u.telegram_username), '@') FROM users u WHERE u.id = intros.user_id)`;
+  const activate = db
     .prepare(
-      `INSERT INTO intros (id, company_id, user_id, pipeline_id, job_id, role, mode, status, message, hiring_for,
-                           requested_via, requested_by_user_id, requested_by_key_id, x402_payment_id, respond_token_hash,
-                           expires_at, responded_at, contact_kind, contact_value, created_at, updated_at)
-       SELECT ?, ?, u.id, ?, ?, ?, ?, ?, CASE WHEN ${guards.map((g) => `(${g})`).join(" AND ")} THEN ? END, ?,
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-         FROM (SELECT 1) AS one LEFT JOIN users u ON u.id = ?`,
+      `UPDATE intros
+          SET status = CASE WHEN ${guards.map((g) => `(${g})`).join(" AND ")} THEN ? END,
+              pipeline_id = ?, job_id = ?, role = ?, mode = ?, message = ?, hiring_for = ?,
+              respond_token_hash = ?, responded_at = ?, contact_kind = ?,
+              contact_value = ${direct ? handleSql : "NULL"},
+              expires_at = ?, created_at = ?, updated_at = ?
+        WHERE id = ? AND company_id = ?`,
     )
     .bind(
-      introId,
-      company.id,
+      ...guardParams,
+      direct ? "direct" : "pending",
       card.id,
       plan.jobId,
       plan.role,
       plan.mode,
-      direct ? "direct" : "pending",
-      ...guardParams,
       plan.message,
       plan.hiringFor,
-      ctx.channel,
-      actor.userId,
-      actor.keyId,
-      ctx.payment?.id ?? null,
       tokenHash,
-      expiresAt,
       direct ? at : null,
       direct ? "telegram" : null,
-      direct ? plan.contactValue : null,
+      sqlTime(new Date(ctx.now.getTime() + INTRO_TTL_DAYS * DAY_MS)),
       at,
       at,
-      input.candidate_id,
+      heldId,
+      company.id,
     );
+  // Бронь могла зникнути (мертва бронь, видалення акаунта): тоді пакет не пише нічого.
+  const live = guardStatement(
+    db,
+    `EXISTS (SELECT 1 FROM intros WHERE id = ? AND status = ? AND ${LIVE()})`,
+    [heldId, direct ? "direct" : "pending"],
+  );
   const audit = auditStatement(ctx, {
     action: direct ? "contact.reveal" : "intro.request",
     target: input.candidate_id,
-    meta: {
-      intro_id: introId,
-      mode: plan.mode,
-      role: plan.role,
-      job_id: plan.jobId,
-      payment_id: ctx.payment?.id ?? null,
-    },
+    meta: { intro_id: heldId, mode: plan.mode, role: plan.role, job_id: plan.jobId, payment_id: ctx.payment?.id ?? null },
   });
 
   try {
-    await runIntroBatch(db, introId, [insert, audit], {
+    await runIntroBatch(db, [activate, live, audit], {
       companyId: company.id,
       candidateId: input.candidate_id,
       event: direct ? "contact_shared" : "intro_requested",
-      introId,
+      introId: heldId,
       now: ctx.now,
       actor,
       auditActor: auditActor(ctx.actor),
@@ -431,12 +656,12 @@ export async function requestIntro(rawCtx: ActionContext, input: IntroInput): Pr
   } catch (error) {
     if (!isConstraintError(error)) throw error;
     // Щось змінилось між перевіркою і записом: та сама перевірка назве що саме.
-    await checkIntroRequest(ctx, input);
+    await checkIntroRequest(ctx, input, { heldId });
     throw conflict();
   }
 
-  await notifyCandidate(db, introId, token, notifierFromEnv(ctx.env), ctx.now);
-  const row = await introRowFor(db, company.id, introId);
+  await notifyCandidate(db, heldId, token, companyNotifier(ctx), ctx.now);
+  const row = await introRowFor(db, company.id, heldId);
   if (!row) throw new ActionError("internal", 500, "Something went wrong on our side. Try again later.");
   return { intro: projectIntro(row), mode: plan.mode };
 }
@@ -458,6 +683,7 @@ export interface CandidateIntroRow {
   expires_at: string;
   respond_token_hash: string | null;
   company_name: string;
+  company_status: CompanyInfo["status"];
   company_domain: string | null;
   company_domain_verified: number;
   company_about: string | null;
@@ -468,12 +694,13 @@ export interface CandidateIntroRow {
   email: string | null;
 }
 
+/** Живе знайомство для кандидата (бронь не видно нікому). */
 export async function candidateIntroRow(db: D1Database, introId: string): Promise<CandidateIntroRow | null> {
   return db
     .prepare(
       `SELECT i.id, i.company_id, i.user_id, i.status, i.mode, i.message, i.hiring_for, i.role, i.job_id, i.expires_at,
               i.respond_token_hash,
-              c.name AS company_name, c.domain AS company_domain,
+              c.name AS company_name, c.status AS company_status, c.domain AS company_domain,
               (c.domain_verified_at IS NOT NULL) AS company_domain_verified, c.about AS company_about,
               j.title AS job_title,
               u.channel, u.telegram_id, u.telegram_username, u.email
@@ -481,7 +708,7 @@ export async function candidateIntroRow(db: D1Database, introId: string): Promis
          JOIN companies c ON c.id = i.company_id
          JOIN users u ON u.id = i.user_id
          LEFT JOIN company_jobs j ON j.id = i.job_id AND j.company_id = i.company_id
-        WHERE i.id = ?`,
+        WHERE i.id = ? AND ${LIVE("i")}`,
     )
     .bind(introId)
     .first<CandidateIntroRow>();
@@ -519,7 +746,9 @@ async function notifyCandidate(db: D1Database, introId: string, token: string | 
     const row = await candidateIntroRow(db, introId);
     if (!row) return;
     const message: OutgoingMessage =
-      row.status === "direct" ? directRevealMessage(row.company_name) : introRequestMessage(requestDetails(row), n.origin, token);
+      row.status === "direct"
+        ? directRevealMessage(row.company_name)
+        : introRequestMessage(requestDetails(row), n.origin, token, contactPreview(row));
     const res = await deliver(recipientOf(row), message, n);
     if (res.ok) channel = res.channel;
     else error = res.error;
@@ -598,7 +827,7 @@ export type IntroDecision = "accept" | "decline" | "block";
 export type RespondOutcome =
   | { kind: "accepted"; companyName: string; contactKind: "telegram" | "email" }
   | { kind: "declined"; companyName: string; blocked: boolean }
-  | { kind: "answered" | "expired" | "withdrawn" | "not_found" | "not_yours" | "no_contact" };
+  | { kind: "answered" | "expired" | "withdrawn" | "not_found" | "not_yours" | "no_contact" | "company_inactive" };
 
 /** Стан знайомства для кандидата. `revealed` = режим direct (відповідати нема на що). */
 export type CandidateIntroState = "pending" | "answered" | "expired" | "withdrawn" | "revealed";
@@ -624,6 +853,20 @@ export function outcomeForState(state: Exclude<CandidateIntroState, "pending">):
   return { kind: state === "revealed" ? "answered" : state };
 }
 
+/**
+ * Прострочене за часом, але ще pending: прострочити зараз (картка → found,
+ * повідомлення тому, хто просив, рівно раз).
+ */
+export async function expireIfDue(
+  db: D1Database,
+  row: { id: string; status: Intro["status"]; expires_at: string },
+  now: Date,
+  notifier: Notifier | null,
+): Promise<void> {
+  if (row.status !== "pending" || row.expires_at > sqlTime(now)) return;
+  if ((await expireIntro(db, row.id, now)) && notifier) await notifyRequester(db, row.id, "expired", notifier);
+}
+
 /** Текст відповіді кандидату (бот і сторінка). Простий текст. */
 export function answerText(outcome: RespondOutcome): string {
   switch (outcome.kind) {
@@ -641,6 +884,8 @@ export function answerText(outcome: RespondOutcome): string {
       return ANSWER_TEXT.noContact;
     case "not_yours":
       return ANSWER_TEXT.notYours;
+    case "company_inactive":
+      return ANSWER_TEXT.companyInactive;
     case "not_found":
       return ANSWER_TEXT.invalid;
   }
@@ -659,7 +904,8 @@ export interface RespondArgs {
 /**
  * Відповідь кандидата однією транзакцією. «Accept»: знімок контакту (Telegram-нік,
  * інакше пошта), картка → contact_shared, вебхук intro.accepted у чергу, потім
- * повідомлення тому, хто просив (без контакту). «Decline»: картка → declined
+ * повідомлення тому, хто просив (без контакту); компанія, що вже не активна
+ * (призупинена, закрита), контакт не отримує. «Decline»: картка → declined
  * (candidate). «Decline and block»: ще candidate_blocked = 1 і visibility_lost
  * у картці цієї компанії (інші компанії людину бачать далі).
  */
@@ -670,9 +916,13 @@ export async function respondToIntro(db: D1Database, args: RespondArgs): Promise
     if (!row) return { kind: "not_found" };
     if (row.user_id !== args.userId) return { kind: "not_yours" };
     const state = candidateState(row, now);
-    if (state !== "pending") return outcomeForState(state);
+    if (state !== "pending") {
+      await expireIfDue(db, row, now, args.notifier);
+      return outcomeForState(state);
+    }
 
     const accept = args.decision === "accept";
+    if (accept && row.company_status !== "active") return { kind: "company_inactive" };
     const contact = accept ? candidateContact(row) : null;
     if (accept && !contact) return { kind: "no_contact" };
 
@@ -682,7 +932,9 @@ export async function respondToIntro(db: D1Database, args: RespondArgs): Promise
     const update = db
       .prepare(
         `UPDATE intros
-            SET status = CASE WHEN status = 'pending' AND expires_at > ? THEN ? END,
+            SET status = CASE WHEN status = 'pending' AND expires_at > ?
+                               AND (? = 0 OR EXISTS (SELECT 1 FROM companies ca WHERE ca.id = intros.company_id AND ca.status = 'active'))
+                              THEN ? END,
                 responded_at = ?, updated_at = ?, respond_token_hash = NULL,
                 candidate_blocked = CASE WHEN ? = 1 THEN 1 ELSE candidate_blocked END,
                 contact_kind = ?, contact_value = ?,
@@ -691,6 +943,7 @@ export async function respondToIntro(db: D1Database, args: RespondArgs): Promise
       )
       .bind(
         at,
+        accept ? 1 : 0,
         accept ? "accepted" : "declined",
         at,
         at,
@@ -715,7 +968,6 @@ export async function respondToIntro(db: D1Database, args: RespondArgs): Promise
     try {
       await runIntroBatch(
         db,
-        row.id,
         [update, audit],
         {
           companyId: row.company_id,
@@ -740,6 +992,9 @@ export async function respondToIntro(db: D1Database, args: RespondArgs): Promise
     return { kind: "declined", companyName: row.company_name, blocked };
   }
   const row = await candidateIntroRow(db, args.introId);
+  if (row && args.decision === "accept" && row.company_status !== "active" && row.status === "pending") {
+    return { kind: "company_inactive" };
+  }
   const state = row ? candidateState(row, now) : null;
   if (state && state !== "pending") return outcomeForState(state);
   throw new ActionError("internal", 500, "Something went wrong on our side. Try again later.");
@@ -769,38 +1024,45 @@ export type CandidateIntroView =
       details: IntroRequestDetails;
       about: string | null;
       /** Що саме побачить компанія після «так». */
-      contact: { kind: "telegram" | "email"; shown: string } | null;
+      contact: ContactPreview;
+      /** Призупинена чи закрита компанія контакту не отримає. */
+      companyActive: boolean;
     };
 
 /**
- * Дані сторінки /intro/[id] (GET нічого не пише). Стан перевіряємо ДО токена:
- * після відповіді чи скасування токен у базі стерто, а людина має побачити
- * "This request was withdrawn.", а не «хибне посилання».
+ * Дані сторінки /intro/[id]. Живий запит GET не змінює. Стан перевіряємо ДО
+ * токена: після відповіді чи скасування токен у базі стерто, а людина має
+ * побачити "This request was withdrawn.", а не «хибне посилання». Запит після
+ * expires_at, який ще pending, простроченим робить саме це читання.
  */
 export async function loadIntroForCandidate(
   db: D1Database,
   introId: string,
-  opts: { token?: string | null; sessionUserId?: string | null; now?: Date },
+  opts: { token?: string | null; sessionUserId?: string | null; now?: Date; notifier?: Notifier | null },
 ): Promise<CandidateIntroView> {
+  const now = opts.now ?? new Date();
   const row = await candidateIntroRow(db, introId);
   if (!row) return { state: "invalid" };
-  const state = candidateState(row, opts.now ?? new Date());
+  const state = candidateState(row, now);
   if (state === "revealed") return { state: "invalid" };
-  if (state !== "pending") return { state };
+  if (state !== "pending") {
+    await expireIfDue(db, row, now, opts.notifier ?? null);
+    return { state };
+  }
   const auth = await authorizeCandidate(row, opts);
   if (!auth) return { state: "invalid" };
-  const contact = candidateContact(row);
   return {
     state: "pending",
     auth,
     details: requestDetails(row),
     about: row.company_about?.trim() || null,
-    contact: contact ? { kind: contact.kind, shown: contact.kind === "email" ? maskEmail(contact.value) : contact.value } : null,
+    contact: contactPreview(row),
+    companyActive: row.company_status === "active",
   };
 }
 
 // ---------------------------------------------------------------------------
-// Скасування, прострочення, читання
+// Скасування, читання
 
 const notFound = () => new ActionError("not_found", 404, "This intro was not found.");
 const notPending = () => new ActionError("intro_not_pending", 409, "This intro is no longer pending.");
@@ -809,6 +1071,7 @@ const notPending = () => new ActionError("intro_not_pending", 409, "This intro i
 export async function cancelIntro(rawCtx: ActionContext, input: { intro_id: string }): Promise<Intro> {
   const { ctx, actor } = companyActor(rawCtx);
   const { db, company } = ctx;
+  await expireDue(db, { companyId: company.id, introId: input.intro_id }, ctx.now, companyNotifier(ctx));
   for (let attempt = 0; attempt < 2; attempt++) {
     const row = await introRowFor(db, company.id, input.intro_id);
     if (!row) throw notFound();
@@ -822,7 +1085,7 @@ export async function cancelIntro(rawCtx: ActionContext, input: { intro_id: stri
       .bind(at, row.id, company.id);
     const audit = auditStatement(ctx, { action: "intro.cancel", target: row.user_id, meta: { intro_id: row.id } });
     try {
-      await runIntroBatch(db, row.id, [update, audit], {
+      await runIntroBatch(db, [update, audit], {
         companyId: company.id,
         candidateId: row.user_id,
         event: "intro_canceled",
@@ -842,47 +1105,10 @@ export async function cancelIntro(rawCtx: ActionContext, input: { intro_id: stri
   throw notPending();
 }
 
-/**
- * Прострочити одне знайомство (cron): expired, токен стерто, картка → found
- * (якщо досі intro_requested), вебхук intro.expired у чергу, журнал системи.
- * false, якщо його вже немає в pending (відповідь чи скасування встигли).
- */
-export async function expireIntro(db: D1Database, introId: string, now: Date): Promise<boolean> {
-  const row = await db
-    .prepare("SELECT company_id, user_id, status, expires_at FROM intros WHERE id = ?")
-    .bind(introId)
-    .first<{ company_id: string; user_id: string; status: string; expires_at: string }>();
-  const at = sqlTime(now);
-  if (!row || row.status !== "pending" || row.expires_at > at) return false;
-  const hook = webhookQueue("intro.expired", at);
-  const update = db
-    .prepare(
-      `UPDATE intros SET status = CASE WHEN status = 'pending' AND expires_at <= ? THEN 'expired' END,
-              respond_token_hash = NULL, updated_at = ?, ${hook.sql}
-        WHERE id = ?`,
-    )
-    .bind(at, at, ...hook.params, introId);
-  const audit = db
-    .prepare("INSERT INTO audit_log (actor, action, target, meta_json, at) VALUES (?, ?, ?, ?, ?)")
-    .bind(systemAuditActor(row.company_id), "intro.expire", row.user_id, JSON.stringify({ company_id: row.company_id, intro_id: introId }), at);
-  try {
-    await runIntroBatch(db, introId, [update, audit], {
-      companyId: row.company_id,
-      candidateId: row.user_id,
-      event: "intro_expired",
-      introId,
-      now,
-    });
-  } catch (error) {
-    if (!isConstraintError(error)) throw error;
-    return false;
-  }
-  return true;
-}
-
-/** Одне знайомство компанії (intro_status). Чуже → 404. */
+/** Одне знайомство компанії (intro_status). Чуже → 404. Прострочене за часом стає expired. */
 export async function getIntro(rawCtx: ActionContext, input: { intro_id: string }): Promise<Intro> {
   const { ctx } = companyActor(rawCtx);
+  await expireDue(ctx.db, { companyId: ctx.company.id, introId: input.intro_id }, ctx.now, companyNotifier(ctx));
   const row = await introRowFor(ctx.db, ctx.company.id, input.intro_id);
   if (!row) throw notFound();
   return projectIntro(row);
@@ -891,7 +1117,7 @@ export async function getIntro(rawCtx: ActionContext, input: { intro_id: string 
 /** Знайомство, оплачене цим платежем x402 (відповідь на ідемпотентний повтор). */
 export async function findIntroByPayment(db: D1Database, companyId: string, paymentId: string): Promise<Intro | null> {
   const row = await db
-    .prepare(`SELECT ${INTRO_COLUMNS} FROM intros WHERE company_id = ? AND x402_payment_id = ?`)
+    .prepare(`SELECT ${INTRO_COLUMNS} FROM intros WHERE company_id = ? AND x402_payment_id = ? AND ${LIVE()}`)
     .bind(companyId, paymentId)
     .first<IntroRow>();
   return row ? projectIntro(row) : null;
@@ -925,8 +1151,9 @@ export async function listIntros(
   input: { status?: Intro["status"]; updated_since?: string; cursor?: string; limit?: number },
 ): Promise<IntroList> {
   const { ctx } = companyActor(rawCtx);
+  await expireDue(ctx.db, { companyId: ctx.company.id }, ctx.now, companyNotifier(ctx));
   const limit = input.limit ?? 50;
-  const where = ["company_id = ?"];
+  const where = ["company_id = ?", LIVE()];
   const params: (string | number)[] = [ctx.company.id];
   if (input.status) {
     where.push("status = ?");

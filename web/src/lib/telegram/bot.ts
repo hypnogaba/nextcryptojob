@@ -52,6 +52,7 @@ export const BOT_TEXT = {
     `Daily jobs are paused. Send /start to resume, or change it in ${named(origin, "/settings", "Settings")}.`,
   unknown: () => "I understand /start, /help and /stop.",
   unknownAction: "Unknown action",
+  introFailed: "Something went wrong. Try again from the link in the message.",
 } as const;
 
 /** Команда з тексту: "/start", "/Start@nextcryptojob_bot payload" → "start". */
@@ -136,7 +137,14 @@ export async function handleCallbackQuery(query: TgCallbackQuery, ctx: BotContex
     case "ia":
     case "id":
     case "ib": {
-      const r = await handleIntroCallback(query, ctx);
+      // Кнопку треба відповісти завжди, інакше Telegram крутить годинник на ній.
+      let r: { answer: string; reply: string | null };
+      try {
+        r = await handleIntroCallback(query, ctx);
+      } catch (err) {
+        console.error(`telegram intro button failed: ${err instanceof Error ? err.message : String(err)}`);
+        r = { answer: BOT_TEXT.introFailed, reply: null };
+      }
       await answerCallbackQuery(ctx.token, query.id, r.answer, ctx.deps);
       if (r.reply) await sendMessage(ctx.token, query.from.id, r.reply, {}, ctx.deps);
       break;
