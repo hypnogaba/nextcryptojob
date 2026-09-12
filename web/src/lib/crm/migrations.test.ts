@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { migratedD1 } from "@/test/sqlite-d1";
+import { APPLIED_MIGRATIONS, migratedD1 } from "@/test/sqlite-d1";
 import { addCompany, addSubscription, ALL_MIGRATIONS, all, crmDb, run } from "@/test/crm-fixtures";
 
 const sql = (name: string) => readFileSync(new URL(`../../../../db/migrations/${name}`, import.meta.url), "utf8");
@@ -8,7 +8,9 @@ const sql = (name: string) => readFileSync(new URL(`../../../../db/migrations/${
 describe("migrations 0003_crm and 0004_billing", () => {
   it("apply after the migrations production already has, and leave those tables alone", () => {
     // Порядок продакшену: 0001, 0002, 0005, 0008, 0009 уже є; 0003 і 0004 накочуємо зараз.
-    const { raw } = migratedD1(["0001_core.sql", "0002_auth.sql", "0005_cards.sql", "0008_sources_v5.sql", "0009_users_email_lower.sql"]);
+    const before0003 = APPLIED_MIGRATIONS.slice(0, APPLIED_MIGRATIONS.indexOf("0003_crm.sql"));
+    expect(APPLIED_MIGRATIONS.slice(before0003.length)).toEqual(["0003_crm.sql", "0004_billing.sql"]);
+    const { raw } = migratedD1(before0003);
     run(raw, "INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
     run(raw, "INSERT INTO identities (user_id, kind, value) VALUES ('u1', 'sherlock', 'ada')");
     run(raw, "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES ('abcdefghij', 'u1', 'engineer', 70, 8, 'Ada', 'v5')");

@@ -330,7 +330,10 @@ export function breakdownOf(row: ScoreRow): ScoreBreakdown {
   }
   const relevant = new Set([...core, ...bonus].flatMap((part) => FACTS_OF_SOURCE[part.source]));
   const gaps: ScoreBreakdown["gaps"] = [];
-  for (const [source] of entries(b.gaps)) {
+  for (const [key] of entries(b.gaps)) {
+    // Відомий ключ як є (evm.base); інакше лише джерело до крапки. Часткова прогалина гаманця
+    // має в ключі початок адреси (contracts §3: solana.BGjMfx5B), і він назовні не йде.
+    const source = Object.hasOwn(GAP_NAMES, key) ? key : key.split(".")[0];
     const name = Object.hasOwn(GAP_NAMES, source) ? GAP_NAMES[source] : undefined;
     if (name && relevant.has(source.split(".")[0]) && !gaps.some((g) => g.source === source)) {
       gaps.push({ source, label: `${name} data unavailable right now` });

@@ -54,7 +54,9 @@ function leakyCandidate(n = 0): string {
   const email = `alice${n}@example.org`;
   const yt = `UCabcdefghijklmnopqrstu${n}`;
   const site = `https://alice${n}.dev`;
-  for (const v of [WALLET, WALLET.toLowerCase(), sol, handle, `@${handle}`, email, `t.me/${handle}`, yt, site]) LEAKS.add(v);
+  for (const v of [WALLET, WALLET.toLowerCase(), sol, sol.slice(0, 8), handle, `@${handle}`, email, `t.me/${handle}`, yt, site]) {
+    LEAKS.add(v);
+  }
 
   const id = addUser(db.raw, {
     email,
@@ -76,7 +78,13 @@ function leakyCandidate(n = 0): string {
       cover: 100,
       level: 8,
       reason: `path:gh_eng+x ${email}`,
-      gaps: { solana: "not configured: HELIUS_KEY", [`evm:${WALLET}`]: "timeout", [`@${handle}`]: "x" },
+      gaps: {
+        solana: "not configured: HELIUS_KEY",
+        [`evm:${WALLET}`]: "timeout",
+        [`@${handle}`]: "x",
+        [`solana.${sol.slice(0, 8)}`]: `partial: ${sol.slice(0, 8)}: timeout`,
+        [`evm.${WALLET.slice(0, 8)}`]: "partial",
+      },
       extra: { email },
     },
   });
@@ -171,7 +179,10 @@ describe("anonymous projection never leaks personal data", () => {
       { source: "gh_eng", label: "Open-source engineering (GitHub)", weight: 80, value: 70 },
       { source: "x", label: "Reach and engagement on X", weight: 20, value: 60 },
     ]);
-    expect(engineer.breakdown?.gaps).toEqual([{ source: "solana", label: "Solana data unavailable right now" }]);
+    expect(engineer.breakdown?.gaps).toEqual([
+      { source: "solana", label: "Solana data unavailable right now" },
+      { source: "evm", label: "EVM wallet data unavailable right now" },
+    ]);
     expect(profile.roles_detailed.find((r) => r.role === "security_auditor")).toMatchObject({
       unscored_reason: "missing_anchor",
     });
@@ -312,5 +323,22 @@ describe("projection rules", () => {
       }),
     });
     expect(trader.gaps).toEqual([{ source: "evm.base", label: "Base data unavailable right now" }]);
+
+    // Часткова прогалина гаманця (contracts §3) несе початок адреси: назовні лише назва джерела.
+    const partial = breakdownOf({
+      ...row,
+      role: "trader",
+      breakdown_json: JSON.stringify({
+        core: { trading: { weight: 80, value: 40 } },
+        bonus: {},
+        gaps: { "solana.BGjMfx5B": "partial: BGjMfx5B: timeout", "evm.0xAbCdEf": "partial", "hyperliquid.0x12345678": "x" },
+      }),
+    });
+    expect(partial.gaps).toEqual([
+      { source: "solana", label: "Solana data unavailable right now" },
+      { source: "evm", label: "EVM wallet data unavailable right now" },
+      { source: "hyperliquid", label: "Hyperliquid data unavailable right now" },
+    ]);
+    expect(JSON.stringify(partial)).not.toMatch(/BGjMfx5B|0xAbCdEf|0x12345678/);
   });
 });
