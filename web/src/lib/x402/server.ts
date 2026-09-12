@@ -13,6 +13,7 @@ import {
 } from "@x402/core/types";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
+import { newId } from "@/lib/ids";
 import { PRICES, type PaidAction, type X402Config } from "./config";
 import { createFacilitatorClient } from "./facilitator";
 
@@ -292,18 +293,9 @@ function evmAuthorizationKey(payload: PaymentPayload): { from: string; nonce: st
 // ---------------------------------------------------------------------------
 // Дрібні помічники
 
-const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-/** 'pay_' + 20 символів base62 з crypto.getRandomValues (специфікація 3.5). */
+/** 'pay_' + 20 символів base62 (специфікація 3.5); спільний генератор у lib/ids.ts. */
 export function newPaymentId(): string {
-  let out = "pay_";
-  while (out.length < 24) {
-    for (const byte of crypto.getRandomValues(new Uint8Array(32))) {
-      // 248 = 4·62: відкидаємо хвіст, щоб усі символи були рівноймовірні.
-      if (byte < 248 && out.length < 24) out += BASE62[byte % 62];
-    }
-  }
-  return out;
+  return newId("pay");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

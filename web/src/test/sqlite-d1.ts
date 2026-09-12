@@ -15,6 +15,9 @@ export const APPLIED_MIGRATIONS = [
   "0008_sources_v5.sql",
   "0009_users_email_lower.sql",
   "0010_score_jobs_user.sql",
+  // Накочено 2026-09-12 доріжкою CRM (T1), після 0010.
+  "0003_crm.sql",
+  "0004_billing.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sqlTime } from "./time";
+import { fromSqlTime, isoTime, sqlTime, startOfUtcDay, startOfUtcMonth } from "./time";
 
 describe("sqlTime", () => {
   it("writes UTC in the SQLite datetime format", () => {
@@ -30,5 +30,27 @@ describe("sqlTime", () => {
     const expiredIso = new Date("2026-09-12T09:00:00Z").toISOString();
     expect(expiredIso > now).toBe(true);
     expect(sqlTime(new Date(expiredIso)) > now).toBe(false);
+  });
+});
+
+describe("isoTime", () => {
+  it("turns a SQLite UTC time into ISO 8601 with Z, and back", () => {
+    expect(isoTime("2026-09-12 10:15:00")).toBe("2026-09-12T10:15:00Z");
+    expect(sqlTime(fromSqlTime("2026-09-12 10:15:00"))).toBe("2026-09-12 10:15:00");
+    expect(isoTime(null)).toBeNull();
+  });
+
+  it("refuses strings that are not SQLite times instead of guessing", () => {
+    expect(() => isoTime("2026-09-12T10:15:00Z")).toThrow();
+    expect(() => isoTime("yesterday")).toThrow();
+  });
+});
+
+describe("UTC day and month starts", () => {
+  it("cut at 00:00 UTC whatever the local zone", () => {
+    const t = new Date("2026-09-12T23:59:59+05:00"); // 18:59:59 UTC
+    expect(startOfUtcDay(t).toISOString()).toBe("2026-09-12T00:00:00.000Z");
+    expect(startOfUtcDay(new Date("2026-09-13T00:00:00Z")).toISOString()).toBe("2026-09-13T00:00:00.000Z");
+    expect(startOfUtcMonth(t).toISOString()).toBe("2026-09-01T00:00:00.000Z");
   });
 });

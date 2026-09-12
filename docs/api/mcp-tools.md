@@ -64,6 +64,8 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
   Кожен інструмент оголошує `outputSchema` (посилання нижче ведуть у `openapi.yaml#/components/schemas/…`).
 - Помилка дії: `isError: true`, `structuredContent = { "error": { "code", "message", "request_id", "details"? } }`,
   коди ті самі, що в REST (`openapi.yaml#/components/schemas/Error`). Невалідний вхід: помилка протоколу `-32602`.
+  Інструмент, дію якого ще не запущено, відповідає `not_implemented` (REST 501) раніше за будь-яку вимогу оплати.
+  Код `forbidden` (роль команди не має права) буває лише в інтерфейсі: ключ діє від імені компанії.
 - Квоти й ліміти ті самі, що в REST (специфікація, розділ 9). Замість заголовків `RateLimit-*` результат
   має `_meta["ncj/quota"] = { "limit", "remaining", "reset_seconds" }`.
 - Кожна дія над кандидатом пишеться в `audit_log` з `channel = 'mcp'`.
@@ -238,6 +240,10 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 ## 5. Перевірка паритету (тест)
 
 `web/src/lib/crm/actions.test.ts` проходить реєстр дій і перевіряє:
-1. кожна дія має `rest` (метод + шлях) і `mcp` (назва) і збігається з `x-mcp-tool` в `openapi.yaml`;
-2. `z.toJSONSchema(input)` дорівнює злитим параметрам і тілу операції REST;
-3. ціна в реєстрі дорівнює `x-x402-price-usd`.
+1. кожна дія має `rest` (метод + шлях) і `mcp` (назва) і збігається з `x-mcp-tool` в `openapi.yaml` і з таблицями розділу 4;
+2. `z.toJSONSchema(input)` дорівнює злитим параметрам і тілу операції REST за смислом: типи, переліки, межі
+   (min/max, довжини, кількість елементів), формати, шаблони, обов'язковість, вкладені об'єкти, закритість;
+3. `z.toJSONSchema(output)` так само дорівнює схемі успішної відповіді REST;
+4. JSON-схеми розділу 4 (`$defs`, `search_candidates`, `get_candidate`, `request_intro`, `search_jobs`) дорівнюють входу з реєстру;
+5. ціна в реєстрі дорівнює `x-x402-price-usd`; анотації дорівнюють розділу 3.
+Не порівнюються лише `uniqueItems` і `minProperties`: у zod це перевірки коду (refine), їх ловлять поведінкові тести.
