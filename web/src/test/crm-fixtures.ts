@@ -268,6 +268,6 @@ export async function contextFor(
 ): Promise<ActionContext> {
   return resolveActor(
     { db: db.d1, env: o.env ?? TEST_ENV, now: o.now, requestId: "req_test" },
-    { channel: "rest", ...request },
+    { ...request, channel: request.channel ?? (request.sessionUserId ? "web" : "rest") },
   );
 }

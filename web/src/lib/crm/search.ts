@@ -2,6 +2,7 @@ import type { ActionContext } from "./context";
 import { deriveChains, loadCandidates, onchainYears, projectSummary, type FactRow } from "./project";
 import {
   ActionError,
+  FORMULA_VERSION,
   type EmptyReason,
   type SearchFilters,
   type SearchRequest,
@@ -13,16 +14,20 @@ import { visibleToSql, type SqlFragment } from "./visibility";
 /**
  * Пошук кандидатів (специфікація CRM, 5.2).
  *
- * - Лише видимі (visibility.ts) і лише з обраною роллю; бал показуємо, коли
- *   версія формули пройшла ворота якості.
+ * - Лише видимі (visibility.ts: прапор, згода, хоч одна відома роль) і лише з
+ *   обраною роллю; бал показуємо, коли версія формули пройшла ворота якості.
  * - Сортування за спаданням ключа, далі users.id за зростанням. Непораховані
  *   завжди після порахованих (ключ -1): відсутнє значення не випереджає справжнє.
- * - Мережі й роки ончейн у breakdown_json поки немає, тож це пост-фільтр у TS
- *   по пачках з 200 рядків, доки не набрано limit + 1 або переглянуто 2 000.
- * - Курсор: base64url(JSON) + HMAC (ключ з SESSION_SECRET через HKDF, мітка
- *   "cursor"), прив'язаний до хешу фільтрів. Сторінка 20, не більше 10 сторінок:
- *   на 10-й next_cursor = null і page_cap_reached = true, курсор 11-ї сторінки → 409.
- * - Порожня перша сторінка завжди має empty_reason.
+ * - Мережі, роки ончейн і місто не латиницею перевіряє TS (пост-фільтр) по
+ *   пачках з 200 рядків, доки не набрано limit + 1 або переглянуто 2 000.
+ * - Курсор зашифровано AES-GCM (ключ з SESSION_SECRET через HKDF, мітка
+ *   "cursor-enc", випадковий IV): клієнт не бачить ні балів, ні id, а змінений
+ *   курсор не розшифровується. Позиція в курсорі це завжди рядок, який ми вже
+ *   віддали (якір), плюс скільки невідповідних рядків після нього переглянуто:
+ *   id і бал того, хто фільтрам не підійшов, у курсор не потрапляють.
+ * - Сторінка до 20, не більше 10 сторінок: на 10-й next_cursor = null і
+ *   page_cap_reached = true, курсор 11-ї сторінки → 409 page_cap_reached.
+ * - Порожня перша сторінка без продовження завжди має empty_reason.
  */
 
 export const PAGE_SIZE = 20;
@@ -50,11 +55,20 @@ interface Position {
   id: string;
 }
 
-interface CursorPayload extends Position {
-  v: 1;
+interface Row extends Position {
+  city: string | null;
+}
+
+/** Вміст курсора (лише всередині шифру). */
+interface CursorPayload {
+  v: 2;
   sort: Sort;
-  page: number;
   fh: string;
+  page: number;
+  /** Останній відданий рядок (null = від початку). */
+  a: Position | null;
+  /** Скільки рядків після якоря переглянуто без збігу. */
+  skip: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +92,7 @@ function b64url(bytes: Uint8Array): string {
 }
 
 function fromB64url(text: string): Uint8Array<ArrayBuffer> | null {
-  if (!/^[A-Za-z0-9_-]*$/.test(text)) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(text)) return null;
   try {
     const bin = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
     return Uint8Array.from(bin, (c) => c.charCodeAt(0));
@@ -90,11 +104,11 @@ function fromB64url(text: string): Uint8Array<ArrayBuffer> | null {
 async function cursorKey(secret: string): Promise<CryptoKey> {
   const base = await crypto.subtle.importKey("raw", encoder.encode(secret), "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: encoder.encode("cursor") },
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: encoder.encode("cursor-enc") },
     base,
-    { name: "HMAC", hash: "SHA-256", length: 256 },
+    { name: "AES-GCM", length: 256 },
     false,
-    ["sign", "verify"],
+    ["encrypt", "decrypt"],
   );
 }
 
@@ -103,10 +117,16 @@ export async function filtersHash(filters: SearchFilters, sort: Sort): Promise<s
   return b64url(new Uint8Array(digest)).slice(0, 22);
 }
 
-export async function signCursor(payload: CursorPayload, secret: string): Promise<string> {
-  const body = b64url(encoder.encode(JSON.stringify(payload)));
-  const sig = await crypto.subtle.sign("HMAC", await cursorKey(secret), encoder.encode(body));
-  return `${body}.${b64url(new Uint8Array(sig))}`;
+const IV_BYTES = 12;
+
+/** base64url(IV ‖ шифр AES-GCM з тегом). */
+export async function sealCursor(payload: CursorPayload, secret: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const sealed = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await cursorKey(secret), encoder.encode(JSON.stringify(payload)));
+  const out = new Uint8Array(IV_BYTES + sealed.byteLength);
+  out.set(iv);
+  out.set(new Uint8Array(sealed), IV_BYTES);
+  return b64url(out);
 }
 
 const INVALID_CURSOR = () =>
@@ -114,20 +134,22 @@ const INVALID_CURSOR = () =>
     fields: { cursor: "Invalid or changed search." },
   });
 
-async function readCursor(cursor: string, secret: string, sort: Sort, fh: string): Promise<CursorPayload> {
-  const [body, sig, extra] = cursor.split(".");
-  const bodyBytes = body ? fromB64url(body) : null;
-  const sigBytes = sig ? fromB64url(sig) : null;
-  if (extra !== undefined || !bodyBytes || !sigBytes) throw INVALID_CURSOR();
-  const ok = await crypto.subtle.verify("HMAC", await cursorKey(secret), sigBytes, encoder.encode(body));
-  if (!ok) throw INVALID_CURSOR();
+export async function openCursor(cursor: string, secret: string, sort: Sort, fh: string): Promise<CursorPayload> {
+  const bytes = fromB64url(cursor);
+  if (!bytes || bytes.length <= IV_BYTES + 16) throw INVALID_CURSOR();
   let p: CursorPayload;
   try {
-    p = JSON.parse(new TextDecoder().decode(bodyBytes));
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: bytes.slice(0, IV_BYTES) },
+      await cursorKey(secret),
+      bytes.slice(IV_BYTES),
+    );
+    p = JSON.parse(new TextDecoder().decode(plain));
   } catch {
     throw INVALID_CURSOR();
   }
-  if (p.v !== 1 || p.sort !== sort || p.fh !== fh || typeof p.k !== "number" || typeof p.id !== "string") {
+  const anchorOk = p.a === null || (typeof p.a === "object" && typeof p.a.k === "number" && typeof p.a.id === "string");
+  if (p.v !== 2 || p.sort !== sort || p.fh !== fh || !anchorOk || !Number.isInteger(p.skip) || p.skip < 0) {
     throw INVALID_CURSOR();
   }
   if (!Number.isInteger(p.page) || p.page < 2) throw INVALID_CURSOR();
@@ -137,7 +159,17 @@ async function readCursor(cursor: string, secret: string, sort: Sort, fh: string
 // ---------------------------------------------------------------------------
 // SQL
 
-/** FROM і WHERE вибірки: видимість, обрана роль, фільтри, що йдуть у SQL. */
+const ASCII = /^[\x20-\x7e]*$/;
+
+/** Місто для порівняння: NFKC, без зайвих пробілів, нижній регістр для будь-якої абетки. */
+export function normalizeCity(city: string): string {
+  return city.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * FROM і WHERE вибірки: видимість, обрана роль, фільтри, що йдуть у SQL.
+ * lower() у SQLite знає лише латиницю, тож місто не латиницею звіряє TS (пост-фільтр).
+ */
 function baseQuery(companyId: string | null, filters: SearchFilters): SqlFragment {
   const params: (string | number | null)[] = [];
   const where: string[] = [];
@@ -160,7 +192,6 @@ function baseQuery(companyId: string | null, filters: SearchFilters): SqlFragmen
          AND s2.score IS NOT NULL
          AND EXISTS (SELECT 1 FROM quality_runs q2 WHERE q2.formula_version = s2.formula_version AND q2.passed = 1)
        ORDER BY s2.score DESC, s2.role LIMIT 1)`;
-    where.push(`CASE WHEN json_valid(u.roles) THEN json_array_length(u.roles) > 0 ELSE 0 END`);
   }
 
   const visible = visibleToSql(companyId);
@@ -194,9 +225,12 @@ function baseQuery(companyId: string | null, filters: SearchFilters): SqlFragmen
   if (filters.work_mode === "remote") {
     where.push(`(',' || replace(COALESCE(u.remote_mode, ''), ' ', '') || ',') LIKE '%,remote,%'`);
   } else if (filters.work_mode === "city") {
-    where.push(`(',' || replace(COALESCE(u.remote_mode, ''), ' ', '') || ',') LIKE '%,city,%'
-                AND lower(trim(u.city)) = lower(trim(?))`);
-    params.push(filters.city ?? "");
+    where.push(`(',' || replace(COALESCE(u.remote_mode, ''), ' ', '') || ',') LIKE '%,city,%' AND u.city IS NOT NULL`);
+    const city = (filters.city ?? "").trim();
+    if (ASCII.test(city)) {
+      where.push(`lower(trim(u.city)) = lower(?)`);
+      params.push(city);
+    }
   }
   if (filters.contact_direct) {
     where.push(`u.contact_mode = 'direct' AND u.telegram_username IS NOT NULL AND trim(u.telegram_username) <> ''
@@ -215,17 +249,18 @@ async function fetchBatch(
   base: SqlFragment,
   sort: Sort,
   after: Position | null,
+  offset: number,
   size: number,
-): Promise<Position[]> {
+): Promise<Row[]> {
   const keyset = after ? `WHERE (k < ? OR (k = ? AND id > ?))` : "";
   const res = await db
     .prepare(
-      `SELECT id, k FROM (SELECT u.id AS id, ${SORT_KEYS[sort]} AS k ${base.sql})
+      `SELECT id, k, city FROM (SELECT u.id AS id, u.city AS city, ${SORT_KEYS[sort]} AS k ${base.sql})
         ${keyset}
-        ORDER BY k DESC, id ASC LIMIT ${size}`,
+        ORDER BY k DESC, id ASC LIMIT ? OFFSET ?`,
     )
-    .bind(...base.params, ...(after ? [after.k, after.k, after.id] : []))
-    .all<Position>();
+    .bind(...base.params, ...(after ? [after.k, after.k, after.id] : []), size, offset)
+    .all<Row>();
   return res.results;
 }
 
@@ -246,7 +281,10 @@ function hasScoreFilter(f: SearchFilters): boolean {
   return f.min_score !== undefined || f.min_level !== undefined || f.max_level !== undefined || f.min_coverage !== undefined;
 }
 
-/** Чому порожньо (лише для порожньої першої сторінки). */
+/**
+ * Чому порожньо (лише для порожньої першої сторінки без продовження).
+ * Чинна формула = FORMULA_VERSION з договору (contracts §4), без перегляду scores.
+ */
 async function emptyReason(
   db: D1Database,
   companyId: string | null,
@@ -256,10 +294,9 @@ async function emptyReason(
   const row = await db
     .prepare(
       `SELECT (SELECT COUNT(*) ${scope.sql}) AS visible,
-              EXISTS (SELECT 1 FROM quality_runs q WHERE q.passed = 1 AND q.formula_version =
-                        (SELECT formula_version FROM scores ORDER BY computed_at DESC LIMIT 1)) AS published`,
+              EXISTS (SELECT 1 FROM quality_runs q WHERE q.formula_version = ? AND q.passed = 1) AS published`,
     )
-    .bind(...scope.params)
+    .bind(...scope.params, FORMULA_VERSION)
     .first<{ visible: number; published: number }>();
   const visible = row?.visible ?? 0;
   if (visible === 0) return { reason: "no_visible_candidates_for_role", roleVisibleCount: 0 };
@@ -284,11 +321,13 @@ export async function searchCandidates(
   const fh = await filtersHash(filters, sort);
 
   let page = 1;
-  let after: Position | null = null;
+  let anchor: Position | null = null;
+  let skip = 0;
   if (input.cursor) {
-    const c = await readCursor(input.cursor, secret, sort, fh);
+    const c = await openCursor(input.cursor, secret, sort, fh);
     page = c.page;
-    after = { k: c.k, id: c.id };
+    anchor = c.a;
+    skip = c.skip;
   }
   if (page > MAX_PAGES) {
     throw new ActionError(
@@ -300,41 +339,57 @@ export async function searchCandidates(
   }
 
   const base = baseQuery(companyId, filters);
-  const postFilter = (filters.chains?.length ?? 0) > 0 || filters.min_onchain_years !== undefined;
-  const matched: Position[] = [];
+  const cityPost = filters.work_mode === "city" && !ASCII.test((filters.city ?? "").trim());
+  const wantCity = cityPost ? normalizeCity(filters.city ?? "") : null;
+  const chainPost = (filters.chains?.length ?? 0) > 0 || filters.min_onchain_years !== undefined;
+  const postFilter = chainPost || cityPost;
+
+  const data: Position[] = [];
   let scanned = 0;
-  let last: Position | null = after;
+  let lastScanned: Position | null = null;
+  let hasMore = false;
   let exhausted = false;
 
-  while (matched.length <= limit && scanned < MAX_SCANNED) {
+  while (!hasMore && scanned < MAX_SCANNED) {
     // Без пост-фільтра досить limit + 1 рядків; з ним беремо пачку з запасом.
     const size = postFilter ? BATCH : limit + 1;
-    const rows = await fetchBatch(ctx.db, base, sort, last, size);
-    const facts = postFilter && rows.length ? await chainFacts(ctx.db, rows.map((r) => r.id)) : null;
+    // Перша пачка: від якоря курсора з пропуском; далі від останнього переглянутого (лише тут, не в курсорі).
+    const rows: Row[] = lastScanned
+      ? await fetchBatch(ctx.db, base, sort, lastScanned, 0, size)
+      : await fetchBatch(ctx.db, base, sort, anchor, skip, size);
+    const facts = chainPost && rows.length ? await chainFacts(ctx.db, rows.map((r) => r.id)) : null;
     for (const row of rows) {
       scanned++;
-      last = row;
-      if (facts && !passesChainFilters(facts.get(row.id) ?? [], filters, ctx.now)) continue;
-      matched.push(row);
-      if (matched.length > limit) break;
+      lastScanned = row;
+      const passes =
+        (!facts || passesChainFilters(facts.get(row.id) ?? [], filters, ctx.now)) &&
+        (wantCity === null || (row.city !== null && normalizeCity(row.city) === wantCity));
+      if (!passes) {
+        skip++;
+        continue;
+      }
+      if (data.length === limit) {
+        hasMore = true; // збіг limit + 1: сторінка повна, продовжимо з останнього відданого
+        break;
+      }
+      data.push({ k: row.k, id: row.id });
+      anchor = { k: row.k, id: row.id };
+      skip = 0;
     }
-    if (matched.length > limit) break;
+    if (hasMore) break;
     if (rows.length < size) {
       exhausted = true;
       break;
     }
   }
 
-  const data = matched.slice(0, limit);
-  let nextPos: Position | null = null;
-  if (matched.length > limit) nextPos = data[data.length - 1];
-  else if (!exhausted && last) nextPos = last; // переглянули 2 000 рядків: продовжимо з того ж місця
-
+  // Продовження: сторінка повна, або переглянули 2 000 рядків і далі ще щось є.
+  const more = hasMore || !exhausted;
   let nextCursor: string | null = null;
   let capReached = false;
-  if (nextPos) {
+  if (more) {
     if (page >= MAX_PAGES) capReached = true;
-    else nextCursor = await signCursor({ v: 1, sort, k: nextPos.k, id: nextPos.id, page: page + 1, fh }, secret);
+    else nextCursor = await sealCursor({ v: 2, sort, fh, page: page + 1, a: anchor, skip }, secret);
   }
 
   const rows = await loadCandidates(ctx.db, data.map((d) => d.id), companyId);
@@ -344,7 +399,9 @@ export async function searchCandidates(
   });
 
   let empty: { reason: EmptyReason; roleVisibleCount: number } | null = null;
-  if (summaries.length === 0 && page === 1) empty = await emptyReason(ctx.db, companyId, filters);
+  if (summaries.length === 0 && page === 1 && nextCursor === null) {
+    empty = await emptyReason(ctx.db, companyId, filters);
+  }
 
   return {
     data: summaries,

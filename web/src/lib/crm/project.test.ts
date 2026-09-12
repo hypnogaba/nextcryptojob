@@ -266,7 +266,7 @@ describe("projection rules", () => {
     }
   });
 
-  it("breakdown shows source scores and generic gap labels, never internal reasons or unknown keys", () => {
+  it("breakdown shows source scores and generic gap labels of this role's sources only, never internal reasons", () => {
     const row: ScoreRow = {
       user_id: "u",
       role: "security_auditor",
@@ -278,7 +278,13 @@ describe("projection rules", () => {
       breakdown_json: JSON.stringify({
         core: { audits: { weight: 60, value: 88.6 }, gh_eng: { weight: 25, value: null }, nonsense: { weight: 1, value: 1 } },
         bonus: { site: { max: 5, value: 12.4 } },
-        gaps: { "evm.base": "HTTP 500 from blockscout", github: "not configured: GITHUB_TOKEN", "dune:x": "?" },
+        gaps: {
+          "evm.base": "HTTP 500 from blockscout", // живить onchain, якого в цій ролі немає
+          github: "not configured: GITHUB_TOKEN",
+          youtube: "quota", // не входить у бал аудитора
+          site: "timeout",
+          "dune:x": "?",
+        },
         reason: "path:audits",
       }),
     };
@@ -289,11 +295,22 @@ describe("projection rules", () => {
       ],
       bonus: [{ source: "site", label: "Personal site or blog", max: 5, value: 12 }],
       gaps: [
-        { source: "evm.base", label: "Base data unavailable right now" },
         { source: "github", label: "GitHub data unavailable right now" },
+        { source: "site", label: "Site data unavailable right now" },
       ],
       formula_version: "v5",
       updated_at: "2026-09-12T09:00:00Z",
     });
+    // Той самий збій EVM видно в ролі, де є onchain.
+    const trader = breakdownOf({
+      ...row,
+      role: "trader",
+      breakdown_json: JSON.stringify({
+        core: { trading: { weight: 80, value: 40 }, onchain: { weight: 20, value: 50 } },
+        bonus: { x: { max: 5, value: 1 } },
+        gaps: { "evm.base": "HTTP 500", youtube: "quota" },
+      }),
+    });
+    expect(trader.gaps).toEqual([{ source: "evm.base", label: "Base data unavailable right now" }]);
   });
 });

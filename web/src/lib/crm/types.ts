@@ -9,15 +9,14 @@ import { ROLES, type RoleKey as RoleKeyType } from "@/lib/card/roles";
  * Вхідні схеми суворі (additionalProperties: false в openapi): зайве поле це
  * помилка клієнта, а не тихе ігнорування. Вихідні не суворі: поля лише додаємо.
  *
- * Відхилення від openapi.yaml (див. звіт T1–T3):
- * - SourceKey має ще `audits` і `dune` (формула v5, contracts §4);
- * - Account.key може бути null: член команди в інтерфейсі діє без ключа.
+ * Тест actions.test.ts звіряє ці схеми з openapi.yaml і mcp-tools.md за типами,
+ * переліченнями й межами (z.toJSONSchema проти розгорнутих схем договору).
  */
 
 // ---------------------------------------------------------------------------
 // Помилки
 
-/** Коди з openapi.yaml#/components/schemas/Error, плюс `forbidden` (лише інтерфейс, див. permissions.ts). */
+/** Коди з openapi.yaml#/components/schemas/Error (`forbidden` бачить лише інтерфейс, див. permissions.ts). */
 export const ERROR_CODES = [
   "unauthorized",
   "invalid_api_key",
@@ -43,6 +42,7 @@ export const ERROR_CODES = [
   "validation_failed",
   "not_configured",
   "internal",
+  "not_implemented",
   "forbidden",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -89,6 +89,12 @@ export function validationError(error: z.ZodError): ActionError {
 
 // ---------------------------------------------------------------------------
 // Перелічення
+
+/**
+ * Чинна версія формули балу (docs/contracts.md §4; engine/src/formula/score.ts FORMULA_VERSION).
+ * Порожній пошук з фільтром балу каже scores_not_published, доки ворота якості цієї версії не пройдено.
+ */
+export const FORMULA_VERSION = "v5";
 
 const ROLE_KEYS = Object.keys(ROLES) as [RoleKeyType, ...RoleKeyType[]];
 export const RoleKey = z.enum(ROLE_KEYS);
@@ -412,7 +418,7 @@ const JobFields = {
     .nullable(),
   salary: Salary,
   apply_url: z.url().nullable(),
-  tags: z.array(z.string().max(32)).max(10),
+  tags: Tags,
 };
 
 const uniqueJobLists = <T extends { roles?: readonly string[]; work_mode?: readonly string[] }>(j: T) =>
@@ -453,15 +459,15 @@ export const JobUpdate = z
 export const Job = z.object({
   job_id: z.string(),
   status: z.enum(["draft", "open", "closed"]),
-  title: z.string(),
-  description: z.string().optional(),
-  roles: z.array(RoleKey),
-  work_mode: z.array(z.enum(["remote", "city"])),
-  city: z.string().nullable().optional(),
-  country: z.string().nullable().optional(),
-  salary: Salary.optional(),
-  apply_url: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional(),
+  title: JobFields.title,
+  description: JobFields.description.optional(),
+  roles: JobFields.roles,
+  work_mode: JobFields.work_mode,
+  city: JobFields.city.optional(),
+  country: JobFields.country.optional(),
+  salary: JobFields.salary.optional(),
+  apply_url: JobFields.apply_url.optional(),
+  tags: JobFields.tags.optional(),
   live: z.boolean(),
   created_at: IsoDateTime,
   updated_at: IsoDateTime,
@@ -532,7 +538,7 @@ export const SavedSearchUpdate = z.strictObject({
 // Вебхук
 
 export const Webhook = z.object({
-  url: z.string().nullable(),
+  url: z.url().nullable(),
   enabled: z.boolean(),
   events: z.array(z.enum(["intro.accepted", "intro.declined", "intro.expired"])),
   failing_since: IsoDateTime.nullable(),

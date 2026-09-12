@@ -19,6 +19,7 @@ import {
   type Stage,
   type UnscoredReason,
 } from "./types";
+import { visibleToSql } from "./visibility";
 
 /**
  * Анонімний профіль кандидата для компаній (специфікація CRM, 5.3): відповідь
@@ -95,8 +96,9 @@ const USER_COLUMNS = `u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.sala
 
 /**
  * Рядки для набору кандидатів одним пакетом запитів (id одним параметром JSON
- * через json_each: D1 має межу 100 параметрів). Видимість тут НЕ перевіряється:
- * викликач уже відібрав id правилом visibility.ts.
+ * через json_each: D1 має межу 100 параметрів). Рядок людини вибирається лише
+ * під правилом видимості (visibility.ts) для цієї компанії: навіть якщо викликач
+ * помилився з id, невидимий кандидат у відповідь не потрапить.
  */
 export async function loadCandidates(
   db: D1Database,
@@ -107,8 +109,9 @@ export async function loadCandidates(
   if (ids.length === 0) return out;
   const list = JSON.stringify(ids);
   const inIds = "(SELECT value FROM json_each(?))";
+  const visible = visibleToSql(companyId);
   const statements = [
-    db.prepare(`SELECT ${USER_COLUMNS} FROM users u WHERE u.id IN ${inIds}`).bind(list),
+    db.prepare(`SELECT ${USER_COLUMNS} FROM users u WHERE u.id IN ${inIds} AND ${visible.sql}`).bind(list, ...visible.params),
     db
       .prepare(
         `SELECT s.user_id, s.role, s.score, s.cover, s.breakdown_json, s.formula_version, s.computed_at,
@@ -264,6 +267,25 @@ const SOURCE_LABELS: Record<SourceKey, string> = {
   dune: "Dune Spellbook contributions",
 };
 
+/**
+ * Які джерела фактів живлять бал джерела (contracts §4). Прогалину показуємо,
+ * лише коли її джерело входить у ядро чи додатки ЦІЄЇ ролі: прогалина YouTube
+ * нічого не каже про бал інженера.
+ */
+const FACTS_OF_SOURCE: Record<SourceKey, readonly string[]> = {
+  gh_eng: ["github"],
+  gh_builder: ["github"],
+  x: ["x"],
+  yt: ["youtube"],
+  media: ["x", "youtube"],
+  output: ["site", "github", "dune"],
+  onchain: ["evm", "solana", "hyperliquid"],
+  trading: ["evm", "solana", "hyperliquid"],
+  site: ["site"],
+  audits: ["audits"],
+  dune: ["dune"],
+};
+
 /** Прогалини: лише ці ключі й лише текст "{Source} data unavailable right now". */
 const GAP_NAMES: Record<string, string> = {
   x: "X",
@@ -306,10 +328,11 @@ export function breakdownOf(row: ScoreRow): ScoreBreakdown {
     const p = part as Record<string, unknown>;
     bonus.push({ source, label: SOURCE_LABELS[source], max: intOrNull(p.max) ?? 0, value: intOrNull(p.value) });
   }
+  const relevant = new Set([...core, ...bonus].flatMap((part) => FACTS_OF_SOURCE[part.source]));
   const gaps: ScoreBreakdown["gaps"] = [];
   for (const [source] of entries(b.gaps)) {
     const name = Object.hasOwn(GAP_NAMES, source) ? GAP_NAMES[source] : undefined;
-    if (name && !gaps.some((g) => g.source === source)) {
+    if (name && relevant.has(source.split(".")[0]) && !gaps.some((g) => g.source === source)) {
       gaps.push({ source, label: `${name} data unavailable right now` });
     }
   }
