@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetLimiters } from "../limits.js";
 import { collectGithub } from "./github.js";
-import { rateLimitWaitMs } from "./github-api.js";
+import { GITHUB_MAX_WAIT_MS, rateLimitWaitMs } from "./github-api.js";
 import { ctxWith, json, mockFetch, NOW } from "./testkit.js";
 
 const TOKEN = "ghp_secretTestToken000";
@@ -106,18 +106,18 @@ describe("collectGithub: ліміт GitHub", () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"], now: NOW }); });
   const settle = async <T>(p: Promise<T>): Promise<T> => { p.catch(() => undefined); await vi.runAllTimersAsync(); return p; };
 
-  it("403 з x-ratelimit-remaining 0: чекає скидання через бюджет і пробує ще раз", async () => {
+  it("403 з x-ratelimit-remaining 0 і скиданням за 10 с: чекає через бюджет і пробує ще раз", async () => {
     const starts: number[] = [];
     const t0 = performance.now();
     const { fetchImpl } = mockFetch(() => {
       starts.push(performance.now() - t0);
       return starts.length === 1
-        ? json({ message: "API rate limit exceeded" }, 403, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": resetIn(30) })
+        ? json({ message: "API rate limit exceeded" }, 403, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": resetIn(10) })
         : json(USER);
     });
     const r = await settle(collectGithub("test-dev", ctxWith(fetchImpl, env)));
     expect(r.ok).toBe(true);
-    expect(starts).toEqual([0, 31_000]);
+    expect(starts).toEqual([0, 11_000]);
   });
 
   it("GraphQL 200 з RATE_LIMITED теж ліміт", async () => {
@@ -131,12 +131,29 @@ describe("collectGithub: ліміт GitHub", () => {
     expect(n).toBe(2);
   });
 
-  it("скидання далі за хвилину: одразу прогалина", async () => {
+  it("скидання далі за 15 с: одразу прогалина, без сну", async () => {
     const { fetchImpl, calls } = mockFetch(() =>
-      json({ message: "API rate limit exceeded" }, 403, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": resetIn(600) }));
+      json({ message: "API rate limit exceeded" }, 403, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": resetIn(30) }));
+    const t0 = performance.now();
     const r = await settle(collectGithub("test-dev", ctxWith(fetchImpl, env)));
-    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^github: GitHub rate limit \(resets in 601 s\)/) });
+    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^github: GitHub rate limit \(resets in 31 s\)/) });
     expect(calls).toHaveLength(1);
+    expect(GITHUB_MAX_WAIT_MS).toBe(15_000);
+    expect(performance.now() - t0).toBe(0);
+  });
+
+  it("429 з Retry-After 600: прогалина, а бюджет api.github.com для інших стоїть не довше 15 с", async () => {
+    const starts: number[] = [];
+    const t0 = performance.now();
+    const { fetchImpl } = mockFetch(() => {
+      starts.push(performance.now() - t0);
+      return starts.length === 1 ? json({ message: "secondary rate limit" }, 429, { "retry-after": "600" }) : json(USER);
+    });
+    const first = await settle(collectGithub("test-dev", ctxWith(fetchImpl, env)));
+    expect(first).toMatchObject({ ok: false, gap: expect.stringMatching(/rate limit/) });
+    const second = await settle(collectGithub("other-dev", ctxWith(fetchImpl, env)));
+    expect(second.ok).toBe(true);
+    expect(starts[1]!).toBeLessThanOrEqual(GITHUB_MAX_WAIT_MS);
   });
 
   it("ліміт удруге поспіль: прогалина", async () => {

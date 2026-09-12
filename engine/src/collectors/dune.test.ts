@@ -55,11 +55,21 @@ describe("collectDune", () => {
     const { fetchImpl } = mockFetch(() => (++n === 1
       ? json({ message: "API rate limit exceeded" }, 403, {
         "x-ratelimit-remaining": "0", "x-ratelimit-resource": "search",
-        "x-ratelimit-reset": String(Math.floor(NOW / 1000) + 20) })
+        "x-ratelimit-reset": String(Math.floor(NOW / 1000) + 10) })
       : search(0)));
     const ctx = ctxWith(fetchImpl, env);
     expect(await collectDune("test-dev", ctx)).toEqual({ ok: true, facts: { spellbookPrs: 0, spellbookPrs12m: 0 } });
-    expect(ctx.sleeps).toEqual([21_000]);
+    expect(ctx.sleeps).toEqual([11_000]);
+  });
+
+  it("ліміт пошуку зі скиданням далі за 15 с: прогалина без сну", async () => {
+    const { fetchImpl, calls } = mockFetch(() => json({ message: "API rate limit exceeded" }, 403, {
+      "x-ratelimit-remaining": "0", "x-ratelimit-resource": "search",
+      "x-ratelimit-reset": String(Math.floor(NOW / 1000) + 40) }));
+    const ctx = ctxWith(fetchImpl, env);
+    expect(await collectDune("test-dev", ctx)).toMatchObject({ ok: false, gap: expect.stringMatching(/^dune: GitHub rate limit/) });
+    expect(ctx.sleeps).toEqual([]);
+    expect(calls).toHaveLength(1);
   });
 
   it("422 від пошуку: прогалина з кодом", async () => {

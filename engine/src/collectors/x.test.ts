@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetLimiters } from "../limits.js";
 import { ctxWith, json, mockFetch, NOW } from "./testkit.js";
-import { collectX, EMPTY_ATTEMPTS, isOwnPost, parseTweetDate } from "./x.js";
+import { collectX, EMPTY_ATTEMPTS, isOwnPost, parseTweetDate, X_CALL_ESTIMATE_MS } from "./x.js";
 
 const TOKEN = "tw-secret-token-1";
 const env = { TWITTER_TOKEN: TOKEN };
@@ -136,24 +136,43 @@ describe("collectX: прогалини", () => {
   });
 });
 
-describe("collectX: порожнє data = ліміт", () => {
-  beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] }); });
+describe("collectX: порожнє data = ліміт, у межах дедлайну", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"], now: NOW }); });
   const settle = async <T>(p: Promise<T>): Promise<T> => { p.catch(() => undefined); await vi.runAllTimersAsync(); return p; };
+  const clock = { now: () => Date.now() };
 
-  it("повторює з паузою бюджету 4, 8, 12, 16 с, далі прогалина", async () => {
+  it("не більше трьох спроб з паузою бюджету 2 і 4 с, далі прогалина", async () => {
     const starts: number[] = [];
     const t0 = Date.now();
     const { fetchImpl } = api({ info: () => { starts.push(Date.now() - t0); return json({ success: true }); } });
-    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env)));
-    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^x: 6551 returned no profile after retries/) });
-    expect(starts).toHaveLength(EMPTY_ATTEMPTS);
-    expect(starts).toEqual([0, 4_000, 12_000, 24_000, 40_000]);
+    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env, clock)));
+    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^x: 6551 returned no profile/) });
+    expect(EMPTY_ATTEMPTS).toBe(3);
+    expect(starts).toEqual([0, 2_000, 6_000]);
+  });
+
+  it("повтор, що не встигне до дедлайну, не робиться", async () => {
+    let n = 0;
+    const { fetchImpl } = api({ info: () => { n++; return json({ success: true }); } });
+    // 2 с паузи + оцінка виклику не влазять у 5 с до дедлайну.
+    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env, { ...clock, deadlineAt: NOW + 5_000 })));
+    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^x: 6551 returned no profile/) });
+    expect(n).toBe(1);
+    expect(2_000 + X_CALL_ESTIMATE_MS).toBeGreaterThan(5_000);
+  });
+
+  it("дедлайн пускає перший повтор і відсікає другий", async () => {
+    let n = 0;
+    const { fetchImpl } = api({ info: () => { n++; return json({ success: true }); } });
+    const deadlineAt = NOW + 2_000 + 4_000 + X_CALL_ESTIMATE_MS - 1;
+    await settle(collectX("test_builder", ctxWith(fetchImpl, env, { ...clock, deadlineAt })));
+    expect(n).toBe(2);
   });
 
   it("порожнє data двічі, потім відповідь: факти є", async () => {
     let n = 0;
     const { fetchImpl } = api({ info: () => (++n <= 2 ? json({ data: {}, success: true }) : json(INFO)) });
-    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env)));
+    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env, clock)));
     expect(n).toBe(3);
     expect(r).toMatchObject({ ok: true, facts: { followers: 4321 } });
   });
@@ -161,15 +180,45 @@ describe("collectX: порожнє data = ліміт", () => {
   it("стрічка лишилась порожньою після повторів: прогалина, а не нулі", async () => {
     let n = 0;
     const { fetchImpl } = api({ tweets: () => { n++; return json({ data: [], success: true }); } });
-    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env)));
+    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env, clock)));
     expect(n).toBe(EMPTY_ATTEMPTS);
     expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^x: 6551 returned no posts/) });
   });
 
   it("порожній KOL після повторів: kolSourceGap", async () => {
     const { fetchImpl } = api({ kol: () => json({ data: null, success: true }) });
-    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env)));
+    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env, clock)));
     expect(r).toMatchObject({ ok: true, facts: { kol: null, kolSourceGap: true } });
+  });
+
+  it("стрічка впала, поки KOL чекає повтору: повтор KOL не стартує після повернення", async () => {
+    let kolCalls = 0;
+    const { fetchImpl } = api({
+      kol: () => { kolCalls++; return json({ data: {}, success: true }); },
+      tweets: () => json({ error: "invalid token", success: false }, 401),
+    });
+    const r = await settle(collectX("test_builder", ctxWith(fetchImpl, env, clock)));
+    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^x: posts unavailable \(HTTP 401\)/) });
+    await vi.runAllTimersAsync();
+    expect(kolCalls).toBe(1);
+  });
+});
+
+describe("collectX: без запитів-сиріт", () => {
+  it("стрічка впала: KOL, що ще в польоті, скасовується до повернення", async () => {
+    let kolSignal: AbortSignal | null | undefined;
+    const { fetchImpl } = mockFetch((url, init) => {
+      const path = url.pathname.split("/").pop();
+      if (path === "twitter_user_info") return json(INFO);
+      if (path === "twitter_user_tweets") return json({ error: "query failed" }, 401);
+      kolSignal = init.signal;
+      return new Promise<Response>((_res, rej) => {
+        init.signal?.addEventListener("abort", () => rej(init.signal!.reason), { once: true });
+      });
+    });
+    const r = await collectX("test_builder", ctxWith(fetchImpl, env));
+    expect(r).toMatchObject({ ok: false, gap: expect.stringMatching(/^x: posts unavailable/) });
+    expect(kolSignal?.aborted).toBe(true);
   });
 });
 

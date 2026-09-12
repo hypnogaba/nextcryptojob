@@ -92,11 +92,17 @@ describe("collectAudits", () => {
       .toEqual({ ok: false, gap: "audits: Sherlock resume unavailable (HTTP 410)" });
   });
 
-  it("нік, що вийшов би за межі шляху, відкидається без запиту", async () => {
+  it.each(["../admin", ".", "..", "-x", "_x", ".hidden", "a/b", ""])("нік %j, що вийшов би за межі шляху, відкидається без запиту", async (bad) => {
     const { fetchImpl, calls } = api();
-    expect(await collectAudits("../admin", { github: "test-dev" }, ctxWith(fetchImpl)))
+    expect(await collectAudits(bad, { github: "test-dev" }, ctxWith(fetchImpl)))
       .toEqual({ ok: false, gap: "audits: invalid Sherlock handle" });
     expect(calls).toHaveLength(0);
+  });
+
+  it("нік з крапкою чи дефісом усередині приймається", async () => {
+    const { fetchImpl, calls } = api();
+    expect((await collectAudits("a.b-c_d", { github: "test-dev" }, ctxWith(fetchImpl))).ok).toBe(true);
+    expect(calls[0]!.url.pathname).toBe("/watson/a.b-c_d");
   });
 
   it("нормалізація ніка з профілю", () => {

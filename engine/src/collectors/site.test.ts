@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetLimiters } from "../limits.js";
-import { collectSite, discoverFeed, normalizeSite, parseFeed, parseSitemap } from "./site.js";
+import { collectSite, discoverFeed, normalizeSite, parseFeed, parseSitemap, SITE_PHASE_MS } from "./site.js";
 import { ctxWith, mockFetch, NOW, text } from "./testkit.js";
 
 const BASE = "https://site.example.org";
@@ -80,6 +80,25 @@ describe("collectSite: розбір", () => {
     } });
   });
 
+  it("карта з редиректом apex → www: дочірні карти www рахуються (40)", async () => {
+    const APEX = "https://apex.example.org", WWW = "https://www.apex.example.org";
+    const moved = (to: string) => () => new Response(null, { status: 301, headers: { location: to } });
+    const wwwUrlset = (n: number, from: number) => `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${
+      Array.from({ length: n }, (_, i) => `<url><loc>${WWW}/p/${from + i}</loc></url>`).join("")}</urlset>`;
+    const { fetchImpl } = site({
+      [`${APEX}/`]: moved(`${WWW}/`),
+      [`${WWW}/`]: () => text("<html>home</html>", 200, "text/html"),
+      [`${APEX}/sitemap.xml`]: moved(`${WWW}/sitemap.xml`),
+      [`${WWW}/sitemap.xml`]: () => text(`<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <sitemap><loc>${WWW}/sitemap-posts.xml</loc></sitemap><sitemap><loc>${APEX}/sitemap-pages.xml</loc></sitemap>
+        </sitemapindex>`),
+      [`${WWW}/sitemap-posts.xml`]: () => text(wwwUrlset(25, 0)),
+      [`${APEX}/sitemap-pages.xml`]: () => text(wwwUrlset(15, 25)),
+    });
+    const r = await collectSite("apex.example.org", ctxWith(fetchImpl));
+    expect(r).toMatchObject({ ok: true, facts: { reachable: true, sitemapUrls: 40 } });
+  });
+
   it("SPA віддає HTML на всі шляхи: стрічки й карти немає, сайт доступний", async () => {
     const { fetchImpl } = mockFetch(() => text("<!doctype html><div id=root></div>", 200, "text/html"));
     expect(await collectSite(BASE, ctxWith(fetchImpl))).toEqual({ ok: true, facts: {
@@ -96,6 +115,9 @@ describe("collectSite: розбір", () => {
   it("нормалізація адреси за §2", () => {
     expect(normalizeSite("Example.COM/blog/")).toBe("https://example.com/blog");
     expect(normalizeSite("https://example.com")).toBe("https://example.com");
+    expect(normalizeSite("https://Example.com:8443/blog/")).toBe("https://example.com/blog");
+    expect(normalizeSite("example.com:443")).toBe("https://example.com");
+    expect(() => normalizeSite("javascript:alert(1)")).toThrow();
   });
 
   it("парсери: не-стрічка, RSS 1.0, sitemap без <loc> у image:loc", () => {
@@ -106,6 +128,44 @@ describe("collectSite: розбір", () => {
     expect(discoverFeed(`<link href='https://feeds.example.net/x?a=1&amp;b=2' type="application/atom+xml" rel=alternate>`, BASE))
       .toBe("https://feeds.example.net/x?a=1&b=2");
     expect(discoverFeed(`<link rel="alternate" type="application/rss+xml" href="http://insecure.example.net/rss">`, BASE)).toBeNull();
+  });
+});
+
+describe("collectSite: бюджет часу на стрічку й карту", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("шлях, що не відповідає, обривається за SITE_PHASE_MS; решта результатів лишається", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"], now: NOW });
+    const aborted: string[] = [];
+    const hang = (path: string) => (_u: URL, init: RequestInit) => new Promise<Response>((_res, rej) => {
+      init.signal?.addEventListener("abort", () => { aborted.push(path); rej(init.signal!.reason); }, { once: true });
+    });
+    const routes: Record<string, (u: URL, init: RequestInit) => Response | Promise<Response>> = {
+      [`${BASE}/`]: () => text("<html>home</html>", 200, "text/html"),
+      [`${BASE}/feed`]: hang("/feed"),
+      [`${BASE}/rss.xml`]: () => text(RSS, 200, "application/rss+xml"),
+      [`${BASE}/sitemap.xml`]: hang("/sitemap.xml"),
+    };
+    const { fetchImpl } = mockFetch((u, init) => (routes[u.origin + u.pathname] ?? notFound)(u, init));
+    const t0 = Date.now();
+    const p = collectSite(BASE, ctxWith(fetchImpl, {}, { now: () => Date.now() }));
+    p.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(SITE_PHASE_MS + 10);
+    const r = await p;
+    expect(Date.now() - t0).toBeLessThanOrEqual(SITE_PHASE_MS + 10);
+    expect(SITE_PHASE_MS).toBeLessThanOrEqual(20_000);
+    expect(r).toMatchObject({ ok: true, facts: { reachable: true, feedItems: 4, sitemapUrls: 0 } });
+    expect(aborted.sort()).toEqual(["/feed", "/sitemap.xml"]);
+  });
+
+  it("скасування викликачем під час стрічки кидає, а не пише прогалину", async () => {
+    const ac = new AbortController();
+    const { fetchImpl } = mockFetch((u, init) => {
+      if (u.pathname === "/") return text("<html>home</html>", 200, "text/html");
+      queueMicrotask(() => ac.abort());
+      return new Promise<Response>((_res, rej) => init.signal?.addEventListener("abort", () => rej(init.signal!.reason), { once: true }));
+    });
+    await expect(collectSite(BASE, ctxWith(fetchImpl, {}, { signal: ac.signal }))).rejects.toBeDefined();
   });
 });
 

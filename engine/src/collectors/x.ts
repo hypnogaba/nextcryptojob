@@ -2,7 +2,7 @@ import { fetchJson } from "../http.js";
 import { backoffFor } from "../limits.js";
 import type { Fetched, XFacts } from "../types.js";
 import {
-  collect, DAY_MS, describeError, fetchOpts, GapError, isEmpty, notConfigured, nowMs, num,
+  collect, DAY_MS, describeError, fetchOpts, fitsDeadline, GapError, isEmpty, notConfigured, nowMs, num,
   type CollectorContext,
 } from "./context.js";
 
@@ -11,10 +11,14 @@ import {
  * Порожнє `data` у відповіді 6551 означає ліміт: чекаємо через бюджет "6551" і повторюємо.
  */
 const BASE = "https://ai.6551.io/open/";
-/** Скільки разів питати, поки `data` порожнє (як у research/harness/collect_v3.py). */
-export const EMPTY_ATTEMPTS = 5;
-/** Пауза після порожньої відповіді: 4 с × номер спроби. */
-const EMPTY_BACKOFF_MS = 4_000;
+/**
+ * Скільки разів питати, поки `data` порожнє. Дослідження питало 5 разів з паузами до 20 с;
+ * у дедлайн людини (45 с, три людини разом) влазять лише 3 спроби з паузами 2 і 4 с.
+ */
+export const EMPTY_ATTEMPTS = 3;
+const EMPTY_BACKOFF_MS = [2_000, 4_000];
+/** Оцінка одного виклику 6551 для рішення «чи встигне повтор» (живий збір: 1–4 с на виклик). */
+export const X_CALL_ESTIMATE_MS = 4_000;
 
 type Envelope = { data?: unknown; success?: boolean; error?: string };
 
@@ -28,20 +32,23 @@ type UserInfo = { success?: boolean; followersCount?: number; statusesCount?: nu
 
 /**
  * Один виклик 6551. Повертає `data` або null, якщо воно лишилось порожнім після
- * EMPTY_ATTEMPTS спроб. HTTP-помилки (після повторів fetchJson) летять далі.
+ * EMPTY_ATTEMPTS спроб або повтор не встиг би до дедлайну. HTTP-помилки (після
+ * повторів fetchJson) летять далі. `signal` знімає і запит, і повтор із черги бюджету.
  */
-async function call6551(path: string, body: object, token: string, ctx: CollectorContext): Promise<unknown> {
+async function call6551(path: string, body: object, token: string, ctx: CollectorContext, signal = ctx.signal): Promise<unknown> {
   const url = BASE + path;
   for (let attempt = 1; attempt <= EMPTY_ATTEMPTS; attempt++) {
     const res = await fetchJson<Envelope>(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: ctx.signal,
+      signal,
     }, fetchOpts(ctx));
     if (!isEmpty(res?.data)) return res.data;
+    const wait = EMPTY_BACKOFF_MS[attempt - 1];
+    if (wait === undefined || !fitsDeadline(ctx, wait + X_CALL_ESTIMATE_MS)) break;
     // Наступний виклик у бюджеті "6551" (і чужий теж) стане в чергу за цією паузою.
-    if (attempt < EMPTY_ATTEMPTS) backoffFor(url, EMPTY_BACKOFF_MS * attempt);
+    backoffFor(url, wait);
   }
   return null;
 }
@@ -113,27 +120,37 @@ export async function collectX(handle: string, ctx: CollectorContext): Promise<F
     }
     if (info.success === false) throw new GapError("6551 could not load the profile (missing or suspended account)");
 
-    // KOL і пости незалежні: бюджет "6551" сам розводить їх у часі.
-    const kolP = call6551("twitter_kol_followers", { username }, token, ctx).catch((e: unknown) => {
-      if (ctx.signal?.aborted) throw e;
-      return null;   // kolSourceGap
-    });
-    const tweetsP = (async (): Promise<Tweet[]> => {
-      // Акаунт без жодного допису: порожня стрічка тут правда, а не ліміт.
-      if (num(info.statusesCount) === 0) return [];
-      let data: unknown;
-      try {
-        data = await call6551("twitter_user_tweets", { username, maxResults: 100, product: "Latest" }, token, ctx);
-      } catch (e) {
+    // KOL і пости незалежні: бюджет "6551" сам розводить їх у часі. Обидва під спільним
+    // сигналом: коли пости дають прогалину, KOL (у польоті чи в черзі на повтор)
+    // скасовується, і після повернення жоден запит не витрачає бали 6551.
+    const local = new AbortController();
+    const signal = ctx.signal ? AbortSignal.any([ctx.signal, local.signal]) : local.signal;
+    try {
+      const kolP = call6551("twitter_kol_followers", { username }, token, ctx, signal).catch((e: unknown) => {
         if (ctx.signal?.aborted) throw e;
-        throw new GapError(`posts unavailable (${describeError(e)})`);
-      }
-      if (data === null) throw new GapError("6551 returned no posts after retries (rate limit)");
-      const list = Array.isArray(data) ? data : (data as { tweets?: unknown }).tweets;
-      if (!Array.isArray(list)) throw new GapError("6551 returned posts in an unknown shape");
-      return list as Tweet[];
-    })();
-    const [kolData, tweets] = await Promise.all([kolP, tweetsP]);
-    return xFacts(info, kolData, tweets, nowMs(ctx));
+        return null;   // kolSourceGap
+      });
+      const tweetsP = (async (): Promise<Tweet[]> => {
+        // Акаунт без жодного допису: порожня стрічка тут правда, а не ліміт.
+        if (num(info.statusesCount) === 0) return [];
+        let data: unknown;
+        try {
+          data = await call6551("twitter_user_tweets", { username, maxResults: 100, product: "Latest" }, token, ctx, signal);
+        } catch (e) {
+          if (ctx.signal?.aborted) throw e;
+          throw new GapError(`posts unavailable (${describeError(e)})`);
+        }
+        if (data === null) throw new GapError("6551 returned no posts after retries (rate limit)");
+        const list = Array.isArray(data) ? data : (data as { tweets?: unknown }).tweets;
+        if (!Array.isArray(list)) throw new GapError("6551 returned posts in an unknown shape");
+        return list as Tweet[];
+      })();
+      // Прогалина постів одразу скасовує KOL, не чекаючи його відповіді.
+      tweetsP.catch(() => local.abort(new GapError("posts failed")));
+      const [kolData, tweets] = await Promise.all([kolP, tweetsP]);
+      return xFacts(info, kolData, tweets, nowMs(ctx));
+    } finally {
+      local.abort(new GapError("x collector returned"));
+    }
   });
 }

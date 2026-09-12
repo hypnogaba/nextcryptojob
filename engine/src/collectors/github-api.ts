@@ -1,5 +1,5 @@
 import { readCapped, redact, safeFetch, UnsafeUrlError } from "../http.js";
-import { backoffFor, MAX_BACKOFF_MS } from "../limits.js";
+import { backoffFor } from "../limits.js";
 import {
   describeError, fetchOpts, GapError, notConfigured, nowMs, pause, type CollectorContext,
 } from "./context.js";
@@ -9,11 +9,15 @@ import {
  *
  * Ліміт GitHub приходить як 403/429 з x-ratelimit-remaining: 0 (або GraphQL 200 з
  * помилкою RATE_LIMITED) і часом скидання в x-ratelimit-reset. Якщо скидання
- * ближче за MAX_BACKOFF_MS, чекаємо його і пробуємо ще раз; далі або вдруге
- * поспіль ліміт → прогалина. Ліміт core/graphql відсуває бюджет api.github.com,
- * ліміт пошуку (свій, 30 на хвилину) чекає лише цей виклик.
+ * ближче за GITHUB_MAX_WAIT_MS, чекаємо його і пробуємо ще раз; далі або вдруге
+ * поспіль ліміт → прогалина одразу, без сну. Ліміт core/graphql відсуває бюджет
+ * api.github.com, ліміт пошуку (свій, 30 на хвилину) чекає лише цей виклик.
+ * Бюджет для всіх не стоїть довше GITHUB_MAX_WAIT_MS: дедлайн людини 45 с.
  */
 export const GITHUB_API = "https://api.github.com";
+export const GITHUB_MAX_WAIT_MS = 15_000;
+/** 429 без жодного заголовка про час. */
+const DEFAULT_LIMIT_WAIT_MS = 5_000;
 const MAX_GITHUB_BODY = 4 * 1024 * 1024;
 const SERVER_RETRIES = 2;
 
@@ -31,7 +35,7 @@ export function rateLimitWaitMs(status: number, headers: Headers, now: number, g
   if (!limited) return null;
   if (headers.has("retry-after") && Number.isFinite(retryAfter)) return Math.max(0, retryAfter * 1000);
   if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - now) + 1_000;
-  return MAX_BACKOFF_MS;
+  return DEFAULT_LIMIT_WAIT_MS;
 }
 
 type GraphqlError = { type?: string; message?: string };
@@ -51,7 +55,7 @@ export async function githubJson<T>(url: string, init: RequestInit, ctx: Collect
   for (;;) {
     let res: Response;
     try {
-      res = await safeFetch(url, { ...init, headers, signal: ctx.signal }, fetchOpts(ctx, { backoffOn429Ms: 5_000 }));
+      res = await safeFetch(url, { ...init, headers, signal: ctx.signal }, fetchOpts(ctx, { backoffOn429Ms: DEFAULT_LIMIT_WAIT_MS, maxBackoffMs: GITHUB_MAX_WAIT_MS }));
     } catch (e) {
       if (ctx.signal?.aborted || e instanceof UnsafeUrlError) throw e;
       if (++failures > SERVER_RETRIES) throw new GapError(`GitHub unreachable (${describeError(e)})`);
@@ -71,7 +75,7 @@ export async function githubJson<T>(url: string, init: RequestInit, ctx: Collect
 
     const wait = rateLimitWaitMs(res.status, res.headers, nowMs(ctx), graphqlLimited);
     if (wait !== null) {
-      if (limitedOnce || wait > MAX_BACKOFF_MS) {
+      if (limitedOnce || wait > GITHUB_MAX_WAIT_MS) {
         throw new GapError(`GitHub rate limit (resets in ${Math.ceil(wait / 1000)} s)`);
       }
       limitedOnce = true;

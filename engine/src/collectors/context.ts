@@ -10,6 +10,11 @@ export interface CollectorContext {
   env: Readonly<Record<string, string | undefined>>;
   /** Скасування всього збору людини. Скасований збір кидає AbortError, а не пише прогалину. */
   signal?: AbortSignal;
+  /**
+   * Коли спрацює дедлайн людини (ENGINE_DEADLINE_MS), мс за годинником `now`. Повтори, що не
+   * встигнуть до нього, збирачі не починають. Без поля дедлайн невідомий і не обмежує.
+   */
+  deadlineAt?: number;
   /** Лише тести: fetch під safeFetch (обмежувач і маскування ключів лишаються). */
   fetchImpl?: typeof fetch;
   /** Лише тести: DNS для перевірки хоста разом із fetchImpl. */
@@ -46,6 +51,10 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
+
+/** Чи встигне дія тривалістю ms до дедлайну людини. */
+export const fitsDeadline = (ctx: CollectorContext, ms: number): boolean =>
+  ctx.deadlineAt === undefined || nowMs(ctx) + ms <= ctx.deadlineAt;
 
 export const pause = (ctx: CollectorContext, ms: number): Promise<void> =>
   (ctx.sleep ?? abortableSleep)(ms, ctx.signal);

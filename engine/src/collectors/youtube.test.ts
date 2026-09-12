@@ -64,6 +64,17 @@ describe("collectYoutube", () => {
     expect(channelSelector(CHANNEL_ID)).toEqual({ id: CHANNEL_ID });
     expect(channelSelector("SomeHandle")).toEqual({ forHandle: "@somehandle" });
     expect(channelSelector("bad handle")).toBeNull();
+    expect(channelSelector("ab")).toBeNull();
+  });
+
+  it("нелатинські хендли YouTube приймаються й ідуть у forHandle", async () => {
+    expect(channelSelector("@Привіт_Канал")).toEqual({ forHandle: "@привіт_канал" });
+    expect(channelSelector("@日本語チャンネル")).toEqual({ forHandle: "@日本語チャンネル" });
+    expect(channelSelector("@مرحبا.قناة")).toEqual({ forHandle: "@مرحبا.قناة" });
+    expect(channelSelector("@name/../x")).toBeNull();
+    const { fetchImpl, calls } = api();
+    expect((await collectYoutube("@Привіт_Канал", ctxWith(fetchImpl, env))).ok).toBe(true);
+    expect(calls[0]!.url.searchParams.get("forHandle")).toBe("@привіт_канал");
   });
 
   it("приховані підписники: subscribers null і hiddenSubscribers true", async () => {

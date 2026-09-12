@@ -63,7 +63,8 @@ export async function collectAudits(
 ): Promise<Fetched<AuditsFacts>> {
   return collect("audits", ctx, async () => {
     const handle = sherlockHandle.trim().replace(/^@/, "").toLowerCase();
-    if (!/^[a-z0-9_.-]{1,64}$/.test(handle)) throw new GapError("invalid Sherlock handle");
+    // Перший символ лише літера чи цифра: "." і ".." у шляху /watson/<h> вели б в інший ресурс.
+    if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(handle)) throw new GapError("invalid Sherlock handle");
     if (!normHandle(person.github) && !normHandle(person.x)) {
       throw new GapError("no GitHub or X to verify the Sherlock profile against");
     }

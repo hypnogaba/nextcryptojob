@@ -13,7 +13,10 @@ export function mockFetch(handler: Handler): { fetchImpl: typeof fetch; calls: C
     let body: unknown = i.body ?? null;
     if (typeof body === "string") { try { body = JSON.parse(body); } catch { /* текст як є */ } }
     calls.push({ url, init: i, body });
-    return handler(url, i, body);
+    const res = await handler(url, i, body);
+    // Як у справжнього fetch із redirect: "manual": url відповіді = адреса цього стрибка.
+    if (!res.url) Object.defineProperty(res, "url", { value: url.toString() });
+    return res;
   }) as unknown as typeof fetch;
   return { fetchImpl, calls };
 }

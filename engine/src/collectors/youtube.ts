@@ -20,12 +20,15 @@ type Channel = {
 type PlaylistItem = { contentDetails?: { videoId?: string; videoPublishedAt?: string } };
 type Video = { id?: string; statistics?: { viewCount?: string } };
 
-/** §2: `@handle` нижнім регістром або channel id `UC…` як є. */
+/**
+ * §2: `@handle` нижнім регістром або channel id `UC…` як є. Хендли YouTube бувають
+ * будь-якою писемністю: літери й цифри Unicode, "_", "-", ".", 3–30 символів.
+ */
 export function channelSelector(handleOrId: string): { id: string } | { forHandle: string } | null {
   const v = handleOrId.trim();
   if (/^UC[A-Za-z0-9_-]{22}$/.test(v)) return { id: v };
-  const h = v.replace(/^@/, "").toLowerCase();
-  return /^[a-z0-9._-]{3,30}$/.test(h) ? { forHandle: `@${h}` } : null;
+  const h = v.replace(/^@/, "").normalize("NFC").toLowerCase();
+  return /^[\p{L}\p{M}\p{N}._-]{3,30}$/u.test(h) ? { forHandle: `@${h}` } : null;
 }
 
 const url = (path: string, params: Record<string, string>, key: string): string =>
