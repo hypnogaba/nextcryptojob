@@ -1,4 +1,5 @@
 import { consentChange, CONTACT_CONSENT, SCORING_CONSENT, VISIBILITY_CONSENT } from "@/lib/consent";
+import type { Channel } from "@/lib/telegram/channel";
 import { notifyCrmVisibility } from "./hooks";
 import { canonicalTimezone } from "./timezones";
 
@@ -9,7 +10,7 @@ import { canonicalTimezone } from "./timezones";
  * або змінюються разом, або ніхто.
  */
 
-export type Channel = "email" | "telegram";
+export type { Channel };
 export type ContactMode = "approval" | "direct";
 
 export type Settings = {

@@ -1,12 +1,12 @@
 import { plainText } from "./markdown";
-import howScoring from "../../../content/legal/how-scoring-works.md?raw";
-import privacy from "../../../content/legal/privacy-policy.md?raw";
-import termsCandidates from "../../../content/legal/terms-candidates.md?raw";
-import termsCompanies from "../../../content/legal/terms-companies.md?raw";
+import howScoring from "../../../content/legal/how-scoring-works";
+import privacy from "../../../content/legal/privacy-policy";
+import termsCandidates from "../../../content/legal/terms-candidates";
+import termsCompanies from "../../../content/legal/terms-companies";
 
 /**
  * Юридичні сторінки: копії docs/legal у web/content/legal (scripts/legal-content.mjs),
- * вбудовані в бандл як текст. Це чернетки для юриста: текст не правимо тут.
+ * модулі з рядком, вбудовані в бандл. Це чернетки для юриста: текст не правимо тут.
  */
 
 export type LegalDoc = { path: string; file: string; source: string; description: string };

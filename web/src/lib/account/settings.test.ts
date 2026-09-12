@@ -160,9 +160,11 @@ describe("validateDailyJobs", () => {
 
   it("accepts UTC and stores a renamed zone under the runtime name", () => {
     expect(validateDailyJobs({ ...base, timezone: "UTC" }, can)).toMatchObject({ value: { timezone: "UTC" } });
-    const kyiv = validateDailyJobs({ ...base, timezone: "Europe/Kyiv" }, can);
-    expect(kyiv.ok).toBe(true);
-    expect(kyiv.ok && ["Europe/Kyiv", "Europe/Kiev"]).toContain(kyiv.ok && kyiv.value.timezone);
+    // V8 знає Київ як Europe/Kiev, браузер може прислати Europe/Kyiv: зводимо до назви рушія.
+    expect(validateDailyJobs({ ...base, timezone: "Europe/Kyiv" }, can)).toMatchObject({
+      ok: true,
+      value: { timezone: expect.stringMatching(/^Europe\/(Kyiv|Kiev)$/) },
+    });
   });
 
   it("refuses Telegram until it is linked, and email without an address", () => {
