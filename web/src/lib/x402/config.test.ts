@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { readX402Config, type X402Env } from "./config";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { readX402Config, resetConfigWarnings, type X402Env } from "./config";
 
 const EVM = "0x1111111111111111111111111111111111111111";
 const SOL = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 const CDP = { CDP_API_KEY_ID: "key-id", CDP_API_KEY_SECRET: "c2VjcmV0LXZhbHVlLW5vdC1yZWFs" };
 const PAY_TO = { X402_PAY_TO_EVM: EVM, X402_PAY_TO_SOLANA: SOL };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("production", () => {
   it("with CDP keys and both addresses accepts USDC on Base and Solana mainnet through CDP", () => {
@@ -69,8 +73,14 @@ describe("production", () => {
     expect(config).toMatchObject({ enabled: false, missing: ["X402_PAY_TO_EVM"] });
   });
 
-  it("with CDP keys and X402_NETWORK=testnet uses the test networks through CDP", () => {
+  it("with CDP keys and X402_NETWORK=testnet uses the test networks through CDP, and warns loudly once", () => {
+    resetConfigWarnings();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    readX402Config({ ...CDP, ...PAY_TO, X402_NETWORK: "testnet" }, "production");
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0][0])).toMatch(/production.*test network/i);
     const config = readX402Config({ ...CDP, ...PAY_TO, X402_NETWORK: "testnet" }, "production");
+    expect(warn).toHaveBeenCalledOnce(); // раз на ізолят, не на кожен запит
     if (!config.enabled) throw new Error("expected enabled");
     expect(config.facilitator.kind).toBe("cdp");
     expect(config.networks.map((n) => n.network)).toEqual(["eip155:84532", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"]);
@@ -78,6 +88,13 @@ describe("production", () => {
 });
 
 describe("development", () => {
+  it("does not warn about test networks outside production", () => {
+    resetConfigWarnings();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    readX402Config({ ...PAY_TO }, "development");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("without CDP keys uses the test networks through x402.org", () => {
     const config = readX402Config({ ...PAY_TO }, "development");
     if (!config.enabled) throw new Error(`expected enabled, got ${config.reason}`);

@@ -52,13 +52,22 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 CREATE INDEX IF NOT EXISTS idx_api_keys_company ON api_keys(company_id, revoked_at);
 
--- Платіж x402. payload_hash (SHA-256 декодованого PaymentPayload) унікальний: один
--- підписаний платіж оплачує рівно один запит, повтор тіла дає 409 payment_reused.
+-- Платіж x402. payload_hash (SHA-256 канонічного JSON підписаної частини PaymentPayload:
+-- x402Version, scheme, network, payload) унікальний: один підписаний платіж оплачує рівно
+-- один запит, повтор дає 409 payment_reused. Для EVM ще й (network, evm_from, evm_nonce):
+-- той самий дозвіл EIP-3009 з іншим написанням (регістр hex, зайві ключі) теж повтор.
+-- request_hash прив'язує платіж до запиту: ідемпотентний повтор з тим самим
+-- payment-identifier приймаємо лише для того самого запиту (дія, вхід, адреса ресурсу).
+-- Стани: verified (бронь до розрахунку), settled, failed, unconfirmed (settle не дав
+-- відповіді або ще pending: результат у ланцюжку невідомий, адмін звіряє за tx).
 -- Рядки лишаються після закриття компанії (бухгалтерія), тому company_id SET NULL.
 CREATE TABLE IF NOT EXISTS x402_payments (
     id                 TEXT PRIMARY KEY,                        -- 'pay_…'
     payload_hash       TEXT NOT NULL UNIQUE,
+    request_hash       TEXT NOT NULL,                           -- SHA-256 (дія + канонічний вхід + URL ресурсу)
     payment_identifier TEXT UNIQUE,                             -- розширення payment-identifier, якщо клієнт дав
+    evm_from           TEXT,                                    -- EIP-3009 authorization.from, нижній регістр
+    evm_nonce          TEXT,                                    -- EIP-3009 authorization.nonce, нижній регістр
     company_id         TEXT REFERENCES companies(id) ON DELETE SET NULL,
     api_key_id         TEXT REFERENCES api_keys(id) ON DELETE SET NULL,
     payer              TEXT,                                    -- адреса платника з verify
@@ -69,8 +78,8 @@ CREATE TABLE IF NOT EXISTS x402_payments (
     amount_usd_cents   INTEGER NOT NULL,
     action             TEXT NOT NULL CHECK (action IN ('search_candidates', 'request_intro', 'buy_usdc_month')),
     channel            TEXT NOT NULL CHECK (channel IN ('rest', 'mcp')),
-    status             TEXT NOT NULL CHECK (status IN ('verified', 'settled', 'failed')),
-    tx                 TEXT,                                    -- хеш або підпис транзакції після settle
+    status             TEXT NOT NULL CHECK (status IN ('verified', 'settled', 'failed', 'unconfirmed')),
+    tx                 TEXT,                                    -- хеш або підпис транзакції (і при невдалому settle, якщо був)
     error_reason       TEXT,
     facilitator        TEXT NOT NULL CHECK (facilitator IN ('cdp', 'payai', 'x402org')),
     request_id         TEXT,
@@ -80,6 +89,11 @@ CREATE TABLE IF NOT EXISTS x402_payments (
 CREATE INDEX IF NOT EXISTS idx_x402_company ON x402_payments(company_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_x402_payer ON x402_payments(payer, action, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_x402_tx ON x402_payments(network, tx) WHERE tx IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_x402_evm_nonce ON x402_payments(network, evm_from, evm_nonce)
+    WHERE evm_nonce IS NOT NULL;
+-- Для адмінки й cron: завислі броні та непідтверджені розрахунки (findStalePayments).
+CREATE INDEX IF NOT EXISTS idx_x402_stale ON x402_payments(status, created_at)
+    WHERE status IN ('verified', 'unconfirmed');
 
 -- Облік викликів: денні квоти, сторінка «Usage», підсумки для адмінки.
 -- Пишемо рядок на кожен виклик з відомим актором (ключ, сесія члена команди або платник x402).

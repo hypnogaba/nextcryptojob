@@ -127,6 +127,13 @@ function clean(value: string | undefined): string | undefined {
   return v ? v : undefined;
 }
 
+let warnedTestnetInProduction = false;
+
+/** Для тестів: попередження про тестову мережу в продакшні знову спрацює. */
+export function resetConfigWarnings(): void {
+  warnedTestnetInProduction = false;
+}
+
 function disabled(reason: string, missing: string[]): X402Config {
   return { enabled: false, reason, missing, networks: [], facilitator: null };
 }
@@ -185,6 +192,14 @@ export function readX402Config(env: X402Env, nodeEnv: string | undefined = proce
     });
   } else {
     facilitator = { kind: "x402org", url: X402ORG_FACILITATOR_URL };
+  }
+
+  if (production && mode === "testnet" && !warnedTestnetInProduction) {
+    // Не помилка (так перевіряють прод на тестових грошах), але забути цей стан не можна.
+    warnedTestnetInProduction = true;
+    console.warn(
+      "x402: PRODUCTION IS RUNNING ON TEST NETWORKS (X402_NETWORK=testnet). Payments are test USDC, not real money.",
+    );
   }
 
   return { enabled: true, mode, networks, facilitator };
