@@ -131,3 +131,33 @@ type SiteFacts = { reachable: boolean; feedItems: number; items90d: number; site
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
   `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`; binding `DB` = D1 `nextcryptojob`
   (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `crypto-jobs-agent` (лише читання в коді).
+
+## 7. Номери міграцій (щоб доріжки не зіткнулись)
+| Файл | Власник | Таблиці |
+|---|---|---|
+| 0001_core.sql | controller | users, identities, source_facts, scores, score_jobs, quality_runs |
+| 0002_auth.sql | web: вхід | sessions, login_codes, auth_attempts, consents, consent_events, webhook_updates, audit_log |
+| 0003_crm.sql | web: CRM | companies, company_members, saved_searches, pipeline, pipeline_events, intros, company_jobs, agency_applications |
+| 0004_billing.sql | web: оплата й агенти | subscriptions, api_keys, x402_payments, usage_events |
+| 0005_cards.sql | web: картки | cards |
+| 0006_digest.sql | engine: добірка | sent, digest_runs |
+| 0007_admin.sql | web: адмінка | appeals, admin_flags |
+Нова таблиця поза цим списком лише через controller.
+
+## 8. Ключі, яких ще немає (власник додасть у кінці)
+Код мусить працювати без них у тестовому режимі і явно казати, чого бракує:
+`HELIUS_KEY`, `BLOCKSCOUT_KEY`, `YOUTUBE_KEY`, `GITHUB_TOKEN`, `TELEGRAM_OIDC_CLIENT_ID`,
+`TELEGRAM_OIDC_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `CDP_API_KEY_ID`,
+`CDP_API_KEY_SECRET`, пошта (Cloudflare Email Service після переїзду NS). Без ключа: джерело дає
+прогалину з причиною `not configured: <KEY>`, вхід через Telegram ховає кнопку, оплата показує
+«скоро», пошта в розробці пише код у журнал (лише не в продакшені).
+
+## 9. Час у базі (обидві доріжки)
+- Усі мітки часу: TEXT у форматі SQLite `YYYY-MM-DD HH:MM:SS`, UTC (як `datetime('now')`).
+  ISO з `T` і `Z` у базу НЕ пишемо: `'T'` сортується після `' '`, і прострочене виглядає дійсним.
+- Краще рахувати в SQL: `datetime('now', '+10 minutes')`. Якщо час приходить з коду, лише через
+  спільний помічник `sqlTime(date)` = `date.toISOString().replace('T', ' ').slice(0, 19)`.
+- Згоди: `consents` = поточний стан, `consent_events` (0002) = незмінна історія (GDPR ст. 7(1)):
+  кожна зміна згоди пише подію в тій самій пакетній транзакції.
+- Секрети в базі лише як хеш: `sessions.id` = SHA-256 токена сесії; `login_codes.code_hash` =
+  HMAC-SHA256(`SESSION_SECRET`, email + ':' + code).
