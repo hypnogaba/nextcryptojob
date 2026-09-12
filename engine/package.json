@@ -11,10 +11,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.test.json && tsc -p tsconfig.scripts.json --noEmit",
     "parity": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/parity.js",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:wallets": "tsx scripts/smoke-wallets.ts"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.13.3",
+    "better-sqlite3": "^13.0.3",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
