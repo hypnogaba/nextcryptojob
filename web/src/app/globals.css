@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Темна тема йде за системою. data-theme="light" на <html> лишає світлу,
+   data-theme="dark" вмикає темну примусово: місце під майбутній перемикач. */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+  &:where([data-theme="dark"] *) {
+    @slot;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NextCryptoJob: токени дизайну. Єдине джерело кольору.
+   Бренд: ground (полотно), surface (картки), ink (текст),
+   ink-muted (другорядний текст), line (лінії), brand (акцент).
+   Змінні shadcn нижче лише посилаються на ці.
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: light;
+
+  --ground:    #f3f5f4;
+  --surface:   #ffffff;
+  --ink:       #141a1b;
+  --ink-muted: #58646a;
+  --line:      #d5dcda;
+  --line-strong: #7f8c8a;  /* межа полів: >= 3:1 до surface і ground */
+  --brand:     #0b6e63;
+  --brand-ink: #ffffff;
+  --brand-soft: #e1efec;
+  --brand-hover: color-mix(in oklab, var(--brand), black 12%);
+  --wash:      #e8eceb;
+  --danger:    #b3261e;
+
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ground:    #0e1213;
+    --surface:   #151b1c;
+    --ink:       #e4eae8;
+    --ink-muted: #95a2a1;
+    --line:      #2a3436;
+    --line-strong: #617071;
+    --brand:     #4cc2ae;
+    --brand-ink: #0e1213;
+    --brand-soft: #16302c;
+    --wash:      #1c2425;
+    --danger:    #f2867d;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground:    #0e1213;
+  --surface:   #151b1c;
+  --ink:       #e4eae8;
+  --ink-muted: #95a2a1;
+  --line:      #2a3436;
+  --line-strong: #617071;
+  --brand:     #4cc2ae;
+  --brand-ink: #0e1213;
+  --brand-soft: #16302c;
+  --wash:      #1c2425;
+  --danger:    #f2867d;
+}
+
+/* Змінні shadcn/ui, зведені до токенів бренду. */
+:root {
+  --background: var(--ground);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-ink);
+  --secondary: var(--wash);
+  --secondary-foreground: var(--ink);
+  --muted: var(--wash);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--brand);
+}
+
+@theme inline {
+  /* Шрифти: next/font кладе змінні на <html> (див. layout.tsx). */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-unbounded), var(--font-plex-sans), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* Токени бренду як утиліти: bg-ground, text-ink, border-line, text-brand… */
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-hover: var(--brand-hover);
+
+  /* Утиліти shadcn/ui. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring;
+  }
+  /* Одне кільце фокуса для всього: колір бренду на повну (>= 3:1 в обох темах). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-heading;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
