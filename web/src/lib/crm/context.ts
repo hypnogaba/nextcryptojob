@@ -67,6 +67,10 @@ export type CrmEnv = X402Env & {
   RL_API?: RateLimit;
   RL_WEB?: RateLimit;
   RL_IP?: RateLimit;
+  /** Сповіщення про знайомства (notify.ts): бот, пошта, адреса сайту для посилань. */
+  TELEGRAM_BOT_TOKEN?: string;
+  EMAIL?: SendEmail;
+  SITE_URL?: string;
 };
 
 export interface ActionContext {
@@ -79,6 +83,11 @@ export interface ActionContext {
   /** Мить запиту: межі денних і місячних квот рахуються від неї. */
   now: Date;
   env: CrmEnv;
+  /**
+   * Платіж x402, яким оплачено цей виклик (після verify і settle). Ставить
+   * run() з броні; обробник пише його id у свій рядок (intros.x402_payment_id).
+   */
+  payment?: { id: string; payer: string | null } | null;
 }
 
 export function actorRole(actor: Actor): ActorRole {

@@ -5,6 +5,7 @@ import type { SettleTiming } from "@/lib/x402/server";
 import { auditStatement, type AuditMeta } from "./audit";
 import { actorRole, type AccessMode, type ActionContext, type Channel } from "./context";
 import { assertCan, type Permission } from "./permissions";
+import { cancelIntro, checkIntroRequest, getIntro, listIntros, requestIntro } from "./intros";
 import { addNote, addToPipeline, listHistory, listPipeline, removeFromPipeline, updateCard } from "./pipeline";
 import { loadCandidates, projectHidden, projectIntro, projectProfile, contactFromIntro, INTRO_COLUMNS, type IntroRow } from "./project";
 import {
@@ -37,9 +38,9 @@ import { isVisibleTo } from "./visibility";
  * (docs/api/mcp-tools.md). Вихід = тіло успішної відповіді REST.
  * Тест actions.test.ts звіряє реєстр з openapi.yaml і mcp-tools.md.
  *
- * Обробники (handler) є в діях T2–T4 (get_account, search_candidates,
- * get_candidate, воронка); решту допишуть T5–T12. Дія без обробника відповідає 501
- * not_implemented ще до перевірки оплати.
+ * Обробники (handler) є в діях T2–T5 (get_account, search_candidates,
+ * get_candidate, воронка, знайомства); решту допишуть T6–T12. Дія без обробника
+ * відповідає 501 not_implemented ще до перевірки оплати.
  */
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -83,6 +84,12 @@ export interface ActionDef<I extends z.ZodType = z.ZodType, O extends z.ZodType 
   audit?: string;
   /** Дія над кандидатом (5.1: кожна пише audit_log). */
   touchesCandidate?: boolean;
+  /**
+   * Перевірки дії, які читають базу (видимість, кулдауни, вакансія), без жодного
+   * запису. Іде в reserve() ДО квоти й до вимоги оплати, тобто до будь-якого
+   * settle x402: відмова тут нічого не списує (специфікація 5.5 і 7.4, крок 4).
+   */
+  precheck?: (ctx: ActionContext, input: z.output<I>) => Promise<void>;
   handler?: (ctx: ActionContext, input: z.output<I>) => Promise<HandlerResult<z.output<O>>>;
 }
 
@@ -264,6 +271,14 @@ export const ACTIONS = [
     quota: ["request_intro_day", "request_intro_month"],
     audit: "intro.request",
     touchesCandidate: true,
+    precheck: async (ctx, input) => {
+      await checkIntroRequest(ctx, input);
+    },
+    handler: async (ctx, input) => {
+      const { intro } = await requestIntro(ctx, input);
+      // intro.request або contact.reveal пише сам пакет знайомства.
+      return { output: intro, auditWritten: true };
+    },
   }),
   defineAction({
     name: "list_intros",
@@ -274,6 +289,7 @@ export const ACTIONS = [
     output: T.IntroList,
     permission: "intros.read",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => ({ output: await listIntros(ctx, input) }),
   }),
   defineAction({
     name: "intro_status",
@@ -284,6 +300,7 @@ export const ACTIONS = [
     output: T.Intro,
     permission: "intros.read",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => ({ output: await getIntro(ctx, input) }),
   }),
   defineAction({
     name: "cancel_intro",
@@ -296,6 +313,8 @@ export const ACTIONS = [
     access: ALL_ACCESS,
     audit: "intro.cancel",
     touchesCandidate: true,
+    // Журнал intro.cancel пише пакет скасування разом з рухом картки.
+    handler: async (ctx, input) => ({ output: await cancelIntro(ctx, input), auditWritten: true }),
   }),
   defineAction({
     name: "list_jobs",
@@ -497,6 +516,8 @@ export interface PreparedAction {
   ctx: ActionContext;
   /** Ціна, якщо цей виклик оплачує x402; null = входить у доступ або безкоштовно. */
   payment: { action: PaidAction; usd: string; settle: SettleTiming } | null;
+  /** Платіж, яким оплачено виклик (ставить reserve); run() дає його обробнику як ctx.payment. */
+  paidWith?: PaymentRef | null;
 }
 
 /** Платіж, який дав шлюз x402 після verify: id рядка x402_payments і адреса платника. */
@@ -530,8 +551,9 @@ export interface ActionResult {
  *
  *   prepareAction  вхід, право, стан компанії, доступ, канал, чи є обробник (501);
  *                  нічого не пише. Кидає до будь-якої 402.
- *   reserve        квоти (атомарна бронь рядка usage_events). Для платної дії це
- *                  `validate` шлюзу x402: квоту перевірено ДО settle.
+ *   reserve        precheck дії (видимість, кулдауни, вакансія) і квоти (атомарна
+ *                  бронь рядка usage_events). Для платної дії це `validate` шлюзу
+ *                  x402: усе перевірено ДО settle.
  *   run            обробник + перевірка виходу; облік і журнал НЕ пише. Для
  *                  before_response (пошук) це `effect` шлюзу; для before_effect
  *                  (знайомство, місяць USDC) `effect` теж run, і пише лише сам обробник.
@@ -620,6 +642,8 @@ function paymentFor(def: ActionDef, ctx: ActionContext): PreparedAction["payment
  */
 export async function reserve(prepared: PreparedAction, payment: PaymentRef | null = null): Promise<Reservation> {
   const { def } = prepared;
+  // Спершу перевірки дії: відмова (кандидат невидимий, кулдаун) важливіша за 402 і нічого не бронює.
+  if (def.precheck) await def.precheck(prepared.ctx, prepared.input);
   if (prepared.payment && !payment) {
     throw new PaymentRequired(prepared.payment.action, prepared.payment.usd, prepared.payment.settle);
   }
@@ -627,6 +651,7 @@ export async function reserve(prepared: PreparedAction, payment: PaymentRef | nu
     prepared.ctx.actor.kind === "x402_guest" && payment
       ? { ...prepared.ctx, actor: { kind: "x402_guest", payer: payment.payer, paymentId: payment.id } }
       : prepared.ctx;
+  prepared.paidWith = payment;
   const usage = usageRecord(def, ctx, payment);
   const plan = quotaPlan(ctx.actor, ctx.company);
 
@@ -642,7 +667,8 @@ export async function reserve(prepared: PreparedAction, payment: PaymentRef | nu
 export async function run(prepared: PreparedAction): Promise<HandlerResult<unknown>> {
   const { def } = prepared;
   if (!def.handler) throw new ActionError("not_implemented", 501, "This action is not available yet.");
-  const result = await def.handler(prepared.ctx, prepared.input);
+  const ctx = prepared.paidWith ? { ...prepared.ctx, payment: prepared.paidWith } : prepared.ctx;
+  const result = await def.handler(ctx, prepared.input);
   const checked = def.output.safeParse(result.output);
   if (!checked.success) {
     console.error(`crm: output of ${def.name} does not match its schema`, checked.error.issues.slice(0, 5));
