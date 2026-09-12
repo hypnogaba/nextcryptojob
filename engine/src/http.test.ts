@@ -16,7 +16,13 @@ afterEach(() => { vi.useRealTimers(); });
 describe("політика адрес", () => {
   it.each(["127.0.0.1", "10.1.2.3", "169.254.169.254", "172.16.0.1", "192.168.1.1", "0.0.0.0", "::1", "fd00::1", "::ffff:127.0.0.1", "100.64.0.1"])
     ("%s: приватна", (ip) => expect(isPrivateIp(ip)).toBe(true));
-  it.each(["8.8.8.8", "104.16.1.1", "2606:4700::1111"])("%s: публічна", (ip) => expect(isPrivateIp(ip)).toBe(false));
+  it.each(["8.8.8.8", "104.16.1.1", "2606:4700::1111", "2001:4860:4860::8888", "64:ff9c::1"])("%s: публічна", (ip) => expect(isPrivateIp(ip)).toBe(false));
+  it.each(["64:ff9b::10.0.0.1", "64:ff9b::a00:1", "64:ff9b::808:808", "64:ff9b:0:0:0:0:7f00:1", "64:ff9b:1::1",
+    "2002::1", "2002:c0a8:101::1", "2002:0808:0808::1"])("%s: NAT64 і 6to4 блокуються (обгортки IPv4)", (ip) => expect(isPrivateIp(ip)).toBe(true));
+  it("URL з NAT64-літералом відкидається без мережі", () => {
+    expect(() => checkUrlShape("https://[64:ff9b::7f00:1]/")).toThrow(UnsafeUrlError);
+    expect(() => checkUrlShape("https://[2002:7f00:1::]/")).toThrow(UnsafeUrlError);
+  });
 
   it.each([
     "ftp://jobs.dou.ua/feed", "file:///etc/passwd", "javascript:alert(1)",
@@ -289,6 +295,17 @@ describe("safeFetch і бюджети запитів", () => {
     });
     await settle(fetchJson("https://api.example.com/a", {}, { fetchImpl, retryDelayMs: 0 }));
     expect(starts).toEqual([0, 60_000]);
+  });
+
+  it("maxBackoffMs обрізає Retry-After для всього бюджету", async () => {
+    const starts: number[] = [];
+    const t0 = Date.now();
+    const fetchImpl = asFetch(() => {
+      starts.push(Date.now() - t0);
+      return starts.length === 1 ? new Response("slow", { status: 429, headers: { "retry-after": "3600" } }) : new Response("{}");
+    });
+    await settle(fetchJson("https://api.example.com/a", {}, { fetchImpl, retryDelayMs: 0, maxBackoffMs: 15_000 }));
+    expect(starts).toEqual([0, 15_000]);
   });
 
   it("429 без Retry-After чекає зростаючу паузу", async () => {

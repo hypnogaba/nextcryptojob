@@ -29,11 +29,36 @@ const isPrivateV4 = (ip: string): boolean => {
     (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
 };
 
+/** IPv6 у вісім 16-бітних груп ("::" розгорнуто, IPv4 у хвості перетворено). null, якщо не розібрати. */
+function v6Groups(v: string): number[] | null {
+  let s = v;
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
+  if (tail) {
+    const o = tail[1]!.split(".").map(Number);
+    s = s.slice(0, -tail[1]!.length) + `${((o[0]! << 8) | o[1]!).toString(16)}:${((o[2]! << 8) | o[3]!).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const rest = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const fill = halves.length === 2 ? 8 - head.length - rest.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const groups = [...head, ...Array(fill).fill("0"), ...rest].map((g) => parseInt(g, 16));
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
 const isPrivateV6 = (ip: string): boolean => {
-  const v = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  const v = ip.toLowerCase().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
   if (v === "::" || v === "::1") return true;
   if (v.startsWith("::ffff:")) { const tail = v.slice(7); return isIP(tail) === 4 ? isPrivateV4(tail) : true; }
-  return /^(fc|fd|fe[89ab]|ff)/.test(v);
+  const g = v6Groups(v);
+  if (!g) return true;
+  // Обгортки IPv4, за якими може стояти будь-яка, зокрема приватна, IPv4:
+  // NAT64 64:ff9b::/96 і 64:ff9b:1::/48 (RFC 6052, 8215), 6to4 2002::/16 (RFC 3056).
+  if (g[0] === 0x64 && g[1] === 0xff9b && (g[2] === 1 || g.slice(2, 6).every((x) => x === 0))) return true;
+  if (g[0] === 0x2002) return true;
+  // fc00::/7 (ULA), fe80::/10 (link-local), ff00::/8 (multicast).
+  return (g[0]! & 0xfe00) === 0xfc00 || (g[0]! & 0xffc0) === 0xfe80 || (g[0]! & 0xff00) === 0xff00;
 };
 
 export const isPrivateIp = (ip: string): boolean =>
@@ -217,6 +242,8 @@ export interface FetchOptions {
   maxBodyBytes?: number;
   /** Пауза для всього бюджету після 429 без Retry-After. fetchJson і fetchXml ставлять її самі, зростаючою. */
   backoffOn429Ms?: number;
+  /** Стеля паузи бюджету після 429 (типово MAX_BACKOFF_MS): джерело, що просить години, не зупиняє інших надовго. */
+  maxBackoffMs?: number;
 }
 
 /** Retry-After у секундах або як дата. null, якщо заголовка немає чи він незрозумілий. */
@@ -277,7 +304,7 @@ export async function safeFetch(url: string, init: RequestInit = {}, o: FetchOpt
         signal: userSignal ? AbortSignal.any([userSignal, timeout]) : timeout,
       }).catch((e: unknown) => { throw unsafeCause(e) ?? e; });
       if (r.status === 429) {
-        limiter.backoff(Math.min(retryAfterMs(r.headers) ?? o.backoffOn429Ms ?? 2_000, MAX_BACKOFF_MS));
+        limiter.backoff(Math.min(retryAfterMs(r.headers) ?? o.backoffOn429Ms ?? 2_000, o.maxBackoffMs ?? MAX_BACKOFF_MS));
       }
       return r;
     }, { signal: userSignal });
