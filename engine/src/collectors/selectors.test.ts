@@ -61,6 +61,8 @@ describe("isSwapName", () => {
     "transfer(address _to, uint256 _value)",
     "approve(address,uint256)",
     "multicall(bytes[])",
+    "swapOwner(address,address,address)",
+    "swapOwner(address prevOwner, address oldOwner, address newOwner)",
     "",
   ])("не обмін: %s", (n) => expect(isSwapName(n)).toBe(false));
 
@@ -76,6 +78,39 @@ describe("resolveSelectors", () => {
     expect(selectorCachePath({})).toBe("./data/selectors.json");
   });
 
+  it("SELECTOR_CACHE береться з o.env, а не лише з process.env", async () => {
+    const envPath = join(dir, "from-env", "sel.json");
+    const { fetchImpl } = fakeFetch(openchain({ "0xa9059cbb": "transfer(address,uint256)" }));
+    await resolveSelectors(["0xa9059cbb"], { fetchImpl, env: { SELECTOR_CACHE: envPath } });
+    expect(JSON.parse(await readFile(envPath, "utf8"))["0xa9059cbb"]).toBe("transfer(address,uint256)");
+  });
+
+  it("«openchain не знає» живе в кеші добу, потім питаємо знову", async () => {
+    let t = Date.UTC(2026, 8, 12);
+    const now = () => t;
+    const { fetchImpl, calls } = fakeFetch(openchain({}));
+    const r1 = await resolveSelectors(["0xdeadbeef"], { fetchImpl, cachePath, now });
+    expect(r1.names.get("0xdeadbeef")).toBeNull();
+    t += 23 * 3600_000;
+    __resetSelectorCaches(); // і з файлу теж
+    await resolveSelectors(["0xdeadbeef"], { fetchImpl, cachePath, now });
+    expect(calls).toHaveLength(1);
+    t += 2 * 3600_000;
+    await resolveSelectors(["0xdeadbeef"], { fetchImpl, cachePath, now });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("старий формат (null без часу) вважається простроченим", async () => {
+    await mkdir(join(dir, "sub"), { recursive: true });
+    await writeFile(cachePath, JSON.stringify({ "0xdeadbeef": null, "0xa9059cbb": "transfer(address,uint256)" }), "utf8");
+    const { fetchImpl, calls } = fakeFetch(openchain({ "0xdeadbeef": "found()" }));
+    const r = await resolveSelectors(["0xdeadbeef", "0xa9059cbb"], { fetchImpl, cachePath });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url.searchParams.get("function")).toBe("0xdeadbeef");
+    expect(r.names.get("0xdeadbeef")).toBe("found()");
+    expect(r.names.get("0xa9059cbb")).toBe("transfer(address,uint256)");
+  });
+
   it("промах іде в openchain і пишеться у файл; влучання з файлу не йде в мережу", async () => {
     const { fetchImpl, calls } = fakeFetch(openchain({ "0x3593564c": "execute(bytes,bytes[],uint256)", "0xa9059cbb": "transfer(address,uint256)" }));
     const r1 = await resolveSelectors(["0x3593564C", "0xa9059cbb", "0xdeadbeef", "0x", "junk"], { fetchImpl, cachePath });
@@ -88,7 +123,9 @@ describe("resolveSelectors", () => {
     expect(r1.failed.size).toBe(0);
 
     const onDisk = JSON.parse(await readFile(cachePath, "utf8"));
-    expect(onDisk).toEqual({ "0x3593564c": "execute(bytes,bytes[],uint256)", "0xa9059cbb": "transfer(address,uint256)", "0xdeadbeef": null });
+    expect(onDisk).toMatchObject({ "0x3593564c": "execute(bytes,bytes[],uint256)", "0xa9059cbb": "transfer(address,uint256)" });
+    // Невідомий селектор зберігається з часом перевірки (для терміну придатності).
+    expect(onDisk["0xdeadbeef"]).toEqual({ unknownAt: expect.any(Number) });
     expect((await readdir(join(dir, "sub"))).filter((f) => f.endsWith(".tmp"))).toEqual([]);
 
     // Новий процес: памʼять порожня, кеш з файлу.

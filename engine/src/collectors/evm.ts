@@ -20,11 +20,18 @@
  * Сторінка до 1000 рядків, не більше 10 сторінок: Etherscan не дає PageNo × Offset > 10 000.
  * startblock/endblock не передаємо: endblock=99999999 з Python-версії на Blockscout
  * відрізав Optimism до 34 надісланих замість 209 (живий прогін 12.09.2026).
+ *
+ * Межа часу (ENGINE_DEADLINE_MS, 45 с на людину): після deadline − 10 с нових сторінок
+ * не беремо (sentCapped, gap "stopped early: deadline"), за 2 с до межі обриваємо запити;
+ * запит 15 с і один повтор; ліміт у тілі перечікуємо не більше трьох разів (1 + 2 + 4 с).
  */
 import { fetchJson } from "../http.js";
 import { backoffFor } from "../limits.js";
 import type { EvmChainFacts, EvmFacts } from "../types.js";
-import { type CollectOptions, type Collected, errText, IN_BAND_RETRIES, inBandDelay, normEvm, scrubKey } from "./onchain.js";
+import {
+  type Budget, budgetFor, type CollectOptions, type Collected, errText, IN_BAND_RETRIES, inBandDelay, normEvm,
+  REQUEST_RETRIES, REQUEST_TIMEOUT_MS, scrubKey, STOPPED_EARLY,
+} from "./onchain.js";
 import { isSwapName, resolveSelectors, SELECTOR } from "./selectors.js";
 
 export type EvmChain = "ethereum" | "base" | "arbitrum" | "optimism";
@@ -62,7 +69,6 @@ interface Endpoint {
   key?: string;
   /** Якого ключа бракує, коли йдемо на публічний сервер. */
   missing?: string;
-  timeoutMs: number;
 }
 
 export function endpointFor(chain: EvmChain, env: Record<string, string | undefined>): Endpoint {
@@ -70,14 +76,12 @@ export function endpointFor(chain: EvmChain, env: Record<string, string | undefi
   const bs = env.BLOCKSCOUT_KEY?.trim();
   const id = String(CHAIN_ID[chain]);
   if (es && ETHERSCAN_FREE_CHAINS.has(chain)) {
-    return { source: "etherscan", base: ETHERSCAN_API, fixed: { chainid: id, apikey: es }, key: es, timeoutMs: 30_000 };
+    return { source: "etherscan", base: ETHERSCAN_API, fixed: { chainid: id, apikey: es }, key: es };
   }
-  if (bs) return { source: "blockscout", base: BLOCKSCOUT_PRO_API, fixed: { chain_id: id, apikey: bs }, key: bs, timeoutMs: 30_000 };
+  if (bs) return { source: "blockscout", base: BLOCKSCOUT_PRO_API, fixed: { chain_id: id, apikey: bs }, key: bs };
   return {
     source: "blockscout", base: BLOCKSCOUT_INSTANCE[chain], fixed: {},
     missing: ETHERSCAN_FREE_CHAINS.has(chain) ? "ETHERSCAN_KEY" : "BLOCKSCOUT_KEY",
-    // Публічні сервери бувають повільні.
-    timeoutMs: 45_000,
   };
 }
 
@@ -110,11 +114,11 @@ const DAILY_LIMIT = /daily/i;
  * Ліміт у тілі (Etherscan: 200 і "Max rate limit reached") відсуває весь бюджет
  * через backoffFor і повторює ту саму сторінку.
  */
-async function fetchRows(url: string, ep: Endpoint, o: EvmOptions): Promise<TxRow[]> {
+async function fetchRows(url: string, ep: Endpoint, o: EvmOptions, b: Budget): Promise<TxRow[]> {
   const base = o.rateLimitBackoffMs ?? 1_000;
   for (let attempt = 0; ; attempt++) {
-    const d = await fetchJson<ApiResponse>(url, { signal: o.signal },
-      { fetchImpl: o.fetchImpl, retries: o.retries, retryDelayMs: o.retryDelayMs, timeoutMs: ep.timeoutMs });
+    const d = await fetchJson<ApiResponse>(url, { signal: b.signal },
+      { fetchImpl: o.fetchImpl, retries: o.retries ?? REQUEST_RETRIES, retryDelayMs: o.retryDelayMs, timeoutMs: REQUEST_TIMEOUT_MS });
     if (Array.isArray(d?.result)) return d.result as TxRow[];
     const msg = scrubKey(String((typeof d?.result === "string" && d.result) || d?.message || d?.error || "відповідь без result"), ep.key);
     if (RATE_LIMIT.test(msg) && !DAILY_LIMIT.test(msg) && attempt < IN_BAND_RETRIES) {
@@ -138,17 +142,33 @@ interface ChainRaw {
   okSent: Array<{ method: string; name: string }>;
 }
 
+/** Межа часу настала раніше, ніж мережа віддала хоч сторінку. */
+class StoppedEarly extends Error {
+  constructor() { super(STOPPED_EARLY); this.name = "StoppedEarly"; }
+}
+
 /** Мережа однієї адреси: сторінки txlist, лічба, вік. Кидає, якщо не відповіла вже перша сторінка. */
-async function collectChain(address: string, ep: Endpoint, o: EvmOptions): Promise<ChainRaw> {
+async function collectChain(address: string, ep: Endpoint, o: EvmOptions, b: Budget): Promise<ChainRaw> {
   const rows: TxRow[] = [];
   let complete = false;
   let partial: string | undefined;
   for (let page = 1; page <= MAX_PAGES; page++) {
+    if (!b.open()) {
+      if (page === 1) throw new StoppedEarly();
+      partial = STOPPED_EARLY;
+      break;
+    }
     let got: TxRow[];
     try {
-      got = await fetchRows(txlistUrl(ep, address, page, PAGE_SIZE, "desc"), ep, o);
+      got = await fetchRows(txlistUrl(ep, address, page, PAGE_SIZE, "desc"), ep, o, b);
     } catch (e) {
-      if (page === 1 || o.signal?.aborted) throw e;
+      if (o.signal?.aborted) throw e;
+      if (b.stopped()) {
+        if (page === 1) throw new StoppedEarly();
+        partial = STOPPED_EARLY;
+        break;
+      }
+      if (page === 1) throw e;
       partial = `partial: page ${page} failed, counts are a lower bound (${scrubKey(errText(e), ep.key)})`;
       break;
     }
@@ -170,10 +190,10 @@ async function collectChain(address: string, ep: Endpoint, o: EvmOptions): Promi
       const t = ts(r);
       if (t !== null && (firstTs === null || t < firstTs)) firstTs = t;
     }
-  } else {
+  } else if (b.open()) {
     // Найстаріша транзакція за межами 10 000 рядків: один рядок за зростанням.
     try {
-      firstTs = ts((await fetchRows(txlistUrl(ep, address, 1, 1, "asc"), ep, o))[0]);
+      firstTs = ts((await fetchRows(txlistUrl(ep, address, 1, 1, "asc"), ep, o, b))[0]);
     } catch (e) {
       if (o.signal?.aborted) throw e;
       firstTs = null;
@@ -189,6 +209,27 @@ async function collectChain(address: string, ep: Endpoint, o: EvmOptions): Promi
     ...(partial ? { gap: partial } : {}),
   };
   return { facts, okSent };
+}
+
+type Names = { names: Map<string, string | null>; failed: Set<string>; error?: string };
+
+/** openchain для селекторів без назви. Не встиг до межі = назви невідомі (swaps null), а не падіння. */
+async function lookupNames(unnamed: Set<string>, o: EvmOptions, env: Record<string, string | undefined>, b: Budget): Promise<Names> {
+  if (unnamed.size === 0) return { names: new Map(), failed: new Set() };
+  const stopped = (): Names => ({ names: new Map(), failed: new Set(unnamed), error: STOPPED_EARLY });
+  if (b.signal.aborted) {
+    if (o.signal?.aborted) throw o.signal.reason;
+    return stopped();
+  }
+  try {
+    return await resolveSelectors(unnamed, {
+      fetchImpl: o.fetchImpl, signal: b.signal, cachePath: o.selectorCachePath, env, now: o.now,
+      retries: o.retries ?? REQUEST_RETRIES, retryDelayMs: o.retryDelayMs,
+    });
+  } catch (e) {
+    if (o.signal?.aborted) throw e;
+    return stopped();
+  }
 }
 
 const failedChain = (source: Source, gap: string): EvmChainFacts =>
@@ -208,12 +249,14 @@ export async function collectEvm(addresses: readonly string[], o: EvmOptions = {
     return invalid.length ? { ok: false, gap: "no valid EVM address" } : { ok: true, facts: {} };
   }
 
+  const b = budgetFor({ ...o, env });
   const jobs = valid.flatMap((address) => EVM_CHAINS.map((chain) => ({ address, chain, ep: endpointFor(chain, env) })));
   const raw = await Promise.all(jobs.map(async (j) => {
     try {
-      return { ...j, raw: await collectChain(j.address, j.ep, o), gap: null };
+      return { ...j, raw: await collectChain(j.address, j.ep, o, b), gap: null };
     } catch (e) {
       if (o.signal?.aborted) throw e;
+      if (e instanceof StoppedEarly || b.stopped()) return { ...j, raw: null, gap: STOPPED_EARLY };
       const why = scrubKey(errText(e), j.ep.key);
       const gap = j.ep.missing ? `not configured: ${j.ep.missing}; public ${hostOf(j.ep)} failed: ${why}` : why;
       return { ...j, raw: null, gap };
@@ -226,9 +269,7 @@ export async function collectEvm(addresses: readonly string[], o: EvmOptions = {
     if (!r.raw) continue;
     for (const t of r.raw.okSent) if (!t.name && SELECTOR.test(t.method)) unnamed.add(t.method);
   }
-  const resolved = unnamed.size
-    ? await resolveSelectors(unnamed, { fetchImpl: o.fetchImpl, signal: o.signal, cachePath: o.selectorCachePath, retries: o.retries, retryDelayMs: o.retryDelayMs })
-    : { names: new Map<string, string | null>(), failed: new Set<string>(), requests: 0 };
+  const resolved = await lookupNames(unnamed, o, env, b);
 
   const facts: EvmFacts = {};
   let anyOk = false;

@@ -28,7 +28,7 @@ const row = (o: { from?: string; ts?: number; block?: number; methodId?: string;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
 const NO_TX = { status: "0", message: "No transactions found", result: [] };
 
-type Handler = (p: URLSearchParams) => Response;
+type Handler = (p: URLSearchParams, init?: RequestInit) => Response | Promise<Response>;
 /**
  * Рядки від найновішого до найстарішого; віддає сторінку за page/offset/sort як txlist.
  * startblock/endblock фільтрують, як на Blockscout.
@@ -71,12 +71,12 @@ const openchainOk: Handler = (p) => {
 type Call = { url: URL; chain: string; at: number };
 function router(h: Partial<Record<EvmChain | "openchain", Handler>>) {
   const calls: Call[] = [];
-  const fetchImpl = (async (input: string | URL | Request) => {
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     const chain = chainOf(url);
     calls.push({ url, chain, at: performance.now() });
     const handler = h[chain] ?? (chain === "openchain" ? openchainOk : () => json(NO_TX));
-    return handler(url.searchParams);
+    return handler(url.searchParams, init);
   }) as unknown as typeof fetch;
   return { fetchImpl, calls, of: (c: string) => calls.filter((x) => x.chain === c) };
 }
@@ -248,12 +248,63 @@ describe("collectEvm: прогалини й ключі", () => {
     expect(eth[1]!.at - eth[0]!.at).toBeGreaterThanOrEqual(550);
   });
 
+  it("ліміт у тілі щоразу: не більше трьох повторів, далі прогалина мережі", async () => {
+    const r = router({ ethereum: () => json({ status: "0", message: "NOTOK", result: "Max rate limit reached" }) });
+    const res = await collectEvm([ADDR], opts(r.fetchImpl));
+    if (!res.ok) throw new Error(res.gap);
+    expect(r.of("ethereum")).toHaveLength(4);
+    expect(res.facts[ADDR]!.ethereum!.gap).toMatch(/Max rate limit reached/);
+  });
+
+  it("5xx: типово один повтор, а не більше", async () => {
+    let n = 0;
+    const flaky = router({ ethereum: (p) => (n++ === 0 ? new Response("x", { status: 502 }) : paged([row()])(p)) });
+    const ok = await collectEvm([ADDR], { ...opts(flaky.fetchImpl), retries: undefined });
+    if (!ok.ok) throw new Error(ok.gap);
+    expect(ok.facts[ADDR]!.ethereum!.sent).toBe(1);
+
+    __resetLimiters();
+    const down = router({ ethereum: () => new Response("x", { status: 502 }) });
+    const res = await collectEvm([ADDR], { ...opts(down.fetchImpl), retries: undefined });
+    if (!res.ok) throw new Error(res.gap);
+    expect(down.of("ethereum")).toHaveLength(2);
+    expect(res.facts[ADDR]!.ethereum!.sent).toBeNull();
+  });
+
   it("денний ліміт не перечікуємо: одна спроба і прогалина", async () => {
     const r = router({ ethereum: () => json({ status: "0", message: "NOTOK", result: "Max daily rate limit reached" }) });
     const res = await collectEvm([ADDR], opts(r.fetchImpl));
     if (!res.ok) throw new Error(res.gap);
     expect(r.of("ethereum")).toHaveLength(1);
     expect(res.facts[ADDR]!.ethereum!.gap).toMatch(/daily/);
+  });
+});
+
+describe("collectEvm: межа часу", () => {
+  it("сторінки зупиняються до межі: лічба як нижня межа, gap stopped early, вік не питаємо", async () => {
+    let t = 0;
+    const rows = Array.from({ length: 9000 }, (_, i) => row({ ts: 1_700_000_000 - i }));
+    const r = router({ ethereum: (p) => { t += 12_000; return paged(rows)(p); } });
+    const res = await collectEvm([ADDR], { ...opts(r.fetchImpl), now: () => t, deadline: 45_000 });
+    if (!res.ok) throw new Error(res.gap);
+    // Старти на 0, 12 і 24 с; о 36 с уже за межею 45 − 10 с.
+    expect(r.of("ethereum")).toHaveLength(3);
+    expect(res.facts[ADDR]!.ethereum).toMatchObject({ sent: 3000, sentCapped: true, firstTs: null });
+    expect(res.facts[ADDR]!.ethereum!.gap).toBe("stopped early: deadline");
+  });
+
+  it("запит, що висить, обривається за 2 с до межі; збирач віддає решту мереж", async () => {
+    // Сервер не відповідає, доки запит не обірвуть (як справжній fetch із signal).
+    const hang = (_p: URLSearchParams, init?: RequestInit) => new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+    });
+    const r = router({ ethereum: hang, base: paged([row({ blockscout: true })]) });
+    const t0 = performance.now();
+    const res = await collectEvm([ADDR], { ...opts(r.fetchImpl), deadline: Date.now() + 2_400, deadlineMarginMs: 0 });
+    expect(performance.now() - t0).toBeLessThan(2_000);
+    if (!res.ok) throw new Error(res.gap);
+    expect(res.facts[ADDR]!.ethereum).toMatchObject({ sent: null, gap: "stopped early: deadline" });
+    expect(res.facts[ADDR]!.base).toMatchObject({ sent: 1 });
   });
 });
 

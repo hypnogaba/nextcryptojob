@@ -66,10 +66,27 @@ describe("collectHyperliquid", () => {
     expect(await collectHyperliquid([A], { fetchImpl })).toEqual({ ok: true, facts: { [A]: { volumeUsd: 0, fillsRecent: 0 } } });
   });
 
-  it("portfolio не відповів: обсяг null, угоди лишаються", async () => {
+  it("portfolio не відповів: обсяг null з приміткою в partial, угоди лишаються", async () => {
     const { fetchImpl } = fake((c) => c.body.type === "portfolio" ? new Response("x", { status: 500 }) : json([fill(1)]));
     const res = await collectHyperliquid([A], { fetchImpl, retries: 0, retryDelayMs: 0 });
-    expect(res).toEqual({ ok: true, facts: { [A]: { volumeUsd: null, fillsRecent: 1 } } });
+    if (!res.ok) throw new Error(res.gap);
+    expect(res.facts).toEqual({ [A]: { volumeUsd: null, fillsRecent: 1 } });
+    expect(res.partial?.[A]).toMatch(/^portfolio: .*api\.hyperliquid\.xyz/);
+  });
+
+  it("відповідь без allTime чи не масив угод: null з поясненням, а не мовчки", async () => {
+    const { fetchImpl } = fake((c) => c.body.type === "portfolio" ? json(portfolio(null)) : json({ error: "odd" }));
+    const res = await collectHyperliquid([A, B], { fetchImpl, retries: 0 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.gap).toMatch(/portfolio: no allTime volume.*userFills: not a list/);
+  });
+
+  it("5xx: типово один повтор", async () => {
+    let n = 0;
+    const { fetchImpl, calls } = fake((c) => (c.body.type === "userFills" && n++ === 0 ? new Response("x", { status: 502 }) : c.body.type === "portfolio" ? json(portfolio("1")) : json([])));
+    const res = await collectHyperliquid([A], { fetchImpl, retryDelayMs: 0 });
+    expect(res).toEqual({ ok: true, facts: { [A]: { volumeUsd: 1, fillsRecent: 0 } } });
+    expect(calls.filter((c) => c.body.type === "userFills")).toHaveLength(2);
   });
 
   it("одна адреса не відповіла зовсім: поля null і partial; усі не відповіли: прогалина", async () => {

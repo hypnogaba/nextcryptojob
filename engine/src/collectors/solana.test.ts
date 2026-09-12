@@ -35,9 +35,20 @@ describe("isSwapTx", () => {
     expect(isSwapTx(tx({ outer: ["ComputeBudget111111111111111111111111111111", JUP6] }), OWNER)).toBe(true);
     expect(isSwapTx(tx({ inner: [TOKEN, WHIRL] }), OWNER)).toBe(true);
     expect(isSwapTx(tx({ keys: [SYSTEM, "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"] }), OWNER)).toBe(true);
-    const plainKeys: ParsedTx = { transaction: { message: { accountKeys: [OWNER, "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"], instructions: [] } }, meta: null };
-    expect(isSwapTx(plainKeys, OWNER)).toBe(true);
+    const noMeta: ParsedTx = { transaction: { message: { accountKeys: [{ pubkey: OWNER, signer: true }, { pubkey: "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA", signer: false }], instructions: [] } }, meta: null };
+    expect(isSwapTx(noMeta, OWNER)).toBe(true);
     expect(isSwapTx(tx({ loaded: ["dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"] }), OWNER)).toBe(true);
+  });
+
+  it("власник мусить підписати транзакцію: чужий обмін, де він лише отримувач, не рахується", () => {
+    const notSigner = tx({ outer: [JUP6] });
+    (notSigner.transaction!.message!.accountKeys![0] as { signer?: boolean }).signer = false;
+    expect(isSwapTx(notSigner, OWNER)).toBe(false);
+    const absent: ParsedTx = { transaction: { message: { accountKeys: [{ pubkey: OTHER, signer: true }], instructions: [{ programId: JUP6 }] } }, meta: null };
+    expect(isSwapTx(absent, OWNER)).toBe(false);
+    // Рядкові ключі без позначки signer: підпис не доведено.
+    const plain: ParsedTx = { transaction: { message: { accountKeys: [OWNER, JUP6], instructions: [{ programId: JUP6 }] } }, meta: null };
+    expect(isSwapTx(plain, OWNER)).toBe(false);
   });
 
   it("усі 13 програм DEX у переліку", () => {
@@ -67,11 +78,17 @@ describe("isSwapTx", () => {
 
 describe("estimateSwaps", () => {
   it("вибірка менше 50: null; 50 і більше: частка × успішні підписи", () => {
-    expect(estimateSwaps(49, 49, 1000)).toBeNull();
-    expect(estimateSwaps(0, 0, 0)).toBeNull();
-    expect(estimateSwaps(50, 10, 1000)).toBe(200);
-    expect(estimateSwaps(150, 1, 6301)).toBe(42);
-    expect(estimateSwaps(150, 0, 6301)).toBe(0);
+    expect(estimateSwaps(49, 49, 1000, false)).toBeNull();
+    expect(estimateSwaps(50, 10, 1000, false)).toBe(200);
+    expect(estimateSwaps(150, 1, 6301, false)).toBe(42);
+    expect(estimateSwaps(150, 0, 6301, false)).toBe(0);
+  });
+
+  it("виняток §3: прочитано всі успішні й список не обрізаний = точна кількість навіть менше 50", () => {
+    expect(estimateSwaps(20, 5, 20, false)).toBe(5);
+    expect(estimateSwaps(19, 5, 20, false)).toBeNull();
+    expect(estimateSwaps(20, 5, 20, true)).toBeNull();
+    expect(estimateSwaps(0, 0, 0, false)).toBe(0);
   });
 });
 
@@ -154,27 +171,76 @@ describe("collectSolana", () => {
     expect(f.maxTxInFlight()).toBe(4);
   });
 
-  it("без HELIUS_KEY: публічний RPC, транзакції по одній", async () => {
-    const f = rpcFake({ sigList: sigs(5), delayMs: 5 });
-    const res = await collectSolana([OWNER], { ...base(f.fetchImpl, {}), sampleSize: 3, minSample: 3 });
+  it("без HELIUS_KEY і до 30 успішних: публічний RPC читає всі по одній, кількість точна", async () => {
+    const f = rpcFake({ sigList: sigs(5, { errEvery: 5 }), txs: { sig1: tx({ outer: [JUP6] }) }, delayMs: 5 });
+    const res = await collectSolana([OWNER], base(f.fetchImpl, {}));
     if (!res.ok) throw new Error(res.gap);
     expect(f.calls[0]!.url.toString()).toBe("https://api.mainnet-beta.solana.com/");
     expect(f.maxTxInFlight()).toBe(1);
-    expect(res.facts[OWNER]).toMatchObject({ sigs: 5, sampleSeen: 3, sampleSwaps: 0, swaps: 0 });
+    expect(f.of("getTransaction")).toHaveLength(4);
+    expect(res.facts[OWNER]).toMatchObject({ sigs: 5, sigsOk: 4, sampleSeen: 4, sampleSwaps: 1, swaps: 1 });
+    expect(res.partial).toBeUndefined();
   });
 
-  it("вибірка менше 50 (типова межа): swaps = null, решта фактів є", async () => {
-    const f = rpcFake({ sigList: sigs(4), txs: { sig0: tx({ outer: [JUP6] }) } });
+  it("без HELIUS_KEY і більше 30 успішних: лише підписи, swaps = null з приміткою not configured", async () => {
+    const f = rpcFake({ sigList: sigs(31) });
+    const res = await collectSolana([OWNER], base(f.fetchImpl, {}));
+    if (!res.ok) throw new Error(res.gap);
+    expect(f.of("getTransaction")).toHaveLength(0);
+    expect(res.facts[OWNER]).toEqual({ sigs: 31, sigsOk: 31, sigsCapped: false, firstTs: 1_780_000_000 - 30 * 60, sampleSeen: 0, sampleSwaps: 0, swaps: null });
+    expect(res.partial).toEqual({ [OWNER]: "swaps: not configured: HELIUS_KEY" });
+  });
+
+  it("вибірка зупиняється за 10 с до межі: віддає виміряне, swaps за правилами порогу", async () => {
+    let t = 0;
+    const f = rpcFake({ sigList: sigs(100) });
+    const fetchImpl = (async (u: string | URL | Request, init?: RequestInit) => {
+      if (String(init?.body).includes("getTransaction")) t += 5_000;
+      return f.fetchImpl(u, init);
+    }) as unknown as typeof fetch;
+    const res = await collectSolana([OWNER], { ...base(fetchImpl), sampleSize: 20, now: () => t, deadline: 45_000 });
+    if (!res.ok) throw new Error(res.gap);
+    const seen = res.facts[OWNER]!.sampleSeen;
+    expect(seen).toBeGreaterThan(0);
+    expect(seen).toBeLessThan(20);
+    expect(res.facts[OWNER]).toMatchObject({ sigs: 100, swaps: null });
+    expect(res.partial?.[OWNER]).toBe("swaps: stopped early: deadline");
+  });
+
+  it("вибірка менше 50 і не всі успішні прочитані: swaps = null, решта фактів є", async () => {
+    const f = rpcFake({ sigList: sigs(60), txs: { sig0: tx({ outer: [JUP6] }) } });
+    const res = await collectSolana([OWNER], { ...base(f.fetchImpl), sampleSize: 40 });
+    if (!res.ok) throw new Error(res.gap);
+    expect(res.facts[OWNER]).toEqual({ sigs: 60, sigsOk: 60, sigsCapped: false, firstTs: 1_780_000_000 - 59 * 60, sampleSeen: 40, sampleSwaps: 1, swaps: null });
+  });
+
+  it("20 з 20 успішних прочитано: точна кількість обмінів", async () => {
+    const txs = Object.fromEntries([0, 3, 7, 11, 19].map((i) => [`sig${i}`, tx({ outer: [JUP6] })]));
+    const f = rpcFake({ sigList: sigs(20), txs });
     const res = await collectSolana([OWNER], base(f.fetchImpl));
     if (!res.ok) throw new Error(res.gap);
-    expect(res.facts[OWNER]).toEqual({ sigs: 4, sigsOk: 4, sigsCapped: false, firstTs: 1_780_000_000 - 3 * 60, sampleSeen: 4, sampleSwaps: 1, swaps: null });
+    expect(res.facts[OWNER]).toMatchObject({ sigs: 20, sigsOk: 20, sampleSeen: 20, sampleSwaps: 5, swaps: 5 });
   });
 
-  it("10 повних сторінок: sigsCapped, вік невідомий, одинадцятої сторінки немає", async () => {
-    const f = rpcFake({ sigList: sigs(10_500) });
-    const res = await collectSolana([OWNER], { ...base(f.fetchImpl), sampleSize: 0 });
+  it("одна з 20 транзакцій не відповіла: вибірка вже не повна і менше 50, swaps = null", async () => {
+    const f = rpcFake({ sigList: sigs(20), onTx: (s) => (s === "sig4" ? new Response("x", { status: 500 }) : undefined) });
+    const res = await collectSolana([OWNER], base(f.fetchImpl));
     if (!res.ok) throw new Error(res.gap);
-    expect(res.facts[OWNER]).toMatchObject({ sigs: 10_000, sigsOk: 10_000, sigsCapped: true, firstTs: null, sampleSeen: 0, swaps: null });
+    expect(res.facts[OWNER]).toMatchObject({ sigsOk: 20, sampleSeen: 19, swaps: null });
+  });
+
+  it("порожній гаманець: нуль обмінів (усі нуль успішних прочитано)", async () => {
+    const f = rpcFake({ sigList: [] });
+    const res = await collectSolana([OWNER], base(f.fetchImpl));
+    if (!res.ok) throw new Error(res.gap);
+    expect(res.facts[OWNER]).toEqual({ sigs: 0, sigsOk: 0, sigsCapped: false, firstTs: null, sampleSeen: 0, sampleSwaps: 0, swaps: 0 });
+  });
+
+  it("10 повних сторінок: sigsCapped, вік невідомий, одинадцятої сторінки немає, малої вибірки не досить", async () => {
+    const f = rpcFake({ sigList: sigs(10_500) });
+    const res = await collectSolana([OWNER], { ...base(f.fetchImpl), sampleSize: 20 });
+    if (!res.ok) throw new Error(res.gap);
+    expect(res.facts[OWNER]).toMatchObject({ sigs: 10_000, sigsOk: 10_000, sigsCapped: true, firstTs: null, sampleSeen: 20, swaps: null });
     expect(f.of("getSignaturesForAddress")).toHaveLength(10);
   });
 
@@ -216,7 +282,7 @@ describe("collectSolana", () => {
     if (!noKey.ok) expect(noKey.gap).toMatch(/^not configured: HELIUS_KEY; public api\.mainnet-beta\.solana\.com failed: /);
 
     __resetLimiters();
-    const err = rpcFake({ sigList: [], onSigPage: () => json({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: "Invalid param: WrongSize" } }) });
+    const err = rpcFake({ sigList: [], onSigPage: () => json({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: `Invalid param: WrongSize (key ${KEY})` } }) });
     const withKey = await collectSolana([OWNER], base(err.fetchImpl));
     expect(withKey.ok).toBe(false);
     if (!withKey.ok) {

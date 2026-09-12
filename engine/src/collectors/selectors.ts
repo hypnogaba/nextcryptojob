@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fetchJson } from "../http.js";
-import { errText } from "./onchain.js";
+import { errText, REQUEST_TIMEOUT_MS } from "./onchain.js";
 
 /**
  * Назва методу, яка означає обмін. Перенесено з research/harness/collect_fast.py (SWAP_NAME)
@@ -18,10 +18,10 @@ import { errText } from "./onchain.js";
  * (`execute(bytes,bytes[])` і `execute(bytes,bytes[],uint256)`), а не будь-яке
  * `execute(bytes32…)`. Приймає обидва стилі назв: openchain без імен параметрів
  * і Etherscan з іменами ("execute(bytes commands,bytes[] inputs,uint256 deadline)").
- * `swapETH(uint16…` це міст Stargate, а не обмін.
+ * `swapETH(uint16…` це міст Stargate, `swapOwner` заміна власника Safe: не обміни.
  */
 export const SWAP_NAME =
-  /swap(?!ETH\(uint16)|exactinput|exactoutput|^execute\(bytes(?:\s+\w+)?,\s*bytes\[\]|fillorder|fillquote|sellto|transformerc20|unoswap/i;
+  /swap(?!ETH\(uint16|owner)|exactinput|exactoutput|^execute\(bytes(?:\s+\w+)?,\s*bytes\[\]|fillorder|fillquote|sellto|transformerc20|unoswap/i;
 
 export const isSwapName = (name: string | null | undefined): boolean => !!name && SWAP_NAME.test(name.trim());
 
@@ -30,10 +30,16 @@ export const OPENCHAIN_LOOKUP = "https://api.openchain.xyz/signature-database/v1
 /** Скільки селекторів в одному запиті до openchain. */
 export const SELECTOR_BATCH = 40;
 
-export const selectorCachePath = (env: Record<string, string | undefined> = process.env): string =>
-  env.SELECTOR_CACHE ?? "./data/selectors.json";
+/** SELECTOR_CACHE з переданого оточення, далі з process.env, далі ./data/selectors.json. */
+export const selectorCachePath = (env?: Record<string, string | undefined>): string =>
+  env?.SELECTOR_CACHE?.trim() || process.env.SELECTOR_CACHE?.trim() || "./data/selectors.json";
 
-type CacheFile = Record<string, string | null>;
+/** Скільки вірити відповіді «openchain назви не знає»: базу поповнюють, тож за добу питаємо знову. */
+export const UNKNOWN_TTL_MS = 24 * 3600_000;
+
+/** Назва або позначка «не знає» з часом перевірки (мс). */
+type Entry = string | { unknownAt: number };
+type CacheFile = Record<string, Entry>;
 
 async function readCacheFile(path: string): Promise<CacheFile> {
   let text: string;
@@ -43,7 +49,12 @@ async function readCacheFile(path: string): Promise<CacheFile> {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const out: CacheFile = {};
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      if (SELECTOR.test(k) && (typeof v === "string" || v === null)) out[k] = v;
+      if (!SELECTOR.test(k)) continue;
+      if (typeof v === "string" && v) out[k] = v;
+      else if (v && typeof v === "object" && Number.isFinite((v as { unknownAt?: unknown }).unknownAt)) {
+        out[k] = { unknownAt: Number((v as { unknownAt: number }).unknownAt) };
+      }
+      // null без часу (старий формат) не беремо: вважаємо простроченим і питаємо знову.
     }
     return out;
   } catch {
@@ -53,17 +64,17 @@ async function readCacheFile(path: string): Promise<CacheFile> {
 }
 
 /**
- * Кеш селекторів одного файлу. Значення null = openchain назви не знає
- * (це відповідь, її теж кешуємо); відсутній ключ = ще не питали.
+ * Кеш селекторів одного файлу. Рядок = назва (назавжди: селектор не змінює назви);
+ * {unknownAt} = openchain назви не знав (дійсне UNKNOWN_TTL_MS); відсутній ключ = ще не питали.
  */
 class SelectorCache {
-  private map: Map<string, string | null> | null = null;
+  private map: Map<string, Entry> | null = null;
   private loading: Promise<void> | null = null;
   private writing: Promise<void> = Promise.resolve();
 
   constructor(readonly path: string) {}
 
-  async ready(): Promise<Map<string, string | null>> {
+  async ready(): Promise<Map<string, Entry>> {
     if (this.map) return this.map;
     this.loading ??= readCacheFile(this.path).then((f) => { this.map = new Map(Object.entries(f)); });
     await this.loading;
@@ -81,7 +92,7 @@ class SelectorCache {
       const onDisk = await readCacheFile(this.path);
       for (const [k, v] of Object.entries(onDisk)) if (!map.has(k)) map.set(k, v);
       const obj: CacheFile = {};
-      for (const k of [...map.keys()].sort()) obj[k] = map.get(k) ?? null;
+      for (const k of [...map.keys()].sort()) obj[k] = map.get(k)!;
       await mkdir(dirname(this.path), { recursive: true });
       const tmp = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
       await writeFile(tmp, JSON.stringify(obj, null, 0) + "\n", "utf8");
@@ -105,8 +116,11 @@ export function __resetSelectorCaches(): void { caches.clear(); }
 export interface ResolveOptions {
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
-  /** Шлях до кешу. Типово SELECTOR_CACHE або ./data/selectors.json. */
+  /** Шлях до кешу. Типово SELECTOR_CACHE (з env, далі process.env) або ./data/selectors.json. */
   cachePath?: string;
+  env?: Record<string, string | undefined>;
+  /** Годинник, мс (термін придатності «не знає»). Типово Date.now. */
+  now?: () => number;
   retries?: number;
   retryDelayMs?: number;
 }
@@ -128,8 +142,9 @@ type OpenchainResponse = {
 
 /** Розвʼязує селектори: спершу кеш, решту пачками по 40 через openchain; нове дописує в кеш. */
 export async function resolveSelectors(selectors: Iterable<string>, o: ResolveOptions = {}): Promise<Resolved> {
-  const cache = cacheFor(o.cachePath ?? selectorCachePath());
+  const cache = cacheFor(o.cachePath ?? selectorCachePath(o.env));
   const map = await cache.ready();
+  const now = o.now ?? Date.now;
   const wanted = new Set<string>();
   for (const s of selectors) {
     const v = s.toLowerCase();
@@ -138,7 +153,9 @@ export async function resolveSelectors(selectors: Iterable<string>, o: ResolveOp
   const names = new Map<string, string | null>();
   const need: string[] = [];
   for (const s of wanted) {
-    if (map.has(s)) names.set(s, map.get(s) ?? null);
+    const e = map.get(s);
+    if (typeof e === "string") names.set(s, e);
+    else if (e && now() - e.unknownAt < UNKNOWN_TTL_MS) names.set(s, null);
     else need.push(s);
   }
   need.sort();
@@ -152,13 +169,13 @@ export async function resolveSelectors(selectors: Iterable<string>, o: ResolveOp
     const url = `${OPENCHAIN_LOOKUP}?filter=true&function=${chunk.join(",")}`;
     try {
       const d = await fetchJson<OpenchainResponse>(url, { signal: o.signal },
-        { fetchImpl: o.fetchImpl, retries: o.retries, retryDelayMs: o.retryDelayMs });
+        { fetchImpl: o.fetchImpl, retries: o.retries, retryDelayMs: o.retryDelayMs, timeoutMs: REQUEST_TIMEOUT_MS });
       const fn = d?.result?.function;
       if (d?.ok !== true || !fn || typeof fn !== "object") throw new Error("openchain відповів без result.function");
       for (const s of chunk) {
         const hits = fn[s];
         const name = Array.isArray(hits) ? hits.find((h) => typeof h?.name === "string" && h.name)?.name ?? null : null;
-        map.set(s, name);
+        map.set(s, name ?? { unknownAt: now() });
         names.set(s, name);
       }
     } catch (e) {
