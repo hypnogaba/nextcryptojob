@@ -160,7 +160,7 @@ const PATH_BUDGETS: Array<[hostBudget: string, pathPrefix: string, budget: strin
 ];
 
 const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
-  "6551": { concurrency: 2, minIntervalMs: 500 },
+  "6551": { concurrency: 2, minIntervalMs: 800 }, // ≤ 1,25 зап./с: під навантаженням 6551 віддає порожні дані (ворота якості 12.09); 2, щоб завислий запит не блокував решту
   etherscan: { concurrency: 1, minIntervalMs: 250 },
   blockscout: { concurrency: 1, minIntervalMs: 250 },
   helius: { concurrency: 4, minIntervalMs: 100 },
