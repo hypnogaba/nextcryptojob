@@ -186,7 +186,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 
 ## 10. Налаштування CRM і оплати (з проєкту CRM, 12.09)
 Секрети й змінні Worker: `WEBHOOK_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
-`X402_NETWORK` ('base-sepolia'|'base'|'solana-devnet'|'solana'), `X402_PAY_TO_EVM`, `X402_PAY_TO_SOLANA`,
+`X402_NETWORK` ('mainnet' | 'testnet'; обидві мережі Base і Solana разом, див. специфікацію CRM §7.3), `X402_PAY_TO_EVM`, `X402_PAY_TO_SOLANA`,
 `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`; прив'язки лімітів `RL_*` за специфікацією CRM. Дозволено два
 лише-індексні доповнення до ядра (індекси на `scores` і `users` у 0003). Двигун для добірок читає
 `company_jobs_live` (0004) і пише вакансії компаній у `sent`.
