@@ -131,3 +131,23 @@ type SiteFacts = { reachable: boolean; feedItems: number; items90d: number; site
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
   `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`; binding `DB` = D1 `nextcryptojob`
   (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `crypto-jobs-agent` (лише читання в коді).
+
+## 7. Номери міграцій (щоб доріжки не зіткнулись)
+| Файл | Власник | Таблиці |
+|---|---|---|
+| 0001_core.sql | controller | users, identities, source_facts, scores, score_jobs, quality_runs |
+| 0002_auth.sql | web: вхід | sessions, login_codes, auth_attempts, consents, webhook_updates, audit_log |
+| 0003_crm.sql | web: CRM | companies, company_members, saved_searches, pipeline, pipeline_events, intros, company_jobs, agency_applications |
+| 0004_billing.sql | web: оплата й агенти | subscriptions, api_keys, x402_payments, usage_events |
+| 0005_cards.sql | web: картки | cards |
+| 0006_digest.sql | engine: добірка | sent, digest_runs |
+| 0007_admin.sql | web: адмінка | appeals, admin_flags |
+Нова таблиця поза цим списком лише через controller.
+
+## 8. Ключі, яких ще немає (власник додасть у кінці)
+Код мусить працювати без них у тестовому режимі і явно казати, чого бракує:
+`HELIUS_KEY`, `BLOCKSCOUT_KEY`, `YOUTUBE_KEY`, `GITHUB_TOKEN`, `TELEGRAM_OIDC_CLIENT_ID`,
+`TELEGRAM_OIDC_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `CDP_API_KEY_ID`,
+`CDP_API_KEY_SECRET`, пошта (Cloudflare Email Service після переїзду NS). Без ключа: джерело дає
+прогалину з причиною `not configured: <KEY>`, вхід через Telegram ховає кнопку, оплата показує
+«скоро», пошта в розробці пише код у журнал (лише не в продакшені).
