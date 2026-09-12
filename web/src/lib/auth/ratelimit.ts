@@ -39,8 +39,8 @@ export type RateVerdict = { allowed: boolean; retryAfterMinutes: number };
  * RETURNING віддає стан ПІСЛЯ: відмова, якщо лічильник > maxAttempts або
  * блокування діє (було до цієї спроби або щойно поставлене).
  */
-export async function consume(key: string, limits: Limits): Promise<RateVerdict> {
-  const row = await db()
+export async function consume(key: string, limits: Limits, d: D1Database = db()): Promise<RateVerdict> {
+  const row = await d
     .prepare(
       `INSERT INTO auth_attempts (key, attempts, window_start, blocked_until)
        VALUES (?1, 1, datetime('now'), CASE WHEN 1 > ?2 THEN datetime('now', ?4) END)

@@ -144,6 +144,31 @@ describe("cli", () => {
     expect(jobs()).toHaveLength(2);
   });
 
+  it("score-facts: збирачі й формула без D1, друк часу, прогалин і балів; ключі лише «set/missing»", async () => {
+    const out: string[] = [];
+    const registry = fakeRegistry({ collectSolana: async () => ({ ok: true, facts: { S: { sigs: 3, sigsOk: 3, sigsCapped: false,
+      firstTs: null, sampleSeen: 3, sampleSwaps: 1, swaps: 1 } }, partial: { S1234567890: "swaps: stopped early: deadline" } }) });
+    const code = await runCli(["score-facts", "--x", "@Alice", "--github", "Alice-GH", "--site", "alice.dev", "--evm",
+      `${"0x" + "A".repeat(40)},${"0x" + "b".repeat(40)}`, "--solana", "S1234567890", "--sherlock", "alice"],
+    { env: { TWITTER_TOKEN: "secret-token-value" }, db: () => { throw new Error("D1 must not be touched"); }, registry: () => registry,
+      out: (l) => out.push(l), err: (l) => out.push(l) });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).not.toContain("secret-token-value");
+    expect(text).toMatch(/TWITTER_TOKEN set, GITHUB_TOKEN missing/);
+    expect(text).toMatch(/^x +\d+ +ok$/m);
+    expect(text).toMatch(/solana\.S1234567: swaps: stopped early: deadline/);
+    expect(text).toMatch(/^trader +\d+\.\d/m);
+    const inputs = Object.fromEntries(registry.calls.map((c) => [c.collector, c.input]));
+    expect(inputs).toMatchObject({ collectX: "alice", collectGithub: "alice-gh", collectSite: "https://alice.dev",
+      collectEvm: ["0x" + "a".repeat(40), "0x" + "b".repeat(40)], collectAudits: { sherlock: "alice", github: "alice-gh", x: "alice" } });
+  });
+
+  it("score-facts без жодної ідентичності: код 2", async () => {
+    expect((await cli(["score-facts"])).code).toBe(2);
+    expect((await cli(["score-facts", "--json"])).code).toBe(2);
+  });
+
   it("неправильний виклик: код 2 і підказка", async () => {
     expect((await cli(["nope"])).code).toBe(2);
     expect((await cli(["score-user"])).code).toBe(2);

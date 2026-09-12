@@ -128,6 +128,18 @@ describe("session actor", () => {
     expect([a, b]).toContain(((await contextFor(db, { sessionUserId: user, companyId: other })).actor as { companyId: string }).companyId);
   });
 
+  it("accepts a session only in the web app: REST and MCP need a key", async () => {
+    const user = addUser(db.raw, { visible: false });
+    const co = addCompany(db.raw);
+    addMember(db.raw, co, user, "owner");
+    for (const channel of ["rest", "mcp"] as const) {
+      expect(await rejection(contextFor(db, { sessionUserId: user, channel }))).toMatchObject({ code: "unauthorized", status: 401 });
+      // З платежем такий запит лише гість, не член компанії.
+      expect((await contextFor(db, { sessionUserId: user, channel, hasPayment: true })).actor.kind).toBe("x402_guest");
+    }
+    expect((await contextFor(db, { sessionUserId: user, channel: "web" })).actor.kind).toBe("member");
+  });
+
   it("a signed-in person without a company gets 401, a pending invite is not membership", async () => {
     const user = addUser(db.raw, { visible: false, email: "invitee@example.com" });
     const co = addCompany(db.raw);

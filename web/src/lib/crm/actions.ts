@@ -37,8 +37,8 @@ import { isVisibleTo } from "./visibility";
  * Тест actions.test.ts звіряє реєстр з openapi.yaml і mcp-tools.md.
  *
  * Обробники (handler) є в діях T2–T3 (get_account, search_candidates,
- * get_candidate); решту допишуть T4–T12. Дія без обробника відповідає 500
- * з текстом "not implemented yet".
+ * get_candidate); решту допишуть T4–T12. Дія без обробника відповідає 501
+ * not_implemented ще до перевірки оплати.
  */
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -480,6 +480,24 @@ export interface PreparedAction {
   payment: { action: PaidAction; usd: string; settle: SettleTiming } | null;
 }
 
+/** Платіж, який дав шлюз x402 після verify: id рядка x402_payments і адреса платника. */
+export interface PaymentRef {
+  id: string;
+  payer: string | null;
+}
+
+/** Бронь виклику: квоту перевірено, рядок usage_events (якщо дія з квотою) уже стоїть. */
+export interface Reservation {
+  prepared: PreparedAction;
+  /** Контекст з платником x402 (для гостя), яким пишеться облік і журнал. */
+  ctx: ActionContext;
+  usage: UsageRecord | null;
+  /** id рядка usage_events, заброньованого до дії; null для дій без квоти. */
+  usageId: number | null;
+  /** Денна квота дії (для RateLimit-* і _meta["ncj/quota"]). */
+  quota: QuotaState | null;
+}
+
 export interface ActionResult {
   output: unknown;
   status: number;
@@ -488,13 +506,40 @@ export interface ActionResult {
   headers: Record<string, string>;
 }
 
+/*
+ * Кроки виконання однакові для всіх каналів (специфікація 7.4):
+ *
+ *   prepareAction  вхід, право, стан компанії, доступ, канал, чи є обробник (501);
+ *                  нічого не пише. Кидає до будь-якої 402.
+ *   reserve        квоти (атомарна бронь рядка usage_events). Для платної дії це
+ *                  `validate` шлюзу x402: квоту перевірено ДО settle.
+ *   run            обробник + перевірка виходу; облік і журнал НЕ пише. Для
+ *                  before_response (пошук) це `effect` шлюзу; для before_effect
+ *                  (знайомство, місяць USDC) `effect` теж run, і пише лише сам обробник.
+ *   commit         облік і журнал одним пакетом, лише після вдалого settle.
+ *   release        відмова після броні (settle не пройшов, обробник упав).
+ *
+ * Шлюз x402 (T9/T10):
+ *   const prepared = prepareAction(name, input, ctx);           // 404/401/403/422/501
+ *   let r: Reservation | undefined;
+ *   const paid = gate.withPayment(prepared.payment.action, prepared.payment.settle, {
+ *     validate: async (p) => { try { r = await reserve(prepared, { id: p.paymentId, payer: p.payer }); }
+ *                              catch (e) { if (e instanceof ActionError) return e; throw e; } },
+ *     effect: () => run(prepared),
+ *   });
+ *   const out = await paid({ payment, input: prepared.input, resource, context });
+ *   out.kind === "ok" ? await commit(r!, out.value) : r && (await release(r, 402));
+ */
+
 /**
- * Усі перевірки до оплати й до дії: вхід, право, стан компанії, доступ, канал.
- * Квоти бронює executeAction: адресу гостя x402 дає лише verify.
+ * Усі перевірки до оплати й до дії: чи дія реалізована, вхід, право, стан
+ * компанії, доступ, канал. Нічого не пише в базу.
  */
 export function prepareAction(name: string, rawInput: unknown, ctx: ActionContext): PreparedAction {
   const def = getAction(name);
   if (!def) throw new ActionError("not_found", 404, "Unknown action.");
+  // Раніше за будь-яку 402: за нереалізовану дію не можна взяти гроші.
+  if (!def.handler) throw new ActionError("not_implemented", 501, "This action is not available yet.");
   if (def.channels && !def.channels.includes(ctx.channel)) {
     throw new ActionError("key_required", 401, "This action is available through the API with a key.");
   }
@@ -516,10 +561,7 @@ export function prepareAction(name: string, rawInput: unknown, ctx: ActionContex
           : new ActionError("subscription_required", 403, "This action needs a subscription.");
       }
       // Без підписки інтерфейс лише читає: платити x402 можна лише з API чи MCP.
-      if (ctx.channel === "web" && company.access === "pay_per_request" && !def.mcp.annotations.readOnlyHint) {
-        throw new ActionError("subscription_required", 403, "Subscribe to do this in the web app, or use the API.");
-      }
-      if (ctx.channel === "web" && company.access === "pay_per_request" && def.price) {
+      if (ctx.channel === "web" && company.access === "pay_per_request" && (!def.mcp.annotations.readOnlyHint || def.price)) {
         throw new ActionError("subscription_required", 403, "Subscribe to do this in the web app, or use the API.");
       }
     }
@@ -554,53 +596,46 @@ function paymentFor(def: ActionDef, ctx: ActionContext): PreparedAction["payment
 }
 
 /**
- * Дія після всіх перевірок (і після verify x402, якщо дія платна):
- * бронь квоти → обробник → перевірка виходу → облік і журнал одним пакетом.
- * `payment` передає шлюз x402 (T9/T10): id платежу й адреса платника.
+ * Квоти до дії (і до settle): атомарна бронь рядка usage_events для дії з квотою.
+ * Платна дія без платежу → PaymentRequired; вичерпана квота → ActionError 429/403.
  */
-export async function executeAction(
-  prepared: PreparedAction,
-  opts: { payment?: { id: string; payer: string } } = {},
-): Promise<ActionResult> {
-  const { def, input } = prepared;
-  let ctx = prepared.ctx;
-  if (prepared.payment && !opts.payment) {
+export async function reserve(prepared: PreparedAction, payment: PaymentRef | null = null): Promise<Reservation> {
+  const { def } = prepared;
+  if (prepared.payment && !payment) {
     throw new PaymentRequired(prepared.payment.action, prepared.payment.usd, prepared.payment.settle);
   }
-  if (ctx.actor.kind === "x402_guest" && opts.payment) {
-    ctx = { ...ctx, actor: { kind: "x402_guest", payer: opts.payment.payer, paymentId: opts.payment.id } };
-  }
-  if (!def.handler) throw new ActionError("internal", 500, "This action is not implemented yet.");
-
-  const usage = usageRecord(def, ctx, opts.payment ?? null);
+  const ctx: ActionContext =
+    prepared.ctx.actor.kind === "x402_guest" && payment
+      ? { ...prepared.ctx, actor: { kind: "x402_guest", payer: payment.payer, paymentId: payment.id } }
+      : prepared.ctx;
+  const usage = usageRecord(def, ctx, payment);
   const plan = quotaPlan(ctx.actor, ctx.company);
-  let usageId: number | null = null;
-  let quota: QuotaState | null = null;
 
   if (def.quota && usage && plan) {
-    const reservation = await reserveUsage(ctx.db, usage, plan, def.quota, ctx.company?.subscription ?? null, ctx.now);
-    if (!reservation.ok) throw quotaError(reservation.exceeded, plan);
-    usageId = reservation.usageId;
-    quota = reservation.quotas[0] ?? null;
+    const booked = await reserveUsage(ctx.db, usage, plan, def.quota, ctx.company?.subscription ?? null, ctx.now);
+    if (!booked.ok) throw quotaError(booked.exceeded, plan);
+    return { prepared, ctx, usage, usageId: booked.usageId, quota: booked.quotas[0] ?? null };
   }
+  return { prepared, ctx, usage, usageId: null, quota: null };
+}
 
-  let result: HandlerResult<unknown>;
-  try {
-    result = await def.handler(ctx, input);
-    const checked = def.output.safeParse(result.output);
-    if (!checked.success) {
-      console.error(`crm: output of ${def.name} does not match its schema`, checked.error.issues.slice(0, 5));
-      throw new ActionError("internal", 500, "Something went wrong on our side. Try again later.");
-    }
-    result = { ...result, output: checked.data };
-  } catch (error) {
-    if (usageId !== null) {
-      const status = error instanceof ActionError ? error.status : 500;
-      await finishUsageStatement(ctx.db, usageId, status, null).run();
-    }
-    throw error;
+/** Обробник і перевірка виходу за схемою. Облік і журнал не пише (це commit). */
+export async function run(prepared: PreparedAction): Promise<HandlerResult<unknown>> {
+  const { def } = prepared;
+  if (!def.handler) throw new ActionError("not_implemented", 501, "This action is not available yet.");
+  const result = await def.handler(prepared.ctx, prepared.input);
+  const checked = def.output.safeParse(result.output);
+  if (!checked.success) {
+    console.error(`crm: output of ${def.name} does not match its schema`, checked.error.issues.slice(0, 5));
+    throw new ActionError("internal", 500, "Something went wrong on our side. Try again later.");
   }
+  return { ...result, output: checked.data };
+}
 
+/** Облік (usage_events) і журнал (audit_log) одним пакетом після успіху (і після settle). */
+export async function commit(reservation: Reservation, result: HandlerResult<unknown>): Promise<ActionResult> {
+  const { prepared, ctx, usage, usageId, quota } = reservation;
+  const { def, input } = prepared;
   const status = result.status ?? def.rest.status;
   const writes: D1PreparedStatement[] = [];
   if (usageId !== null) {
@@ -613,23 +648,47 @@ export async function executeAction(
   }
   const auditAction = result.audit?.action ?? def.audit;
   if (auditAction) {
-    const target =
-      result.audit?.target !== undefined ? result.audit.target : (candidateOf(input) ?? null);
+    const target = result.audit?.target !== undefined ? result.audit.target : candidateOf(input);
     writes.push(auditStatement(ctx, { action: auditAction, target, meta: result.audit?.meta }));
   }
   if (writes.length) await ctx.db.batch(writes);
-
   return { output: result.output, status, quota, headers: quota ? rateLimitHeaders(quota) : {} };
 }
 
-/** prepareAction + executeAction. Платна дія без платежу кидає PaymentRequired. */
+/**
+ * Відмова після броні. Платіж не пройшов (402): рядка обліку не лишається, наче
+ * виклику не було. Інша помилка: рядок лишається з цим статусом і не рахується в квоту.
+ */
+export async function release(reservation: Reservation, status: number): Promise<void> {
+  if (reservation.usageId === null) return;
+  const { db } = reservation.ctx;
+  if (status === 402) {
+    await db.prepare("DELETE FROM usage_events WHERE id = ?").bind(reservation.usageId).run();
+  } else {
+    await finishUsageStatement(db, reservation.usageId, status, null).run();
+  }
+}
+
+/**
+ * Усі кроки для виклику без шлюзу x402 (інтерфейс, дії без ціни) або з уже
+ * перевіреним і розрахованим платежем. Платна дія без платежу кидає PaymentRequired.
+ */
 export async function runAction(
   name: string,
   rawInput: unknown,
   ctx: ActionContext,
-  opts: { payment?: { id: string; payer: string } } = {},
+  opts: { payment?: PaymentRef } = {},
 ): Promise<ActionResult> {
-  return executeAction(prepareAction(name, rawInput, ctx), opts);
+  const prepared = prepareAction(name, rawInput, ctx);
+  const reservation = await reserve(prepared, opts.payment ?? null);
+  let result: HandlerResult<unknown>;
+  try {
+    result = await run(prepared);
+  } catch (error) {
+    await release(reservation, error instanceof ActionError ? error.status : 500);
+    throw error;
+  }
+  return commit(reservation, result);
 }
 
 function candidateOf(input: unknown): string | null {
@@ -638,15 +697,12 @@ function candidateOf(input: unknown): string | null {
 }
 
 /** Рядок usage_events для цього виклику; null, коли актора не видно (публічна дія). */
-function usageRecord(
-  def: ActionDef,
-  ctx: ActionContext,
-  payment: { id: string; payer: string } | null,
-): UsageRecord | null {
+function usageRecord(def: ActionDef, ctx: ActionContext, payment: PaymentRef | null): UsageRecord | null {
   let subject: QuotaSubject;
   if (ctx.actor.kind === "x402_guest") {
     if (!payment) return null;
-    subject = { payer: payment.payer };
+    // Квота гостя за адресою платника; без адреси (фасилітатор не дав) за самим платежем.
+    subject = { payer: payment.payer ?? `payment:${payment.id}` };
   } else if (ctx.company) {
     subject = { companyId: ctx.company.id };
   } else {

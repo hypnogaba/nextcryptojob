@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   addApiKey,
@@ -17,8 +18,10 @@ import {
 } from "@/test/crm-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
 import type { ActionContext } from "./context";
-import { filtersHash, searchCandidates, signCursor } from "./search";
-import { ActionError, type SearchRequest, type SearchResponse } from "./types";
+import { loadCandidates } from "./project";
+import { filtersHash, openCursor, sealCursor, searchCandidates } from "./search";
+import { isVisibleTo } from "./visibility";
+import { ActionError, FORMULA_VERSION, type SearchRequest, type SearchResponse } from "./types";
 
 let db: TestDb;
 beforeEach(() => {
@@ -116,6 +119,27 @@ describe("who appears", () => {
     expect(devrel.data[0].roles.map((r) => r.role)).toEqual(["devrel"]);
   });
 
+  it("only people with at least one known role are visible", async () => {
+    const { co, ctx } = await companyCtx();
+    const none = addUser(db.raw, { roles: [] });
+    const junk = addUser(db.raw, { rolesJson: JSON.stringify(["@alice", "ceo"]) });
+    const ok = candidate(50);
+    expect(ids(await searchCandidates(ctx, {}))).toEqual([ok]);
+    expect(await isVisibleTo(db.d1, none, co)).toBe(false);
+    expect(await isVisibleTo(db.d1, junk, null)).toBe(false);
+    expect(await isVisibleTo(db.d1, ok, co)).toBe(true);
+  });
+
+  it("loadCandidates itself never returns an invisible person, whatever id it is given", async () => {
+    const { co } = await companyCtx();
+    const hidden = candidate(50, { visible: false });
+    const teammate = candidate(50);
+    addMember(db.raw, co, teammate, "member");
+    const shown = candidate(40);
+    const rows = await loadCandidates(db.d1, [hidden, teammate, shown], co);
+    expect([...rows.keys()]).toEqual([shown]);
+  });
+
   it("broken roles JSON in one row does not break the search for everyone", async () => {
     const { ctx } = await companyCtx();
     candidate(null, { rolesJson: "not json" });
@@ -177,8 +201,10 @@ describe("sorting and levels", () => {
 
   it("scores of an unpublished formula are not shown, and a score filter explains why nothing came back", async () => {
     const { ctx } = await companyCtx();
+    run(db.raw, "DELETE FROM quality_runs");
+    publishFormula(db.raw, FORMULA_VERSION, false); // прогін воріт був, але не пройшов
     const id = addUser(db.raw);
-    addScore(db.raw, id, "engineer", 75, { formula: "v6" });
+    addScore(db.raw, id, "engineer", 75);
     const res = await searchCandidates(ctx, { filters: { role: "engineer" } });
     expect(res.data[0].headline).toEqual({ role: "engineer", score: null, level: null, coverage: null, unscored_reason: "not_published" });
     const filtered = await searchCandidates(ctx, { filters: { role: "engineer", min_score: 10 } });
@@ -222,6 +248,7 @@ describe("filters", () => {
     expect(await q({ work_mode: "remote" })).toEqual(expect.arrayContaining([remote, lisbon]));
     expect(await q({ work_mode: "remote" })).not.toContain(paris);
     expect(await q({ work_mode: "city", city: " lisbon " })).toEqual([lisbon]);
+    expect(await q({ work_mode: "city", city: "LISBON" })).toEqual([lisbon]);
     expect(await q({ x_verified: true })).toEqual([paris]);
     expect(await q({ wallet_verified: true })).toEqual([lisbon]);
     expect(await q({ contact_direct: true })).toEqual([direct]);
@@ -235,6 +262,19 @@ describe("filters", () => {
     expect(ids(await searchCandidates(ctx, { filters: { exclude_in_pipeline: true } }))).toEqual([b]);
     const res = await searchCandidates(ctx, {});
     expect(res.data.map((d) => d.pipeline)).toEqual([{ stage: "found", tags: [] }, null]);
+  });
+});
+
+describe("city in any alphabet", () => {
+  it("matches a non-Latin city without regard to letter case or Unicode form", async () => {
+    const { ctx } = await companyCtx();
+    const kyiv = candidate(50, { remoteMode: "city", city: "Київ" });
+    const krakow = candidate(40, { remoteMode: "city", city: "Krako\u0301w" }); // «ó» розкладено на o + наголос
+    candidate(30, { remoteMode: "city", city: "Kyiv" });
+    const q = (city: string) => searchCandidates(ctx, { filters: { work_mode: "city", city } }).then(ids);
+    expect(await q("КИЇВ")).toEqual([kyiv]);
+    expect(await q(" київ ")).toEqual([kyiv]);
+    expect(await q("KRAKÓW")).toEqual([krakow]);
   });
 });
 
@@ -252,6 +292,11 @@ describe("empty results always say why", () => {
     candidate(55);
     const res = await searchCandidates(ctx, { filters: { role: "engineer", min_score: 90 } });
     expect(res).toMatchObject({ data: [], empty_reason: "filters_too_narrow", role_visible_count: 2 });
+  });
+
+  it("the current formula comes from the contract, the same constant as the engine's", () => {
+    const engine = readFileSync(new URL("../../../../engine/src/formula/score.ts", import.meta.url), "utf8");
+    expect(engine).toContain(`export const FORMULA_VERSION = "${FORMULA_VERSION}"`);
   });
 
   it("a non-empty page has no empty_reason", async () => {
@@ -299,22 +344,84 @@ describe("pagination", () => {
     expect(res.data).toHaveLength(20);
 
     const last = res.data.at(-1)!;
-    const eleven = await signCursor(
-      { v: 1, sort: "score", k: last.headline.score ?? -1, id: last.candidate_id, page: 11, fh: await filtersHash({}, "score") },
+    const eleven = await sealCursor(
+      {
+        v: 2,
+        sort: "score",
+        fh: await filtersHash({}, "score"),
+        page: 11,
+        a: { k: last.headline.score ?? -1, id: last.candidate_id },
+        skip: 0,
+      },
       CURSOR_SECRET,
     );
     expect(await rejection(searchCandidates(ctx, { cursor: eleven }))).toMatchObject({ code: "page_cap_reached", status: 409 });
   });
 
-  it("a forged cursor or one from other filters is rejected", async () => {
+  it("the cursor is encrypted: no score, no candidate id, and a changed byte is rejected", async () => {
     const { ctx } = await companyCtx();
-    many(25);
+    const scores = [73.91, 64.37, 55.28];
+    for (let i = 0; i < 25; i++) candidate(scores[i % 3] - i / 100);
     const first = await searchCandidates(ctx, {});
     const cursor = first.next_cursor!;
-    const [body, sig] = cursor.split(".");
-    const forgedBody = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(body, "base64url").toString()), page: 2, k: 999 })).toString("base64url");
-    expect(await rejection(searchCandidates(ctx, { cursor: `${forgedBody}.${sig}` }))).toMatchObject({ code: "validation_failed" });
+    const last = first.data.at(-1)!;
+    const bytes = Buffer.from(cursor, "base64url");
+    const text = bytes.toString("latin1");
+    for (const leak of [last.candidate_id, last.candidate_id.replace(/-/g, ""), ...scores.map(String), String(Math.floor(scores[0]))]) {
+      expect(cursor).not.toContain(leak);
+      expect(text).not.toContain(leak);
+    }
+    expect(() => JSON.parse(text)).toThrow();
+    // Два курсори тієї самої позиції різні (випадковий IV).
+    expect((await searchCandidates(ctx, {})).next_cursor).not.toBe(cursor);
+
+    for (const i of [0, 5, 20, bytes.length - 1]) {
+      const tampered = Buffer.from(bytes);
+      tampered[i] ^= 0x01;
+      expect(await rejection(searchCandidates(ctx, { cursor: tampered.toString("base64url") }))).toMatchObject({
+        code: "validation_failed",
+        status: 422,
+      });
+    }
+    expect(await rejection(searchCandidates(ctx, { cursor: cursor.slice(0, 20) }))).toMatchObject({ code: "validation_failed" });
     expect(await rejection(searchCandidates(ctx, { cursor, filters: { min_score: 1 } }))).toMatchObject({ code: "validation_failed" });
     expect(await rejection(searchCandidates(ctx, { cursor, sort: "newest" }))).toMatchObject({ code: "validation_failed" });
+    // Інший секрет не відкриє курсор.
+    await expect(openCursor(cursor, "another-secret-another-secret-another", "score", await filtersHash({}, "score"))).rejects.toMatchObject({
+      code: "validation_failed",
+    });
+    // Усередині: якір = останній відданий кандидат.
+    const inside = await openCursor(cursor, CURSOR_SECRET, "score", await filtersHash({}, "score"));
+    expect(inside).toMatchObject({ page: 2, a: { id: last.candidate_id }, skip: 0 });
+  });
+
+  it("after 2 000 non-matching rows the cursor holds no id of a candidate who did not match, and no empty_reason is given", async () => {
+    const { ctx } = await companyCtx();
+    const insert = db.raw.prepare(
+      "INSERT INTO users (id, email, roles, visible_to_companies, remote_mode) VALUES (?, ?, '[\"engineer\"]', 1, 'remote')",
+    );
+    const consent = db.raw.prepare("INSERT INTO consents (user_id, kind, granted, text_version) VALUES (?, 'visibility', 1, 'v1')");
+    const score = db.raw.prepare(
+      "INSERT INTO scores (user_id, role, score, cover, breakdown_json, formula_version) VALUES (?, 'engineer', ?, 100, '{}', 'v5')",
+    );
+    for (let i = 0; i < 2010; i++) {
+      const id = crypto.randomUUID();
+      insert.run(id, `${id}@example.com`);
+      consent.run(id);
+      score.run(id, 90 - i / 100);
+    }
+    const onBase = candidate(1); // найнижчий бал: знайдеться лише після 2 000 переглянутих
+    addFacts(db.raw, onBase, "evm", { "0x5555555555555555555555555555555555555555": { base: { sent: 1, firstTs: null } } });
+
+    const filters = { chains: ["base" as const] };
+    const first = await searchCandidates(ctx, { filters });
+    expect(first).toMatchObject({ data: [], page: 1, empty_reason: null, role_visible_count: null });
+    expect(first.next_cursor).not.toBeNull();
+    const inside = await openCursor(first.next_cursor!, CURSOR_SECRET, "score", await filtersHash(filters, "score"));
+    expect(inside).toEqual({ v: 2, sort: "score", fh: expect.any(String), page: 2, a: null, skip: 2000 });
+
+    const second = await searchCandidates(ctx, { filters, cursor: first.next_cursor! });
+    expect(ids(second)).toEqual([onBase]);
+    expect(second.next_cursor).toBeNull();
   });
 });

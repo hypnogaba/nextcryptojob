@@ -10,7 +10,8 @@ Group=nextcryptojob
 WorkingDirectory=/opt/nextcryptojob-engine
 EnvironmentFile=/etc/nextcryptojob-engine.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/node dist/cli.js enqueue-refresh
+# Node 24 (engines >=24): на VPS /usr/bin/node це Node 22, Node 24 стоїть у /usr/local/bin.
+ExecStart=/usr/local/bin/node dist/cli.js enqueue-refresh
 TimeoutStartSec=120
 NoNewPrivileges=true
 ProtectSystem=strict

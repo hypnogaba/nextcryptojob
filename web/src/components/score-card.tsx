@@ -30,13 +30,18 @@ export function ScoreCard({ view }: { view: CardView }) {
             <span className="mb-1 font-mono text-base text-ink-muted">/100</span>
           </p>
 
-          <p className="mt-5">
+          <p className="mt-5 flex flex-wrap items-center gap-2">
             <span
               className="inline-block rounded-md px-2 py-1 font-mono text-sm font-medium"
               style={{ backgroundColor: view.tier.base, color: view.tier.ink }}
             >
               {view.levelLabel}
             </span>
+            {view.marker ? (
+              <span className="inline-block rounded-md border border-line-strong px-2 py-1 font-mono text-xs text-ink-muted">
+                {view.marker}
+              </span>
+            ) : null}
           </p>
 
           <h1 className="mt-8 truncate font-sans text-2xl font-semibold tracking-normal">{view.displayName}</h1>

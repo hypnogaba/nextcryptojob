@@ -2,7 +2,7 @@
 import type { PersonFacts, RoleKey } from "../types.js";
 import { type CorePath, type ScoredRole, SCORED_ROLES, ROLE_ORDER, UNSCORED_ROLES } from "./roles.js";
 import { computeSources, type ScoreSource, type Sources } from "./sources.js";
-import { SOLANA_MIN_SAMPLE } from "./wallets.js";
+import { SOLANA_MIN_SAMPLE, solanaSwapsKnown } from "./wallets.js";
 
 export const FORMULA_VERSION = "v5" as const;
 
@@ -39,16 +39,22 @@ function coreOf(path: CorePath, s: Sources): { value: number; cover: number } {
   return { value: num / den, cover };
 }
 
-/** Причини прогалин для breakdown: від збирача (`gaps`), з фактів audits/EVM і замала вибірка Solana. */
+/**
+ * Причини прогалин для breakdown: від збирача (`gaps`, зокрема `<джерело>.<адреса…>` з часткових
+ * відповідей гаманців), з фактів audits/EVM, KOL X (`x.kol`) і невідомі обміни Solana (замала неповна вибірка).
+ */
 function collectGaps(f: PersonFacts): Record<string, string> {
   const gaps: Record<string, string> = {};
   for (const [k, v] of Object.entries(f.gaps ?? {})) if (v) gaps[k] = v;
   if (f.audits?.gap && !gaps.audits) gaps.audits = f.audits.gap;
+  // KOL важить 30 з 100 у балі X; без нього бал X рахується з решти, і людина має бачити чому.
+  if (f.x?.kolSourceGap && !gaps.x) gaps["x.kol"] = "KOL followers unavailable";
   for (const perAddr of Object.values(f.evm ?? {})) {
     for (const [chain, c] of Object.entries(perAddr)) if (c?.gap) gaps[`evm.${chain}`] ??= c.gap;
   }
-  if (!gaps.solana && Object.values(f.solana ?? {}).some((s) => s.sampleSeen < SOLANA_MIN_SAMPLE)) {
-    gaps.solana = "sample too small";
+  const unknown = Object.values(f.solana ?? {}).filter((s) => solanaSwapsKnown(s) === null);
+  if (!gaps.solana && unknown.length) {
+    gaps.solana = unknown.some((s) => s.sampleSeen < SOLANA_MIN_SAMPLE) ? "sample too small" : "swaps unknown";
   }
   return gaps;
 }

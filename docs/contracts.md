@@ -36,7 +36,10 @@ ENS `*.eth` / SNS `*.sol` у релізі 1 не розвʼязуємо (пол�
 
 ## 3. Факти джерел (`source_facts.facts_json`)
 Правило: поле, якого джерело не віддало, дорівнює `null`, а не 0. Якщо джерело не відповіло
-зовсім, `facts_json = NULL`, `gap_reason = '<людська причина>'`.
+зовсім, `facts_json = NULL`, `gap_reason = '<людська причина>'`. Часткова відповідь гаманців (evm,
+hyperliquid, solana: частина адрес не відповіла або має невідоме поле): `facts_json` = факти як є,
+`gap_reason = 'partial: <перші 8 символів адреси>: <причина>; …'`, а в `breakdown_json.gaps` ключ
+`<джерело>.<перші 8 символів адреси>` (наприклад `solana.BGjMfx5B`).
 
 ```ts
 type XFacts = { followers: number|null; kol: number|null; kolSourceGap: boolean;
@@ -166,6 +169,8 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0008_sources_v5.sql | controller | перебудова identities і source_facts (sherlock, audits, dune) |
 | 0009_users_email_lower.sql | controller | індекс users(lower(email)) |
 | 0010_score_jobs_user.sql | controller | індекс score_jobs(user_id, id) |
+| 0011_user_settings.sql | web: налаштування | users.digest_paused |
+| 0012_access_views.sql | web: оплата | перебудова в'ю company_access і company_jobs_live (past_due 7 днів від початку періоду) |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)
@@ -189,6 +194,8 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 ## 10. Налаштування CRM і оплати (з проєкту CRM, 12.09)
 Секрети й змінні Worker: `WEBHOOK_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
 `X402_NETWORK` ('mainnet' | 'testnet'; обидві мережі Base і Solana разом, див. специфікацію CRM §7.3), `X402_PAY_TO_EVM`, `X402_PAY_TO_SOLANA`,
-`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`; прив'язки лімітів `RL_*` за специфікацією CRM. Дозволено два
+`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `ADMIN_EMAILS` (кома-список адмінів; без нього лише hypnogaba@gmail.com); прив'язки лімітів `RL_*` за специфікацією CRM. Дозволено два
 лише-індексні доповнення до ядра (індекси на `scores` і `users` у 0003). Двигун для добірок читає
 `company_jobs_live` (0004) і пише вакансії компаній у `sent`.
+- ІНВАРІАНТ (12.09): `users.email` пишеться ЛИШЕ після перевірки коду з пошти. Жодна інша доріжка (Telegram, бот,
+  імпорт) не пише `users.email`, бо адмінський доступ спирається на пошту сесії.

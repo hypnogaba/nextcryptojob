@@ -7,7 +7,18 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
  * Реалізовано лише те, чим користується код: prepare/bind/first/all/run/batch.
  */
 
-const DEFAULT_MIGRATIONS = ["0001_core.sql", "0002_auth.sql"];
+/** Усі міграції, накочені на продакшн, у порядку накочування. */
+export const APPLIED_MIGRATIONS = [
+  "0001_core.sql",
+  "0002_auth.sql",
+  "0005_cards.sql",
+  "0008_sources_v5.sql",
+  "0009_users_email_lower.sql",
+  "0010_score_jobs_user.sql",
+  // Накочено 2026-09-12 доріжкою CRM (T1), після 0010.
+  "0003_crm.sql",
+  "0004_billing.sql",
+];
 
 function toSql(value: unknown): SQLInputValue {
   // D1 не приймає undefined і відмовляє з помилкою; тест має впасти так само.
@@ -61,8 +72,8 @@ class Statement {
 
 export type TestDb = { raw: DatabaseSync; d1: D1Database };
 
-/** Порожня база в пам'яті з міграціями (за замовчуванням 0001 і 0002). */
-export function migratedD1(migrations: string[] = DEFAULT_MIGRATIONS): TestDb {
+/** Порожня база в пам'яті з міграціями (за замовчуванням усі накочені). */
+export function migratedD1(migrations: string[] = APPLIED_MIGRATIONS): TestDb {
   const raw = new DatabaseSync(":memory:");
   // D1 перевіряє зовнішні ключі; тест теж.
   raw.exec("PRAGMA foreign_keys = ON");

@@ -33,6 +33,7 @@ info:
     - Times are ISO 8601 UTC with `Z`.
     - Lists use an opaque `cursor`. Candidate search stops after 10 pages (200 results) per query: no bulk export.
     - Errors: `{ "error": { "code", "message", "request_id" } }`, except 402 (x402 PaymentRequired object).
+    - An operation that is not live yet answers 501 `not_implemented`, always before any 402: nothing is charged for it.
     - Every response has `X-Request-Id`. Metered responses have `RateLimit-*` headers for the daily quota of that action.
   contact:
     name: NextCryptoJob
@@ -923,6 +924,8 @@ components:
       description: |
         Codes: `company_not_active` (pending review, suspended, rejected or closed), `subscription_required`,
         `trial_limit` (the action is not in the trial), `quota_exceeded` (monthly quota, see `/me`).
+        `forbidden` (the team role cannot do this, for example a member creating API keys) comes only from the
+        web app: an API key acts for the company and has no forbidden action among these operations.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1035,6 +1038,8 @@ components:
                 - validation_failed
                 - not_configured
                 - internal
+                - not_implemented
+                - forbidden
             message: { type: string, description: "English, human readable, never contains an em dash." }
             request_id: { type: string }
             details: { type: object, additionalProperties: true }
@@ -1101,7 +1106,8 @@ components:
       enum: [pending, accepted, declined, expired, canceled, direct]
     SourceKey:
       type: string
-      enum: [gh_eng, gh_builder, x, yt, media, output, onchain, trading, site]
+      description: Score sources of formula v5 (docs/contracts.md section 4). `audits` (Sherlock) and `dune` (Spellbook) came with v5.
+      enum: [gh_eng, gh_builder, x, yt, media, output, onchain, trading, site, audits, dune]
 
     SearchFilters:
       type: object
@@ -1207,8 +1213,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/RoleScore"
         - type: object
+          required: [breakdown]
           properties:
-            breakdown: { oneOf: [{ $ref: "#/components/schemas/ScoreBreakdown" }, { type: "null" }] }
+            breakdown:
+              description: null when the role is not scored or its formula has not passed the quality gate yet.
+              oneOf: [{ $ref: "#/components/schemas/ScoreBreakdown" }, { type: "null" }]
     Badges:
       type: object
       required: [x_verified, wallet, github_linked, youtube_linked, site_linked]
@@ -1499,7 +1508,7 @@ components:
         tags:
           type: array
           maxItems: 10
-          items: { type: string, maxLength: 32 }
+          items: { type: string, minLength: 1, maxLength: 32 }
     JobCreate:
       allOf:
         - $ref: "#/components/schemas/JobBase"
@@ -1677,6 +1686,7 @@ components:
               request_intro_month: { limit: 40, remaining: 31, resets_at: "2026-10-01T00:00:00Z" }
         x402:
           type: object
+          required: [enabled, networks, prices_usd]
           properties:
             enabled: { type: boolean }
             networks: { type: array, items: { type: string } }
@@ -1684,7 +1694,8 @@ components:
               type: object
               additionalProperties: { type: string }
         key:
-          type: object
+          type: [object, "null"]
+          description: The API key of this request. null in the web app, where a team member acts without a key.
           required: [key_id, name, prefix]
           properties:
             key_id: { type: string }

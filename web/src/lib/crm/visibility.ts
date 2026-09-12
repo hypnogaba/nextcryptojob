@@ -6,7 +6,9 @@
  * - `users.visible_to_companies = 1`;
  * - є чинна згода `visibility`. У 0002 згода це поточний стан рядка
  *   `consents(user_id, kind, granted, …)`: чинна = `granted = 1` (колонки
- *   `revoked_at`, як у специфікації 3.4, у міграції немає).
+ *   `revoked_at`, як у специфікації 3.4, у міграції немає);
+ * - людина обрала хоч одну відому роль (contracts §1): без ролі анонімний профіль
+ *   порожній, а зіпсований JSON ролей не зупиняє запит (CASE перед json_each).
  * Для запитів компанії ще:
  * - кандидат не заблокував компанію («Decline and block»: intros.candidate_blocked = 1).
  *   Блок виглядає як невидимість, без підказки, що саме блок;
@@ -15,17 +17,30 @@
  * Фрагменти мають позиційні `?`; параметри повертаються в тому ж порядку.
  */
 
+import { ROLES } from "@/lib/card/roles";
+
 export interface SqlFragment {
   sql: string;
   params: (string | number | null)[];
 }
+
+// Ключі ролей це константи [a-z_], тож їх можна вписати в SQL літералами.
+const KNOWN_ROLES = Object.keys(ROLES)
+  .map((k) => {
+    if (!/^[a-z_]+$/.test(k)) throw new Error(`unexpected role key ${k}`);
+    return `'${k}'`;
+  })
+  .join(", ");
 
 /** Базова видимість (гість x402 і будь-яка компанія). `u` = псевдонім таблиці users. */
 export function visibleSql(u = "u"): SqlFragment {
   return {
     sql: `${u}.visible_to_companies = 1
       AND EXISTS (SELECT 1 FROM consents vc
-                   WHERE vc.user_id = ${u}.id AND vc.kind = 'visibility' AND vc.granted = 1)`,
+                   WHERE vc.user_id = ${u}.id AND vc.kind = 'visibility' AND vc.granted = 1)
+      AND CASE WHEN json_valid(${u}.roles)
+               THEN EXISTS (SELECT 1 FROM json_each(${u}.roles) vr WHERE vr.value IN (${KNOWN_ROLES}))
+               ELSE 0 END`,
     params: [],
   };
 }

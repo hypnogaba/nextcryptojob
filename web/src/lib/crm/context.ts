@@ -12,8 +12,8 @@ import { ActionError } from "./types";
  * Порядок:
  * 1. `Authorization: Bearer ncj_live_…` → SHA-256 → api_keys.key_hash → компанія ключа.
  *    Ключа немає → 401 invalid_api_key; відкликаний → 401 key_revoked.
- * 2. Інакше сесія входу → company_members (компанія з кукі `ncj_company`, інакше
- *    та, де людина була востаннє).
+ * 2. Інакше сесія входу, лише в каналі web (REST і MCP кук не приймають) →
+ *    company_members (компанія з кукі `ncj_company`, інакше та, де людина була востаннє).
  * 3. Інакше платіж x402 (PAYMENT-SIGNATURE або `_meta["x402/payment"]`) → гість;
  *    адресу платника дає verify пізніше.
  * 4. Інакше 401 unauthorized.
@@ -216,7 +216,7 @@ export async function resolveActor(base: ContextBase, request: ActorRequest): Pr
     return { ...ctx, actor: agent, company };
   }
 
-  if (request.sessionUserId) {
+  if (request.sessionUserId && request.channel === "web") {
     const member = await memberFromSession(base.db, request.sessionUserId, request.companyId ?? null);
     if (member) {
       const company = await loadCompany(base.db, member.companyId);

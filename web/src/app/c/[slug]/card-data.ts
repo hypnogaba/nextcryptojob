@@ -1,6 +1,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { headers } from "next/headers";
 import { cache } from "react";
+import { currentUser } from "@/lib/auth/session";
+import { isCardOwner } from "@/lib/card/owner";
 import { getCard } from "@/lib/card/store";
 
 /** Картка за slug з D1; cache() дає одне читання на запит для сторінки й метаданих. */
@@ -8,6 +10,14 @@ export const loadCard = cache(async (slug: string) => {
   const { env } = await getCloudflareContext({ async: true });
   return getCard(env.DB, slug);
 });
+
+/** Чи дивиться власник картки: так/ні, без id людини. */
+export async function loadIsOwner(slug: string): Promise<boolean> {
+  const user = await currentUser();
+  if (!user) return false;
+  const { env } = await getCloudflareContext({ async: true });
+  return isCardOwner(env.DB, slug, user.id);
+}
 
 const FALLBACK_ORIGIN = "https://nextcryptojob.xyz";
 

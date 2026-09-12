@@ -1,11 +1,11 @@
 // Підставні збирачі для тестів і сухих прогонів: без мережі, з передбачуваними фактами.
 import type {
-  AuditsFacts, DuneFacts, EvmFacts, GithubFacts, HyperliquidFacts, SiteFacts, SolanaFacts, XFacts, YoutubeFacts,
+  AuditsFacts, Collected, DuneFacts, EvmFacts, GithubFacts, HyperliquidFacts, SiteFacts, SolanaFacts, XFacts, YoutubeFacts,
 } from "../types.js";
-import type { CollectorCtx, CollectorRegistry, CollectorResult } from "./registry.js";
+import type { CollectorCtx, CollectorRegistry } from "./registry.js";
 
 export type CollectorName = keyof CollectorRegistry;
-export type FakeCall = { collector: CollectorName; input: unknown; signal: AbortSignal };
+export type FakeCall = { collector: CollectorName; input: unknown; signal: AbortSignal; ctx: CollectorCtx };
 export interface FakeRegistry extends CollectorRegistry {
   readonly calls: FakeCall[];
 }
@@ -29,10 +29,10 @@ export const sampleHyperliquid = (addresses: readonly string[]): HyperliquidFact
 export const sampleSolana = (addresses: readonly string[]): SolanaFacts => Object.fromEntries(addresses.map((a) => [a, {
   sigs: 900, sigsOk: 880, sigsCapped: false, firstTs: 1_650_000_000, sampleSeen: 200, sampleSwaps: 60, swaps: 270 }]));
 
-const ok = <T>(facts: T): CollectorResult<T> => ({ ok: true, facts });
+const ok = <T>(facts: T): Collected<T> => ({ ok: true, facts });
 
 /** Збирач, що чекає, доки його скасують, і тоді кидає AbortError (як справжні). */
-export function hangUntilAborted<T>(): (...args: unknown[]) => Promise<CollectorResult<T>> {
+export function hangUntilAborted<T>(): (...args: unknown[]) => Promise<Collected<T>> {
   return (...args) => new Promise((_resolve, reject) => {
     const { signal } = args[args.length - 1] as CollectorCtx;
     const fail = () => reject(signal.reason ?? new DOMException("aborted", "AbortError"));
@@ -41,8 +41,8 @@ export function hangUntilAborted<T>(): (...args: unknown[]) => Promise<Collector
 }
 
 /** Збирач, що не зважає на скасування й ніколи не відповідає. */
-export function neverResolves<T>(): () => Promise<CollectorResult<T>> {
-  return () => new Promise<CollectorResult<T>>(() => undefined);
+export function neverResolves<T>(): () => Promise<Collected<T>> {
+  return () => new Promise<Collected<T>>(() => undefined);
 }
 
 /** Підміна збирача: та сама сигнатура, але вхід довільний (тестам зручно брати hangUntilAborted тощо). */
@@ -51,15 +51,15 @@ export type FakeOverrides = { [K in CollectorName]?: CollectorRegistry[K] | Over
 
 /**
  * Реєстр із типовими фактами для кожного джерела. `over` підміняє окремі збирачі.
- * Кожен виклик пишеться в `calls` (вхід, сигнал).
+ * Кожен виклик пишеться в `calls` (вхід, сигнал, увесь контекст).
  */
 export function fakeRegistry(over: FakeOverrides = {}): FakeRegistry {
   const calls: FakeCall[] = [];
-  const run = async <T>(collector: CollectorName, input: unknown, args: unknown[], fallback: () => CollectorResult<T>):
-    Promise<CollectorResult<T>> => {
+  const run = async <T>(collector: CollectorName, input: unknown, args: unknown[], fallback: () => Collected<T>):
+    Promise<Collected<T>> => {
     const ctx = args[args.length - 1] as CollectorCtx;
-    calls.push({ collector, input, signal: ctx.signal });
-    const custom = over[collector] as ((...a: unknown[]) => Promise<CollectorResult<T>> | CollectorResult<T>) | undefined;
+    calls.push({ collector, input, signal: ctx.signal, ctx });
+    const custom = over[collector] as ((...a: unknown[]) => Promise<Collected<T>> | Collected<T>) | undefined;
     return custom ? custom(...args) : fallback();
   };
   return {

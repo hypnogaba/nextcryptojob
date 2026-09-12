@@ -1,4 +1,4 @@
-import type { DuneFacts, Fetched } from "../types.js";
+import type { Collected, DuneFacts } from "../types.js";
 import { collect, DAY_MS, GapError, notConfigured, nowMs, pause, type CollectorContext } from "./context.js";
 import { GITHUB_API, GITHUB_LOGIN, githubJson, normalizeLogin } from "./github-api.js";
 
@@ -7,7 +7,10 @@ import { GITHUB_API, GITHUB_LOGIN, githubJson, normalizeLogin } from "./github-a
  * Профілі dune.com не збираємо: офіційного API немає, сайт за перевіркою Cloudflare.
  */
 export const SPELLBOOK = "duneanalytics/spellbook";
-/** Пошук GitHub: 30 запитів на хвилину з токеном. Між двома запитами людини пауза. */
+/**
+ * Пошук GitHub: 30 запитів на хвилину з токеном. Між людьми їх розводить бюджет "github-search"
+ * (limits.ts, 1 запит на 2 с); між двома запитами однієї людини ще й пауза.
+ */
 export const SEARCH_PAUSE_MS = 2_500;
 
 /** Дата початку вікна 12 місяців для `merged:>=`, UTC. */
@@ -24,7 +27,7 @@ async function searchCount(q: string, ctx: CollectorContext): Promise<number> {
   return n;
 }
 
-export async function collectDune(githubLogin: string, ctx: CollectorContext): Promise<Fetched<DuneFacts>> {
+export async function collectDune(githubLogin: string, ctx: CollectorContext): Promise<Collected<DuneFacts>> {
   return collect("dune", ctx, async () => {
     if (!ctx.env.GITHUB_TOKEN) throw notConfigured("GITHUB_TOKEN");
     const login = normalizeLogin(githubLogin);

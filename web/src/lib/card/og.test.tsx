@@ -36,4 +36,14 @@ describe("renderCardImage", () => {
       writeFileSync(process.env.CARD_PNG_OUT, bytes);
     }
   }, 30_000);
+
+  it("renders a trader card with the wallets marker", async () => {
+    const res = renderCardImage(cardView({ ...CARD, role: "trader", score: 82, level: 9 }));
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(pngSize(bytes)).toEqual(OG_SIZE);
+    if (process.env.CARD_PNG_OUT_TRADER) {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(process.env.CARD_PNG_OUT_TRADER, bytes);
+    }
+  }, 30_000);
 });

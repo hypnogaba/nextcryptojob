@@ -16,8 +16,19 @@ export type WalletSummary = {
   tradeGap: boolean;         // хоч одна Solana з невідомими обмінами
 };
 
-/** Solana, чиї обміни невідомі: swaps = null або вибірка менша за SOLANA_MIN_SAMPLE. */
-export function solanaSwapsKnown(s: { sampleSeen: number; swaps: number | null }): number | null {
+type SolanaSwapFacts = { sigsOk: number; sigsCapped: boolean; sampleSeen: number; sampleSwaps: number; swaps: number | null };
+
+/** Чи прочитано всі успішні транзакції адреси, а список підписів не обрізаний (договір §3). */
+export const solanaFullSample = (s: SolanaSwapFacts): boolean => !s.sigsCapped && s.sampleSeen === s.sigsOk;
+
+/**
+ * Обміни адреси Solana, яким можна вірити, або null (невідомо → tradeGap).
+ * Договір §3: вибірка менша за SOLANA_MIN_SAMPLE = прогалина; ВИНЯТОК: перевірено всі успішні
+ * транзакції (sampleSeen = sigsOk) і список не обрізаний (sigsCapped = false) → кількість точна
+ * (sampleSwaps) навіть нижче 50 і навіть 0 для порожнього гаманця.
+ */
+export function solanaSwapsKnown(s: SolanaSwapFacts): number | null {
+  if (solanaFullSample(s)) return Number.isFinite(s.sampleSwaps) ? s.sampleSwaps : s.swaps;
   return s.sampleSeen < SOLANA_MIN_SAMPLE ? null : s.swaps;
 }
 

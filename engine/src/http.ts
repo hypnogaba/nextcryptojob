@@ -3,7 +3,7 @@ import type { LookupAddress } from "node:dns";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP, type LookupFunction } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
-import { limiterFor, MAX_BACKOFF_MS, NestedRunError } from "./limits.js";
+import { budgetKeyForUrl, limiterFor, MAX_BACKOFF_MS, NestedRunError } from "./limits.js";
 
 /**
  * Політика вихідних адрес.
@@ -275,7 +275,7 @@ function mergeHeaders(base: Record<string, string>, extra: RequestInit["headers"
 /**
  * fetch із перевіркою адреси на кожному стрибку і з бюджетом запитів.
  *
- * Кожен стрибок бере слот limiterFor(хост) і тримає його до заголовків
+ * Кожен стрибок бере слот limiterFor(budgetKeyForUrl(адреса)) і тримає його до заголовків
  * відповіді; 429 відсуває весь бюджет ще до звільнення слота. Сигнал
  * викликача знімає запит і з черги бюджету, і з мережі.
  *
@@ -296,7 +296,7 @@ export async function safeFetch(url: string, init: RequestInit = {}, o: FetchOpt
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const u = await assertSafeUrl(current, lookup);
-    const limiter = limiterFor(u.hostname);
+    const limiter = limiterFor(budgetKeyForUrl(u));
     const res = await limiter.run(async () => {
       const timeout = AbortSignal.timeout(timeoutMs);
       const r = await fetchImpl(u.toString(), {

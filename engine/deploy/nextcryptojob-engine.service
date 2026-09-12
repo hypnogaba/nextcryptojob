@@ -14,7 +14,8 @@ EnvironmentFile=/etc/nextcryptojob-engine.env
 Environment=NODE_ENV=production
 # Кеш селекторів EVM (збирач collect-b) пише сюди, а не в /opt.
 Environment=SELECTOR_CACHE=/var/lib/nextcryptojob-engine/selectors.json
-ExecStart=/usr/bin/node dist/cli.js worker
+# Node 24 (engines >=24): на VPS /usr/bin/node це Node 22, Node 24 стоїть у /usr/local/bin.
+ExecStart=/usr/local/bin/node dist/cli.js worker
 Restart=always
 RestartSec=10
 # Перший SIGTERM: нових завдань не брати, поточні закінчити (ENGINE_SHUTDOWN_GRACE_MS, типово 60 с),
@@ -22,6 +23,8 @@ RestartSec=10
 KillSignal=SIGTERM
 TimeoutStopSec=90
 StateDirectory=nextcryptojob-engine
+# Лише власник: сюди ж ненадовго кладуть файл еталону воріт якості (реальні люди).
+StateDirectoryMode=0750
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
