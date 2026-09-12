@@ -84,7 +84,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 - `gh_builder` = combine(40·lin(reposPushed12m,12), 30·lin(reposWithSite,4), 30·logn(commits12m,1500))
 - `x` = combine(15·logn(followers,500000), 30·(kolSourceGap ? null : logn(kol,1000)),
   15·logn(ownAvgLikesRt,1500), 15·logn(ownAvgViews,150000), 15·logn(ownAvgReplies,150),
-  10·lin(own / max(daysCovered,1) · 30, 20)); якщо followers = null → `x = null`
+  10·lin(own / daysCovered · 30, 20) (daysCovered null або 0 → null)); якщо followers = null → `x = null`
 - `yt` = combine(45·logn(subscribers,1000000), 35·logn(avgViewsRecent,100000), 20·lin(videos90d,12));
   якщо subscribers = null → `yt = null`
 - Гаманці зводяться в: `ageYears` (найраніший firstTs серед EVM і Solana без sigsCapped),
@@ -95,7 +95,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 - `trading` = без гаманців → null; trades = 0 → (tradeGap ? null : 0);
   інакше combine(45·logn(trades,3000), 20·lin(|tradeChains|,4), 20·logn(hlVolume,5000000), 15·logn(held,20))
   (`held` у релізі 1 = null)
-- `site` = недоступний → null; інакше 30 + 0.7·(combine(40·logn(feedItems,100), 25·lin(items90d,8),
+- `site` = недоступний → null; інакше 30 + 0.7·(combine(40·logn(feedItems,100), 20·lin(items90d,8),
   10·logn(sitemapUrls,150)) ?? 0)
 - `media` = max(x, yt) з не-null; `output` = max(site, gh_eng) з не-null.
 
