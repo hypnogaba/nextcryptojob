@@ -71,6 +71,31 @@ describe("collectGithub", () => {
     expect(await collectGithub("nobody-here", ctxWith(fetchImpl, env))).toEqual({ ok: false, gap: "github: user not found" });
   });
 
+  it("збій GraphQL на боці GitHub (помилка без type) повторюється, і факти приходять", async () => {
+    const BROKEN = { data: { user: null }, errors: [{ message: "Something went wrong while executing your query on 2026-09-12T09:59:27Z." }] };
+    let n = 0;
+    const { fetchImpl, calls } = mockFetch(() => json(++n <= 2 ? BROKEN : USER));
+    const r = await collectGithub("test-dev", ctxWith(fetchImpl, env));
+    expect(r).toMatchObject({ ok: true, facts: { followers: 250 } });
+    expect(calls).toHaveLength(3);
+  });
+
+  it("збій GraphQL на боці GitHub щоразу: прогалина після повторів, а не 'no user'", async () => {
+    const BROKEN = { data: { user: null }, errors: [{ message: "Something went wrong while executing your query." }] };
+    const { fetchImpl, calls } = mockFetch(() => json(BROKEN));
+    expect(await collectGithub("test-dev", ctxWith(fetchImpl, env)))
+      .toEqual({ ok: false, gap: "github: GraphQL failed on GitHub's side after 3 attempt(s)" });
+    expect(calls).toHaveLength(3);
+  });
+
+  it("збій GraphQL на боці GitHub: повтор, що не встигне до межі збору, не починається", async () => {
+    const BROKEN = { data: { user: null }, errors: [{ message: "Something went wrong while executing your query." }] };
+    const { fetchImpl, calls } = mockFetch(() => json(BROKEN));
+    const ctx = ctxWith(fetchImpl, env, { deadlineAt: NOW + 5_000 });
+    expect(await collectGithub("test-dev", ctx)).toEqual({ ok: false, gap: "github: GraphQL failed on GitHub's side after 1 attempt(s)" });
+    expect(calls).toHaveLength(1);
+  });
+
   it("невалідний логін: прогалина без запиту", async () => {
     const { fetchImpl, calls } = mockFetch(() => json(USER));
     expect(await collectGithub("bad login", ctxWith(fetchImpl, env))).toEqual({ ok: false, gap: "github: invalid login" });

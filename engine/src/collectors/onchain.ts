@@ -1,7 +1,7 @@
 /**
  * Спільне для збирачів гаманців (evm, hyperliquid, solana).
  */
-import type { Fetched } from "../types.js";
+import type { Collected } from "../types.js";
 
 export type Env = Record<string, string | undefined>;
 
@@ -30,12 +30,12 @@ export interface CollectOptions {
 }
 
 /**
- * Результат збирача гаманців. `partial`: примітки за адресою, коли джерело відповіло
+ * Результат збирача гаманців (types.ts). `partial`: примітки за адресою, коли джерело відповіло
  * не повністю. Адреса, що не відповіла зовсім, у фактах відсутня (нуль замість неї
  * був би вигадкою) і має тут причину; адреса у фактах може мати тут пояснення null
- * (наприклад "swaps: not configured: HELIUS_KEY"). Сумісний із Fetched<T>.
+ * (наприклад "swaps: not configured: HELIUS_KEY").
  */
-export type Collected<T> = Fetched<T> & { partial?: Record<string, string> };
+export type { Collected };
 
 /** Дописує примітку до адреси в partial. */
 export function addNote(partial: Record<string, string>, address: string, note: string): void {

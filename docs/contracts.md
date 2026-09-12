@@ -36,7 +36,10 @@ ENS `*.eth` / SNS `*.sol` у релізі 1 не розвʼязуємо (пол�
 
 ## 3. Факти джерел (`source_facts.facts_json`)
 Правило: поле, якого джерело не віддало, дорівнює `null`, а не 0. Якщо джерело не відповіло
-зовсім, `facts_json = NULL`, `gap_reason = '<людська причина>'`.
+зовсім, `facts_json = NULL`, `gap_reason = '<людська причина>'`. Часткова відповідь гаманців (evm,
+hyperliquid, solana: частина адрес не відповіла або має невідоме поле): `facts_json` = факти як є,
+`gap_reason = 'partial: <перші 8 символів адреси>: <причина>; …'`, а в `breakdown_json.gaps` ключ
+`<джерело>.<перші 8 символів адреси>` (наприклад `solana.BGjMfx5B`).
 
 ```ts
 type XFacts = { followers: number|null; kol: number|null; kolSourceGap: boolean;

@@ -151,6 +151,14 @@ const SUFFIX_ALIASES: Array<[suffix: string, budget: string]> = [
   [".helius-rpc.com", "helius"],
 ];
 
+/** Бюджет пошуку GitHub (api.github.com/search/...). */
+export const GITHUB_SEARCH = "github-search";
+
+/** Бюджети за хостом і початком шляху: той самий хост, але інший ліміт провайдера. */
+const PATH_BUDGETS: Array<[hostBudget: string, pathPrefix: string, budget: string]> = [
+  ["api.github.com", "/search/", GITHUB_SEARCH],
+];
+
 const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   "6551": { concurrency: 2, minIntervalMs: 500 },
   etherscan: { concurrency: 1, minIntervalMs: 250 },
@@ -160,6 +168,13 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   "api.hyperliquid.xyz": { concurrency: 4, minIntervalMs: 0 },
   "api.mainnet-beta.solana.com": { concurrency: 1, minIntervalMs: 300 },
   "api.github.com": { concurrency: 4, minIntervalMs: 0 },
+  // Пошук GitHub має власний ліміт: 30 запитів на хвилину з токеном. Окремий бюджет, щоб
+  // він не гальмував GraphQL і core (ключ з хоста й шляху, budgetKeyForUrl).
+  [GITHUB_SEARCH]: { concurrency: 1, minIntervalMs: 2_000 },
+  // Sherlock (audits): JSON їхнього сайту, без ключа; не частіше, ніж дослідження (2,5 с).
+  "mainnet-contest.sherlock.xyz": { concurrency: 1, minIntervalMs: 2_500 },
+  // Власний Blockscout мережі Optimism (не *.blockscout.com): публічний, по одному.
+  "explorer.optimism.io": { concurrency: 1, minIntervalMs: 250 },
   "www.googleapis.com": { concurrency: 4, minIntervalMs: 0 },
   "api.openchain.xyz": { concurrency: 2, minIntervalMs: 0 },
 };
@@ -185,6 +200,17 @@ export function budgetKey(hostOrBudget: string): string {
   return h;
 }
 
+/**
+ * Ключ бюджету для адреси: як budgetKey(хост), але шлях може вибрати окремий бюджет
+ * (пошук GitHub: свій ліміт 30/хв, окремо від GraphQL). safeFetch і backoffFor беруть його.
+ */
+export function budgetKeyForUrl(url: string | URL): string {
+  const u = typeof url === "string" ? new URL(url) : url;
+  const host = budgetKey(u.hostname);
+  for (const [h, prefix, budget] of PATH_BUDGETS) if (host === h && u.pathname.startsWith(prefix)) return budget;
+  return host;
+}
+
 const registry = new Map<string, InternalLimiter>();
 
 /**
@@ -207,14 +233,13 @@ export function limiterFor(hostOrBudget: string): Limiter {
 }
 
 /**
- * Відсунути всі старти бюджету, до якого належить адреса чи хост.
+ * Відсунути всі старти бюджету, до якого належить адреса (з урахуванням шляху) чи хост.
  * Для лімітів, про які провайдер каже в тілі відповіді, а не статусом 429
  * (Etherscan відповідає 200 з "Max rate limit reached").
  */
 export function backoffFor(urlOrHost: string | URL, ms: number): void {
-  const host = urlOrHost instanceof URL ? urlOrHost.hostname
-    : urlOrHost.includes("://") ? new URL(urlOrHost).hostname : urlOrHost;
-  limiterFor(host).backoff(Math.min(ms, MAX_BACKOFF_MS));
+  const key = urlOrHost instanceof URL || urlOrHost.includes("://") ? budgetKeyForUrl(urlOrHost) : urlOrHost;
+  limiterFor(key).backoff(Math.min(ms, MAX_BACKOFF_MS));
 }
 
 /** Лише для тестів: забути всі обмежувачі. */

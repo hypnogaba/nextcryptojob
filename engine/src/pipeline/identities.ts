@@ -13,11 +13,13 @@ export type IdentityRow = {
  * Входи збирачів однієї людини.
  * X рахується лише підтверджений (`verified_at`); непідтверджений лишається тут із verified = false,
  * щоб конвеєр записав прогалину «not verified», а не мовчки забув джерело.
+ * GitHub рахується й без підтвердження (бал GitHub), але профіль Sherlock з ним звіряється лише
+ * з підтвердженим (код у біо): інакше будь-хто вписав би чужий GitHub і забрав чужий заробіток.
  * Гаманці рахуються й без підпису: вставлена адреса вже доказ, підпис лише значок.
  */
 export type CollectorInputs = {
   x: { handle: string; verified: boolean } | null;
-  github: string | null;
+  github: { login: string; verified: boolean } | null;
   youtube: string | null;
   site: string | null;
   evm: string[];
@@ -45,9 +47,10 @@ export function groupIdentities(rows: readonly IdentityRow[]): CollectorInputs {
     [...new Set(rows.filter((r) => r.kind === kind).sort((a, b) => a.id - b.id).map((r) => r.value.trim()).filter(Boolean))];
 
   const x = first("x");
+  const gh = first("github");
   return {
     x: x ? { handle: x.value.trim(), verified: !!x.verified_at } : null,
-    github: first("github")?.value.trim() ?? null,
+    github: gh ? { login: gh.value.trim(), verified: !!gh.verified_at } : null,
     youtube: first("youtube")?.value.trim() ?? null,
     site: first("site")?.value.trim() ?? null,
     evm: all("evm"),

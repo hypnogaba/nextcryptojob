@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { __resetLimiters, backoffFor, budgetKey, createLimiter, limiterFor, NestedRunError } from "./limits.js";
+import {
+  __resetLimiters, backoffFor, budgetKey, budgetKeyForUrl, createLimiter, GITHUB_SEARCH, limiterFor, NestedRunError,
+} from "./limits.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -346,6 +348,83 @@ describe("budgetKey і limiterFor", () => {
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThan(8);
     expect(starts.filter((s) => s === 0).length).toBe(peak);
+  });
+});
+
+describe("бюджети Sherlock, Optimism і пошуку GitHub", () => {
+  /** Моменти стартів n викликів одного бюджету (кожен триває 10 мс). */
+  async function starts(key: string, n: number): Promise<{ starts: number[]; peak: number }> {
+    const limiter = limiterFor(key);
+    const out: number[] = [];
+    let inFlight = 0, peak = 0;
+    const t0 = Date.now();
+    const calls = Array.from({ length: n }, () => limiter.run(async () => {
+      out.push(Date.now() - t0);
+      inFlight++; peak = Math.max(peak, inFlight); await sleep(10); inFlight--;
+    }));
+    await vi.runAllTimersAsync();
+    await Promise.all(calls);
+    return { starts: out, peak };
+  }
+  const gaps = (xs: number[]) => xs.slice(1).map((x, i) => x - xs[i]!);
+
+  it("mainnet-contest.sherlock.xyz: по одному, щонайменше 2,5 с між стартами", async () => {
+    const r = await starts("mainnet-contest.sherlock.xyz", 4);
+    expect(r.peak).toBe(1);
+    for (const g of gaps(r.starts)) expect(g).toBeGreaterThanOrEqual(2_500);
+  });
+
+  it("explorer.optimism.io: по одному, 250 мс між стартами, окремо від *.blockscout.com", async () => {
+    expect(budgetKey("explorer.optimism.io")).toBe("explorer.optimism.io");
+    expect(limiterFor("explorer.optimism.io")).not.toBe(limiterFor("optimism.blockscout.com"));
+    const r = await starts("explorer.optimism.io", 4);
+    expect(r.peak).toBe(1);
+    for (const g of gaps(r.starts)) expect(g).toBeGreaterThanOrEqual(250);
+  });
+
+  it("пошук GitHub має свій ключ бюджету з хоста й шляху; GraphQL і core лишаються в api.github.com", () => {
+    expect(budgetKeyForUrl("https://api.github.com/search/issues?q=x")).toBe(GITHUB_SEARCH);
+    expect(budgetKeyForUrl(new URL("https://API.GitHub.com./search/code"))).toBe(GITHUB_SEARCH);
+    expect(budgetKeyForUrl("https://api.github.com/graphql")).toBe("api.github.com");
+    expect(budgetKeyForUrl("https://api.github.com/users/x")).toBe("api.github.com");
+    expect(budgetKeyForUrl("https://api.github.com/searchx")).toBe("api.github.com");
+    // Той самий шлях на чужому хості не потрапляє в бюджет пошуку GitHub.
+    expect(budgetKeyForUrl("https://example.com/search/issues")).toBe("example.com");
+    expect(budgetKeyForUrl("https://eth.blockscout.com/api?x=1")).toBe("blockscout");
+    expect(limiterFor(GITHUB_SEARCH)).not.toBe(limiterFor("api.github.com"));
+  });
+
+  it("пошук GitHub: 30 за хвилину (по одному, 2 с між стартами)", async () => {
+    const r = await starts(GITHUB_SEARCH, 31);
+    expect(r.peak).toBe(1);
+    for (const g of gaps(r.starts)) expect(g).toBeGreaterThanOrEqual(2_000);
+    expect(r.starts.filter((t) => t < 60_000)).toHaveLength(30);
+  });
+
+  it("черга пошуку не гальмує GraphQL: GraphQL стартує одразу, поки пошук чекає свого інтервалу", async () => {
+    const search = limiterFor(budgetKeyForUrl("https://api.github.com/search/issues"));
+    const graphql = limiterFor(budgetKeyForUrl("https://api.github.com/graphql"));
+    const t0 = Date.now();
+    const searchStarts: number[] = [];
+    const s = Array.from({ length: 5 }, () => search.run(async () => { searchStarts.push(Date.now() - t0); }));
+    let graphqlAt = -1;
+    const g = graphql.run(async () => { graphqlAt = Date.now() - t0; });
+    await vi.runAllTimersAsync();
+    await Promise.all([...s, g]);
+    expect(graphqlAt).toBe(0);
+    expect(searchStarts.at(-1)).toBeGreaterThanOrEqual(8_000);
+  });
+
+  it("backoffFor за адресою пошуку відсуває лише пошук, а не весь api.github.com", async () => {
+    backoffFor("https://api.github.com/search/issues?q=1", 10_000);
+    const t0 = Date.now();
+    let graphqlAt = -1, searchAt = -1;
+    const g = limiterFor("api.github.com").run(async () => { graphqlAt = Date.now() - t0; });
+    const s = limiterFor(GITHUB_SEARCH).run(async () => { searchAt = Date.now() - t0; });
+    await vi.runAllTimersAsync();
+    await Promise.all([g, s]);
+    expect(graphqlAt).toBe(0);
+    expect(searchAt).toBeGreaterThanOrEqual(10_000);
   });
 });
 

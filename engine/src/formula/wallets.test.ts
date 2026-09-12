@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EvmChainFacts, SolanaFacts } from "../types.js";
-import { aggregateWallets } from "./wallets.js";
+import { aggregateWallets, solanaSwapsKnown } from "./wallets.js";
 
 const NOW = Date.UTC(2026, 8, 12);
 const YEAR = 365.25 * 86400;
@@ -59,6 +59,40 @@ describe("aggregateWallets", () => {
     expect(enough.trades).toBe(30);
     expect(enough.tradeChains).toEqual(["solana"]);
     expect(enough.tradeGap).toBe(false);
+  });
+
+  it("договір §3, виняток: прочитано всі успішні й список не обрізаний → кількість точна навіть нижче 50", () => {
+    const full = aggregateWallets({ solana: { S1: sol({ sigs: 12, sigsOk: 10, sampleSeen: 10, sampleSwaps: 4, swaps: 4 }) } }, NOW)!;
+    expect(full.trades).toBe(4);
+    expect(full.tradeChains).toEqual(["solana"]);
+    expect(full.tradeGap).toBe(false);
+
+    // Повна вибірка без жодного обміну: точний нуль, а не прогалина.
+    const none = aggregateWallets({ solana: { S1: sol({ sigs: 7, sigsOk: 7, sampleSeen: 7, sampleSwaps: 0, swaps: 0 }) } }, NOW)!;
+    expect(none.trades).toBe(0);
+    expect(none.tradeGap).toBe(false);
+
+    // Порожній гаманець: 0 з 0, теж точно.
+    const empty = aggregateWallets({ solana: { S1: sol({ sigs: 0, sigsOk: 0, sampleSeen: 0, sampleSwaps: 0, swaps: 0 }) } }, NOW)!;
+    expect(empty.tradeGap).toBe(false);
+  });
+
+  it("виняток не діє, якщо вибірка неповна або список підписів обрізаний", () => {
+    // Прочитано 10 з 12 успішних: вибірка менше 50 і не повна → прогалина.
+    const missed = aggregateWallets({ solana: { S1: sol({ sigs: 12, sigsOk: 12, sampleSeen: 10, sampleSwaps: 4, swaps: null }) } }, NOW)!;
+    expect(missed.tradeGap).toBe(true);
+    expect(missed.trades).toBe(0);
+    // sampleSeen = sigsOk, але підписи обрізані (лічба = нижня межа): не точно.
+    const capped = aggregateWallets({ solana: { S1: sol({ sigs: 10000, sigsOk: 30, sigsCapped: true, sampleSeen: 30, sampleSwaps: 9, swaps: 9 }) } }, NOW)!;
+    expect(capped.tradeGap).toBe(true);
+    expect(capped.trades).toBe(0);
+  });
+
+  it("solanaSwapsKnown: точний випадок бере sampleSwaps, навіть якщо старий збирач писав swaps = null", () => {
+    expect(solanaSwapsKnown({ sigsOk: 5, sigsCapped: false, sampleSeen: 5, sampleSwaps: 3, swaps: null })).toBe(3);
+    expect(solanaSwapsKnown({ sigsOk: 500, sigsCapped: false, sampleSeen: 49, sampleSwaps: 3, swaps: 30 })).toBeNull();
+    expect(solanaSwapsKnown({ sigsOk: 500, sigsCapped: false, sampleSeen: 50, sampleSwaps: 3, swaps: 30 })).toBe(30);
+    expect(solanaSwapsKnown({ sigsOk: 30, sigsCapped: true, sampleSeen: 30, sampleSwaps: 3, swaps: 3 })).toBeNull();
   });
 
   it("Solana з swaps = null або Solana, що не відповіла, дає tradeGap", () => {
