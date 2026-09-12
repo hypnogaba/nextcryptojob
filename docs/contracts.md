@@ -36,7 +36,10 @@ ENS `*.eth` / SNS `*.sol` у релізі 1 не розвʼязуємо (пол�
 
 ## 3. Факти джерел (`source_facts.facts_json`)
 Правило: поле, якого джерело не віддало, дорівнює `null`, а не 0. Якщо джерело не відповіло
-зовсім, `facts_json = NULL`, `gap_reason = '<людська причина>'`.
+зовсім, `facts_json = NULL`, `gap_reason = '<людська причина>'`. Часткова відповідь гаманців (evm,
+hyperliquid, solana: частина адрес не відповіла або має невідоме поле): `facts_json` = факти як є,
+`gap_reason = 'partial: <перші 8 символів адреси>: <причина>; …'`, а в `breakdown_json.gaps` ключ
+`<джерело>.<перші 8 символів адреси>` (наприклад `solana.BGjMfx5B`).
 
 ```ts
 type XFacts = { followers: number|null; kol: number|null; kolSourceGap: boolean;
@@ -166,6 +169,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0008_sources_v5.sql | controller | перебудова identities і source_facts (sherlock, audits, dune) |
 | 0009_users_email_lower.sql | controller | індекс users(lower(email)) |
 | 0010_score_jobs_user.sql | controller | індекс score_jobs(user_id, id) |
+| 0011_user_settings.sql | web: налаштування | users.digest_paused |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)

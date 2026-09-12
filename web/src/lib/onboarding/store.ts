@@ -1,0 +1,99 @@
+// Відповіді анкети в users: що шукає людина, ролі, місце, зарплата і
+// досягнутий крок. Кожне збереження кроку й перехід далі одним записом.
+import type { RoleKey } from "@/lib/card/roles";
+import { parseRoles } from "@/lib/roles/catalog";
+import type { Place } from "./place";
+import { advance, parseSavedStep, type SavedStep, type Step } from "./steps";
+
+export const TARGET_MAX = 600;
+
+export type Answers = {
+  targetText: string;
+  roles: RoleKey[];
+  remoteMode: string | null;
+  city: string | null;
+  salaryMin: number | null;
+  salaryCurrency: string | null;
+  step: SavedStep;
+};
+
+type UserRow = {
+  target_text: string | null;
+  roles: string | null;
+  remote_mode: string | null;
+  city: string | null;
+  salary_min: number | null;
+  salary_currency: string | null;
+  onboarding_step: string | null;
+};
+
+export async function loadAnswers(db: D1Database, userId: string): Promise<Answers> {
+  const row = await db
+    .prepare(
+      "SELECT target_text, roles, remote_mode, city, salary_min, salary_currency, onboarding_step FROM users WHERE id = ?",
+    )
+    .bind(userId)
+    .first<UserRow>();
+  return {
+    targetText: row?.target_text ?? "",
+    roles: parseRoles(row?.roles),
+    remoteMode: row?.remote_mode ?? null,
+    city: row?.city ?? null,
+    salaryMin: row?.salary_min ?? null,
+    salaryCurrency: row?.salary_currency ?? null,
+    step: parseSavedStep(row?.onboarding_step),
+  };
+}
+
+/** Поля, які можна змінити з анкети. Назви стовпців лише звідси, не з форми. */
+type Fields = {
+  target_text?: string;
+  roles?: string;
+  remote_mode?: string;
+  city?: string | null;
+  salary_min?: number | null;
+  salary_currency?: string | null;
+};
+
+/**
+ * Зберігає відповіді кроку `completed` і просуває досягнутий крок уперед.
+ * Повертає новий досягнутий крок.
+ */
+export async function saveStep(
+  db: D1Database,
+  userId: string,
+  completed: Step,
+  fields: Fields,
+  saved: SavedStep,
+): Promise<SavedStep> {
+  const step = advance(saved, completed);
+  const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
+  const sets = [...entries.map(([k]) => `${k} = ?`), "onboarding_step = ?"].join(", ");
+  await db
+    .prepare(`UPDATE users SET ${sets} WHERE id = ?`)
+    .bind(...entries.map(([, v]) => v), step, userId)
+    .run();
+  return step;
+}
+
+export function targetFields(text: string): Fields {
+  return { target_text: text };
+}
+
+export function rolesFields(roles: RoleKey[]): Fields {
+  return { roles: JSON.stringify(roles) };
+}
+
+export function placeFields(place: Place): Fields {
+  return {
+    remote_mode: place.remoteMode,
+    city: place.city,
+    salary_min: place.salaryMin,
+    salary_currency: place.salaryCurrency,
+  };
+}
+
+/** Анкету завершено: далі /welcome показує кроки як редагування. */
+export async function finishOnboarding(db: D1Database, userId: string): Promise<void> {
+  await db.prepare("UPDATE users SET onboarding_step = 'done' WHERE id = ?").bind(userId).run();
+}

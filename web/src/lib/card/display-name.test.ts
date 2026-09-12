@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DisplayNameError, normalizeDisplayName } from "./display-name";
+import { DisplayNameError, normalizeDisplayName, suggestDisplayName } from "./display-name";
 
 describe("normalizeDisplayName", () => {
   it.each([
@@ -33,5 +33,21 @@ describe("normalizeDisplayName", () => {
   ])("rejects %j", (raw, reason) => {
     expect(() => normalizeDisplayName(raw)).toThrow(DisplayNameError);
     expect(() => normalizeDisplayName(raw)).toThrow(new RegExp(reason));
+  });
+});
+
+describe("suggestDisplayName", () => {
+  it("prefers the verified X handle", () => {
+    expect(suggestDisplayName("hypnogaba", "someone@example.com")).toBe("@hypnogaba");
+  });
+
+  it("falls back to the first part of the email, without dots or tags", () => {
+    expect(suggestDisplayName(null, "ada.lovelace+jobs@example.com")).toBe("ada lovelace");
+    expect(suggestDisplayName(null, "hypnogaba@gmail.com")).toBe("hypnogaba");
+  });
+
+  it("leaves the field empty when the email part is not an allowed name", () => {
+    expect(suggestDisplayName(null, "0x52908400098527886e0f@example.com")).toBe("");
+    expect(suggestDisplayName(null, null)).toBe("");
   });
 });

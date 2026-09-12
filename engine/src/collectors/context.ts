@@ -1,5 +1,5 @@
 import { SourceUnavailableError, type FetchOptions, type Lookup } from "../http.js";
-import type { Fetched } from "../types.js";
+import type { Collected } from "../types.js";
 
 /**
  * Що отримує кожен збирач. Мережа йде лише через safeFetch (http.ts), бюджет запитів
@@ -70,7 +70,7 @@ export function describeError(e: unknown): string {
  * Обгортка збирача: GapError і недоступне джерело стають прогалиною з префіксом джерела,
  * скасування викликачем летить далі (прогалину за скасований збір не пишемо).
  */
-export async function collect<T>(source: string, ctx: CollectorContext, run: () => Promise<T>): Promise<Fetched<T>> {
+export async function collect<T>(source: string, ctx: CollectorContext, run: () => Promise<T>): Promise<Collected<T>> {
   try {
     return { ok: true, facts: await run() };
   } catch (e) {

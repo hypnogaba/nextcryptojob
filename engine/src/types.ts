@@ -18,6 +18,14 @@ export type IdentityKind = "x" | "github" | "youtube" | "site" | "evm" | "solana
 /** Результат збирача: факти або людська причина прогалини (`gap_reason`). */
 export type Fetched<T> = { ok: true; facts: T } | { ok: false; gap: string };
 
+/**
+ * Єдиний тип результату збирача (реєстр конвеєра і самі збирачі). `partial` дають збирачі
+ * гаманців: примітки за адресою, коли джерело відповіло не повністю (адреса без відповіді
+ * у фактах відсутня; адреса у фактах може мати тут пояснення null). Конвеєр переносить їх
+ * у `breakdown_json.gaps` (`<джерело>.<початок адреси>`) і в `source_facts.gap_reason`, не чіпаючи фактів.
+ */
+export type Collected<T> = Fetched<T> & { partial?: Record<string, string> };
+
 // §3. Факти джерел (`source_facts.facts_json`).
 
 export type XFacts = { followers: number|null; kol: number|null; kolSourceGap: boolean;
@@ -39,7 +47,8 @@ export type HyperliquidFacts = { [address: string]: { volumeUsd: number|null; fi
 
 export type SolanaFacts = { [address: string]: { sigs: number; sigsOk: number; sigsCapped: boolean;
   firstTs: number|null; sampleSeen: number; sampleSwaps: number; swaps: number|null } };
-// swaps = null, якщо sampleSeen < 50 (замала вибірка = прогалина)
+// swaps = null, якщо sampleSeen < 50 (замала вибірка = прогалина); ВИНЯТОК: перевірено всі успішні
+// (sampleSeen = sigsOk) і список не обрізаний (sigsCapped = false) → кількість точна, swaps = sampleSwaps
 
 export type YoutubeFacts = { channelId: string; subscribers: number|null; hiddenSubscribers: boolean;
   avgViewsRecent: number|null; videos90d: number|null };
@@ -62,6 +71,8 @@ export type DuneFacts = { spellbookPrs: number | null; spellbookPrs12m: number |
 /**
  * Усі факти однієї людини для формули (§4). Джерело, яке людина не підключила, відсутнє або null.
  * Джерело, яке не відповіло, теж null, а його причина лежить у `gaps` (`source_facts.gap_reason`).
+ * Ключ `gaps`: назва джерела (усе джерело без фактів) або `<джерело>.<деталь>` (частина джерела,
+ * наприклад `solana.BGjMfx96`: адреса без відповіді чи з невідомими обмінами; факти джерела лишаються).
  */
 export type PersonFacts = {
   x?: XFacts | null;
@@ -73,5 +84,5 @@ export type PersonFacts = {
   site?: SiteFacts | null;
   audits?: AuditsFacts | null;
   dune?: DuneFacts | null;
-  gaps?: Partial<Record<SourceKey, string>>;
+  gaps?: Record<string, string>;
 };

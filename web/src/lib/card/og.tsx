@@ -116,6 +116,23 @@ export function CardImage({ view }: { view: CardView }) {
             >
               {view.levelLabel}
             </span>
+            {view.marker ? (
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  fontFamily: "Plex Mono",
+                  fontSize: 22,
+                  marginLeft: 14,
+                  padding: "8px 14px",
+                  borderRadius: 10,
+                  border: `2px solid ${INK_MUTED}`,
+                  color: INK_MUTED,
+                }}
+              >
+                {view.marker}
+              </span>
+            ) : null}
           </div>
         </div>
 

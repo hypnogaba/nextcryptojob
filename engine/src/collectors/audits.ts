@@ -1,5 +1,5 @@
 import { fetchJson, SourceUnavailableError } from "../http.js";
-import type { AuditsFacts, Fetched } from "../types.js";
+import type { AuditsFacts, Collected } from "../types.js";
 import { collect, describeError, fetchOpts, GapError, pause, type CollectorContext } from "./context.js";
 
 /**
@@ -60,7 +60,7 @@ export async function collectAudits(
   sherlockHandle: string,
   person: { github?: string | null; x?: string | null },
   ctx: CollectorContext,
-): Promise<Fetched<AuditsFacts>> {
+): Promise<Collected<AuditsFacts>> {
   return collect("audits", ctx, async () => {
     const handle = sherlockHandle.trim().replace(/^@/, "").toLowerCase();
     // Перший символ лише літера чи цифра: "." і ".." у шляху /watson/<h> вели б в інший ресурс.
