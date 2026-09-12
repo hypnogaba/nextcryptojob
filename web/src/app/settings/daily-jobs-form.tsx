@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
 import { ERROR, FIELD, HINT, LABEL } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
@@ -40,10 +40,7 @@ const RADIO_ROW =
 
 export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, paused, zones }: Props) {
   const [state, action] = useActionState(saveDailyJobsAction, {} as SettingsState);
-  // Списки керовані станом: після дії React скидає форму, і некерований <select>
-  // повертався б до варіанта з першого показу, а не до щойно збереженого.
-  const [hourValue, setHourValue] = useState(String(hour));
-  const [zone, setZone] = useState(timezone ?? "UTC");
+  const zoneRef = useRef<HTMLSelectElement>(null);
   const [detected, setDetected] = useState(false);
 
   // Перший візит: пояс ще не збережено, беремо з браузера й одразу пишемо.
@@ -51,20 +48,23 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
     if (timezone) return;
     const fromDevice = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const match = fromDevice ? matchZone(fromDevice, zones) : null;
-    if (!match) return;
+    if (!match || !zoneRef.current) return;
+    // Прямо в поле: HTML з сервера лишається тим самим, без розбіжності гідратації.
+    zoneRef.current.value = match;
     detectTimezoneAction(match)
       .catch(() => {
         // Не вийшло записати: людина збереже пояс сама кнопкою Save.
       })
-      .finally(() => {
-        setZone(match);
-        setDetected(true);
-      });
+      .finally(() => setDetected(true));
   }, [timezone, zones]);
 
   const errors = state.errors ?? {};
+  // Після дії React скидає форму до значень за замовчуванням, а <select> при цьому
+  // бере варіант із першого показу, навіть керований. Ключ зі збережених значень
+  // перебудовує форму, щойно сервер віддав нові, тож видно саме збережене.
+  const saved = `${channel}|${hour}|${timezone ?? ""}|${paused ? 1 : 0}`;
   return (
-    <form action={action} className="grid gap-5">
+    <form key={saved} action={action} className="grid gap-5">
       <fieldset className="grid gap-2" aria-describedby={errors.channel ? "channel-error" : undefined}>
         <legend className={`${LABEL} mb-2`}>Send my jobs by</legend>
         <label className={RADIO_ROW}>
@@ -113,8 +113,7 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
           <select
             id="hour"
             name="hour"
-            value={hourValue}
-            onChange={(e) => setHourValue(e.target.value)}
+            defaultValue={String(hour)}
             aria-invalid={errors.hour ? true : undefined}
             aria-describedby={errors.hour ? "hour-error" : undefined}
             className={FIELD}
@@ -138,11 +137,9 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
           <select
             id="timezone"
             name="timezone"
-            value={zone}
-            onChange={(e) => {
-              setZone(e.target.value);
-              setDetected(false);
-            }}
+            ref={zoneRef}
+            defaultValue={timezone ?? "UTC"}
+            onChange={() => setDetected(false)}
             aria-invalid={errors.timezone ? true : undefined}
             aria-describedby={errors.timezone ? "timezone-error" : "timezone-hint"}
             className={FIELD}
