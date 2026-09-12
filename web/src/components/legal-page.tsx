@@ -3,7 +3,9 @@ import { docTitle, type LegalDoc } from "@/lib/legal/docs";
 import { renderMarkdown } from "@/lib/legal/markdown";
 
 export function legalMetadata(doc: LegalDoc): Metadata {
-  return { title: docTitle(doc.source), description: doc.description, alternates: { canonical: doc.path } };
+  // Шаблон layout сам додає « | NextCryptoJob», тож назву бренду з заголовка знімаємо.
+  const title = docTitle(doc.source).replace(/^NextCryptoJob\s+/, "");
+  return { title, description: doc.description, alternates: { canonical: doc.path } };
 }
 
 /** Юридична сторінка з Markdown. Смужка DRAFT з самого документа лишається на місці. */

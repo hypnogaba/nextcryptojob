@@ -26,7 +26,9 @@ export const APPLIED_MIGRATIONS = [
  * APPLIED_MIGRATIONS; коли той тест це відпустить, список зливається з верхнім.
  */
 export const APPLIED_AFTER_CRM = [
-  // 2026-09-12, доріжка web (W6, налаштування): users.digest_paused.
+  // 2026-09-12, доріжка оплати (T8): перебудова подань доступу.
+  "0012_access_views.sql",
+  // 2026-09-12, доріжка web (W6, налаштування): users.digest_paused. Накочено після 0012.
   "0011_user_settings.sql",
 ];
 
