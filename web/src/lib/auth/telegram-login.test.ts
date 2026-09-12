@@ -77,9 +77,33 @@ describe("beginTelegramLogin", () => {
 
   it("remembers who is connecting Telegram from the account page", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
+    await createSession("u1", null);
     await begin();
     expect(lastFlow!.linkUserId).toBe("u1");
+  });
+
+  it.each(["cross-site", "same-site"])("refuses to start connecting Telegram when %s sent the signed-in person here", async (site) => {
+    exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
+    await createSession("u1", null);
+    harness.headers.set("sec-fetch-site", site);
+    await expect(beginTelegramLogin(ORIGIN, deps())).resolves.toBe(`${ORIGIN}/auth/telegram/error?reason=cross_site`);
+    expect(harness.jar.get(FLOW_COOKIE)).toBeUndefined();
+  });
+
+  it.each(["same-origin", "none", null])("lets a signed-in person connect Telegram from %s", async (site) => {
+    exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
+    await createSession("u1", null);
+    if (site) harness.headers.set("sec-fetch-site", site);
+    const url = await begin();
+    expect(url.origin).toBe("https://oauth.telegram.org");
+    expect(lastFlow!.linkUserId).toBe("u1");
+  });
+
+  it("still lets a signed-out visitor from another site sign in with Telegram", async () => {
+    harness.headers.set("sec-fetch-site", "cross-site");
+    const url = await begin();
+    expect(url.origin).toBe("https://oauth.telegram.org");
+    expect(lastFlow!.linkUserId).toBeNull();
   });
 });
 
@@ -89,6 +113,7 @@ describe("finishTelegramLogin", () => {
     const [u] = rows<{ id: string; telegram_id: string; channel: string }>("SELECT id, telegram_id, channel FROM users");
     expect(u).toMatchObject({ telegram_id: "987654321", channel: "telegram" });
     expect(harness.jar.get(SESSION_COOKIE)).toBeDefined();
+    expect(rows("SELECT user_id, method FROM sessions")).toEqual([{ user_id: u.id, method: "telegram" }]);
     expect(rows("SELECT actor, action, target, meta_json FROM audit_log")).toEqual([
       { actor: u.id, action: "auth.login_telegram", target: u.id, meta_json: '{"created":true}' },
     ]);
@@ -150,18 +175,20 @@ describe("finishTelegramLogin", () => {
 
   it("links Telegram to the signed-in profile when it is free", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
+    await createSession("u1", "email");
     await expect(roundTrip()).resolves.toBe("/account");
     expect(rows("SELECT id, telegram_id, channel FROM users")).toEqual([
       { id: "u1", telegram_id: "987654321", channel: "email" },
     ]);
     expect(rows("SELECT action FROM audit_log")).toEqual([{ action: "auth.telegram_linked" }]);
+    // Прив'язка не відкриває нової сесії: сесія поштою лишається сесією поштою.
+    expect(rows("SELECT method FROM sessions")).toEqual([{ method: "email" }]);
   });
 
   it("refuses to link a Telegram that belongs to another profile", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
     exec("INSERT INTO users (id, telegram_id) VALUES ('u2', '987654321')");
-    await createSession("u1");
+    await createSession("u1", null);
     const sessionBefore = harness.jar.get(SESSION_COOKIE)?.value;
     await expect(roundTrip()).resolves.toBe("/auth/telegram/error?reason=linked_elsewhere");
     expect(rows("SELECT id, telegram_id FROM users ORDER BY id")).toEqual([
@@ -174,13 +201,28 @@ describe("finishTelegramLogin", () => {
 
   it("does not link or sign in when the session changed during the flow", async () => {
     exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
-    await createSession("u1");
+    await createSession("u1", null);
     const url = await begin();
     harness.jar.delete(SESSION_COOKIE);
     await expect(finish({ code: "c", state: url.searchParams.get("state")! })).resolves.toBe(
       "/auth/telegram/error?reason=session_changed",
     );
     expect(rows("SELECT id, telegram_id FROM users")).toEqual([{ id: "u1", telegram_id: null }]);
+  });
+
+  it("does not sign in or link when a session appeared during a signed-out flow", async () => {
+    const url = await begin();
+    expect(lastFlow!.linkUserId).toBeNull();
+    // Поки людина була в Telegram, у цьому браузері хтось увійшов поштою.
+    exec("INSERT INTO users (id, email) VALUES ('u1', 'ada@example.com')");
+    await createSession("u1", "email");
+    const sessionBefore = harness.jar.get(SESSION_COOKIE)?.value;
+    await expect(finish({ code: "c", state: url.searchParams.get("state")! })).resolves.toBe(
+      "/auth/telegram/error?reason=session_changed",
+    );
+    expect(rows("SELECT id, telegram_id FROM users")).toEqual([{ id: "u1", telegram_id: null }]);
+    expect(harness.jar.get(SESSION_COOKIE)?.value).toBe(sessionBefore);
+    expect(rows("SELECT action FROM audit_log")).toEqual([]);
   });
 
   it("limits code exchanges per IP", async () => {

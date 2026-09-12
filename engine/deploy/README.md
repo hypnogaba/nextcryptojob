@@ -1,6 +1,7 @@
 # Встановлення engine на VPS
 
-Worker черги `score_jobs` (systemd, `Restart=always`) і щогодинний таймер `enqueue-refresh`.
+Worker черги `score_jobs` (systemd, `Restart=always`), щогодинний таймер `enqueue-refresh` і щогодинний
+таймер добірки `digest-due` (§6).
 Перше встановлення: 12.09.2026 на VPS tradebot (`ssh tradebot-vps`, Ubuntu 22.04, root). На тій самій
 машині живуть бойовий торговий бот, сканер NextRole та інші служби: їхніх юнітів, користувачів,
 файлів і env не чіпаємо (з `/etc/nextrole-scanner.env` лише читаємо три значення, див. §3).
@@ -134,6 +135,47 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js score-facts --x <н�
 
 Тимчасовий `GITHUB_TOKEN` для ручного прогону (поки його немає в env): лише в оточення одного процесу
 через stdin, не на диск: `gh auth token | ssh tradebot-vps 'IFS= read -r GH; …; export GITHUB_TOKEN="$GH"; runuser …'`.
+
+## 6. Добірка вакансій (`digest-due`, задача E7)
+
+Що робить і контракт листа: `src/digest/README.md`. Юніти: `nextcryptojob-digest.service` (oneshot) і
+`nextcryptojob-digest.timer` (щогодини о :05, `Persistent=true`).
+
+Перед першим запуском:
+1. Controller накочує `db/migrations/0006_digest.sql` на D1 `nextcryptojob` (без неї `digest-due`
+   падає на `no such table: digest_runs`). 0011 (`users.digest_paused`) може прийти пізніше: без неї
+   пауза не діє, у журналі рядок `digest_paused missing`.
+2. Дописати в `/etc/nextcryptojob-engine.env` (без друку значень, як у §3):
+   - `TELEGRAM_BOT_TOKEN`: той самий бот, що в сайту (секрет Worker `TELEGRAM_BOT_TOKEN`). Без нього людей
+     з каналом Telegram пропускаємо, у базу нічого не пишемо.
+   - `SITE_URL='https://nextcryptojob.xyz'`: посилання на вакансії компаній і адреса листа.
+   - `INTERNAL_API_SECRET`: той самий секрет, що в сайту для `/api/internal/digest-email`. Поки
+     ендпойнта немає (W7) або пошта на сайті не налаштована, добірки поштою стають `failed`
+     з `email not configured`.
+   `CF_API_TOKEN` має читати й D1 `crypto-jobs-agent` (NextRole): нинішній токен зі сканера NextRole
+   це вміє (перевірено 12.09 сухим прогоном).
+3. Сухий прогін з VPS, нічого не пише й не шле:
+
+```sh
+cd /opt/nextcryptojob-engine && set -a; . /etc/nextcryptojob-engine.env; set +a
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js digest-due --dry-run
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js digest-due --dry-run --profile '{"roles":["engineer"],"remote_mode":"remote"}'
+```
+
+Встановлення:
+
+```sh
+scp deploy/nextcryptojob-digest.service deploy/nextcryptojob-digest.timer tradebot-vps:/etc/systemd/system/
+systemd-analyze verify nextcryptojob-digest.service nextcryptojob-digest.timer
+systemctl daemon-reload
+systemctl enable --now nextcryptojob-digest.timer
+systemctl list-timers nextcryptojob-digest.timer
+journalctl -u nextcryptojob-digest -n 20   # рядок digest-due: eligible, due, sent, failed, empty, skipped, already
+```
+
+Годину, коли нікому не пора, прогін закінчує без жодного читання бази NextRole. Коли пора хоч комусь,
+один запит пулу: близько 57 тис. `rows_read` (повний прохід `jobs_cache`, індексу на `fetched_at` там
+немає навмисно), що за ціною D1 для читань копійки.
 
 ## Оновлення
 

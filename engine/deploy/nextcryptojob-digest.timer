@@ -1,0 +1,13 @@
+[Unit]
+Description=NextCryptoJob engine: hourly digest-due at :05
+
+[Timer]
+# Щогодини о :05. Людина отримує добірку у свою годину або наступну (запас на пропущений запуск),
+# тож без RandomizedDelaySec: зсув на хвилини нічого не дає, а година має бути передбачуваною.
+OnCalendar=*-*-* *:05:00
+AccuracySec=30s
+Persistent=true
+Unit=nextcryptojob-digest.service
+
+[Install]
+WantedBy=timers.target

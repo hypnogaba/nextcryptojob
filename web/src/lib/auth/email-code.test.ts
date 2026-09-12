@@ -6,6 +6,7 @@ import {
   normaliseEmail,
   randomCode,
   requestCode,
+  verifyAddEmailCode,
   verifyCode,
 } from "./email-code";
 import { hmacSha256Hex } from "./hash";
@@ -268,7 +269,7 @@ describe("verifyCode", () => {
     expect(users).toEqual([{ id: res.userId, email: "ada@example.com", channel: "email" }]);
     expect(res.userId).toMatch(/^[0-9a-f-]{36}$/);
     expect(harness.jar.store.has(SESSION_COOKIE)).toBe(true);
-    expect(rows("SELECT id FROM sessions WHERE user_id = ?", res.userId)).toHaveLength(1);
+    expect(rows("SELECT method FROM sessions WHERE user_id = ?", res.userId)).toEqual([{ method: "email" }]);
 
     const log = rows<{ actor: string; action: string; target: string; meta_json: string }>(
       "SELECT actor, action, target, meta_json FROM audit_log",
@@ -398,5 +399,24 @@ describe("verifyCode", () => {
     await expect(verifyCode("ada@example.com", "12345")).resolves.toEqual({ ok: false, reason: "invalid_code" });
     await expect(verifyCode("ada@example.com", "abcdef")).resolves.toEqual({ ok: false, reason: "invalid_code" });
     expect(rows("SELECT attempts FROM login_codes")).toEqual([{ attempts: 0 }]);
+  });
+});
+
+describe("verifyAddEmailCode", () => {
+  it("refuses to overwrite an email that appeared on the row after the code was sent", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel) VALUES ('tg', '555', 'telegram')");
+    const res = await requestCode("new@example.com", IP, { kind: "add_email", userId: "tg" });
+    expect(res.ok).toBe(true);
+    const code = outbox.at(-1)!.text.match(/(\d{6})/)![1];
+
+    // Пошту дописали в рядок після відправки коду: сесія, з якою прийшла
+    // перевірка, ще бачила профіль без пошти, а в базі вона вже є.
+    exec("UPDATE users SET email = 'already@example.com' WHERE id = 'tg'");
+
+    await expect(verifyAddEmailCode("tg", "new@example.com", code)).resolves.toEqual({
+      ok: false,
+      reason: "has_email",
+    });
+    expect(rows("SELECT email FROM users WHERE id = 'tg'")).toEqual([{ email: "already@example.com" }]);
   });
 });

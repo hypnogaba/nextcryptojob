@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { requestCodeMessage, verifyCodeMessage } from "@/lib/auth/code-messages";
 import {
   CODE_TTL_MINUTES,
   requestCode,
@@ -21,45 +22,7 @@ export type LoginMessage = { tone: "error" | "info"; text: string };
 export type LoginState = { step: "email" | "code"; email: string; message?: LoginMessage };
 
 const GENERIC: LoginMessage = { tone: "error", text: "Something went wrong. Try again." };
-
-function wait(minutes: number | undefined): string {
-  const n = Math.max(1, minutes ?? 1);
-  return n === 1 ? "1 minute" : `${n} minutes`;
-}
-
-function requestMessage(res: Exclude<RequestCodeResult, { ok: true }>): LoginMessage {
-  switch (res.reason) {
-    case "invalid_email":
-      return { tone: "error", text: "Enter a valid email address." };
-    case "email_unavailable":
-      return { tone: "info", text: "Email sign-in opens soon." };
-    case "rate_limited":
-      return { tone: "error", text: `Too many codes requested. Try again in ${wait(res.retryAfterMinutes)}.` };
-    case "send_failed":
-      return { tone: "error", text: "We could not send the email. Try again in a minute." };
-  }
-}
-
-function verifyMessage(res: Exclude<VerifyCodeResult, { ok: true }>): LoginMessage {
-  switch (res.reason) {
-    case "invalid_email":
-      return { tone: "error", text: "Enter a valid email address." };
-    case "invalid_code":
-      return { tone: "error", text: "Enter the 6-digit code from the email." };
-    case "email_unavailable":
-      return { tone: "info", text: "Email sign-in opens soon." };
-    case "rate_limited":
-      return { tone: "error", text: `Too many tries. Try again in ${wait(res.retryAfterMinutes)}.` };
-    case "expired":
-      return { tone: "error", text: "This code has expired. Send a new one." };
-    case "wrong_code": {
-      const left = res.attemptsLeft ?? 0;
-      return { tone: "error", text: `That code is not right. ${left} ${left === 1 ? "try" : "tries"} left.` };
-    }
-    case "too_many_attempts":
-      return { tone: "error", text: "Too many wrong tries. Send a new code." };
-  }
-}
+const UNAVAILABLE = "Email sign-in opens soon.";
 
 export async function loginAction(prev: LoginState, form: FormData): Promise<LoginState> {
   const intent = form.get("intent");
@@ -78,8 +41,8 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
     // redirect кидає виняток, тож стоїть поза try. Новий акаунт іде
     // налаштовувати профіль, той, хто повернувся, у свій кабінет.
     if (res.ok) redirect(res.created ? "/welcome" : "/account");
-    if (res.reason === "invalid_email") return { step: "email", email, message: verifyMessage(res) };
-    return { step: "code", email, message: verifyMessage(res) };
+    if (res.reason === "invalid_email") return { step: "email", email, message: verifyCodeMessage(res, UNAVAILABLE) };
+    return { step: "code", email, message: verifyCodeMessage(res, UNAVAILABLE) };
   }
 
   // intent === "send": перший код або новий замість старого.
@@ -101,7 +64,7 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
     };
   }
   const step = prev.step === "code" && res.reason !== "invalid_email" ? "code" : "email";
-  return { step, email, message: requestMessage(res) };
+  return { step, email, message: requestCodeMessage(res, UNAVAILABLE) };
 }
 
 export async function signOutAction(): Promise<void> {

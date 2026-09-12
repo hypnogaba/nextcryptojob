@@ -50,7 +50,7 @@ function ChannelSwitch({ on, hasEmail }: { on: boolean; hasEmail: boolean }) {
   // Хто прийшов лише з Telegram, пошти не має: вимкнути Telegram нема на що.
   const locked = on && !hasEmail;
   const note = locked
-    ? "Daily jobs go to Telegram. Add an email to your profile to switch."
+    ? "Daily jobs go to Telegram. Add an email above to switch."
     : on
       ? "Daily jobs go to Telegram."
       : "Daily jobs go to your email.";

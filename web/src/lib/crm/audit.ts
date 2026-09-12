@@ -34,6 +34,15 @@ export function auditActor(actor: Actor): string {
   }
 }
 
+/**
+ * Актор системних записів, що стосуються компанії (кандидат сховався, видалив
+ * акаунт, знайомство прострочилось): `<company_id>:system`. Префікс компанії
+ * кладе рядок у журнал компанії (companyAuditRange).
+ */
+export function systemAuditActor(companyId: string | null): string {
+  return companyId ? `${companyId}:system` : "system";
+}
+
 /** Межі діапазону `actor` для журналу однієї компанії: WHERE actor >= lo AND actor < hi. */
 export function companyAuditRange(companyId: string): { lo: string; hi: string } {
   // ';' іде в ASCII одразу за ':', тож [co_X:, co_X;) це всі рядки з префіксом co_X:.
@@ -47,17 +56,39 @@ export interface AuditEntry {
   meta?: AuditMeta;
 }
 
-/** Інструкція для пакета (batch) разом з рештою записів дії. */
-export function auditStatement(ctx: Pick<ActionContext, "db" | "actor" | "company" | "channel" | "requestId" | "now">, entry: AuditEntry): D1PreparedStatement {
+type AuditCtx = Pick<ActionContext, "db" | "actor" | "company" | "channel" | "requestId" | "now">;
+
+/** Значення рядка журналу в порядку колонок (actor, action, target, meta_json, at). */
+export function auditValues(ctx: AuditCtx, entry: AuditEntry): [string, string, string | null, string, string] {
   const meta: AuditMeta = {
     company_id: ctx.company?.id ?? null,
     channel: ctx.channel satisfies Channel,
     request_id: ctx.requestId,
     ...entry.meta,
   };
+  return [auditActor(ctx.actor), entry.action, entry.target ?? null, JSON.stringify(meta), sqlTime(ctx.now)];
+}
+
+/** Інструкція для пакета (batch) разом з рештою записів дії. */
+export function auditStatement(ctx: AuditCtx, entry: AuditEntry): D1PreparedStatement {
   return ctx.db
     .prepare("INSERT INTO audit_log (actor, action, target, meta_json, at) VALUES (?, ?, ?, ?, ?)")
-    .bind(auditActor(ctx.actor), entry.action, entry.target ?? null, JSON.stringify(meta), sqlTime(ctx.now));
+    .bind(...auditValues(ctx, entry));
+}
+
+/**
+ * Рядок журналу, що пишеться, лише коли умова `guard` (SQL-вираз з `?`) істинна
+ * в мить виконання. Так запис журналу в пакеті йде разом з ефектом: змінилась
+ * картка між читанням і пакетом, тоді немає ні ефекту, ні рядка журналу.
+ */
+export function guardedAuditStatement(
+  db: D1Database,
+  values: [string, string, string | null, string, string],
+  guard: { sql: string; params: (string | number | null)[] },
+): D1PreparedStatement {
+  return db
+    .prepare(`INSERT INTO audit_log (actor, action, target, meta_json, at) SELECT ?, ?, ?, ?, ? WHERE ${guard.sql}`)
+    .bind(...values, ...guard.params);
 }
 
 export async function writeAudit(

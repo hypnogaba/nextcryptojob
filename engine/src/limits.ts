@@ -177,6 +177,8 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   "explorer.optimism.io": { concurrency: 1, minIntervalMs: 250 },
   "www.googleapis.com": { concurrency: 4, minIntervalMs: 0 },
   "api.openchain.xyz": { concurrency: 2, minIntervalMs: 0 },
+  // Добірка (digest/deliver.ts): Bot API дозволяє близько 30 повідомлень на секунду на бота; ми йдемо ≤ 25.
+  "api.telegram.org": { concurrency: 1, minIntervalMs: 40 },
 };
 const OTHER_HOST: LimiterOptions = { concurrency: 4, minIntervalMs: 0 };
 

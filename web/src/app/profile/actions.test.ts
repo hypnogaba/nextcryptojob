@@ -35,7 +35,7 @@ function score(role: string, value: number, reason: string | null = null) {
 beforeEach(async () => {
   resetHarness();
   exec(`INSERT INTO users (id, email, roles, onboarding_step) VALUES ('u', 'u@example.com', '["engineer","trader","bd"]', 'done')`);
-  await createSession("u");
+  await createSession("u", null);
 });
 
 describe("createCardAction (a card only with a verified anchor)", () => {

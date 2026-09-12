@@ -31,7 +31,7 @@ async function run(p: Promise<unknown>): Promise<unknown> {
 beforeEach(async () => {
   resetHarness();
   exec("INSERT INTO users (id, email, onboarding_step) VALUES ('u', 'u@example.com', 'done')");
-  await createSession("u");
+  await createSession("u", null);
 });
 
 describe("settings actions need a session", () => {

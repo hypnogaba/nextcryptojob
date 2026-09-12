@@ -28,10 +28,16 @@ function setup(env: Record<string, string> = {}) {
   company = addCompany(raw, { name: "Acme Labs" });
 }
 
-async function signIn(email: string): Promise<string> {
+/** Вхід поштою: адмінка пускає лише сесію з method = 'email'. */
+async function signIn(email: string, method: "email" | "telegram" = "email"): Promise<string> {
   const id = addUser(harness.raw, { email });
   const token = randomToken();
-  exec("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime('now', '+1 day'))", await sha256Hex(token), id);
+  exec(
+    "INSERT INTO sessions (id, user_id, expires_at, method) VALUES (?, ?, datetime('now', '+1 day'), ?)",
+    await sha256Hex(token),
+    id,
+    method,
+  );
   harness.jar.set(SESSION_COOKIE, token);
   return id;
 }
@@ -65,6 +71,15 @@ describe("admin guard", () => {
 
     setup();
     await expect(AdminCompaniesPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("the owner signed in through Telegram is not admin", async () => {
+    await signIn("hypnogaba@gmail.com", "telegram");
+    expect(
+      await redirectOf(grantAccessAction(form({ company_id: company, status: "active", period_end: inDays(30), note: "x" }))),
+    ).toBe("/admin/companies?error=not_admin");
+    await expect(AdminCompaniesPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(rows("SELECT * FROM subscriptions")).toEqual([]);
   });
 
   it("ADMIN_EMAILS replaces the default list", async () => {

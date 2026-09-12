@@ -78,7 +78,7 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
           />
           <span className="grid gap-0.5">
             <span className="text-base text-ink">Email</span>
-            <span className={HINT}>{email ?? "No email address on your account yet."}</span>
+            <span className={HINT}>{email ?? "Add an email above to use this."}</span>
           </span>
         </label>
         <label className={RADIO_ROW}>

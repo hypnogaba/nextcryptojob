@@ -5,8 +5,13 @@
 //   node dist/cli.js enqueue-refresh [--per-hour N]
 //   node dist/cli.js quality-gate <people.json> [raw-cache-dir] [--no-db] [--deadline-ms N]
 //   node dist/cli.js score-facts --x <h> --github <l> --site <url> --evm <a,...> --solana <a,...> [--sherlock <h>]
+//   node dist/cli.js digest-due [--dry-run [--user <id> | --profile <json>]]
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { jobsDbFromEnv, type JobsDb } from "./digest/jobs-db.js";
+import type { DigestProfile } from "./digest/match.js";
+import { parseRoles } from "./digest/roles.js";
+import { formatDryRun, runDigestDue } from "./digest/schedule.js";
 import { intEnv, startWorker } from "./main.js";
 import { DEFAULT_DEADLINE_MS } from "./pipeline/collect.js";
 import { type Db, dbFromEnv } from "./pipeline/db.js";
@@ -27,13 +32,21 @@ export const USAGE = `usage: nextcryptojob-engine <command>
       [--deadline-ms N]                    per-person collection deadline (default ENGINE_DEADLINE_MS or 45000)
   score-facts [--x h] [--github l] [--youtube h] [--site url] [--evm a,b] [--solana a,b] [--sherlock h]
       [--json] [--deadline-ms N]           collect and score identities given here, without D1; X and GitHub
-                                           count as verified (run it only for people who agreed)`;
+                                           count as verified (run it only for people who agreed)
+  digest-due                               send daily job digests to people whose hour it is (hourly timer)
+      [--dry-run]                          pick the jobs and print them; write nothing, send nothing
+      [--user <id>]                        with --dry-run: this person, whatever the hour
+      [--profile <json>]                   with --dry-run: a made-up profile, e.g.
+                                           '{"roles":["engineer"],"remote_mode":"remote,city","city":"Paris"}'`;
 
 /** Залежності команд: у тестах підставні, у продукті з оточення. */
 export interface CliDeps {
   env: EngineEnv;
   db?: () => Db;
   registry?: () => CollectorRegistry;
+  /** База вакансій NextRole (лише читання). */
+  jobs?: () => JobsDb;
+  fetchImpl?: typeof fetch;
   out?: (line: string) => void;
   err?: (line: string) => void;
 }
@@ -128,6 +141,20 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
         }
         return 0;
       }
+      case "digest-due": {
+        const dryRun = has(args, "--dry-run");
+        const userId = flag(args, "--user");
+        const profileJson = flag(args, "--profile");
+        if (args.length || ((userId || profileJson) && !dryRun) || (userId && profileJson)) { err(USAGE); return 2; }
+        const profile = profileJson === undefined ? undefined : parseProfile(profileJson);
+        // Вигаданому профілю наша база потрібна лише для вакансій компаній; без неї обходиться.
+        const ourDb = profile && !deps.env.CF_D1_DATABASE_ID && !deps.db ? null : db();
+        const summary = await runDigestDue(
+          { db: ourDb, jobs: (deps.jobs ?? (() => jobsDbFromEnv(deps.env)))(), env: deps.env, fetchImpl: deps.fetchImpl, log: out },
+          { dryRun, userId, profile });
+        if (dryRun) for (const line of formatDryRun(summary)) out(line);
+        return summary.failed > 0 && !dryRun ? 1 : 0;
+      }
       case undefined: case "help": case "--help": case "-h":
         out(USAGE);
         return cmd === undefined ? 2 : 0;
@@ -139,6 +166,17 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
     err(`${cmd}: ${shortError(e, 400)}`);
     return 1;
   }
+}
+
+/** --profile для сухого прогону: ролі й місце як у users (docs/contracts.md §1). */
+function parseProfile(json: string): DigestProfile {
+  let v: Record<string, unknown>;
+  try { v = JSON.parse(json) as Record<string, unknown>; } catch { throw new Error("--profile має бути JSON"); }
+  const roles = parseRoles(JSON.stringify(v.roles ?? []));
+  if (!roles.length) throw new Error("--profile: roles має містити хоч один ключ ролі з docs/contracts.md §1");
+  const str = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+  const salary = typeof v.salary_min === "number" && Number.isFinite(v.salary_min) ? v.salary_min : null;
+  return { roles, remoteMode: str(v.remote_mode) ?? "remote", city: str(v.city), salaryMin: salary, salaryCurrency: str(v.salary_currency) };
 }
 
 function isEntry(): boolean {

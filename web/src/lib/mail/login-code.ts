@@ -10,6 +10,7 @@ export function loginCodeEmail(
     `Your NextCryptoJob sign-in code is ${code}.`,
     `It expires in ${ttlMinutes} minutes.`,
     "If you did not ask for it, ignore this email.",
+    "Never share this code. NextCryptoJob will never ask you for it.",
   ];
   const text = lines.join("\n\n") + "\n";
   // Код лише з цифр, тож екранувати нічого; решта рядків наші.
@@ -17,6 +18,33 @@ export function loginCodeEmail(
     `<p>Your NextCryptoJob sign-in code is</p>` +
     `<p style="font-size:28px;font-weight:600;letter-spacing:4px;font-family:monospace">${code}</p>` +
     `<p>It expires in ${ttlMinutes} minutes.</p>` +
-    `<p>If you did not ask for it, ignore this email.</p>`;
+    `<p>If you did not ask for it, ignore this email.</p>` +
+    `<p>Never share this code. NextCryptoJob will never ask you for it.</p>`;
+  return { subject, text, html };
+}
+
+/**
+ * Лист з кодом, щоб додати цю пошту до профілю, де вже є сесія (вхід через
+ * Telegram). Інший текст, ніж у входу: людина має розуміти, що саме вона
+ * підтверджує, і що без коду її пошту ніхто не додасть.
+ */
+export function addEmailCodeEmail(
+  code: string,
+  ttlMinutes: number,
+): Omit<MailMessage, "to"> {
+  const subject = `Confirm your email for NextCryptoJob`;
+  const lines = [
+    `Your code to add this email to your NextCryptoJob profile is ${code}.`,
+    `It expires in ${ttlMinutes} minutes.`,
+    "If you did not ask for it, ignore this email. Nobody can add your email without this code.",
+    "Never share this code. NextCryptoJob will never ask you for it.",
+  ];
+  const text = lines.join("\n\n") + "\n";
+  const html =
+    `<p>Your code to add this email to your NextCryptoJob profile is</p>` +
+    `<p style="font-size:28px;font-weight:600;letter-spacing:4px;font-family:monospace">${code}</p>` +
+    `<p>It expires in ${ttlMinutes} minutes.</p>` +
+    `<p>If you did not ask for it, ignore this email. Nobody can add your email without this code.</p>` +
+    `<p>Never share this code. NextCryptoJob will never ask you for it.</p>`;
   return { subject, text, html };
 }
