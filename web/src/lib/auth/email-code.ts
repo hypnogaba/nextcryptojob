@@ -1,7 +1,7 @@
 import { audit } from "@/lib/audit";
 import { appEnv, db } from "@/lib/db";
 import { getMailer } from "@/lib/mail";
-import { loginCodeEmail } from "@/lib/mail/login-code";
+import { addEmailCodeEmail, loginCodeEmail } from "@/lib/mail/login-code";
 import { hmacSha256Hex, hmacSha256Verify } from "./hash";
 import {
   CODE_EMAIL_DAY_LIMITS,
@@ -21,7 +21,27 @@ import { createSession } from "./session";
  * Сам код у базу не пишемо: лише HMAC-SHA256(SESSION_SECRET, email + ':' + code)
  * (docs/contracts.md, §9). Акаунт народжується при першому вдалому вході.
  * Відповіді однакові для будь-якої адреси: з них не видно, чи є акаунт.
+ *
+ * Той самий код додає пошту до профілю без неї (вхід через Telegram): тоді в
+ * HMAC входить ще й id людини, що просила код (CodePurpose). Такий код не
+ * відкриває сесію, а сесія іншої людини не прийме його для своєї пошти. Ліміти
+ * ті самі й спільні з входом. users.email пишеться лише тут, після перевірки
+ * коду (інваріант docs/contracts.md).
  */
+
+/** Для чого код: вхід або «додати пошту» до профілю userId, де вже є сесія. */
+export type CodePurpose = { kind: "sign_in" } | { kind: "add_email"; userId: string };
+
+const SIGN_IN: CodePurpose = { kind: "sign_in" };
+
+/**
+ * Що підписує HMAC. Для входу рядок той самий, що й раніше (коди в дорозі не
+ * ламаються). Для пошти до профілю з пробілами: у нормалізованій адресі
+ * пробілів немає, тож такий рядок ніколи не збіжеться з рядком входу.
+ */
+function codeMaterial(email: string, code: string, purpose: CodePurpose): string {
+  return purpose.kind === "sign_in" ? `${email}:${code}` : `add-email ${purpose.userId} ${email}:${code}`;
+}
 
 export const CODE_TTL_MINUTES = 10;
 export const MAX_CODE_ATTEMPTS = 5;
@@ -36,21 +56,30 @@ export type RequestCodeResult =
       retryAfterMinutes?: number;
     };
 
-export type VerifyCodeResult =
-  | { ok: true; userId: string; created: boolean }
-  | {
-      ok: false;
-      reason:
-        | "invalid_email"
-        | "invalid_code"
-        | "email_unavailable"
-        | "rate_limited"
-        | "expired"
-        | "wrong_code"
-        | "too_many_attempts";
-      attemptsLeft?: number;
-      retryAfterMinutes?: number;
-    };
+export type CodeFailure = {
+  ok: false;
+  reason:
+    | "invalid_email"
+    | "invalid_code"
+    | "email_unavailable"
+    | "rate_limited"
+    | "expired"
+    | "wrong_code"
+    | "too_many_attempts";
+  attemptsLeft?: number;
+  retryAfterMinutes?: number;
+};
+
+export type VerifyCodeResult = { ok: true; userId: string; created: boolean } | CodeFailure;
+
+export type AddEmailResult =
+  | { ok: true; email: string }
+  | CodeFailure
+  /** Ця пошта вже належить іншому профілю (злиття профілів у першому релізі немає). */
+  | { ok: false; reason: "taken" }
+  /** У профілю вже є пошта. */
+  | { ok: false; reason: "has_email" }
+  | { ok: false; reason: "no_user" };
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 
@@ -101,8 +130,15 @@ async function consumeAll(keys: [string, Limits][]): Promise<{ allowed: boolean;
   return { allowed: true, retryAfterMinutes: 0 };
 }
 
-/** Надсилає код на адресу. ip для ліміту беремо з cf-connecting-ip. */
-export async function requestCode(rawEmail: unknown, ip: string): Promise<RequestCodeResult> {
+/**
+ * Надсилає код на адресу. ip для ліміту беремо з cf-connecting-ip. purpose
+ * «add_email» прив'язує код до людини з сесії і міняє текст листа.
+ */
+export async function requestCode(
+  rawEmail: unknown,
+  ip: string,
+  purpose: CodePurpose = SIGN_IN,
+): Promise<RequestCodeResult> {
   const mailer = getMailer(appEnv());
   const key = secret();
   if (!mailer || !key) return { ok: false, reason: "email_unavailable" };
@@ -121,7 +157,7 @@ export async function requestCode(rawEmail: unknown, ip: string): Promise<Reques
   }
 
   const code = randomCode();
-  const codeHash = await hmacSha256Hex(key, `${email}:${code}`);
+  const codeHash = await hmacSha256Hex(key, codeMaterial(email, code, purpose));
   const d = db();
   const [, , inserted] = await d.batch<{ id: number }>([
     d.prepare("DELETE FROM login_codes WHERE expires_at < datetime('now', '-1 day')"),
@@ -136,7 +172,8 @@ export async function requestCode(rawEmail: unknown, ip: string): Promise<Reques
   if (newId === undefined) throw new Error("login code insert returned no id");
 
   try {
-    await mailer.send({ to: email, ...loginCodeEmail(code, CODE_TTL_MINUTES) });
+    const letter = purpose.kind === "sign_in" ? loginCodeEmail : addEmailCodeEmail;
+    await mailer.send({ to: email, ...letter(code, CODE_TTL_MINUTES) });
   } catch (err) {
     console.error("Login code email failed:", err instanceof Error ? err.message : String(err));
     // Лист не дійшов: новий код ніхто не знає, а попередній лишається дійсним.
@@ -156,18 +193,21 @@ export async function requestCode(rawEmail: unknown, ip: string): Promise<Reques
 type CodeRow = { id: number; code_hash: string; attempts: number };
 
 /**
- * Перевіряє код і, якщо він правильний, входить: знаходить або створює
- * людину, пише audit_log, відкриває сесію (кука). Лише в Server Action.
+ * Спільна частина перевірки: форма, ліміт, код з бази, спроба, HMAC і
+ * одноразовість. { ok: true } означає, що код правильний і вже використаний.
+ * Лічильник спроб стирає той, хто викликав, коли дія вдалася.
  */
-export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<VerifyCodeResult> {
-  const email = normaliseEmail(rawEmail);
-  if (!email) return { ok: false, reason: "invalid_email" };
+async function spendCode(
+  email: string,
+  rawCode: unknown,
+  purpose: CodePurpose,
+): Promise<{ ok: true; limitKey: string } | CodeFailure> {
   const code = typeof rawCode === "string" ? rawCode.replace(/\s+/g, "") : "";
   if (!/^\d{6}$/.test(code)) return { ok: false, reason: "invalid_code" };
   const key = secret();
   if (!key) return { ok: false, reason: "email_unavailable" };
 
-  // Кожна перевірка рахується до порівняння; вдалий вхід лічильник стирає.
+  // Кожна перевірка рахується до порівняння; вдала дія лічильник стирає.
   const limitKey = `verify:email:${email}`;
   const gate = await consume(limitKey, VERIFY_EMAIL_LIMITS);
   if (!gate.allowed) {
@@ -198,7 +238,7 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
     .first<{ attempts: number }>();
   if (!counted) return { ok: false, reason: "too_many_attempts" };
 
-  if (!(await hmacSha256Verify(key, `${email}:${code}`, row.code_hash))) {
+  if (!(await hmacSha256Verify(key, codeMaterial(email, code, purpose), row.code_hash))) {
     const attemptsLeft = MAX_CODE_ATTEMPTS - counted.attempts;
     return attemptsLeft > 0
       ? { ok: false, reason: "wrong_code", attemptsLeft }
@@ -211,14 +251,83 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
     .bind(row.id)
     .run();
   if (used.meta.changes !== 1) return { ok: false, reason: "expired" };
+  return { ok: true, limitKey };
+}
 
-  const { userId, created } = await findOrCreateUser(d, email);
-  await clearRate(limitKey);
+/**
+ * Перевіряє код і, якщо він правильний, входить: знаходить або створює
+ * людину, пише audit_log, відкриває сесію (кука). Лише в Server Action.
+ */
+export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<VerifyCodeResult> {
+  const email = normaliseEmail(rawEmail);
+  if (!email) return { ok: false, reason: "invalid_email" };
+  const spent = await spendCode(email, rawCode, SIGN_IN);
+  if (!spent.ok) return spent;
+
+  const { userId, created } = await findOrCreateUser(db(), email);
+  await clearRate(spent.limitKey);
   // Журнал до сесії: якщо запис упаде, людина не лишиться з кукою і
   // повідомленням про помилку водночас. Після createSession нічого не падає.
   await audit(userId, "auth.login_email", userId, { created });
-  await createSession(userId);
+  await createSession(userId, "email");
   return { ok: true, userId, created };
+}
+
+/**
+ * «Add email»: перевіряє код, надісланий для цієї людини (requestCode з
+ * purpose add_email), і лише тоді пише users.email. Сесію не чіпає: людина
+ * лишається в сесії, якою ввійшла (метод входу не змінюється).
+ */
+export async function verifyAddEmailCode(userId: string, rawEmail: unknown, rawCode: unknown): Promise<AddEmailResult> {
+  const email = normaliseEmail(rawEmail);
+  if (!email) return { ok: false, reason: "invalid_email" };
+  const spent = await spendCode(email, rawCode, { kind: "add_email", userId });
+  if (!spent.ok) return spent;
+  await clearRate(spent.limitKey);
+
+  const result = await attachEmail(db(), userId, email);
+  switch (result) {
+    case "added":
+      await audit(userId, "account.email_added", userId);
+      return { ok: true, email };
+    case "already":
+      return { ok: true, email };
+    case "taken":
+      await audit(userId, "account.email_conflict", userId);
+      return { ok: false, reason: "taken" };
+    default:
+      return { ok: false, reason: result };
+  }
+}
+
+/**
+ * Одна інструкція і перевіряє, і пише: у профілю ще немає пошти, а адреса
+ * (без огляду на регістр) нічия. Паралельний запис тієї ж адреси впреться в
+ * UNIQUE, і це теж «taken».
+ */
+async function attachEmail(
+  d: D1Database,
+  userId: string,
+  email: string,
+): Promise<"added" | "already" | "taken" | "has_email" | "no_user"> {
+  try {
+    const res = await d
+      .prepare(
+        `UPDATE users SET email = ?2
+          WHERE id = ?1 AND email IS NULL
+            AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = ?2)`,
+      )
+      .bind(userId, email)
+      .run();
+    if (res.meta.changes === 1) return "added";
+  } catch (err) {
+    if (err instanceof Error && /UNIQUE/i.test(err.message)) return "taken";
+    throw err;
+  }
+  const row = await d.prepare("SELECT email FROM users WHERE id = ?").bind(userId).first<{ email: string | null }>();
+  if (!row) return "no_user";
+  if (row.email === null) return "taken";
+  return row.email.toLowerCase() === email ? "already" : "has_email";
 }
 
 /**

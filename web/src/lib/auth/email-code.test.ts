@@ -268,7 +268,7 @@ describe("verifyCode", () => {
     expect(users).toEqual([{ id: res.userId, email: "ada@example.com", channel: "email" }]);
     expect(res.userId).toMatch(/^[0-9a-f-]{36}$/);
     expect(harness.jar.store.has(SESSION_COOKIE)).toBe(true);
-    expect(rows("SELECT id FROM sessions WHERE user_id = ?", res.userId)).toHaveLength(1);
+    expect(rows("SELECT method FROM sessions WHERE user_id = ?", res.userId)).toEqual([{ method: "email" }]);
 
     const log = rows<{ actor: string; action: string; target: string; meta_json: string }>(
       "SELECT actor, action, target, meta_json FROM audit_log",

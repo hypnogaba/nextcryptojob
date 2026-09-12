@@ -20,6 +20,20 @@ export const APPLIED_MIGRATIONS = [
   "0004_billing.sql",
 ];
 
+/**
+ * Накочені на продакшн після 0003 і 0004, у тому ж порядку. Окремим списком лише
+ * тому, що crm/migrations.test.ts перевіряє, що 0003 і 0004 закривають
+ * APPLIED_MIGRATIONS; коли той тест це відпустить, список зливається з верхнім.
+ */
+export const APPLIED_AFTER_CRM = [
+  // 2026-09-12, доріжка оплати (T8): перебудова подань доступу.
+  "0012_access_views.sql",
+  // 2026-09-12, доріжка web (W6, налаштування): users.digest_paused. Накочено після 0012.
+  "0011_user_settings.sql",
+  // Доріжка web (W3b): sessions.method. Ще НЕ накочено: controller накочує до деплою W3b.
+  "0013_session_method.sql",
+];
+
 function toSql(value: unknown): SQLInputValue {
   // D1 не приймає undefined і відмовляє з помилкою; тест має впасти так само.
   if (value === undefined) throw new TypeError("D1_TYPE_ERROR: undefined is not a supported type");
@@ -73,7 +87,7 @@ class Statement {
 export type TestDb = { raw: DatabaseSync; d1: D1Database };
 
 /** Порожня база в пам'яті з міграціями (за замовчуванням усі накочені). */
-export function migratedD1(migrations: string[] = APPLIED_MIGRATIONS): TestDb {
+export function migratedD1(migrations: string[] = [...APPLIED_MIGRATIONS, ...APPLIED_AFTER_CRM]): TestDb {
   const raw = new DatabaseSync(":memory:");
   // D1 перевіряє зовнішні ключі; тест теж.
   raw.exec("PRAGMA foreign_keys = ON");

@@ -241,8 +241,13 @@ function clampInt(v: number): number {
 
 /** Бали всіх обраних ролей у порядку людини. */
 export function roleScores(rows: CandidateRows): RoleScore[] {
-  const byRole = new Map(rows.scores.map((s) => [s.role, s]));
-  return chosenRoles(rows.user.roles).map((role) => roleScore(role, byRole.get(role)));
+  return roleScoresOf(rows.user.roles, rows.scores);
+}
+
+/** Те саме з сирих даних: JSON ролей людини і її рядки scores (картка воронки). */
+export function roleScoresOf(rolesJson: string, scores: readonly ScoreRow[]): RoleScore[] {
+  const byRole = new Map(scores.map((s) => [s.role, s]));
+  return chosenRoles(rolesJson).map((role) => roleScore(role, byRole.get(role)));
 }
 
 /** Головна роль: задана фільтром, інакше найкраща порахована (непораховані в кінці). */
@@ -485,7 +490,7 @@ export function contactModeOf(user: UserRow): "approval" | "direct" {
   return user.contact_mode === "direct" && user.has_telegram === 1 && user.contact_consent === 1 ? "direct" : "approval";
 }
 
-function tagsOf(json: string): string[] {
+export function tagsOf(json: string): string[] {
   try {
     const v = JSON.parse(json);
     return Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : [];
