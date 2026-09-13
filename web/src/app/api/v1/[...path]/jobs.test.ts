@@ -200,6 +200,8 @@ describe("company jobs over REST", () => {
         fields: { apply_url: "Use an https:// link or a mailto: address." },
       });
     }
+    const tiny = await call("POST", "/jobs", { key, body: { ...OPEN, salary: { min: 1000, max: 2000, currency: "USD", period: "year" } } });
+    expect(tiny.body.error.details.fields).toEqual({ salary: "Enter a salary between 10,000 and 5,000,000 a year (834 to 416,666 a month)." });
     const roles = await call("POST", "/jobs", { key, body: { ...OPEN, roles: ["engineer", "bd", "trader", "finance"] } });
     expect(roles.status).toBe(422);
     const noLink = await call("POST", "/jobs", { key, body: { ...OPEN, apply_url: undefined } });
@@ -318,6 +320,13 @@ describe("company jobs over REST", () => {
     expect(post.body.error.code).toBe("subscription_required");
     expect((await call("PATCH", `/jobs/${id}`, { key, body: { title: "New" } })).body.error.code).toBe("subscription_required");
     expect((await call("POST", `/jobs/${id}/close`, { key })).body.status).toBe("closed");
+  });
+
+  it("search_jobs shows a company salary only inside the same 10k to 5M range as the digest", async () => {
+    const { key } = await company();
+    const id = (await call("POST", "/jobs", { key, body: OPEN })).body.job_id as string;
+    run(db.raw, "UPDATE company_jobs SET salary_min = 1000, salary_max = 150000, salary_currency = 'USD', salary_period = 'year' WHERE id = ?", id);
+    expect((await call("GET", "/public/jobs")).body.data[0].salary).toEqual({ min: null, max: 150000, currency: "USD", period: "year" });
   });
 
   it("a job hidden by the admin leaves company_jobs_live and search_jobs; the company sees it as not live", async () => {

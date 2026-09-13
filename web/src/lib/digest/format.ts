@@ -47,9 +47,18 @@ export const hourLabel = (h: number): string => `${String(h).padStart(2, "0")}:0
 export type Salary = { min: number | null; max: number | null; currency: string | null; period: "year" | "month" };
 
 /** Річна сума лише в правдоподібних межах: 1 000 у кеші NextRole це заглушка, а не зарплата. */
-const MIN_ANNUAL = 10_000;
+export const MIN_ANNUAL = 10_000;
 export const MAX_ANNUAL = 5_000_000;
 export const plausibleAnnual = (v: number): boolean => v >= MIN_ANNUAL && v <= MAX_ANNUAL;
+
+/**
+ * Одна межа зарплати для всього сайту (як annualRange в engine/src/digest/match.ts): сума
+ * від 10 000 до 5 000 000 за рік, місячна множиться на 12. Нею перевіряє збереження
+ * вакансії (lib/crm/jobs.ts), її показують сторінки, лист, search_jobs, JobPosting і пост у X.
+ */
+export function plausibleSalary(v: number, period: "year" | "month"): boolean {
+  return plausibleAnnual(v * (period === "month" ? 12 : 1));
+}
 
 const SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
 

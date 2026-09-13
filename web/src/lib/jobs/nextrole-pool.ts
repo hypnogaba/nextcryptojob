@@ -1,5 +1,5 @@
 import type { RoleKey } from "@/lib/card/roles";
-import { cleanText, plausibleAnnual, safeUrl } from "@/lib/digest/format";
+import { cleanText, plausibleSalary, safeUrl } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
 import { isNonCryptoCompany } from "./nextrole-clean";
 import { foldText, isRemoteLocation } from "./nextrole-place";
@@ -13,9 +13,15 @@ import { titleRoles } from "./nextrole-roles";
  *
  * Межа читань. Індексу на fetched_at у jobs_cache немає навмисно (записи D1 у тисячу
  * разів дорожчі за читання, reference у engine/src/digest/jobs.ts), тож кожен запит пулу
- * це прохід по таблиці. Тому пул не читається на кожен пошук: один запит на ізолят
- * Worker раз на POOL_TTL_MS (паралельні пошуки чекають той самий запит), і рядків не
- * більше POOL_ROW_CAP. Пошуки між читаннями фільтрують пул у пам'яті й базу не чіпають.
+ * це прохід по таблиці. Тому пул не читається на кожен пошук: готовий пул живе в пам'яті
+ * ізолята POOL_TTL_MS, і рядків не більше POOL_ROW_CAP (найсвіжіше бачені). Пошуки між
+ * читаннями фільтрують пул у пам'яті й базу не чіпають.
+ *
+ * Незавершений запит між запитами не ділиться: у Workers проміс, створений під час одного
+ * запиту, не можна чекати з іншого (I/O належить запиту, що його почав). Тож при промаху
+ * кожен запит читає сам; готовий результат уже спільний.
+ * База не відповіла: FAILURE_BACKOFF_MS її не питаємо, а віддаємо попередній пул, навіть
+ * застарілий (краще вчорашні вакансії, ніж жодної); якщо його немає, лише вакансії компаній.
  */
 
 export const LIVE_WINDOW_DAYS = 3;
@@ -29,6 +35,8 @@ export const NEXTROLE_POOL_SQL = `SELECT id, url, company, company_key, title, l
 export const POOL_ROW_CAP = 10_000;
 /** Як довго ізолят тримає пул у пам'яті. Скан NextRole оновлює кеш раз на добу. */
 export const POOL_TTL_MS = 10 * 60_000;
+/** Після невдалого читання базу NextRole не питаємо стільки часу. */
+export const FAILURE_BACKOFF_MS = 60_000;
 const DAY_MS = 86_400_000;
 
 export interface PublicSalary {
@@ -86,18 +94,17 @@ export function parseDbTime(v: string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+// Дослівно як tagsOf в engine/src/digest/jobs.ts (тест nextrole-parity.test.ts звіряє).
 function tagsOf(json: string): string[] {
   try {
     const v: unknown = JSON.parse(json);
     return Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 /** Сума, якою можна вірити: 1 000 у кеші NextRole це заглушка, а не зарплата (як formatSalary). */
 function plausible(v: number | null, period: "year" | "month"): number | null {
-  return v !== null && plausibleAnnual(v * (period === "month" ? 12 : 1)) ? v : null;
+  return v !== null && plausibleSalary(v, period) ? v : null;
 }
 
 export function publicSalary(
@@ -112,14 +119,26 @@ export function publicSalary(
   return { min: lo, max: hi, currency: currency ? currency.toUpperCase() : null, period };
 }
 
-/** Рядок кешу NextRole → вакансія пошуку; null, якщо це не крипто, не наша роль або адреса крива. */
-export function nextroleJob(r: NrRow): PoolJob | null {
+/**
+ * Сито рядка: ті самі перевірки й у тому самому порядку, що в nextroleJob engine до побудови
+ * вакансії. Тіло до останнього return дослівно як в engine (тест звіряє текст): нове правило
+ * там без переносу сюди валить тест.
+ */
+export function nextroleSieve(r: NrRow): { tags: string[]; roles: RoleKey[] } | { drop: "tag" | "company" | "title" } {
   const tags = tagsOf(r.tags);
-  // Тег web3 перевіряє вже SQL (LIKE); тут ще раз точно, бо LIKE бачить і підрядок (як engine).
-  if (!tags.includes("web3")) return null;
-  if (isNonCryptoCompany(r.company_key, r.company)) return null;
+  // Тег web3 перевіряє вже SQL (LIKE); тут ще раз точно, бо LIKE бачить і підрядок.
+  if (!tags.includes("web3")) return { drop: "tag" };
+  if (isNonCryptoCompany(r.company_key, r.company)) return { drop: "company" };
   const roles = titleRoles(r.title, tags);
-  if (roles.length === 0) return null;
+  if (roles.length === 0) return { drop: "title" };
+  return { tags, roles };
+}
+
+/** Рядок кешу NextRole → вакансія пошуку; null, якщо сито відкинуло рядок або адреса крива. */
+export function nextroleJob(r: NrRow): PoolJob | null {
+  const sieved = nextroleSieve(r);
+  if ("drop" in sieved) return null;
+  const { tags, roles } = sieved;
   const url = safeUrl(r.url);
   if (!url) return null;
   const location = r.location?.trim() ? cleanText(r.location, 100) : null;
@@ -145,25 +164,28 @@ export function nextroleJob(r: NrRow): PoolJob | null {
 }
 
 let cached: { at: number; jobs: PoolJob[] } | null = null;
-let loading: Promise<PoolJob[] | null> | null = null;
+let failedAt: number | null = null;
 
 /** Для тестів: наступний пошук читає пул знову. */
 export function resetNextrolePool(): void {
   cached = null;
-  loading = null;
+  failedAt = null;
 }
 
-async function loadPool(jobs: JobsDb, now: Date): Promise<PoolJob[] | null> {
+async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<PoolJob[] | null> {
   const live = new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString();
   const posted = new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString();
   const started = Date.now();
   let rows: NrRow[];
   try {
-    rows = await jobs.all<NrRow>(`${NEXTROLE_POOL_SQL}\n LIMIT ?`, live, posted, POOL_ROW_CAP);
+    // Найсвіжіше бачені першими: якщо межа спрацює, відріжуться ті, кого скан бачив давніше.
+    rows = await jobs.all<NrRow>(`${NEXTROLE_POOL_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, live, posted, cap);
   } catch (e) {
-    // База NextRole чужа й буває зайнята (429): пошук віддає вакансії компаній без неї.
     console.warn(`search_jobs: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
     return null;
+  }
+  if (rows.length >= cap) {
+    console.warn(`search_jobs: NextRole pool hit the ${cap}-row cap; older jobs are left out`);
   }
   const out: PoolJob[] = [];
   for (const r of rows) {
@@ -175,27 +197,27 @@ async function loadPool(jobs: JobsDb, now: Date): Promise<PoolJob[] | null> {
 }
 
 /**
- * Пул NextRole: з пам'яті ізолята, якщо він свіжіший за POOL_TTL_MS, інакше одне читання
- * (паралельні виклики чекають його). null, якщо базу зараз не прочитали (не кешується).
+ * Пул NextRole: з пам'яті ізолята, якщо він свіжіший за POOL_TTL_MS; інакше читання цим
+ * запитом. Після невдачі FAILURE_BACKOFF_MS без читань, і весь цей час (та й одразу після
+ * невдачі) віддається попередній пул, якщо він є. null, якщо пулу немає зовсім.
  */
-export async function nextrolePool(open: () => JobsDb, now: Date): Promise<PoolJob[] | null> {
-  if (cached && Date.now() - cached.at < POOL_TTL_MS) return cached.jobs;
-  if (!loading) {
-    let jobs: JobsDb;
-    try {
-      jobs = open();
-    } catch (e) {
-      console.warn(`search_jobs: JOBS_DB is not bound (${e instanceof Error ? e.name : "unknown"})`);
-      return null;
-    }
-    loading = loadPool(jobs, now)
-      .then((pool) => {
-        if (pool) cached = { at: Date.now(), jobs: pool };
-        return pool;
-      })
-      .finally(() => {
-        loading = null;
-      });
+export async function nextrolePool(open: () => JobsDb, now: Date, cap = POOL_ROW_CAP): Promise<PoolJob[] | null> {
+  const t = Date.now();
+  if (cached && t - cached.at < POOL_TTL_MS) return cached.jobs;
+  if (failedAt !== null && t - failedAt < FAILURE_BACKOFF_MS) return cached?.jobs ?? null;
+  let pool: PoolJob[] | null;
+  try {
+    pool = await loadPool(open(), now, cap);
+  } catch (e) {
+    console.warn(`search_jobs: JOBS_DB is not bound (${e instanceof Error ? e.name : "unknown"})`);
+    pool = null;
   }
-  return loading;
+  if (!pool) {
+    failedAt = Date.now();
+    if (cached) console.warn("search_jobs: serving the previous NextRole pool while the database does not answer");
+    return cached?.jobs ?? null;
+  }
+  failedAt = null;
+  cached = { at: Date.now(), jobs: pool };
+  return pool;
 }

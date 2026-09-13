@@ -69,8 +69,18 @@ function jsonLd(html: string): Record<string, unknown> {
   return JSON.parse(m![1]);
 }
 
+const BROWSER = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+
+/** Перехід з браузера людини з IP 203.0.113.1 (або заданими заголовками). */
 const apply = (id: string, headers: Record<string, string> = {}) =>
-  GET(new Request(`https://nextcryptojob.xyz/jobs/${id}/apply`, { headers }), params(id));
+  GET(
+    new Request(`https://nextcryptojob.xyz/jobs/${id}/apply`, {
+      headers: { "user-agent": BROWSER, "cf-connecting-ip": "203.0.113.1", ...headers },
+    }),
+    params(id),
+  );
+
+const clicks = (id: string) => rows<{ apply_clicks: number }>("SELECT apply_clicks FROM company_jobs WHERE id = ?", id)[0].apply_clicks;
 
 describe("/jobs/<id>", () => {
   it("shows a live job: title, company, place, salary, roles, description and an Apply link through /apply", async () => {
@@ -121,6 +131,22 @@ describe("/jobs/<id>", () => {
     expect(ld).not.toHaveProperty("baseSalary");
   });
 
+  it("names the company site in JobPosting only when its domain is verified", async () => {
+    run(harness.raw, "UPDATE companies SET domain_verified_at = NULL WHERE id = ?", company);
+    const id = addJob();
+    const html = await render(id);
+    expect(html).not.toContain("(domain verified)");
+    expect(jsonLd(html).hiringOrganization).toEqual({ "@type": "Organization", name: "Acme <Labs>" });
+  });
+
+  it("a salary outside 10k to 5M a year is shown nowhere, the same rule as the digest", async () => {
+    const id = addJob();
+    run(harness.raw, "UPDATE company_jobs SET salary_min = 1000, salary_max = 2000 WHERE id = ?", id);
+    const html = await render(id);
+    expect(html).not.toContain("$1k");
+    expect(jsonLd(html)).not.toHaveProperty("baseSalary");
+  });
+
   it("has a title, description and canonical address for search engines", async () => {
     const id = addJob();
     const meta = await generateMetadata(params(id));
@@ -158,8 +184,24 @@ describe("/jobs/<id>/apply", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("https://acme.io/careers/solidity");
     expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(clicks(id)).toBe(1);
+  });
+
+  it("the same IP counts once per job in 10 minutes; another IP or another job counts again", async () => {
+    const id = addJob();
+    const other = addJob();
+    for (let i = 0; i < 3; i++) expect((await apply(id)).headers.get("Location")).toBe("https://acme.io/careers/solidity");
+    expect(clicks(id)).toBe(1);
+    await apply(id, { "cf-connecting-ip": "198.51.100.9" });
+    await apply(other);
+    expect([clicks(id), clicks(other)]).toEqual([2, 1]);
+    // IP як є не зберігаємо: лише ключ пари.
+    expect(JSON.stringify(rows("SELECT * FROM apply_click_seen"))).not.toContain("203.0.113.1");
+    // Минуло 10 хвилин: та сама IP рахується знову, а прострочені рядки прибираються.
+    run(harness.raw, "UPDATE apply_click_seen SET seen_at = datetime('now', '-11 minutes')");
     await apply(id);
-    expect(rows("SELECT apply_clicks FROM company_jobs WHERE id = ?", id)).toEqual([{ apply_clicks: 2 }]);
+    expect(clicks(id)).toBe(3);
+    expect(rows<{ n: number }>("SELECT COUNT(*) AS n FROM apply_click_seen")[0].n).toBe(1);
   });
 
   it("a mailto address works the same way", async () => {
@@ -167,25 +209,50 @@ describe("/jobs/<id>/apply", () => {
     expect((await apply(id)).headers.get("Location")).toBe("mailto:jobs@acme.io");
   });
 
-  it("a browser prefetch and a HEAD request are not clicks", async () => {
+  it("bots, a browser prefetch and a HEAD request are sent on but not counted", async () => {
     const id = addJob();
-    expect((await apply(id, { "sec-purpose": "prefetch" })).headers.get("Location")).toBe("https://acme.io/careers/solidity");
+    const visits: Record<string, string>[] = [
+      { "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
+      { "user-agent": "facebookexternalhit/1.1" },
+      { "user-agent": "curl/8.7.1" },
+      { "user-agent": "" },
+      { "sec-purpose": "prefetch" },
+    ];
+    for (const headers of visits) {
+      expect((await apply(id, headers)).headers.get("Location")).toBe("https://acme.io/careers/solidity");
+    }
     const head = await HEAD(new Request(`https://nextcryptojob.xyz/jobs/${id}/apply`, { method: "HEAD" }), params(id));
     expect(head.status).toBe(302);
-    expect(rows("SELECT apply_clicks FROM company_jobs WHERE id = ?", id)).toEqual([{ apply_clicks: 0 }]);
+    expect(clicks(id)).toBe(0);
   });
 
-  it("a job that is not live goes back to its page and the counter does not move", async () => {
+  it("over the public limit for this IP the candidate still goes to the company, and nothing is written", async () => {
+    const id = addJob();
+    const seen: string[] = [];
+    harness.env.RL_PUBLIC = { limit: async ({ key }: { key: string }) => (seen.push(key), { success: false }) } as unknown as RateLimit;
+    const batch = vi.spyOn(harness.env.DB, "batch");
+    const res = await apply(id);
+    expect(res.headers.get("Location")).toBe("https://acme.io/careers/solidity");
+    expect(seen).toEqual(["ip:203.0.113.1"]);
+    expect(batch).not.toHaveBeenCalled();
+    expect(clicks(id)).toBe(0);
+  });
+
+  it("a job that is not live answers 404 This job is closed. and the counter does not move", async () => {
     const id = addJob({ status: "closed" });
     const res = await apply(id);
-    expect(res.headers.get("Location")).toBe(`/jobs/${id}`);
-    expect(rows("SELECT apply_clicks FROM company_jobs WHERE id = ?", id)).toEqual([{ apply_clicks: 0 }]);
-    expect((await apply("../admin")).headers.get("Location")).toBe("/jobs/..%2Fadmin");
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain("This job is closed.");
+    expect(clicks(id)).toBe(0);
+    expect((await apply("../admin")).status).toBe(404);
   });
 
-  it("an address that is not https or mailto is never a redirect target", async () => {
+  it("an address that is not https or mailto is never a redirect target and is not counted", async () => {
     const id = addJob();
     run(harness.raw, "UPDATE company_jobs SET apply_url = 'javascript:alert(1)' WHERE id = ?", id);
-    expect((await apply(id)).headers.get("Location")).toBe(`/jobs/${id}`);
+    const res = await apply(id);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Location")).toBeNull();
+    expect(clicks(id)).toBe(0);
   });
 });

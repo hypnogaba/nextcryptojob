@@ -1,11 +1,11 @@
 import type { z } from "zod";
 import { cleanText } from "@/lib/digest/format";
 import { jobsDb, type JobsDb } from "@/lib/jobs-db";
-import { nextrolePool, parseDbTime, type PoolJob } from "@/lib/jobs/nextrole-pool";
+import { nextrolePool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/nextrole-pool";
 import { foldText, mentionsCity } from "@/lib/jobs/nextrole-place";
-import { isoTime } from "@/lib/time";
+import { isoTime, sqlTime } from "@/lib/time";
 import type { ActionContext } from "./context";
-import { publicJobUrl, rolesOf, workModesOf } from "./jobs";
+import { applyUrlOf, publicJobUrl, rolesOf, workModesOf } from "./jobs";
 import { ActionError, type PublicJobList as PublicJobListSchema, type RoleKey } from "./types";
 
 /**
@@ -88,11 +88,8 @@ function companyPoolJob(r: LiveRow, env: { SITE_URL?: string }): PoolJob {
     workMode,
     city,
     placeText: city,
-    // Зарплату компанії показуємо як задано (перевірено при збереженні, lib/crm/jobs.ts).
-    salary:
-      r.salary_currency && (r.salary_min !== null || r.salary_max !== null)
-        ? { min: r.salary_min, max: r.salary_max, currency: r.salary_currency, period: r.salary_period ?? "year" }
-        : null,
+    // Та сама межа 10k..5M за рік, що при збереженні (lib/crm/jobs.ts) і в добірці.
+    salary: publicSalary(r.salary_min, r.salary_max, r.salary_currency, r.salary_period ?? "year"),
     roles: rolesOf(r.roles),
     url: publicJobUrl(env, r.id),
     postedAt: isoTime(r.published_at),
@@ -253,10 +250,7 @@ export async function loadPublicJob(db: D1Database, id: string): Promise<PublicJ
     workMode,
     city: r.city,
     country: r.country,
-    salary:
-      r.salary_currency && (r.salary_min !== null || r.salary_max !== null)
-        ? { min: r.salary_min, max: r.salary_max, currency: r.salary_currency, period: r.salary_period ?? "year" }
-        : null,
+    salary: publicSalary(r.salary_min, r.salary_max, r.salary_currency, r.salary_period ?? "year"),
     tags: tagsOf(r.tags),
     company: cleanText(r.company_name, 100),
     companyDomain: r.company_domain,
@@ -266,24 +260,63 @@ export async function loadPublicJob(db: D1Database, id: string): Promise<PublicJ
   };
 }
 
-/**
- * Перехід "Apply": +1 до apply_clicks і адреса компанії, одним запитом і лише для
- * живої вакансії. null, якщо вакансія не жива (тоді лічильник не рухається).
- */
-export async function recordApplyClick(db: D1Database, id: string): Promise<string | null> {
-  const row = await db
-    .prepare(
-      `UPDATE company_jobs SET apply_clicks = apply_clicks + 1
-        WHERE id = ? AND EXISTS (SELECT 1 FROM company_jobs_live l WHERE l.id = ?)
-        RETURNING apply_url`,
-    )
-    .bind(id, id)
-    .first<{ apply_url: string | null }>();
-  return row?.apply_url ?? null;
-}
+/** Одна людина (IP) рахується раз на вакансію за стільки хвилин. */
+export const APPLY_DEDUPE_MINUTES = 10;
+/** Скільки прострочених рядків apply_click_seen прибирає один перехід. */
+const APPLY_PURGE_BATCH = 20;
 
-/** Адреса живої вакансії без лічильника (запит-передвантаження браузера, HEAD). */
+/**
+ * Адреса живої вакансії для "Apply"; null, якщо вакансія не жива. Адресу перевірено при
+ * збереженні; ще раз (https:// або mailto:), бо рядок міг потрапити в базу повз реєстр.
+ */
 export async function liveApplyUrl(db: D1Database, id: string): Promise<string | null> {
   const row = await db.prepare("SELECT apply_url FROM company_jobs_live WHERE id = ?").bind(id).first<{ apply_url: string | null }>();
-  return row?.apply_url ?? null;
+  return row?.apply_url ? applyUrlOf(row.apply_url) : null;
+}
+
+/**
+ * Перехід "Apply" (специфікація 5.6): +1 до apply_clicks, але не частіше за раз на
+ * APPLY_DEDUPE_MINUTES для однієї пари (відвідувач, вакансія). `visitor` = ключ пари
+ * (HMAC від IP і id вакансії, IP як є не зберігаємо, 0018); null = не рахувати (бот,
+ * передвантаження, забагато запитів з цієї IP).
+ *
+ * Одним пакетом: прибрати кілька прострочених рядків, поставити або оновити рядок пари
+ * (оновлюється лише прострочений), і лише якщо він змінився (changes() = 1), додати перехід
+ * живій вакансії. Rate Limiting Workers тут не годиться: його період 10 або 60 с, а треба 10 хв.
+ *
+ * null, якщо вакансія не жива (лічильник не рухається).
+ */
+export async function recordApplyClick(
+  db: D1Database,
+  id: string,
+  visitor: string | null,
+  now = new Date(),
+): Promise<{ url: string; counted: boolean } | null> {
+  const url = await liveApplyUrl(db, id);
+  if (!url) return null;
+  if (!visitor) return { url, counted: false };
+  const at = sqlTime(now);
+  const stale = sqlTime(new Date(now.getTime() - APPLY_DEDUPE_MINUTES * 60_000));
+  const [, , counted] = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM apply_click_seen WHERE key IN (
+           SELECT key FROM apply_click_seen WHERE seen_at <= ? ORDER BY seen_at LIMIT ${APPLY_PURGE_BATCH})`,
+      )
+      .bind(stale),
+    db
+      .prepare(
+        `INSERT INTO apply_click_seen (key, seen_at) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET seen_at = excluded.seen_at WHERE apply_click_seen.seen_at <= ?`,
+      )
+      .bind(visitor, at, stale),
+    // changes() = рядки, змінені попередньою інструкцією пакета: пара нова або її 10 хвилин минули.
+    db
+      .prepare(
+        `UPDATE company_jobs SET apply_clicks = apply_clicks + 1
+          WHERE id = ? AND changes() = 1 AND EXISTS (SELECT 1 FROM company_jobs_live l WHERE l.id = ?)`,
+      )
+      .bind(id, id),
+  ]);
+  return { url, counted: (counted.meta.changes ?? 0) === 1 };
 }

@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { isRoleKey } from "@/lib/card/roles";
-import { formatSalary } from "@/lib/digest/format";
+import { formatSalary, plausibleSalary } from "@/lib/digest/format";
 import { newId } from "@/lib/ids";
 import { siteOrigin } from "@/lib/site";
 import { isoTime, sqlTime } from "@/lib/time";
@@ -215,8 +215,8 @@ export interface JobFields {
   tags: string[];
 }
 
-/** Річна сума, вище якої зарплата вже помилка вводу (чи не та валюта), а не пропозиція. */
-const MAX_ANNUAL_SALARY = 10_000_000;
+/** Та сама межа, що в показі, листі, search_jobs і engine (lib/digest/format.ts plausibleSalary). */
+export const SALARY_RANGE_TEXT = "Enter a salary between 10,000 and 5,000,000 a year (834 to 416,666 a month).";
 /** Керівні символи, крім табуляції й переносу рядка. */
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 const CONTROL_ALL = new RegExp(CONTROL.source, "g");
@@ -286,10 +286,10 @@ export function checkJobFields(input: JobFieldsInput): JobFields {
   if (input.salary) {
     const min = input.salary.min ?? null;
     const max = input.salary.max ?? null;
-    const k = input.salary.period === "month" ? 12 : 1;
+    const period = input.salary.period;
     if (min !== null && max !== null && min > max) errors.salary = "The minimum is above the maximum.";
-    else if ((max ?? min ?? 0) * k > MAX_ANNUAL_SALARY) errors.salary = "This salary looks too high. Check the amount and the period.";
-    else if (min !== null || max !== null) salary = { min, max, currency: input.salary.currency, period: input.salary.period };
+    else if ((min !== null && !plausibleSalary(min, period)) || (max !== null && !plausibleSalary(max, period))) errors.salary = SALARY_RANGE_TEXT;
+    else if (min !== null || max !== null) salary = { min, max, currency: input.salary.currency, period };
   }
 
   let applyUrl: string | null = null;

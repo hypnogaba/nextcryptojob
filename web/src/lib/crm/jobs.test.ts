@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formFieldErrors, formValuesOf, jobInputOf, readJobForm } from "./job-form";
-import { applyUrlOf, checkJobFields, notLiveReason, openJobLimit, X_POST_MAX, xPostText, type Job } from "./jobs";
+import { applyUrlOf, checkJobFields, notLiveReason, openJobLimit, SALARY_RANGE_TEXT, X_POST_MAX, xPostText, type Job } from "./jobs";
 
 /** Правила вакансії без бази: адреса "Apply", текст посту в X, причина "Not live", розбір форми. */
 
@@ -58,9 +58,22 @@ describe("fields", () => {
     expect(f).toMatchObject({ title: "Senior Rust engineer", description: "Line one\nLine two", city: "Kyiv", workMode: ["city"] });
   });
 
-  it("a salary with neither amount is no salary; an absurd one is refused", () => {
+  it("a salary with neither amount is no salary; one outside 10k to 5M a year is refused with the range", () => {
     expect(checkJobFields({ ...FIELDS, salary: { min: null, max: null, currency: "USD", period: "year" } }).salary).toBeNull();
-    expect(() => checkJobFields({ ...FIELDS, salary: { min: 2_000_000, currency: "USD", period: "month" } })).toThrow("Some fields are not valid.");
+    const refused = (salary: { min?: number; max?: number; period: "year" | "month" }) => {
+      try {
+        checkJobFields({ ...FIELDS, salary: { ...salary, currency: "USD" } });
+        return null;
+      } catch (e) {
+        return (e as { details?: { fields?: Record<string, string> } }).details?.fields?.salary ?? null;
+      }
+    };
+    expect(refused({ min: 2_000_000, period: "month" })).toBe(SALARY_RANGE_TEXT);
+    expect(refused({ min: 5_000, max: 90_000, period: "year" })).toBe(SALARY_RANGE_TEXT);
+    expect(refused({ max: 6_000_000, period: "year" })).toBe(SALARY_RANGE_TEXT);
+    expect(refused({ min: 834, max: 416_666, period: "month" })).toBeNull();
+    expect(refused({ min: 10_000, max: 5_000_000, period: "year" })).toBeNull();
+    expect(SALARY_RANGE_TEXT).toBe("Enter a salary between 10,000 and 5,000,000 a year (834 to 416,666 a month).");
   });
 
   it("the open job limit follows the plan", () => {

@@ -25,7 +25,8 @@ export function jobPostingJsonLd(job: PublicJobPage, origin: string): JsonLd {
     hiringOrganization: {
       "@type": "Organization",
       name: job.company,
-      ...(job.companyDomain ? { sameAs: `https://${job.companyDomain}` } : {}),
+      // Домен лише перевірений (пошта власника на ньому): інакше компанія могла вписати чужий сайт.
+      ...(job.companyDomain && job.companyDomainVerified ? { sameAs: `https://${job.companyDomain}` } : {}),
     },
   };
   if (job.postedAt) ld.datePosted = job.postedAt;
