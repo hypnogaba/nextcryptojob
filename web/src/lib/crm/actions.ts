@@ -25,6 +25,7 @@ import {
 import { searchCandidates } from "./search";
 import * as T from "./types";
 import { ActionError, validationError } from "./types";
+import { createSavedSearch, deleteSavedSearch, listSavedSearches, updateSavedSearch } from "./saved-searches";
 import { isVisibleTo } from "./visibility";
 
 /**
@@ -39,7 +40,7 @@ import { isVisibleTo } from "./visibility";
  * Тест actions.test.ts звіряє реєстр з openapi.yaml і mcp-tools.md.
  *
  * Обробники (handler) є в діях T2–T5 (get_account, search_candidates,
- * get_candidate, воронка, знайомства); решту допишуть T6–T12. Дія без обробника
+ * get_candidate, воронка, знайомства) і T7 (збережені пошуки); решту допишуть T8–T12. Дія без обробника
  * відповідає 501 not_implemented ще до перевірки оплати.
  */
 
@@ -388,6 +389,7 @@ export const ACTIONS = [
     output: T.SavedSearchList,
     permission: "saved_searches.manage",
     access: ALL_ACCESS,
+    handler: async (ctx) => ({ output: await listSavedSearches(ctx) }),
   }),
   defineAction({
     name: "create_saved_search",
@@ -398,6 +400,7 @@ export const ACTIONS = [
     output: T.SavedSearch,
     permission: "saved_searches.manage",
     access: SUBSCRIPTION_ONLY,
+    handler: async (ctx, input) => ({ output: await createSavedSearch(ctx, input) }),
   }),
   defineAction({
     name: "update_saved_search",
@@ -410,6 +413,7 @@ export const ACTIONS = [
     output: T.SavedSearch,
     permission: "saved_searches.manage",
     access: SUBSCRIPTION_ONLY,
+    handler: async (ctx, input) => ({ output: await updateSavedSearch(ctx, input) }),
   }),
   defineAction({
     name: "delete_saved_search",
@@ -420,6 +424,10 @@ export const ACTIONS = [
     output: T.Empty,
     permission: "saved_searches.manage",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => {
+      await deleteSavedSearch(ctx, input);
+      return { output: {} };
+    },
   }),
   defineAction({
     name: "get_webhook",
@@ -776,6 +784,22 @@ export async function runAction(
     throw error;
   }
   return commit(reservation, result);
+}
+
+/**
+ * Читання для сторінок інтерфейсу (T7): ті самі перевірки prepareAction (вхід,
+ * право, стан компанії, доступ, канал) і той самий обробник з перевіркою виходу,
+ * але без рядка usage_events: показ сторінки не є викликом API, а запис на кожен
+ * показ коштував би записів D1. Лише для читань без квоти, ціни й журналу;
+ * решта (пошук, профіль, будь-яка зміна) мусить іти через runAction.
+ */
+export async function readAction(name: string, rawInput: unknown, ctx: ActionContext): Promise<unknown> {
+  const prepared = prepareAction(name, rawInput, ctx);
+  const { def } = prepared;
+  if (def.quota || def.price || def.audit || !def.mcp.annotations.readOnlyHint) {
+    throw new Error(`crm: ${name} is metered or changes data; use runAction`);
+  }
+  return (await run(prepared)).output;
 }
 
 function candidateOf(input: unknown): string | null {

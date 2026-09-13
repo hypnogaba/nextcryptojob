@@ -413,6 +413,47 @@ export async function searchCandidates(
   };
 }
 
+/** Скільки збігів запам'ятовує збережений пошук (5.7: «поточні збіги до 200»). */
+export const MATCH_IDS_MAX = 200;
+
+/**
+ * id видимих кандидатів, що підходять під фільтри, у порядку сортування, до `max`.
+ * Для збережених пошуків (seen_json при створенні й зміні фільтрів) і їхніх
+ * сповіщень (T11): без квоти, без журналу, без курсора. Ті самі правила
+ * видимості й пост-фільтри, що й у searchCandidates; переглядає не більше 2 000 рядків.
+ */
+export async function matchingIds(
+  ctx: Pick<ActionContext, "db" | "company" | "now">,
+  filters: SearchFilters,
+  sort: Sort = "score",
+  max = MATCH_IDS_MAX,
+): Promise<string[]> {
+  const companyId = ctx.company?.id ?? null;
+  const base = baseQuery(companyId, filters);
+  const cityPost = filters.work_mode === "city" && !ASCII.test((filters.city ?? "").trim());
+  const wantCity = cityPost ? normalizeCity(filters.city ?? "") : null;
+  const chainPost = (filters.chains?.length ?? 0) > 0 || filters.min_onchain_years !== undefined;
+
+  const ids: string[] = [];
+  let scanned = 0;
+  let last: Position | null = null;
+  while (ids.length < max && scanned < MAX_SCANNED) {
+    const rows = await fetchBatch(ctx.db, base, sort, last, 0, BATCH);
+    const facts = chainPost && rows.length ? await chainFacts(ctx.db, rows.map((r) => r.id)) : null;
+    for (const row of rows) {
+      scanned++;
+      last = row;
+      const passes =
+        (!facts || passesChainFilters(facts.get(row.id) ?? [], filters, ctx.now)) &&
+        (wantCity === null || (row.city !== null && normalizeCity(row.city) === wantCity));
+      if (passes) ids.push(row.id);
+      if (ids.length === max) break;
+    }
+    if (rows.length < BATCH) break;
+  }
+  return ids;
+}
+
 function passesChainFilters(facts: FactRow[], filters: SearchFilters, now: Date): boolean {
   if (filters.chains?.length) {
     const active = deriveChains(facts);

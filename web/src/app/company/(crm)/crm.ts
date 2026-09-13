@@ -27,7 +27,16 @@ export interface CrmView {
   application: Application | null;
 }
 
-export type CrmPage = "team" | "billing" | "settings" | "apply";
+export type CrmPage =
+  | "dashboard"
+  | "search"
+  | "candidates"
+  | "pipeline"
+  | "saved-searches"
+  | "team"
+  | "billing"
+  | "settings"
+  | "apply";
 
 export const COMPANY_COOKIE_OPTIONS = {
   httpOnly: true,
