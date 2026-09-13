@@ -127,7 +127,7 @@ export default async function DevelopersPage({
   const curl = [`curl ${origin}/api/v1/me \\`, '  -H "Authorization: Bearer $NCJ_API_KEY"'].join("\n");
 
   return (
-    <div className={`${PAGE} max-w-3xl`}>
+    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
       <PageTitle>Developers</PageTitle>
       <nav aria-label="Developer sections" className="-my-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
         {[
@@ -260,7 +260,7 @@ export default async function DevelopersPage({
         {perAction.size === 0 ? (
           <p className={HINT}>No calls yet.</p>
         ) : (
-          <div className="min-w-0 overflow-x-auto rounded-[10px] border-2 border-ink">
+          <div className="relative min-w-0 overflow-x-auto rounded-[10px] border-2 border-ink">
             <table className={TABLE}>
               <thead>
                 <tr>

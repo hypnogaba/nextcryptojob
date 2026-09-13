@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
  * рядки через тонку лінію, наведення тлом акценту. Таблиця гортається у своїй
  * рамці, тож сторінка на 390 px вбік не їде. Спільне для CRM і адмінки.
  */
-export const BOARD = "min-w-0 overflow-x-auto rounded-[10px] border-2 border-ink bg-surface";
+// relative: sr-only підписи в клітинках (position: absolute) інакше тікають з рамки
+// і розширюють сторінку на телефоні.
+export const BOARD = "relative min-w-0 overflow-x-auto rounded-[10px] border-2 border-ink bg-surface";
 export const TABLE = "w-full border-collapse text-left text-sm";
 export const CAPTION = "px-4 pt-3 text-left text-sm text-ink-muted";
 export const TH =

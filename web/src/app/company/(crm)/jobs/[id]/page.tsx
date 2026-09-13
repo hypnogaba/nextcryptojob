@@ -33,7 +33,7 @@ export default async function JobPage({
   const sp = await searchParams;
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-3xl`}>
+      <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
         <PageTitle>Job</PageTitle>
         <NoAccess />
       </div>
@@ -57,7 +57,7 @@ export default async function JobPage({
   const error = errorText(first(sp.error));
 
   return (
-    <div className={`${PAGE} max-w-3xl`}>
+    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
       <p>
         <Link href="/company/jobs" className={`${LINK} text-sm`}>
           Back to jobs

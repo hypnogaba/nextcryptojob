@@ -20,7 +20,7 @@ export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];
  */
 export function AdminNav({ current, className = "mb-6" }: { current?: AdminPage; className?: string }) {
   return (
-    <nav aria-label="Admin" className={cn("flex min-w-0 items-center gap-x-4 overflow-x-auto border-b border-line text-sm whitespace-nowrap", className)}>
+    <nav aria-label="Admin" className={cn("flex flex-wrap items-center gap-x-4 border-b border-line text-sm", className)}>
       <span className="font-display text-base font-extrabold tracking-[0.04em] text-ink-muted uppercase">Admin</span>
       {ADMIN_PAGES.map((p) => (
         <Link
@@ -28,7 +28,7 @@ export function AdminNav({ current, className = "mb-6" }: { current?: AdminPage;
           href={p.href}
           aria-current={p.href === current ? "page" : undefined}
           className={cn(
-            "inline-flex min-h-11 shrink-0 items-center border-b-2 font-semibold transition-colors",
+            "inline-flex min-h-11 items-center border-b-2 font-semibold whitespace-nowrap transition-colors",
             p.href === current ? "border-ink text-ink" : "border-transparent text-ink-muted hover:border-line-strong hover:text-ink",
           )}
         >

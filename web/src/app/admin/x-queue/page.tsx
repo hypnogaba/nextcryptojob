@@ -83,9 +83,9 @@ export default async function XQueuePage({ searchParams }: { searchParams: Promi
               <p className="text-xs text-ink-muted">{row.text.length} of 280 characters</p>
               <div className="flex flex-wrap items-end gap-2">
                 <CopyButton text={row.text} />
-                <form action={markXPostedAction} className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
+                <form action={markXPostedAction} className="flex min-w-[16rem] flex-1 flex-wrap items-end gap-2">
                   <input type="hidden" name="job_id" value={row.id} />
-                  <label className="grid min-w-0 flex-1 gap-1 text-sm">
+                  <label className="grid min-w-[12rem] flex-1 gap-1 text-sm">
                     <span className="font-semibold text-ink-muted">Link of the post</span>
                     <input
                       type="url"

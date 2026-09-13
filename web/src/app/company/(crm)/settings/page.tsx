@@ -88,7 +88,7 @@ export default async function CompanySettingsPage({
   const editable = isOwner && (profile.status === "active" || profile.status === "pending_review");
 
   return (
-    <div className={`${PAGE} max-w-3xl`}>
+    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
       <PageTitle>Company settings</PageTitle>
       {error ? <Notice tone="error">{LEAVE_ERRORS[error] ?? "Something went wrong. Try again."}</Notice> : null}
 

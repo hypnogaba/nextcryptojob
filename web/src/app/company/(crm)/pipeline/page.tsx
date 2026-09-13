@@ -135,11 +135,11 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
             return (
               <details key={stage} open={n > 0} className="group min-w-0">
                 <summary className="flex min-h-11 cursor-pointer list-none items-end justify-between gap-2 border-b-2 border-ink pb-1.5 [&::-webkit-details-marker]:hidden">
-                  <span className={`display text-lg leading-none ${stage === "contact_shared" ? "text-brand" : ""}`}>
+                  <span className={`display text-base leading-tight ${stage === "contact_shared" ? "text-brand" : ""}`}>
                     {STAGE_TEXT[stage]} ({n}
                     {filtered && col.next_cursor ? "+" : ""})
                   </span>
-                  <span aria-hidden className="text-sm text-ink-muted transition-transform group-open:rotate-180">
+                  <span aria-hidden className="pb-0.5 text-xs text-ink-muted transition-transform group-open:rotate-180">
                     &#9662;
                   </span>
                 </summary>
@@ -200,7 +200,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
                       <td className={TD}>
                         {h?.score != null ? <ScoreChip score={h.score} level={h.level} /> : <EmptyChip />}
                       </td>
-                      <th scope="row" className={`${TD} font-normal`}>
+                      <th scope="row" className={`${TD} min-w-44 font-normal`}>
                         <Link
                           href={`/company/candidates/${card.candidate_id}`}
                           prefetch={false}
