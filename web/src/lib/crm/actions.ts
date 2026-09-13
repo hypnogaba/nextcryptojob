@@ -7,6 +7,7 @@ import { auditStatement, type AuditMeta } from "./audit";
 import { actorRole, type AccessMode, type ActionContext, type Channel } from "./context";
 import { assertCan, type Permission } from "./permissions";
 import { cancelIntro, checkIntroRequest, getIntro, heldSql, holdIntro, listIntros, releaseHold, requestIntro } from "./intros";
+import { closeJob, getJob, listJobs, postJob, updateJob } from "./jobs";
 import { addNote, addToPipeline, listHistory, listPipeline, removeFromPipeline, updateCard } from "./pipeline";
 import { loadCandidates, projectHidden, projectIntro, projectProfile, contactFromIntro, INTRO_COLUMNS, type IntroRow } from "./project";
 import {
@@ -23,6 +24,7 @@ import {
   type QuotaSubject,
   type UsageRecord,
 } from "./quotas";
+import { searchJobs } from "./public-jobs";
 import { paidSearchMeta, searchCandidates } from "./search";
 import * as T from "./types";
 import { ActionError, validationError } from "./types";
@@ -42,8 +44,8 @@ import { isVisibleTo } from "./visibility";
  * Тест actions.test.ts звіряє реєстр з openapi.yaml і mcp-tools.md.
  *
  * Обробники (handler) є в діях T2–T5 (get_account, search_candidates,
- * get_candidate, воронка, знайомства), T7 (збережені пошуки) і T9 (get_usage,
- * buy_usdc_month); решту допишуть T11 і T12. Дія без обробника відповідає 501
+ * get_candidate, воронка, знайомства), T7 (збережені пошуки), T9 (get_usage,
+ * buy_usdc_month) і T12 (вакансії, search_jobs); вебхук допише T11. Дія без обробника відповідає 501
  * not_implemented ще до перевірки оплати. Маршрути REST і інструменти MCP
  * беруться з цього реєстру (lib/api/rest.ts, lib/api/mcp.ts), тож нова дія
  * з'являється в обох сама.
@@ -349,6 +351,7 @@ export const ACTIONS = [
     output: T.JobList,
     permission: "jobs.read",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => ({ output: await listJobs(ctx, input) }),
   }),
   defineAction({
     name: "post_job",
@@ -359,6 +362,11 @@ export const ACTIONS = [
     output: T.Job,
     permission: "jobs.write",
     access: SUBSCRIPTION_ONLY,
+    audit: "job.create",
+    handler: async (ctx, input) => {
+      const job = await postJob(ctx, input);
+      return { output: job, audit: { meta: { job_id: job.job_id, status: job.status } } };
+    },
   }),
   defineAction({
     name: "get_job",
@@ -369,6 +377,7 @@ export const ACTIONS = [
     output: T.Job,
     permission: "jobs.read",
     access: ALL_ACCESS,
+    handler: async (ctx, input) => ({ output: await getJob(ctx, input) }),
   }),
   defineAction({
     name: "update_job",
@@ -381,6 +390,12 @@ export const ACTIONS = [
     output: T.Job,
     permission: "jobs.write",
     access: SUBSCRIPTION_ONLY,
+    audit: "job.update",
+    handler: async (ctx, input) => {
+      const { job, changed } = await updateJob(ctx, input);
+      // Нічого не змінилось: журнал не пишемо.
+      return changed ? { output: job, audit: { meta: { job_id: job.job_id, status: job.status } } } : { output: job, auditWritten: true };
+    },
   }),
   defineAction({
     name: "close_job",
@@ -391,6 +406,11 @@ export const ACTIONS = [
     output: T.Job,
     permission: "jobs.write",
     access: ALL_ACCESS,
+    audit: "job.close",
+    handler: async (ctx, input) => {
+      const { job, changed } = await closeJob(ctx, input);
+      return changed ? { output: job, audit: { meta: { job_id: job.job_id } } } : { output: job, auditWritten: true };
+    },
   }),
   defineAction({
     name: "list_saved_searches",
@@ -517,6 +537,7 @@ export const ACTIONS = [
     output: T.PublicJobList,
     permission: "public",
     access: ["subscription", "pay_per_request", "none"],
+    handler: async (ctx, input) => ({ output: await searchJobs(ctx, input) }),
   }),
 ] as const;
 

@@ -165,7 +165,9 @@ describe("same actions as REST", () => {
     expect(list.body.result.tools).toHaveLength(28);
     const res = await callTool(POST, "get_account", {}, { key });
     expect(res.structuredContent.access.mode).toBe("pay_per_request");
-    const pending = await callTool(POST, "post_job", { title: "Solidity engineer", roles: ["engineer"], work_mode: ["remote"] }, { key });
+    const job = await callTool(POST, "post_job", { title: "Solidity engineer", roles: ["engineer"], work_mode: ["remote"] }, { key });
+    expect(job.structuredContent.error.code).toBe("subscription_required");
+    const pending = await callTool(POST, "get_webhook", {}, { key });
     expect(pending.structuredContent.error.code).toBe("not_implemented");
   });
 });

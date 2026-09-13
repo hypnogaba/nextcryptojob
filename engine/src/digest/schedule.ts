@@ -14,8 +14,8 @@ import type { Db } from "../pipeline/db.js";
 import { shortError } from "../pipeline/errors.js";
 import type { EngineEnv } from "../pipeline/registry.js";
 import {
-  type ChannelPlan, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
-  type DigestMessage, planChannel,
+  type ChannelPlan, DEFAULT_SITE_URL, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
+  type DigestMessage, planChannel, siteUrlOf,
 } from "./deliver.js";
 import { loadCompanyPool, loadNextrolePool, type PoolStats } from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
@@ -257,7 +257,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   // 2. Пул: один раз на прогін.
   const nr = await loadNextrolePool(deps.jobs, now);
   summary.pool = nr.stats;
-  const company = db ? await loadCompanyPool(db, log) : [];
+  const company = db ? await loadCompanyPool(db, log, siteUrlOf(deps.env) ?? DEFAULT_SITE_URL) : [];
   summary.companyJobs = company.length;
   const pool = { nextrole: nr.jobs, company };
   log(`digest: pool ${nr.stats.kept} jobs (fetched ${nr.stats.fetched}, dropped tag ${nr.stats.dropped.tag} ` +

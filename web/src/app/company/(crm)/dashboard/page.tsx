@@ -89,7 +89,10 @@ export default async function DashboardPage() {
             </li>
             <li className="grid gap-1 rounded-lg border border-line p-4">
               <p className="font-medium text-ink">3. Post a job</p>
-              <p className="text-sm text-ink-muted">Jobs you publish appear in daily digests of matching candidates. Job posting opens soon.</p>
+              <p className="text-sm text-ink-muted">Jobs you publish appear in daily digests of matching candidates.</p>
+              <Link href="/company/jobs/new" className={`${LINK} text-sm`}>
+                New job
+              </Link>
             </li>
           </ol>
         </section>
@@ -216,7 +219,9 @@ export default async function DashboardPage() {
               {board.jobs.map((j) => (
                 <li key={j.id} className="grid gap-0.5 text-sm">
                   <span className="font-medium break-words text-ink">
-                    {j.title}
+                    <Link href={`/company/jobs/${j.id}`} className="hover:text-brand hover:underline">
+                      {j.title}
+                    </Link>
                     {j.status === "draft" ? <span className="font-normal text-ink-muted"> (draft)</span> : null}
                     {j.status === "open" && !j.live ? <span className="font-normal text-ink-muted"> (not live)</span> : null}
                   </span>

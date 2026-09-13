@@ -286,7 +286,7 @@ describe("request parsing and routing", () => {
 
   it("an operation that is not live yet answers 501 not_implemented before anything else", async () => {
     const { key } = await company({ subscribed: false });
-    const res = await call("POST", "/jobs", { key, body: { nonsense: true } });
+    const res = await call("PUT", "/webhook", { key, body: { nonsense: true } });
     expect(res.status).toBe(501);
     expect(res.body.error.code).toBe("not_implemented");
   });
@@ -297,7 +297,6 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
     const { key } = await company();
     const alice = addCandidate(db);
     const bob = addCandidate(db);
-    const job = `job_${"a".repeat(20)}`;
     const results: { op: string; status: number; errors: string[] }[] = [];
     const check = async (method: Method, template: string, path: string, body?: unknown) => {
       const res = await call(method, path, { key, body });
@@ -319,7 +318,16 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
     await check("POST", "/intros/{intro_id}/cancel", `/intros/${intro.body.intro_id}/cancel`);
     await check("DELETE", "/pipeline/{candidate_id}", `/pipeline/${alice.id}`);
     await check("GET", "/jobs", "/jobs");
-    await check("POST", "/jobs", "/jobs", { title: "Solidity engineer", roles: ["engineer"], work_mode: ["remote"] });
+    const posted = await check("POST", "/jobs", "/jobs", {
+      title: "Solidity engineer",
+      roles: ["engineer"],
+      work_mode: ["remote"],
+      salary: { min: 120000, max: 150000, currency: "USD", period: "year" },
+      apply_url: "https://acme.io/jobs/solidity",
+      status: "open",
+      post_on_x: true,
+    });
+    const job = posted.body.job_id as string;
     await check("GET", "/jobs/{job_id}", `/jobs/${job}`);
     await check("PATCH", "/jobs/{job_id}", `/jobs/${job}`, { title: "Senior Solidity engineer" });
     await check("POST", "/jobs/{job_id}/close", `/jobs/${job}/close`);
@@ -355,23 +363,17 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
       "PATCH /saved-searches/{saved_search_id}": 200,
       "DELETE /saved-searches/{saved_search_id}": 204,
       "GET /usage": 200,
+      "GET /jobs": 200,
+      "POST /jobs": 201,
+      "GET /jobs/{job_id}": 200,
+      "PATCH /jobs/{job_id}": 200,
+      "POST /jobs/{job_id}/close": 200,
+      "GET /public/jobs": 200,
       // Місяць USDC платний навіть з підпискою: без платежу 402 з вимогою.
       "POST /billing/usdc-month": 402,
     });
-    // Ще не запущені дії (T11, T12): 501 до будь-якої оплати.
+    // Ще не запущені дії (T11): 501 до будь-якої оплати.
     const pending = results.filter((r) => r.status === 501).map((r) => r.op);
-    expect(pending.sort()).toEqual(
-      [
-        "GET /jobs",
-        "POST /jobs",
-        "GET /jobs/{job_id}",
-        "PATCH /jobs/{job_id}",
-        "POST /jobs/{job_id}/close",
-        "GET /webhook",
-        "PUT /webhook",
-        "POST /webhook/test",
-        "GET /public/jobs",
-      ].sort(),
-    );
+    expect(pending.sort()).toEqual(["GET /webhook", "PUT /webhook", "POST /webhook/test"].sort());
   });
 });

@@ -108,15 +108,15 @@ export async function loadNextrolePool(jobs: JobsDb, now: Date): Promise<{ jobs:
 
 /**
  * Посилання на вакансію компанії: публічна сторінка на сайті (специфікація CRM 5.6).
- * Сторінки /jobs/<id> ще немає (T12), тож поки добірка веде на apply_url компанії (companyJob).
+ * Звідти "Apply" веде на apply_url компанії й рахує переходи (company_jobs.apply_clicks).
  */
 export function companyJobUrl(siteUrl: string, id: string): string {
   return `${siteUrl.replace(/\/+$/, "")}/jobs/${encodeURIComponent(id)}`;
 }
 
-export function companyJob(r: CompanyRow): DigestJob | null {
+export function companyJob(r: CompanyRow, siteUrl: string): DigestJob | null {
   const roles = parseRoles(r.roles);
-  // Відкрита вакансія без apply_url неможлива (CHECK у 0003); без адреси нема куди вести людину.
+  // Відкрита вакансія без apply_url неможлива (CHECK у 0003); без адреси сторінці нема куди вести людину.
   if (roles.length === 0 || !r.apply_url) return null;
   const modes = r.remote_mode.split(",").map((m) => m.trim());
   const remote = modes.includes("remote");
@@ -124,15 +124,17 @@ export function companyJob(r: CompanyRow): DigestJob | null {
   const location = [remote ? "Remote" : null, city].filter(Boolean).join(" or ") || null;
   return {
     ref: `co:${r.id}`, source: "company", id: r.id, title: r.title.trim(), company: r.company_name.trim(),
-    // TODO(T12): companyJobUrl(siteUrl, r.id), коли буде сторінка /jobs/<id> (docs/plans/next-web-tasks.md).
-    companyKey: companyKey(r.company_name), url: r.apply_url, location, placeText: city, remote,
+    companyKey: companyKey(r.company_name), url: companyJobUrl(siteUrl, r.id), location, placeText: city, remote,
     country: r.country, salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, r.salary_period),
     postedAt: parseDbTime(r.published_at), seenAt: null, dedupeKey: null, roles,
   };
 }
 
-/** Живі вакансії компаній (company_jobs_live, 0004/0012). Без подання (база без 0003/0004) → порожньо. */
-export async function loadCompanyPool(db: Db, log: (l: string) => void): Promise<DigestJob[]> {
+/**
+ * Живі вакансії компаній (company_jobs_live, 0004/0012), з посиланням на /jobs/<id> сайту.
+ * Без подання (база без 0003/0004) → порожньо.
+ */
+export async function loadCompanyPool(db: Db, log: (l: string) => void, siteUrl: string): Promise<DigestJob[]> {
   let rows: CompanyRow[];
   try {
     rows = await db.query<CompanyRow>(
@@ -146,5 +148,5 @@ export async function loadCompanyPool(db: Db, log: (l: string) => void): Promise
     }
     throw e;
   }
-  return rows.map(companyJob).filter((j): j is DigestJob => j !== null);
+  return rows.map((r) => companyJob(r, siteUrl)).filter((j): j is DigestJob => j !== null);
 }

@@ -28,6 +28,10 @@ export const DONE_TEXT: Record<string, string> = {
   deleted: "Saved search deleted.",
   alert_on: "Daily alert on.",
   alert_off: "Daily alert off.",
+  job_draft: "Job saved as a draft.",
+  job_published: "Job published. It appears in daily digests of matching candidates.",
+  job_saved: "Job saved.",
+  job_closed: "Job closed. It left the digests, the job search and the X queue.",
 };
 
 export function errorText(code: string | undefined): string | null {

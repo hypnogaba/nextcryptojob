@@ -34,6 +34,11 @@ function JobItem({ job }: { job: SentJob }) {
       <h3 className={`font-sans text-base font-semibold ${WRAP}`}>
         {d.url === null ? (
           <span className={WRAP}>{d.title}</span>
+        ) : d.url.startsWith("/") ? (
+          // Вакансія компанії: її сторінка на сайті, у тій самій вкладці.
+          <Link href={d.url} prefetch={false} className={titleClass}>
+            {d.title}
+          </Link>
         ) : d.url.startsWith("mailto:") ? (
           <a href={d.url} className={titleClass}>
             {d.title}

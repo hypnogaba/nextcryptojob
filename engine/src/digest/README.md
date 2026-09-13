@@ -88,8 +88,8 @@
 ```
 
 `location`, `salary`, `posted_by` можуть бути `null`. `posted_by` не `null` лише для вакансій компаній
-(показати "Posted by {Company} on NextCryptoJob"). `url` вакансії компанії поки її `apply_url` (https або
-mailto; у Telegram mailto йде рядком "Apply: …", не посиланням), бо сторінки `/jobs/<id>` ще немає (T12).
+(показати "Posted by {Company} on NextCryptoJob"). `url` вакансії компанії: її сторінка на сайті
+`${SITE_URL}/jobs/<id>` (без `SITE_URL` домен), звідки "Apply" веде на `apply_url` компанії й рахує перехід.
 `ts` ставиться під час кожної спроби відправки, а не на початку прогону. Адреси пошти в тілі немає: сайт бере `users.email`
 за `user_id` (інваріант §10: пошта лише перевірена) і сам вирішує про згоду й посилання «Unsubscribe».
 

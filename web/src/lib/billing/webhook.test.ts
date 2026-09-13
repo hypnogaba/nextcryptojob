@@ -196,7 +196,8 @@ describe("events in any order", () => {
       for (const evt of order) expect((await post(evt)).status).toBe(200);
       expect(stripeRows()).toEqual([expect.objectContaining(EXPECTED())]);
     }
-  });
+    // 120 свіжих баз з усіма міграціями: сам тест ~2,5 с, а під навантаженням повного прогону буває понад 5 с.
+  }, 30_000);
 
   it("duplicates of every event still leave exactly one correct row", async () => {
     fake.set(finalState());

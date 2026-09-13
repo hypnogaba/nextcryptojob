@@ -48,8 +48,8 @@ export type Salary = { min: number | null; max: number | null; currency: string 
 
 /** Річна сума лише в правдоподібних межах: 1 000 у кеші NextRole це заглушка, а не зарплата. */
 const MIN_ANNUAL = 10_000;
-const MAX_ANNUAL = 5_000_000;
-const plausibleAnnual = (v: number): boolean => v >= MIN_ANNUAL && v <= MAX_ANNUAL;
+export const MAX_ANNUAL = 5_000_000;
+export const plausibleAnnual = (v: number): boolean => v >= MIN_ANNUAL && v <= MAX_ANNUAL;
 
 const SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
 

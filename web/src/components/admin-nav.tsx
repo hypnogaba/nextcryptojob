@@ -6,6 +6,8 @@ export const ADMIN_PAGES = [
   { href: "/admin/sources", label: "Job sources" },
   { href: "/admin/agency-applications", label: "Agency applications" },
   { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/jobs", label: "Company jobs" },
+  { href: "/admin/x-queue", label: "X queue" },
 ] as const;
 
 export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];

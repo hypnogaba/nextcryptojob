@@ -23,7 +23,10 @@ export type JobDetails = {
   company: string;
   location: string | null;
   salary: string | null;
-  /** http(s) або mailto; null, якщо адреса з джерела непридатна. */
+  /**
+   * http(s) або mailto (вакансії NextRole); для вакансій компаній їхня сторінка на
+   * сайті `/jobs/<id>` (звідти "Apply" рахує перехід); null, якщо адреса непридатна.
+   */
   url: string | null;
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
@@ -101,7 +104,6 @@ type NrRow = {
 type CoRow = {
   id: string;
   title: string;
-  apply_url: string | null;
   remote_mode: string;
   city: string | null;
   salary_min: number | null;
@@ -189,7 +191,7 @@ async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string,
   try {
     ({ results } = await d
       .prepare(
-        `SELECT j.id, j.title, j.apply_url, j.remote_mode, j.city, j.salary_min, j.salary_max, j.salary_currency,
+        `SELECT j.id, j.title, j.remote_mode, j.city, j.salary_min, j.salary_max, j.salary_currency,
                 j.salary_period, c.name AS company_name
            FROM company_jobs j JOIN companies c ON c.id = j.company_id
           WHERE j.id IN (${placeholders(ids.length)}) AND j.hidden_by_admin_at IS NULL`,
@@ -215,8 +217,8 @@ async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string,
             currency: r.salary_currency,
             period: r.salary_period === "month" ? "month" : "year",
           }),
-          // TODO(T12): /jobs/<id>, коли буде публічна сторінка вакансії (docs/plans/next-web-tasks.md).
-          url: safeUrl(r.apply_url),
+          // Сторінка вакансії: жива показує "Apply", закрита каже "This job is closed."
+          url: `/jobs/${encodeURIComponent(r.id)}`,
           postedBy: company,
         },
       ];

@@ -197,11 +197,11 @@ describe("not implemented actions", () => {
     const co = addCompany(db.raw);
     const { key } = await addApiKey(db.raw, co);
     const ctx = await contextFor(db, { authorization: `Bearer ${key}` });
-    const call = runAction("post_job", { title: "Solidity engineer", roles: ["engineer"], work_mode: ["remote"] }, ctx);
+    const call = runAction("set_webhook", { url: "https://acme.io/hooks/ncj" }, ctx);
     await expect(call).rejects.toMatchObject({ code: "not_implemented", status: 501 });
     await expect(call).rejects.not.toBeInstanceOf(PaymentRequired);
     // Навіть з хибним входом: спершу 501.
-    expect(() => prepareAction("post_job", { nonsense: true }, ctx)).toThrow(expect.objectContaining({ code: "not_implemented" }));
+    expect(() => prepareAction("set_webhook", { nonsense: true }, ctx)).toThrow(expect.objectContaining({ code: "not_implemented" }));
     expect(facilitator.verify + facilitator.settle).toBe(0);
   });
 

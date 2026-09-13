@@ -63,6 +63,23 @@ describe("/jobs", () => {
     expect(html).not.toContain("Other Labs");
   });
 
+  it("a company job links to its page on the site in the same tab, not to the company's address", async () => {
+    run(harness.raw, "INSERT INTO companies (id, name, kind, status, terms_version, terms_accepted_at) VALUES ('co_x', 'Acme Labs', 'company', 'active', 'v1', datetime('now'))");
+    run(
+      harness.raw,
+      `INSERT INTO company_jobs (id, company_id, status, title, apply_url, expires_at, created_via)
+       VALUES ('job_live', 'co_x', 'open', 'Solidity Auditor', 'https://acme.io/jobs', datetime('now', '+30 days'), 'web')`,
+    );
+    run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_a', 'ada', '2026-09-12', 'sent', 1, 'email')");
+    run(harness.raw, "INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES ('ada', 'co:job_live', 'company', 'dg_a', 1, 'sent', 'email', 'Matches your Engineer role.')");
+    await signIn("ada");
+    const html = await render();
+    expect(html).toMatch(/<a [^>]*href="\/jobs\/job_live"/);
+    expect(html).not.toContain("acme.io/jobs");
+    expect(html).not.toMatch(/href="\/jobs\/job_live"[^>]*target="_blank"/);
+    expect(html).toContain("Posted by Acme Labs on NextCryptoJob");
+  });
+
   it("says the jobs could not be loaded when our DB fails, instead of an error page", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     await signIn("ada");

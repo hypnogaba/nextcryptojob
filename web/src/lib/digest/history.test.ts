@@ -190,8 +190,8 @@ describe("loadJobsPage: what it shows", () => {
     expect(d.jobs.map((j) => [j.ref, j.state, j.details])).toEqual([
       ["nr:1", "ok", { title: "Protocol Engineer", company: "Paying Labs", location: "Remote", salary: "$120k to $150k", url: "https://jobs.example.com/1", postedBy: null }],
       ["nr:2", "ok", { title: "Job 2", company: "Company 2", location: "Remote", salary: null, url: null, postedBy: null }],
-      // Сторінки /jobs/<id> ще немає (T12): посилання на apply_url компанії.
-      ["co:job_live", "ok", { title: "Solidity Auditor", company: "Acme Labs", location: "Remote or Lisbon", salary: "€8k to €10k a month", url: "https://acme.io/jobs", postedBy: "Acme Labs" }],
+      // Вакансія компанії веде на свою сторінку на сайті, не прямо на apply_url.
+      ["co:job_live", "ok", { title: "Solidity Auditor", company: "Acme Labs", location: "Remote or Lisbon", salary: "€8k to €10k a month", url: "/jobs/job_live", postedBy: "Acme Labs" }],
       ["co:job_hidden", "gone", null],
       ["nr:gone", "gone", null],
     ]);

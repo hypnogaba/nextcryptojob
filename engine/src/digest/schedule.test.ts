@@ -211,9 +211,9 @@ describe("runDigestDue", () => {
     expect(shown.reduce((a, r) => a + r.digest_shown, 0)).toBe(1);
     const text = JSON.parse(tgCalls[0]!).text as string;
     expect(text).toContain("Posted by Paying Labs on NextCryptoJob");
-    // Сторінки /jobs/<id> ще немає (T12): посилання веде на apply_url компанії.
-    expect(text).toContain('href="https://paying.example/apply"');
-    expect(text).not.toContain("/jobs/job_");
+    // Посилання веде на сторінку вакансії на сайті (там "Apply" рахує перехід), не прямо на apply_url.
+    expect(text).toContain(`href="https://nextcryptojob.xyz/jobs/${rows[0]!.job_ref.slice(3)}"`);
+    expect(text).not.toContain("paying.example/apply");
   });
 
   it("ts листа ставиться під час відправки, а не на початку прогону", async () => {

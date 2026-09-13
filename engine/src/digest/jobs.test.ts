@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
 import { D1Client } from "../d1.js";
 import { __resetLimiters } from "../limits.js";
-import { loadNextrolePool, parseDbTime } from "./jobs.js";
+import { companyJob, loadNextrolePool, parseDbTime } from "./jobs.js";
 import { assertReadOnlySql, readOnlyJobsDb, ReadOnlySqlError } from "./jobs-db.js";
 
 const NOW = new Date("2026-09-12T10:00:00Z");
@@ -97,5 +97,24 @@ describe("parseDbTime", () => {
     expect(parseDbTime("2026-09-12T10:00:00.000Z")).toBe(Date.parse("2026-09-12T10:00:00Z"));
     expect(parseDbTime(null)).toBeNull();
     expect(parseDbTime("nope")).toBeNull();
+  });
+});
+
+describe("вакансія компанії", () => {
+  const row = {
+    id: "job_1", company_id: "co_1", company_name: "Acme Labs", title: " Solidity engineer ", roles: '["engineer"]',
+    remote_mode: "remote,city", apply_url: "mailto:jobs@acme.io", city: "Lisbon", country: "PT", salary_min: 8000,
+    salary_max: 10000, salary_currency: "eur", salary_period: "month", published_at: "2026-09-10 09:00:00",
+  };
+
+  it("веде на свою сторінку на сайті, а не прямо на apply_url компанії", () => {
+    const job = companyJob(row, "https://nextcryptojob.xyz/")!;
+    expect(job.url).toBe("https://nextcryptojob.xyz/jobs/job_1");
+    expect(job).toMatchObject({ ref: "co:job_1", location: "Remote or Lisbon", remote: true, salary: { currency: "EUR", period: "month" } });
+  });
+
+  it("без apply_url чи ролей вакансії в пулі немає: сторінці нема куди вести", () => {
+    expect(companyJob({ ...row, apply_url: null }, "https://nextcryptojob.xyz")).toBeNull();
+    expect(companyJob({ ...row, roles: "[]" }, "https://nextcryptojob.xyz")).toBeNull();
   });
 });

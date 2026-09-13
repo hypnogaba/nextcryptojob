@@ -33,6 +33,7 @@ export type CrmPage =
   | "candidates"
   | "pipeline"
   | "saved-searches"
+  | "jobs"
   | "team"
   | "billing"
   | "settings"
