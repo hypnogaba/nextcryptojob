@@ -123,7 +123,8 @@ export function WebhookForm({
             disabled={locked}
           />
           <p id="webhook-url-hint" className={HINT}>
-            https only, a public host name on port 443. We do not follow redirects.
+            https only, a public host name on port 443. We do not follow redirects. Send test uses the saved URL; Rotate secret
+            also saves an edited URL.
           </p>
           {state.errors?.url ? (
             <p id="webhook-url-error" role="alert" className={ERROR}>

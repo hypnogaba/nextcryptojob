@@ -18,10 +18,14 @@ import { sqlTime } from "@/lib/time";
  *   (scores.computed_at ролі з фільтра; без ролі будь-якої) змінились після
  *   max(baseline_at, last_alert_at), і про кого цей пошук ще не сповіщав
  *   (seen_json): щотижневий перерахунок балу не повторює ту саму людину;
- * - спершу «беремо» пошук умовним UPDATE (last_alert_at = мить запуску,
+ * - спершу шлемо, потім позначаємо (last_alert_at = мить запуску,
  *   last_match_count = скільки нових, seen_json + нові, обрізано до 2 000
- *   найновіших), лише потім шлемо. Два запуски не шлють двох листів, а змінені
- *   за цей час фільтри (інший baseline_at) відкладають пошук до наступного запуску.
+ *   найновіших) умовним UPDATE, що перевіряє, чи пошук не змінився між читанням
+ *   і записом. Запуск, що впав до позначки, не губить сповіщення: наступний
+ *   запуск надішле його знову (щонайменше раз, а не щонайбільше раз). Запуски
+ *   не перетинаються: межа часу щогодинного запуску (cron/index.ts) набагато
+ *   менша за годину. Фільтри, змінені між читанням і записом (інший baseline_at),
+ *   позначку не дають: наступний запуск рахує від нового baseline_at.
  *   Перевірка без нових теж ставить last_alert_at (last_match_count = 0): так
  *   пошук не перевіряється щогодини, а «нові» рахуються від останньої перевірки;
  * - є нові: повідомлення тому, хто створив пошук (якщо він досі в команді), інакше
@@ -32,15 +36,20 @@ import { sqlTime } from "@/lib/time";
  * пошук, перевірений о 10:00, знову на черзі о 10:00 наступного дня, без зсуву.
  */
 
-export const ALERT_BATCH = 25;
+/** Пошуків за один щогодинний запуск (специфікація 3.6: до 200); ще й межа часу. */
+export const ALERT_BATCH = 200;
 export const ALERT_INTERVAL_MS = 24 * 3_600_000;
 export const SEEN_MAX = 2000;
 
 export interface AlertOptions {
   env?: NotifyEnv;
   notifier?: Notifier;
+  /** Запланована мить cron: від неї розклад «раз на 24 год» і позначка last_alert_at. */
   now?: Date;
   limit?: number;
+  /** Після цієї миті (мс за `clock`) нових пошуків не беремо: решту добере наступна година. */
+  deadline?: number;
+  clock?: () => Date;
 }
 
 export interface AlertResult {
@@ -54,6 +63,8 @@ export interface AlertResult {
   notDelivered: number;
   /** Пошук змінився між читанням і записом: наступний запуск. */
   skipped: number;
+  /** Не взято: скінчився час запуску. */
+  deferred: number;
   errors: number;
 }
 
@@ -143,8 +154,9 @@ async function changedSince(db: D1Database, ids: string[], since: string, role: 
 export async function savedSearchAlerts(db: D1Database, opts: AlertOptions = {}): Promise<AlertResult> {
   const now = opts.now ?? new Date();
   const at = sqlTime(now);
+  const clock = opts.clock ?? (() => new Date());
   const notifier = opts.notifier ?? notifierFromEnv(opts.env ?? {});
-  const out: AlertResult = { checked: 0, alerted: 0, newCandidates: 0, notDelivered: 0, skipped: 0, errors: 0 };
+  const out: AlertResult = { checked: 0, alerted: 0, newCandidates: 0, notDelivered: 0, skipped: 0, deferred: 0, errors: 0 };
 
   const { results } = await db
     .prepare(
@@ -159,11 +171,33 @@ export async function savedSearchAlerts(db: D1Database, opts: AlertOptions = {})
     .bind(sqlTime(new Date(now.getTime() - ALERT_INTERVAL_MS)), opts.limit ?? ALERT_BATCH)
     .all<DueRow>();
 
+  /** Позначити перевірку, лише якщо пошук не змінився відтоді, як ми його прочитали. */
+  const mark = async (row: DueRow, count: number, seen: string[]): Promise<boolean> => {
+    const res = await db
+      .prepare(
+        `UPDATE saved_searches SET last_alert_at = ?, last_match_count = ?, seen_json = ?
+          WHERE id = ? AND alert = 'daily' AND last_alert_at IS ? AND baseline_at IS ?`,
+      )
+      .bind(at, count, JSON.stringify(seen), row.id, row.last_alert_at, row.baseline_at)
+      .run();
+    return (res.meta.changes ?? 0) === 1;
+  };
+
   const names = new Map<string, string>();
   for (const row of results) {
+    if (opts.deadline !== undefined && clock().getTime() >= opts.deadline) {
+      out.deferred++;
+      continue;
+    }
     try {
       const parsed = SearchFilters.safeParse(JSON.parse(row.filters_json));
-      if (!parsed.success) throw new Error("saved search filters do not match SearchFilters");
+      if (!parsed.success) {
+        // Зіпсований пошук не має стояти першим у черзі щогодини: позначаємо перевіреним.
+        out.errors++;
+        console.error("alerts: saved search filters do not match SearchFilters", { savedSearchId: row.id });
+        await mark(row, 0, parseSeen(row.seen_json));
+        continue;
+      }
       const filters = parsed.data;
       const sort: Sort = (SORTS as readonly string[]).includes(row.sort) ? (row.sort as Sort) : "score";
 
@@ -177,47 +211,32 @@ export async function savedSearchAlerts(db: D1Database, opts: AlertOptions = {})
       const fresh = ids.filter((id) => changed.has(id) && !seenSet.has(id));
       const nextSeen = [...seen, ...fresh].slice(-SEEN_MAX);
 
-      const claim = await db
-        .prepare(
-          `UPDATE saved_searches SET last_alert_at = ?, last_match_count = ?, seen_json = ?
-            WHERE id = ? AND alert = 'daily' AND last_alert_at IS ? AND baseline_at IS ?`,
-        )
-        .bind(at, fresh.length, JSON.stringify(nextSeen), row.id, row.last_alert_at, row.baseline_at)
-        .run();
-      if ((claim.meta.changes ?? 0) !== 1) {
-        out.skipped++;
-        continue;
+      if (fresh.length > 0) {
+        // Спершу надіслати: процес, що впаде тут, лишить пошук непозначеним, і наступний запуск повторить.
+        if (!names.has(row.company_id)) {
+          const name = await db.prepare("SELECT name FROM companies WHERE id = ?").bind(row.company_id).first<string>("name");
+          names.set(row.company_id, name ?? "your company");
+        }
+        const url = new URL(`/company/search?${searchQuery(filters, sort)}`, notifier.origin).toString();
+        const message = alertMessage({ count: fresh.length, name: row.name, company: names.get(row.company_id)!, url });
+        let sent = 0;
+        for (const p of await recipients(db, row.company_id, row.created_by_user_id)) {
+          const res = await deliver({ channel: p.channel, telegramId: p.telegram_id, email: p.email }, message, notifier);
+          if (res.ok) sent++;
+          else console.warn("alerts: not delivered", { savedSearchId: row.id, error: res.error });
+        }
+        // Нікуди не дійшло (немає каналу, бота заблоковано): теж позначаємо, інакше повтор щогодини без кінця.
+        if (sent === 0) out.notDelivered++;
+        out.alerted++;
+        out.newCandidates += fresh.length;
       }
-      out.checked++;
-      if (fresh.length === 0) continue;
 
-      out.alerted++;
-      out.newCandidates += fresh.length;
-      if (!names.has(row.company_id)) {
-        const name = await db.prepare("SELECT name FROM companies WHERE id = ?").bind(row.company_id).first<string>("name");
-        names.set(row.company_id, name ?? "your company");
-      }
-      const url = new URL(`/company/search?${searchQuery(filters, sort)}`, notifier.origin).toString();
-      const message = alertMessage({ count: fresh.length, name: row.name, company: names.get(row.company_id)!, url });
-      let sent = 0;
-      for (const p of await recipients(db, row.company_id, row.created_by_user_id)) {
-        const res = await deliver({ channel: p.channel, telegramId: p.telegram_id, email: p.email }, message, notifier);
-        if (res.ok) sent++;
-        else console.warn("alerts: not delivered", { savedSearchId: row.id, error: res.error });
-      }
-      if (sent === 0) out.notDelivered++;
+      if (await mark(row, fresh.length, nextSeen)) out.checked++;
+      else out.skipped++;
     } catch (error) {
+      // Без позначки: наступний запуск повторить цей пошук (і сповіщення, якщо його не надіслано).
       out.errors++;
       console.error("alerts: saved search failed", { savedSearchId: row.id, error: error instanceof Error ? error.message : String(error) });
-      // Зіпсований пошук не має стояти першим у черзі щогодини: наступна спроба через 24 год.
-      try {
-        await db
-          .prepare("UPDATE saved_searches SET last_alert_at = ? WHERE id = ? AND last_alert_at IS ?")
-          .bind(at, row.id, row.last_alert_at)
-          .run();
-      } catch {
-        // База недоступна: спробуємо наступного запуску.
-      }
     }
   }
   return out;

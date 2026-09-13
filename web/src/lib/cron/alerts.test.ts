@@ -132,15 +132,35 @@ describe("savedSearchAlerts", () => {
     expect(texts(c.ownerTelegram).join("\n")).toContain("Mia's search");
   });
 
-  it("two overlapping runs send one alert", async () => {
+  it("an alert is never lost: a run that dies before sending, or after sending but before marking, is repeated next hour", async () => {
     engineer({ computedAt: "2026-09-12 12:30:00" });
-    await saveSearch();
-    const [a, b] = await Promise.all([
-      savedSearchAlerts(db.d1, { notifier, now: hour(1) }),
-      savedSearchAlerts(db.d1, { notifier, now: hour(1) }),
-    ]);
-    expect(a.alerted + b.alerted).toBe(1);
-    expect(texts(c.ownerTelegram).filter((t) => t.includes("new candidate"))).toHaveLength(1);
+    const ss = await saveSearch();
+    const alerts = () => texts(c.ownerTelegram).filter((t) => t.includes("new candidate"));
+
+    // Падіння до надсилання (читання адресатів): нічого не надіслано й нічого не позначено.
+    const beforeSend = failingOnce(db.d1, /SELECT u\.channel/);
+    expect(await savedSearchAlerts(beforeSend, { notifier, now: hour(1) })).toMatchObject({ errors: 1, checked: 0 });
+    expect(alerts()).toHaveLength(0);
+    expect(row(ss).last_alert_at).toBeNull();
+
+    // Наступна година: надіслано, але падіння на позначці. Пошук лишається на черзі.
+    const beforeMark = failingOnce(db.d1, /UPDATE saved_searches SET last_alert_at/);
+    expect(await savedSearchAlerts(beforeMark, { notifier, now: hour(2) })).toMatchObject({ errors: 1, alerted: 1, checked: 0 });
+    expect(alerts()).toHaveLength(1);
+    expect(row(ss).last_alert_at).toBeNull();
+
+    // Ще година: надіслано вдруге (щонайменше раз) і позначено.
+    expect(await savedSearchAlerts(db.d1, { notifier, now: hour(3) })).toMatchObject({ alerted: 1, checked: 1 });
+    expect(alerts()).toHaveLength(2);
+    expect(row(ss)).toMatchObject({ last_alert_at: "2026-09-12 15:00:00", last_match_count: 1 });
+  });
+
+  it("stops at the run's deadline and leaves the rest for the next hour", async () => {
+    engineer({ computedAt: "2026-09-12 12:30:00" });
+    const ss = await saveSearch();
+    const res = await savedSearchAlerts(db.d1, { notifier, now: hour(1), deadline: 0, clock: () => hour(1) });
+    expect(res).toMatchObject({ deferred: 1, checked: 0 });
+    expect(row(ss).last_alert_at).toBeNull();
   });
 
   it("keeps companies apart: a teammate or a candidate who blocked the company is not a match for it", async () => {
@@ -165,3 +185,24 @@ describe("savedSearchAlerts", () => {
     expect(texts(other.ownerTelegram).join("\n")).toContain('2 new candidates match "Beta search"');
   });
 });
+
+/** База, у якій перша інструкція, що збігається з `pattern`, кидає (процес «упав» саме там). */
+function failingOnce(d1: D1Database, pattern: RegExp): D1Database {
+  let armed = true;
+  const boom = () => {
+    armed = false;
+    throw new Error("D1_ERROR: simulated crash");
+  };
+  return new Proxy(d1, {
+    get(target, prop, receiver) {
+      if (prop !== "prepare") return Reflect.get(target, prop, receiver);
+      return (sql: string) => {
+        const stmt = target.prepare(sql);
+        if (!armed || !pattern.test(sql)) return stmt;
+        const fail = { first: boom, all: boom, run: boom, bind: () => fail };
+        return fail;
+      };
+    },
+  }) as D1Database;
+}
+

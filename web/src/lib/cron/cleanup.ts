@@ -41,14 +41,19 @@ const RULES: Rule[] = [
 
 export type CleanupResult = Record<string, number>;
 
-export async function dailyCleanup(db: D1Database, opts: { now?: Date; chunk?: number; maxChunks?: number } = {}): Promise<CleanupResult> {
+export async function dailyCleanup(
+  db: D1Database,
+  opts: { now?: Date; chunk?: number; maxChunks?: number; deadline?: number; clock?: () => Date } = {},
+): Promise<CleanupResult> {
   const now = opts.now ?? new Date();
+  const clock = opts.clock ?? (() => new Date());
+  const late = () => opts.deadline !== undefined && clock().getTime() >= opts.deadline;
   const chunk = opts.chunk ?? CHUNK;
   const maxChunks = opts.maxChunks ?? MAX_CHUNKS;
   const out: CleanupResult = {};
   for (const rule of RULES) {
     let deleted = 0;
-    for (let i = 0; i < maxChunks; i++) {
+    for (let i = 0; i < maxChunks && !late(); i++) {
       const res = await db
         .prepare(`DELETE FROM ${rule.table} WHERE rowid IN (SELECT rowid FROM ${rule.table} WHERE ${rule.where} LIMIT ?)`)
         .bind(...rule.params(now), chunk)

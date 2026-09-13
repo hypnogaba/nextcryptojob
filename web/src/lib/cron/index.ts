@@ -1,5 +1,5 @@
 import type { NotifyEnv } from "@/lib/crm/notify";
-import { deliverWebhooks } from "@/lib/crm/webhooks";
+import { DELIVER_BUDGET_MS, deliverWebhooks } from "@/lib/crm/webhooks";
 import { savedSearchAlerts } from "./alerts";
 import { countStalePayments, dailyCleanup } from "./cleanup";
 import { expireIntros } from "./intros";
@@ -14,9 +14,9 @@ import { expireIntros } from "./intros";
  * | щогодини        | сповіщення збережених пошуків, завислі платежі x402 (лише підрахунок) |
  * | щодня 03:00 UTC | прибирання: сесії, коди входу, лічильники, апдейти бота, облік 400 днів |
  *
- * Кожна задача обмежена пачкою й добирає решту наступним запуском, повтор
- * безпечний (умовні UPDATE, умови прибирання). Задачі йдуть по черзі, кожна у
- * своєму try: збій однієї не зупиняє інших. Кожна пише рядок JSON з лічильниками
+ * Кожна задача обмежена пачкою і часом (CRON_BUDGET_MS, budgetMs) і добирає
+ * решту наступним запуском, повтор безпечний (умовні UPDATE, умови прибирання).
+ * Задачі йдуть по черзі, кожна у своєму try: збій однієї не зупиняє інших. Кожна пише рядок JSON з лічильниками
  * в журнал Worker (observability увімкнено у wrangler.jsonc).
  */
 
@@ -26,6 +26,19 @@ export const CRONS = {
   daily: "0 3 * * *",
 } as const;
 
+/**
+ * Скільки мс може тривати весь запуск тригера. Кожен запуск закінчується до
+ * наступного того самого тригера: 5-хвилинний за 4,5 хв, щогодинний і щоденний
+ * за 10 хв (межа Cloudflare для scheduled 15 хв). Задача, яка не встигла, добере
+ * решту наступним запуском; задача, до якої черга не дійшла, чекає наступного.
+ */
+export const CRON_BUDGET_MS: Record<string, number> = {
+  [CRONS.every5Minutes]: 270_000,
+  [CRONS.hourly]: 600_000,
+  [CRONS.daily]: 600_000,
+};
+const DEFAULT_BUDGET_MS = 60_000;
+
 /** Прив'язки й секрети, які читають задачі. */
 export type CronEnv = NotifyEnv & {
   DB: D1Database;
@@ -33,31 +46,40 @@ export type CronEnv = NotifyEnv & {
 };
 
 export interface CronTime {
-  /** Справжня мить запуску: від неї рахуються терміни й підпис вебхука. */
+  /** Справжня мить старту задачі. */
   now: Date;
   /** Запланована мить тригера (рівно на межі хвилини): від неї розклад сповіщень. */
   scheduled: Date;
+  /** Годинник для міток, що мусять бути свіжими (оренда й підпис вебхука). */
+  clock: () => Date;
+  /** Після цієї миті (мс) задача не бере нової роботи. */
+  deadline: number;
 }
 
 export type Counts = Record<string, number>;
 
 export interface CronJob {
   name: string;
+  /** Власна межа задачі від її старту (у межах межі тригера). */
+  budgetMs?: number;
   run: (env: CronEnv, time: CronTime) => Promise<Counts>;
 }
 
 export const JOBS = {
   expireIntros: {
     name: "intros.expire",
-    run: async (env, { now }) => ({ ...(await expireIntros(env.DB, { env, now })) }),
+    // Решта 5-хвилинного запуску лишається вебхукам.
+    budgetMs: 60_000,
+    run: async (env, { now, clock, deadline }) => ({ ...(await expireIntros(env.DB, { env, now, clock, deadline })) }),
   },
   deliverWebhooks: {
     name: "webhooks.deliver",
-    run: async (env, { now }) => ({ ...(await deliverWebhooks(env.DB, { env, now })) }),
+    budgetMs: DELIVER_BUDGET_MS,
+    run: async (env, { clock, deadline }) => ({ ...(await deliverWebhooks(env.DB, { env, clock, deadline })) }),
   },
   savedSearchAlerts: {
     name: "saved_searches.alert",
-    run: async (env, { scheduled }) => ({ ...(await savedSearchAlerts(env.DB, { env, now: scheduled })) }),
+    run: async (env, { scheduled, clock, deadline }) => ({ ...(await savedSearchAlerts(env.DB, { env, now: scheduled, clock, deadline })) }),
   },
   stalePayments: {
     name: "x402.stale",
@@ -69,7 +91,7 @@ export const JOBS = {
   },
   dailyCleanup: {
     name: "cleanup.daily",
-    run: async (env, { now }) => dailyCleanup(env.DB, { now }),
+    run: async (env, { now, clock, deadline }) => dailyCleanup(env.DB, { now, clock, deadline }),
   },
 } satisfies Record<string, CronJob>;
 
@@ -98,6 +120,8 @@ export interface RunCronOptions {
   now?: () => Date;
   /** Інший розклад (тести). */
   schedule?: Record<string, readonly CronJob[]>;
+  /** Інша межа тригера (тести). */
+  budgetMs?: number;
 }
 
 export async function runCron(cron: string, env: CronEnv, opts: RunCronOptions = {}): Promise<CronReport> {
@@ -108,24 +132,44 @@ export async function runCron(cron: string, env: CronEnv, opts: RunCronOptions =
     console.warn(`cron: no jobs for "${cron}"`);
     return report;
   }
-  const scheduled = new Date(opts.scheduledTime ?? clock().getTime());
+  const start = clock();
+  const scheduled = new Date(opts.scheduledTime ?? start.getTime());
+  const cronDeadline = start.getTime() + (opts.budgetMs ?? CRON_BUDGET_MS[cron] ?? DEFAULT_BUDGET_MS);
   for (const job of jobs) {
+    const jobStart = clock();
     const started = Date.now();
-    try {
-      const counts = await job.run(env, { now: clock(), scheduled });
-      const entry: JobReport = { job: job.name, ok: true, ms: Date.now() - started, counts };
-      report.jobs.push(entry);
-      console.log(JSON.stringify({ cron, ...entry }));
-    } catch (error) {
-      const entry: JobReport = {
-        job: job.name,
-        ok: false,
-        ms: Date.now() - started,
-        error: error instanceof Error ? error.message : String(error),
-      };
-      report.jobs.push(entry);
-      console.error(JSON.stringify({ cron, ...entry }));
+    let entry: JobReport;
+    if (jobStart.getTime() >= cronDeadline) {
+      entry = { job: job.name, ok: false, ms: 0, error: "skipped: the time budget of this run is used up" };
+    } else {
+      const deadline = Math.min(cronDeadline, job.budgetMs ? jobStart.getTime() + job.budgetMs : cronDeadline);
+      try {
+        const counts = await job.run(env, { now: jobStart, scheduled, clock, deadline });
+        entry = { job: job.name, ok: true, ms: Date.now() - started, counts };
+      } catch (error) {
+        entry = { job: job.name, ok: false, ms: Date.now() - started, error: error instanceof Error ? error.message : String(error) };
+      }
     }
+    report.jobs.push(entry);
+    if (entry.ok) console.log(JSON.stringify({ cron, ...entry }));
+    else console.error(JSON.stringify({ cron, ...entry }));
   }
   return report;
+}
+
+/**
+ * Обробник `scheduled` точки входу Worker. Чекає runCron сам (await), а не через
+ * ctx.waitUntil: робота в waitUntil обривається приблизно за 30 с після виходу з
+ * обробника, а запуск усе одно звітує «ok». Не кидає: збій задачі вже в звіті,
+ * а неочікуваний збій планувальника лише пишеться в журнал.
+ */
+export function scheduledHandler(opts: Omit<RunCronOptions, "scheduledTime"> = {}) {
+  return async (controller: { cron: string; scheduledTime: number }, env: CronEnv): Promise<CronReport | null> => {
+    try {
+      return await runCron(controller.cron, env, { ...opts, scheduledTime: controller.scheduledTime });
+    } catch (error) {
+      console.error(JSON.stringify({ cron: controller.cron, error: error instanceof Error ? error.message : String(error) }));
+      return null;
+    }
+  };
 }

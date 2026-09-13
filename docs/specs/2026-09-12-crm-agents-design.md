@@ -175,18 +175,24 @@ AND NOT EXISTS (SELECT 1 FROM company_members m WHERE m.company_id = :company AN
 ```ts
 // web/worker.ts
 import { default as handler } from "./.open-next/worker.js";
-import { runCron } from "./src/lib/cron";
+import { scheduledHandler } from "./src/lib/cron";
+const runScheduled = scheduledHandler();
 export default {
   fetch: handler.fetch,
-  async scheduled(event, env, ctx) { ctx.waitUntil(runCron(event.cron, env)); },
+  // await, НЕ ctx.waitUntil: waitUntil у scheduled обривається ~30 с після виходу з обробника.
+  async scheduled(controller, env) { await runScheduled(controller, env); },
 } satisfies ExportedHandler<CloudflareEnv>;
 ```
-`wrangler.jsonc`: `"main": "worker.ts"`, `"triggers": { "crons": ["*/5 * * * *", "0 * * * *"] }`.
-| Розклад | Задачі |
-|---|---|
-| кожні 5 хв | `expireIntros`, `deliverWebhooks` |
-| щогодини | `savedSearchAlerts` (кожен пошук не частіше разу на 24 год), `closeExpiredJobs`; о 03:00 UTC ще `purgeUsage` (старші 400 днів) |
-Кожна задача обробляє обмежену пачку (до 200 рядків) і добирає решту наступним запуском.
+`wrangler.jsonc`: `"main": "worker.ts"`, `"triggers": { "crons": ["*/5 * * * *", "0 * * * *", "0 3 * * *"] }`.
+| Розклад | Задачі | Межа часу запуску |
+|---|---|---|
+| кожні 5 хв | `expireIntros` (до 1 хв), `deliverWebhooks` (нових рядків не бере після 4 хв) | 4,5 хв |
+| щогодини | `savedSearchAlerts` (до 200 пошуків, кожен не частіше разу на 24 год), лічильник завислих платежів x402, `closeExpiredJobs` (T12) | 10 хв |
+| щодня 03:00 UTC | прибирання: сесії, коди входу, лічильники, апдейти бота, `purgeUsage` (старші 400 днів) | 10 хв |
+Кожна задача обробляє обмежену пачку й межу часу і добирає решту наступним запуском; збій однієї задачі не
+зупиняє інших, обробник `scheduled` не кидає. Вебхуки: свій час на кожну доставку (оренда рядка, `t` підпису),
+не більше 10 подій компанії за запуск, компанію з тайм-аутом до кінця запуску пропускаємо.
+Експлуатація (ключ `WEBHOOK_SIGNING_KEY` не змінювати після запуску, перевірка cron локально): `docs/ops.md`.
 
 ---
 
@@ -550,6 +556,8 @@ CDP JWT на Workers: спершу перевірити `generateJwt` з `@coinb
   `companies.webhook_failing_since`, лист власнику "Your webhook is failing" і плашка в інтерфейсі.
   Cron `deliverWebhooks` бере `idx_intros_webhook`. Вебхук вимкнено або не задано → `webhook_state = 'none'`.
 - Без `WEBHOOK_SIGNING_KEY`: `set_webhook` → 503 `not_configured` ("not configured: WEBHOOK_SIGNING_KEY"), опитування працює.
+- `WEBHOOK_SIGNING_KEY` після запуску НЕ змінювати: з нього виводяться секрети всіх компаній, нове значення
+  мовчки ламає перевірку підпису в кожного приймача (див. `docs/ops.md`).
 
 ---
 

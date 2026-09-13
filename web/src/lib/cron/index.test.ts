@@ -5,7 +5,7 @@ import { webhookSecret, verifySignature } from "@/lib/crm/webhooks";
 import { all, crmDb, publishFormula } from "@/test/crm-fixtures";
 import { addCandidate, addTestCompany, ask, BOT_TOKEN, stubNetwork, type Network } from "@/test/intro-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
-import { CRONS, runCron, SCHEDULE, type CronEnv, type CronJob } from "./index";
+import { CRONS, runCron, SCHEDULE, scheduledHandler, type CronEnv, type CronJob } from "./index";
 
 /**
  * Планувальник: рядки cron збігаються з wrangler.jsonc, кожен тригер має задачі,
@@ -63,6 +63,32 @@ describe("runCron", () => {
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('"job":"broken"'));
   });
 
+  it("stops starting jobs when the run's time budget is used up, and gives each job the tighter deadline", async () => {
+    let t = Date.parse("2026-09-12T12:00:00Z");
+    const deadlines: Record<string, number> = {};
+    const slow = (name: string, ms: number, budgetMs?: number): CronJob => ({
+      name,
+      budgetMs,
+      run: async (_env, time) => {
+        deadlines[name] = time.deadline - time.now.getTime();
+        t += ms;
+        return {};
+      },
+    });
+    const report = await runCron("*/5 * * * *", env(), {
+      now: () => new Date(t),
+      budgetMs: 100_000,
+      schedule: { "*/5 * * * *": [slow("a", 60_000, 30_000), slow("b", 50_000), slow("c", 1)] },
+    });
+    expect(deadlines).toEqual({ a: 30_000, b: 40_000 });
+    expect(report.jobs.map((j) => [j.job, j.ok])).toEqual([
+      ["a", true],
+      ["b", true],
+      ["c", false],
+    ]);
+    expect(report.jobs[2].error).toContain("time budget");
+  });
+
   it("an unknown trigger does nothing", async () => {
     expect(await runCron("7 7 * * *", env())).toEqual({ cron: "7 7 * * *", jobs: [] });
   });
@@ -118,3 +144,37 @@ describe("runCron", () => {
     expect(hits).toHaveLength(1);
   });
 });
+
+describe("scheduled handler (web/worker.ts)", () => {
+  const env = () => ({ DB: db.d1 }) as CronEnv;
+
+  it("resolves only after the whole run finished, and a failing job does not reject it", async () => {
+    const done: string[] = [];
+    const run = scheduledHandler({
+      schedule: {
+        "0 * * * *": [
+          { name: "slow", run: async () => (await new Promise((r) => setTimeout(r, 30)), done.push("slow"), {}) },
+          { name: "broken", run: async () => { throw new Error("boom"); } },
+          { name: "after", run: async () => (done.push("after"), {}) },
+        ],
+      },
+    });
+    const report = await run({ cron: "0 * * * *", scheduledTime: Date.parse("2026-09-12T13:00:00Z") }, env());
+    // Обробник повернувся лише тоді, коли все зроблено: нічого не лишилось на waitUntil.
+    expect(done).toEqual(["slow", "after"]);
+    expect(report?.jobs.map((j) => j.ok)).toEqual([true, false, true]);
+  });
+
+  it("does not reject even when the scheduler itself fails", async () => {
+    const broken = new Proxy({}, { get: () => { throw new Error("schedule unreadable"); } }) as Record<string, readonly CronJob[]>;
+    await expect(scheduledHandler({ schedule: broken })({ cron: "0 * * * *", scheduledTime: 0 }, env())).resolves.toBeNull();
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("schedule unreadable"));
+  });
+
+  it("worker.ts awaits the run inside scheduled and never hands it to ctx.waitUntil", () => {
+    const source = readFileSync(new URL("../../../worker.ts", import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
+    expect(source).toMatch(/async scheduled\([^)]*\)\s*\{\s*await runScheduled\(/);
+    expect(source).not.toContain("waitUntil");
+  });
+});
+

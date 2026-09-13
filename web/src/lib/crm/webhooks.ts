@@ -16,11 +16,13 @@ import { ActionError, type Intro } from "./types";
  *
  * - Один URL на компанію (companies.webhook_url). Лише https на порту 443 і
  *   публічне доменне ім'я: без IP-літералів, localhost і локальних зон, без
- *   логіна й пароля в адресі, не наш власний домен (webhookUrlProblem).
- *   Перевірку DNS у Worker не робимо (вона дає хибні відмови): приватні адреси
- *   закриває прапор global_fetch_strictly_public у wrangler.jsonc, а fetch із
- *   Worker у будь-якому разі йде з мережі Cloudflare, не з нашої. Переходи
- *   (3xx) не виконуємо: redirect "manual", відповідь 3xx це невдача.
+ *   логіна й пароля в адресі, не наш власний домен чи workers.dev (webhookUrlProblem).
+ *   Перевірку DNS у Worker не робимо (вона дає хибні відмови). Приватні адреси
+ *   недосяжні й так: у Worker немає приватної мережі, fetch іде в публічний
+ *   інтернет з мережі Cloudflare. Прапор global_fetch_strictly_public у
+ *   wrangler.jsonc робить інше: fetch на нашу власну зону теж іде публічним
+ *   шляхом, а не напряму в наш Worker, повз WAF. Переходи (3xx) не виконуємо:
+ *   redirect "manual", відповідь 3xx це невдача.
  * - Секрет не зберігаємо: `whsec_` + base64url(HMAC-SHA256(WEBHOOK_SIGNING_KEY,
  *   "{company_id}:{version}")). Показуємо при першому встановленні URL і після
  *   ротації. Ротація: версія + 1; ще 24 год шлемо обидва підписи.
@@ -53,10 +55,24 @@ export const SIGNATURE_TOLERANCE_S = 300;
 export const ROTATION_OVERLAP_MS = 24 * 3_600_000;
 /** Скільки знайомств бере один запуск cron. */
 export const DELIVER_BATCH = 50;
+/** Скільки подій однієї компанії за запуск: повільний приймач не забирає чергу в інших. */
+export const DELIVER_PER_COMPANY = 10;
+/**
+ * Після скількох мс від старту запуск не бере нових рядків. Остання спроба ще
+ * може тривати DELIVERY_TIMEOUT_MS, тож усе вкладається в 5-хвилинний розклад.
+ */
+export const DELIVER_BUDGET_MS = 4 * 60_000;
 /** Скільки спроба тримає рядок, щоб інший запуск його не взяв (довше за таймаут). */
-const LEASE_MS = 2 * 60_000;
+export const LEASE_MS = 2 * 60_000;
 export const URL_MAX = 500;
-const OWN_HOSTS = ["nextcryptojob.xyz"];
+/**
+ * Наші хости (з піддоменами): свій домен (routes у wrangler.jsonc) і піддомен
+ * акаунта на workers.dev (workers_dev: true дає nextcryptojob.hypnogaba.workers.dev
+ * і адреси версій <id>-nextcryptojob.hypnogaba.workers.dev). Вебхук туди не шлемо:
+ * так приймачем не став би наш власний Worker. Тест звіряє з wrangler.jsonc.
+ * До них ще додається хост SITE_URL з оточення.
+ */
+export const OWN_HOSTS = ["nextcryptojob.xyz", "hypnogaba.workers.dev"] as const;
 
 export const WEBHOOK_ACTOR = (companyId: string) => `${companyId}:webhook`;
 
@@ -97,7 +113,7 @@ export function normalizeWebhookUrl(raw: string): string {
 }
 
 function ownHosts(env: { SITE_URL?: string }): string[] {
-  const hosts = new Set(OWN_HOSTS);
+  const hosts = new Set<string>(OWN_HOSTS);
   try {
     hosts.add(new URL(siteOrigin(env)).hostname.toLowerCase());
   } catch {
@@ -445,8 +461,17 @@ export interface DeliverOptions {
   /** WEBHOOK_SIGNING_KEY, SITE_URL і канали сповіщень власників. */
   env?: NotifyEnv & { WEBHOOK_SIGNING_KEY?: string };
   notifier?: Notifier;
-  now?: Date;
+  /**
+   * Годинник. Кожна доставка бере свою мить: для оренди рядка, для `t` підпису
+   * (отримувач відкидає |зараз - t| > 300 с, а пачка може тривати хвилини) і для
+   * запису результату. Типово справжній час.
+   */
+  clock?: () => Date;
   limit?: number;
+  /** Скільки рядків однієї компанії за запуск (решта наступного разу). */
+  perCompany?: number;
+  /** Після цієї миті (мс) нових рядків не беремо; типово старт + DELIVER_BUDGET_MS. */
+  deadline?: number;
 }
 
 export interface DeliverResult {
@@ -461,6 +486,8 @@ export interface DeliverResult {
   dropped: number;
   /** Немає WEBHOOK_SIGNING_KEY: нічого не підписано й не надіслано. */
   skipped: number;
+  /** Не взято в цьому запуску: скінчився час або компанія вже мала тайм-аут. Добере наступний. */
+  deferred: number;
 }
 
 type DeliveryRow = IntroRow & {
@@ -543,18 +570,27 @@ async function loadDelivery(db: D1Database, introId: string): Promise<DeliveryRo
 
 type Outcome = "delivered" | "retrying" | "failed" | "dropped" | "busy";
 
+export interface AttemptResult {
+  outcome: Outcome;
+  /** Приймач не відповів за DELIVERY_TIMEOUT_MS: решту подій цієї компанії запуск відкладає. */
+  timedOut: boolean;
+}
+
+const BUSY: AttemptResult = { outcome: "busy", timedOut: false };
+
 /**
  * Одна спроба доставити подію знайомства, якщо вона на черзі й її час настав.
  * "busy": рядок уже не на черзі, ще не час або його взяв інший запуск.
+ * Час береться з `clock` окремо для оренди, для підпису й для запису результату.
  */
 export async function deliverIntroWebhook(
   db: D1Database,
   introId: string,
-  opts: { signingKey: string; env: NotifyEnv & { SITE_URL?: string }; notifier: Notifier; now: Date },
-): Promise<Outcome> {
+  opts: { signingKey: string; env: NotifyEnv & { SITE_URL?: string }; notifier: Notifier; clock?: () => Date },
+): Promise<AttemptResult> {
+  const clock = opts.clock ?? (() => new Date());
   const row = await loadDelivery(db, introId);
-  const at = sqlTime(opts.now);
-  if (!row || row.webhook_state !== "pending" || !row.webhook_event) return "busy";
+  if (!row || row.webhook_state !== "pending" || !row.webhook_event) return BUSY;
 
   const hook = hookOf({
     id: row.c_id,
@@ -572,21 +608,22 @@ export async function deliverIntroWebhook(
         `UPDATE intros SET webhook_state = 'none', webhook_next_at = NULL, updated_at = ?
           WHERE id = ? AND webhook_state = 'pending' AND webhook_attempts = ?`,
       )
-      .bind(at, introId, row.webhook_attempts)
+      .bind(sqlTime(clock()), introId, row.webhook_attempts)
       .run();
-    return (res.meta.changes ?? 0) === 1 ? "dropped" : "busy";
+    return (res.meta.changes ?? 0) === 1 ? { outcome: "dropped", timedOut: false } : BUSY;
   }
 
-  // Узяти спробу: attempts + 1 і оренда рядка на час спроби. Хто не взяв, той не шле.
+  // Узяти спробу: attempts + 1 і оренда рядка від цієї миті. Хто не взяв, той не шле.
+  const claimAt = clock();
   const claimed = await db
     .prepare(
       `UPDATE intros SET webhook_attempts = webhook_attempts + 1, webhook_next_at = ?
         WHERE id = ? AND webhook_state = 'pending' AND webhook_attempts = ? AND webhook_next_at <= ?
        RETURNING webhook_attempts`,
     )
-    .bind(sqlTime(new Date(opts.now.getTime() + LEASE_MS)), introId, row.webhook_attempts, at)
+    .bind(sqlTime(new Date(claimAt.getTime() + LEASE_MS)), introId, row.webhook_attempts, sqlTime(claimAt))
     .first<{ webhook_attempts: number }>();
-  if (!claimed) return "busy";
+  if (!claimed) return BUSY;
   const attempt = claimed.webhook_attempts;
 
   const event = row.webhook_event;
@@ -594,14 +631,19 @@ export async function deliverIntroWebhook(
   const intro = projectIntro({ ...row, webhook_attempts: attempt });
   const body = introEventBody(row.company_id, event, intro, eventTime(row), id);
   const problem = webhookUrlProblem(hook.url, ownHosts(opts.env));
-  const result: SendResult = problem
-    ? { delivered: false, status_code: null, error: `blocked: ${problem}`, duration_ms: 0 }
-    : await postWebhook(
-        hook.url,
-        body,
-        await signedHeaders(await signingSecrets(opts.signingKey, hook, opts.now), body, { eventId: id, type: event, attempt, now: opts.now }),
-      );
+  let result: SendResult;
+  if (problem) {
+    result = { delivered: false, status_code: null, error: `blocked: ${problem}`, duration_ms: 0 };
+  } else {
+    // Мить підпису: безпосередньо перед надсиланням.
+    const signAt = clock();
+    const headers = await signedHeaders(await signingSecrets(opts.signingKey, hook, signAt), body, { eventId: id, type: event, attempt, now: signAt });
+    result = await postWebhook(hook.url, body, headers);
+  }
+  const timedOut = result.error?.startsWith("timeout") ?? false;
 
+  const doneAt = clock();
+  const at = sqlTime(doneAt);
   const outcome: Outcome = result.delivered ? "delivered" : attempt >= MAX_ATTEMPTS ? "failed" : "retrying";
   const mine = "id = ? AND webhook_state = 'pending' AND webhook_attempts = ?";
   const writes: D1PreparedStatement[] = [];
@@ -614,7 +656,7 @@ export async function deliverIntroWebhook(
       db.prepare("UPDATE companies SET webhook_failing_since = NULL WHERE id = ? AND webhook_failing_since IS NOT NULL").bind(hook.id),
     );
   } else if (outcome === "retrying") {
-    const next = sqlTime(new Date(opts.now.getTime() + RETRY_DELAYS_MS[attempt - 1]));
+    const next = sqlTime(new Date(doneAt.getTime() + RETRY_DELAYS_MS[attempt - 1]));
     writes.push(db.prepare(`UPDATE intros SET webhook_next_at = ?, webhook_last_error = ? WHERE ${mine}`).bind(next, result.error, introId, attempt));
   } else {
     writes.push(
@@ -648,22 +690,32 @@ export async function deliverIntroWebhook(
   if (outcome === "failed" && (results[1]?.meta.changes ?? 0) === 1) {
     await tellOwners(db, hook.id, failingMessage(opts.notifier.origin, result.error), opts.notifier);
   }
-  return outcome;
+  return { outcome, timedOut };
 }
 
 /**
- * Cron кожні 5 хв: доставити події знайомств, чий час настав (idx_intros_webhook),
- * не більше `limit` за запуск, решту добере наступний. Кожне знайомство окремо:
- * збій одного не зупиняє інших.
+ * Cron кожні 5 хв: доставити події знайомств, чий час настав (idx_intros_webhook).
+ * Межі одного запуску: не більше `limit` рядків, не більше `perCompany` на
+ * компанію; після `deadline` (старт + 4 хв) нових рядків не беремо; компанію,
+ * чий приймач раз не відповів за 10 с, до кінця запуску пропускаємо. Решту
+ * добере наступний запуск. Кожне знайомство окремо: збій одного не зупиняє інших.
  */
 export async function deliverWebhooks(db: D1Database, opts: DeliverOptions = {}): Promise<DeliverResult> {
-  const now = opts.now ?? new Date();
-  const out: DeliverResult = { attempted: 0, delivered: 0, retrying: 0, failed: 0, dropped: 0, skipped: 0 };
+  const clock = opts.clock ?? (() => new Date());
+  const started = clock();
+  const deadline = opts.deadline ?? started.getTime() + DELIVER_BUDGET_MS;
+  const out: DeliverResult = { attempted: 0, delivered: 0, retrying: 0, failed: 0, dropped: 0, skipped: 0, deferred: 0 };
   const env = opts.env ?? {};
   const { results } = await db
-    .prepare("SELECT id FROM intros WHERE webhook_state = 'pending' AND webhook_next_at <= ? ORDER BY webhook_next_at LIMIT ?")
-    .bind(sqlTime(now), opts.limit ?? DELIVER_BATCH)
-    .all<{ id: string }>();
+    .prepare(
+      `SELECT id, company_id FROM (
+         SELECT id, company_id, webhook_next_at,
+                ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY webhook_next_at, id) AS rn
+           FROM intros WHERE webhook_state = 'pending' AND webhook_next_at <= ?)
+        WHERE rn <= ? ORDER BY webhook_next_at, id LIMIT ?`,
+    )
+    .bind(sqlTime(started), opts.perCompany ?? DELIVER_PER_COMPANY, opts.limit ?? DELIVER_BATCH)
+    .all<{ id: string; company_id: string }>();
   if (results.length === 0) return out;
   const signingKey = signingKeyOf(env);
   if (!signingKey) {
@@ -673,17 +725,23 @@ export async function deliverWebhooks(db: D1Database, opts: DeliverOptions = {})
     return out;
   }
   const notifier = opts.notifier ?? notifierFromEnv(env);
-  for (const { id } of results) {
-    let outcome: Outcome;
+  const slowCompanies = new Set<string>();
+  for (const { id, company_id } of results) {
+    if (clock().getTime() >= deadline || slowCompanies.has(company_id)) {
+      out.deferred++;
+      continue;
+    }
+    let attempt: AttemptResult;
     try {
-      outcome = await deliverIntroWebhook(db, id, { signingKey, env, notifier, now });
+      attempt = await deliverIntroWebhook(db, id, { signingKey, env, notifier, clock });
     } catch (error) {
       console.error("webhooks: delivery crashed", { introId: id, error: error instanceof Error ? error.message : String(error) });
       continue;
     }
-    if (outcome === "busy") continue;
-    if (outcome !== "dropped") out.attempted++;
-    out[outcome]++;
+    if (attempt.timedOut) slowCompanies.add(company_id);
+    if (attempt.outcome === "busy") continue;
+    if (attempt.outcome !== "dropped") out.attempted++;
+    out[attempt.outcome]++;
   }
   return out;
 }

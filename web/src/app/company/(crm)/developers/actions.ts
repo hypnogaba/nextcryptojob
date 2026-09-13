@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
-import { runAction } from "@/lib/crm/actions";
+import { readAction, runAction } from "@/lib/crm/actions";
 import { assertFormCompany, userFacingError } from "@/lib/crm/company";
 import { crmActionActor } from "@/lib/crm/context";
 import { createApiKey, revokeApiKey } from "@/lib/crm/keys";
 import { ActionError, type Webhook } from "@/lib/crm/types";
-import type { SendResult } from "@/lib/crm/webhooks";
+import { normalizeWebhookUrl, type SendResult } from "@/lib/crm/webhooks";
 import { isId } from "@/lib/ids";
 
 /**
@@ -79,7 +79,14 @@ export async function webhookAction(_prev: WebhookState, form: FormData): Promis
   try {
     const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
+    // Поле URL є в усіх трьох діях: змінену адресу не губимо мовчки.
+    const saved = ((await readAction("get_webhook", {}, ctx)) as Webhook).url;
+    // Невалідна адреса теж «змінена»: ротація передасть її далі й отримає помилку поля.
+    const edited = url !== "" && sameUrl(url, saved) !== true;
     if (intent === "test") {
+      if (edited) {
+        return { url, message: { tone: "error", text: "Save the new URL first. The test goes to the saved URL." } };
+      }
       const { output } = await runAction("test_webhook", {}, ctx);
       const test = output as SendResult;
       return {
@@ -91,7 +98,8 @@ export async function webhookAction(_prev: WebhookState, form: FormData): Promis
     }
     let input: Record<string, unknown>;
     if (intent === "rotate") {
-      input = { rotate_secret: true };
+      // Ротація разом з новою адресою, якщо її змінили в полі.
+      input = { rotate_secret: true, ...(edited ? { url } : {}) };
     } else {
       if (!url) return { url, errors: { url: "Enter the https:// URL of your endpoint." }, message: { tone: "error", text: "Check the URL." } };
       input = { url, enabled: form.get("enabled") === "on" };
@@ -103,7 +111,12 @@ export async function webhookAction(_prev: WebhookState, form: FormData): Promis
       secret: hook.secret ?? undefined,
       message: {
         tone: "success",
-        text: intent === "rotate" ? "Secret rotated. We sign with both secrets for 24 hours." : hook.enabled ? "Saved. The webhook is on." : "Saved. The webhook is off.",
+        text:
+          intent === "rotate"
+            ? `${edited ? "URL saved and secret rotated." : "Secret rotated."} We sign with both secrets for 24 hours.`
+            : hook.enabled
+              ? "Saved. The webhook is on."
+              : "Saved. The webhook is off.",
       },
     };
   } catch (err) {
@@ -114,5 +127,14 @@ export async function webhookAction(_prev: WebhookState, form: FormData): Promis
         ? "Webhooks are not available yet. Your agent can poll list_intros with updated_since."
         : (known.fields?.url ?? known.message);
     return { url, errors: known.fields?.url ? { url: known.fields.url } : undefined, message: { tone: "error", text } };
+  }
+}
+
+/** Та сама адреса, що збережена (без фрагмента, як її зберігає set_webhook); null, якщо поле не URL. */
+function sameUrl(raw: string, saved: string | null): boolean | null {
+  try {
+    return normalizeWebhookUrl(raw) === saved;
+  } catch {
+    return null;
   }
 }

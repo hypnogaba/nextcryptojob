@@ -19,7 +19,6 @@ export function deliverWebhookSoon(introId: string): void {
       signingKey,
       env: workerEnv,
       notifier: notifierFromEnv(workerEnv),
-      now: new Date(),
     }).catch((error: unknown) => {
       console.error("webhooks: immediate delivery failed", { introId, error: error instanceof Error ? error.message : String(error) });
     });

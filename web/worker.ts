@@ -6,13 +6,16 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { default as handler } from "./.open-next/worker.js";
-import { runCron, type CronEnv } from "./src/lib/cron";
+import { scheduledHandler, type CronEnv } from "./src/lib/cron";
+
+const runScheduled = scheduledHandler();
 
 export default {
   fetch: handler.fetch,
-  async scheduled(controller, env, ctx) {
-    // waitUntil: задачі можуть тривати довше за сам виклик scheduled.
-    ctx.waitUntil(runCron(controller.cron, env as unknown as CronEnv, { scheduledTime: controller.scheduledTime }));
+  // Чекаємо весь запуск тут (await), не в ctx.waitUntil: waitUntil у scheduled
+  // обривається приблизно за 30 с після виходу з обробника (src/lib/cron/index.ts).
+  async scheduled(controller, env) {
+    await runScheduled(controller, env as unknown as CronEnv);
   },
 } satisfies ExportedHandler<CloudflareEnv>;
 

@@ -137,6 +137,27 @@ describe("webhook", () => {
     expect(rotated.secret).toBe(await webhookSecret(KEY, co, 2));
   });
 
+  it("Rotate and Send test never drop an edited URL silently", async () => {
+    const { co, owner } = company("Acme Labs");
+    await signIn(owner, co);
+    await webhookAction({} as WebhookState, form({ company_id: co, intent: "save", url: "https://hooks.acme.io/ncj", enabled: "on" }));
+
+    const test = await webhookAction({} as WebhookState, form({ company_id: co, intent: "test", url: "https://hooks.acme.io/v2" }));
+    expect(test.message).toEqual({ tone: "error", text: "Save the new URL first. The test goes to the saved URL." });
+    expect(test.test).toBeUndefined();
+
+    const rotated = await webhookAction({} as WebhookState, form({ company_id: co, intent: "rotate", url: "https://hooks.acme.io/v2" }));
+    expect(rotated.secret).toBe(await webhookSecret(KEY, co, 2));
+    expect(rotated.message?.text).toContain("URL saved and secret rotated.");
+    expect(rows("SELECT webhook_url, webhook_secret_version FROM companies WHERE id = ?", co)).toEqual([
+      { webhook_url: "https://hooks.acme.io/v2", webhook_secret_version: 2 },
+    ]);
+
+    const bad = await webhookAction({} as WebhookState, form({ company_id: co, intent: "rotate", url: "https://10.0.0.1/x" }));
+    expect(bad.errors?.url).toContain("IP addresses");
+    expect(rows("SELECT webhook_secret_version FROM companies WHERE id = ?", co)).toEqual([{ webhook_secret_version: 2 }]);
+  });
+
   it("refuses a private URL with a field error", async () => {
     const { co, owner } = company("Acme Labs");
     await signIn(owner, co);
