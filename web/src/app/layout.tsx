@@ -1,27 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Unbounded } from "next/font/google";
+import { Big_Shoulders, Familjen_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
-// Unbounded лише для заголовків, Plex Sans для тексту, Plex Mono для цифр і міток.
-const unbounded = Unbounded({
-  subsets: ["latin"],
-  variable: "--font-unbounded",
+// Big Shoulders для чисел і заголовків (вузький, як табло), Familjen Grotesk для
+// тексту. Обидва змінні, OFL. Код і адреси йдуть системним моноширинним.
+const display = Big_Shoulders({
+  subsets: ["latin", "latin-ext"],
+  axes: ["opsz"],
+  variable: "--nf-display",
+  // Для Big Shoulders у Next немає метрик запасного шрифту.
+  adjustFontFallback: false,
   display: "swap",
 });
 
-const plexSans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-plex-sans",
-  display: "swap",
-});
-
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-plex-mono",
+const text = Familjen_Grotesk({
+  subsets: ["latin", "latin-ext"],
+  variable: "--nf-text",
   display: "swap",
 });
 
@@ -39,8 +35,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f3f5f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#0e1213" },
+    { media: "(prefers-color-scheme: light)", color: "#eceef1" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1829" },
   ],
 };
 
@@ -50,12 +46,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${unbounded.variable} ${plexSans.variable} ${plexMono.variable}`}
+      className={`${display.variable} ${text.variable}`}
     >
       <body className="flex min-h-dvh flex-col">
         <a
           href="#main"
-          className="sr-only z-50 rounded-md border border-line bg-surface text-sm font-medium text-ink focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-4 focus:py-3"
+          className="sr-only z-50 rounded-lg border border-line bg-surface text-sm font-medium text-ink focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-4 focus:py-3"
         >
           Skip to content
         </a>

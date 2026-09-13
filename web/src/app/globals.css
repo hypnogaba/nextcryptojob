@@ -16,66 +16,100 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   NextCryptoJob: токени дизайну. Єдине джерело кольору.
-   Бренд: ground (полотно), surface (картки), ink (текст),
-   ink-muted (другорядний текст), line (лінії), brand (акцент).
-   Змінні shadcn нижче лише посилаються на ці.
+   NextCryptoJob, напрям «Rookie Card» з гільошем: токени дизайну.
+   Нейтральні кольори й один акцент. Назви:
+     ground     полотно сторінки (сірий рукав для карток)
+     surface    панелі, таблиці, поля
+     ink        текст;  ink-muted = ink-2, другорядний текст
+     line       тонкі лінії (rule);  line-strong межа полів, >= 3:1
+     brand      єдиний акцент (табло-помаранчевий); brand-ink текст на ньому
+     brand-soft тло акценту (accent-wash): наведення, «так» у таблицях
+   Імена brand/line лишились від першої версії: ними користуються CRM і адмінка.
+   Картки мають власні фарби (lib/card/tiers.ts): це друкований предмет,
+   тож від теми сайту вони не залежать.
+   Контраст (перевірено): світла ink/surface 18.4, ink-muted/ground 6.0,
+   brand/ground 5.0, brand-ink/brand 5.8; темна ink/surface 14.1,
+   ink-muted/surface 7.5, brand/surface 6.2, brand-ink/brand 6.9.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
   color-scheme: light;
 
-  --ground:    #f3f5f4;
-  --surface:   #ffffff;
-  --ink:       #141a1b;
-  --ink-muted: #58646a;
-  --line:      #d5dcda;
-  --line-strong: #7f8c8a;  /* межа полів: >= 3:1 до surface і ground */
-  --brand:     #0b6e63;
-  --brand-ink: #ffffff;
-  --brand-soft: #e1efec;
-  --brand-hover: color-mix(in oklab, var(--brand), black 12%);
-  --wash:      #e8eceb;
-  --danger:    #b3261e;
+  --ground:      #eceef1;
+  --surface:     #ffffff;
+  --ink:         #121418;
+  --ink-muted:   #535a64;
+  --line:        #cfd4da;
+  --line-strong: #7b838d;
+  --brand:       #bb340e;
+  --brand-ink:   #ffffff;
+  --brand-soft:  #fbe3da;
+  --brand-hover: #9f2c0b;
+  --wash:        #e3e6ea;
+  --danger:      #b3261e;
+  --sleeve:      rgb(18 20 24 / 5%);
+  --elev-lift: 0 2px 4px rgb(18 20 24 / 8%), 0 28px 50px -24px rgb(18 20 24 / 45%);
+  --elev-rest: 0 1px 2px rgb(18 20 24 / 12%);
 
-  --radius: 0.5rem;
+  /* Імена з макета, як синоніми. */
+  --ink-2: var(--ink-muted);
+  --rule: var(--line);
+  --accent-wash: var(--brand-soft);
+
+  /* Радіуси за ієрархією, а не один на все. */
+  --radius: 0.625rem;
+  --radius-field: 0px;     /* поля: 0 і лінія 1 px (ConnectKit minimal) */
+  --radius-control: 6px;   /* кнопки */
+  --radius-panel: 10px;    /* панелі й таблиці */
+  --radius-card: 4.55% / 3.5%; /* картка 0.718 (pokemon-cards-css, лише числа) */
+
+  --ease-out: cubic-bezier(0, 0, 0.3, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.38, 0.9);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --ground:    #0e1213;
-    --surface:   #151b1c;
-    --ink:       #e4eae8;
-    --ink-muted: #95a2a1;
-    --line:      #2a3436;
-    --line-strong: #617071;
-    --brand:     #4cc2ae;
-    --brand-ink: #0e1213;
-    --brand-soft: #16302c;
-    --wash:      #1c2425;
-    --danger:    #f2867d;
+    --ground:      #0f1829;
+    --surface:     #172237;
+    --ink:         #eef1f6;
+    --ink-muted:   #a8b3c4;
+    --line:        #2b3a55;
+    --line-strong: #7a8699;
+    --brand:       #ff7a4d;
+    --brand-ink:   #0f1829;
+    --brand-soft:  #3a2320;
+    --brand-hover: #ff9670;
+    --wash:        #1e2b42;
+    --danger:      #ff8f86;
+    --sleeve:      rgb(255 255 255 / 4%);
+    --elev-lift: 0 2px 4px rgb(0 0 0 / 30%), 0 28px 50px -24px rgb(0 0 0 / 80%);
+    --elev-rest: 0 1px 2px rgb(0 0 0 / 40%);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --ground:    #0e1213;
-  --surface:   #151b1c;
-  --ink:       #e4eae8;
-  --ink-muted: #95a2a1;
-  --line:      #2a3436;
-  --line-strong: #617071;
-  --brand:     #4cc2ae;
-  --brand-ink: #0e1213;
-  --brand-soft: #16302c;
-  --wash:      #1c2425;
-  --danger:    #f2867d;
+  --ground:      #0f1829;
+  --surface:     #172237;
+  --ink:         #eef1f6;
+  --ink-muted:   #a8b3c4;
+  --line:        #2b3a55;
+  --line-strong: #7a8699;
+  --brand:       #ff7a4d;
+  --brand-ink:   #0f1829;
+  --brand-soft:  #3a2320;
+  --brand-hover: #ff9670;
+  --wash:        #1e2b42;
+  --danger:      #ff8f86;
+  --sleeve:      rgb(255 255 255 / 4%);
+  --elev-lift: 0 2px 4px rgb(0 0 0 / 30%), 0 28px 50px -24px rgb(0 0 0 / 80%);
+  --elev-rest: 0 1px 2px rgb(0 0 0 / 40%);
 }
 
-/* Змінні shadcn/ui, зведені до токенів бренду. */
+/* Змінні shadcn/ui, зведені до токенів. accent у shadcn = тло наведення. */
 :root {
   --background: var(--ground);
   --foreground: var(--ink);
@@ -98,12 +132,21 @@
 }
 
 @theme inline {
-  /* Шрифти: next/font кладе змінні на <html> (див. layout.tsx). */
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-unbounded), var(--font-plex-sans), ui-sans-serif, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* Шрифти: next/font кладе змінні на <html> (див. layout.tsx). Свої імена
+     --nf-*, щоб не зіткнутись із --font-* самого Tailwind. */
+  --font-sans: var(--nf-text), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--nf-display), "Arial Narrow", var(--nf-text), sans-serif;
+  --font-display: var(--nf-display), "Arial Narrow", var(--nf-text), sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Токени бренду як утиліти: bg-ground, text-ink, border-line, text-brand… */
+  /* Шкала: заголовок героя, розділу, сторінки. */
+  --text-hero: clamp(3.25rem, 1.4rem + 7vw, 8.5rem);
+  --text-hero--line-height: 0.86;
+  --text-section: clamp(2.5rem, 1.4rem + 3.6vw, 4.75rem);
+  --text-section--line-height: 0.9;
+  --text-title: clamp(2.25rem, 1.6rem + 2.2vw, 3.5rem);
+  --text-title--line-height: 0.92;
+
   --color-ground: var(--ground);
   --color-surface: var(--surface);
   --color-ink: var(--ink);
@@ -114,8 +157,10 @@
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
   --color-brand-hover: var(--brand-hover);
+  --color-wash: var(--wash);
+  --color-danger: var(--danger);
+  --color-sleeve: var(--sleeve);
 
-  /* Утиліти shadcn/ui. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -135,28 +180,44 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
+  /* rounded-md = поле (0), rounded-lg = кнопка, rounded-xl = панель. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: var(--radius-field);
+  --radius-lg: var(--radius-control);
+  --radius-xl: var(--radius-panel);
+  --radius-2xl: 14px;
+
+  --shadow-lift: var(--elev-lift);
+  --shadow-rest: var(--elev-rest);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring;
   }
-  /* Одне кільце фокуса для всього: колір бренду на повну (>= 3:1 в обох темах). */
   :focus-visible {
-    outline: 2px solid var(--ring);
+    outline: 3px solid var(--ring);
     outline-offset: 2px;
   }
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
+    overflow-x: clip;
   }
   body {
     @apply bg-background text-foreground antialiased;
+    overflow-x: clip;
+    caret-color: var(--brand);
+    accent-color: var(--brand);
+    scrollbar-color: var(--line-strong) var(--ground);
+  }
+  ::selection {
+    background: var(--brand);
+    color: var(--brand-ink);
+  }
+  a {
+    text-underline-offset: 0.2em;
   }
   h1, h2, h3 {
     @apply font-heading;
@@ -165,4 +226,288 @@
   p {
     text-wrap: pretty;
   }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Заголовок у голосі табло: вузький, прописний. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: 0.005em;
+  }
+
+  /* ─── Картка (0.718, радіус 4.55% / 3.5%) ─────────────────────
+     Розміри всередині в cqw, тож та сама картка працює і на 328 px, і на 380 px.
+     Фарби приходять змінними з tiers.ts (style на .ncj-card). */
+  .ncj-card {
+    container-type: inline-size;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 0.718;
+  }
+  .ncj-face {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: var(--radius-card);
+    box-shadow: var(--card-shadow, var(--elev-lift));
+    background: var(--card-frame);
+    background-image: var(--card-sheen, none);
+    color: var(--card-ink);
+  }
+  .ncj-window {
+    position: absolute;
+    inset: 5.5%;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    padding: 6%;
+    border-radius: 3.2% / 2.3%;
+    background: var(--card-window);
+    box-shadow: inset 0 0 0 1px var(--card-hairline);
+  }
+  .ncj-rating { display: flex; align-items: flex-start; justify-content: space-between; gap: 4cqw; }
+  .ncj-num {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 25cqw;
+    line-height: 0.8;
+    letter-spacing: -0.01em;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .ncj-pos { font-family: var(--font-display); font-weight: 800; font-size: 7.9cqw; line-height: 1; margin-top: 1.6cqw; }
+  .ncj-lvl {
+    text-align: right;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 4.2cqw;
+    line-height: 1.1;
+    text-transform: uppercase;
+    color: var(--card-ink-2);
+  }
+  .ncj-lvl b { display: block; font-size: 9cqw; line-height: 1; color: var(--card-ink); }
+  .ncj-art {
+    position: relative;
+    margin-block: 3.5cqw;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 1.6cqw;
+  }
+  .ncj-art > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ncj-art > .ncj-seal { position: relative; width: auto; height: 100%; max-width: 100%; aspect-ratio: 1; }
+  .ncj-art-empty {
+    position: relative;
+    font-size: 3.4cqw;
+    line-height: 1.3;
+    text-align: center;
+    color: var(--card-ink-2);
+    max-width: 70%;
+  }
+  .ncj-name {
+    font-family: var(--font-display);
+    font-weight: 850;
+    font-size: 7.4cqw;
+    line-height: 1.05;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ncj-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6cqw 2.6cqw;
+    margin-top: 2cqw;
+    font-family: var(--font-display);
+  }
+  .ncj-stats div { display: flex; align-items: baseline; gap: 1.3cqw; border-top: 0.4cqw solid var(--card-ink); padding-top: 0.8cqw; min-width: 0; }
+  .ncj-stats b { font-size: 5.8cqw; font-weight: 850; line-height: 1; }
+  .ncj-stats span { font-size: 3.4cqw; font-weight: 700; letter-spacing: 0.04em; }
+  .ncj-stats .gap b { font-size: 3.6cqw; font-weight: 600; color: var(--card-ink-2); }
+  .ncj-setline {
+    position: absolute;
+    left: 7%;
+    right: 7%;
+    bottom: 1.4%;
+    display: flex;
+    justify-content: space-between;
+    gap: 2cqw;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 3.1cqw;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    color: var(--card-frame-ink);
+  }
+  .ncj-setline span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ncj-tag {
+    position: absolute;
+    top: 1.4%;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 3.1cqw;
+    line-height: 1.5;
+    letter-spacing: 0.1em;
+    padding: 0 1.6cqw;
+    border-radius: 0.8cqw;
+  }
+  .ncj-tag-example { right: 7%; background: var(--brand); color: var(--brand-ink); }
+  .ncj-tag-marker { left: 7%; background: var(--card-window); color: var(--card-ink); box-shadow: inset 0 0 0 1px var(--card-hairline); }
+
+  /* Зворот: розклад балу, як статистика на звороті картки 1952 року. */
+  .ncj-back {
+    padding: 7% 7% 6%;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    background: var(--card-window);
+    box-shadow: inset 0 0 0 0.6cqw var(--card-frame-solid);
+  }
+  .ncj-back h3 { font-family: var(--font-display); font-weight: 850; font-size: 7.6cqw; line-height: 1; text-transform: uppercase; }
+  .ncj-back p { font-size: 3.3cqw; line-height: 1.35; color: var(--card-ink-2); margin-top: 1.4cqw; }
+  .ncj-back table { width: 100%; border-collapse: collapse; margin-top: 3.2cqw; font-size: 3.5cqw; line-height: 1.2; align-self: start; }
+  .ncj-back th {
+    text-align: left;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 3.4cqw;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-bottom: 0.5cqw solid var(--card-ink);
+    padding: 0.8cqw 0;
+  }
+  .ncj-back td, .ncj-back tbody th { padding: 1.1cqw 0; border-bottom: 1px solid var(--card-hairline); vertical-align: top; }
+  .ncj-back tbody th { text-align: left; font-family: var(--font-sans); font-weight: 500; font-size: 3.5cqw; letter-spacing: 0; text-transform: none; }
+  .ncj-back td:not(:first-child), .ncj-back th:not(:first-child) { text-align: right; white-space: nowrap; padding-left: 2cqw; }
+  .ncj-back .ncj-gapnote td { border-bottom: 1px solid var(--card-hairline); padding-top: 0; color: var(--card-ink-2); font-size: 3cqw; }
+  .ncj-back .ncj-sum > * { font-family: var(--font-display); font-weight: 800; font-size: 4.2cqw; letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 0; padding-top: 1.6cqw; padding-bottom: 0; }
+  .ncj-back .ncj-total > * { font-family: var(--font-display); font-weight: 900; font-size: 6.6cqw; letter-spacing: 0.02em; text-transform: uppercase; border-bottom: 0; padding-top: 1.2cqw; }
+  .ncj-back .ncj-legend { align-self: end; border-top: 1px solid var(--card-hairline); padding-top: 2cqw; }
+
+  /* Поворот і нахил (Atropos: 15°, 300 мс, перспектива 1200 px). */
+  .ncj-stage { perspective: 1200px; }
+  .ncj-flip {
+    --rx: 0deg;
+    --ry: 0deg;
+    position: relative;
+    transform-style: preserve-3d;
+    transform: rotateX(var(--rx)) rotateY(var(--ry));
+    transition: transform 300ms var(--ease-out);
+  }
+  .ncj-flip[data-flipped="true"] { transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + 180deg)); }
+  .ncj-side { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .ncj-side-back { transform: rotateY(180deg); }
+  .ncj-glare {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-card);
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 25%), transparent 55%);
+    transition: opacity 300ms var(--ease-out);
+    backface-visibility: hidden;
+  }
+  .ncj-flip[data-tilting="true"] .ncj-glare { opacity: 1; }
+
+  /* Печатка малює себе один раз: 1.6 с, шар кожні 90 мс. */
+  .ncj-seal-draw .ncj-layer {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: ncj-seal-draw 1600ms var(--ease-enter) forwards;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+  @keyframes ncj-seal-draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ncj-flip, .ncj-glare { transition: none; }
+    .ncj-seal-draw .ncj-layer { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
+  }
+}
+
+@layer components {
+  /* Мала картка (драбина рівнів, дошка). */
+  .ncj-mini {
+    container-type: inline-size;
+    position: relative;
+    aspect-ratio: 0.718;
+    border-radius: var(--radius-card);
+    background: var(--card-frame);
+    background-image: var(--card-sheen);
+    box-shadow: var(--elev-rest);
+  }
+  .ncj-mini-window {
+    position: absolute;
+    inset: 7%;
+    display: grid;
+    place-items: end center;
+    padding-bottom: 8%;
+    border-radius: 5% / 3.6%;
+    background: var(--card-window);
+  }
+  .ncj-mini-seal { width: 84%; height: auto; aspect-ratio: 1; }
+  .ncj-mini b {
+    position: absolute;
+    left: 15%;
+    top: 10%;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 30cqw;
+    line-height: 0.85;
+    color: var(--card-ink);
+  }
+}
+
+@layer components {
+  /* Прев'ю картинок для X (композиція як у lib/card/og.tsx). Тло завжди темне. */
+  .ncj-share {
+    container-type: inline-size;
+    position: relative;
+    overflow: hidden;
+    background: #0f1829;
+    color: #eef1f6;
+    border-radius: 6px;
+    box-shadow: var(--elev-lift);
+  }
+  .ncj-share-wide { aspect-ratio: 1200 / 675; }
+  .ncj-share-tall { aspect-ratio: 1080 / 1350; }
+  .ncj-share-rosette { position: absolute; opacity: 0.1; }
+  .ncj-share-wide .ncj-share-rosette { width: 64cqw; height: 64cqw; right: -14cqw; top: -4cqw; }
+  .ncj-share-tall .ncj-share-rosette { width: 94cqw; height: 94cqw; left: 3cqw; top: -8cqw; }
+  .ncj-share-card { position: absolute; }
+  .ncj-share-card .ncj-face { --card-shadow: 0 2cqw 4cqw rgb(0 0 0 / 45%); }
+  .ncj-share-wide .ncj-share-card { left: 5.3cqw; top: 5.4cqw; width: 32.8cqw; transform: rotate(-4deg); }
+  .ncj-share-tall .ncj-share-card { left: 50%; top: 7cqw; width: 52cqw; transform: translateX(-50%) rotate(-3deg); }
+  .ncj-share-copy { position: absolute; font-family: var(--font-display); }
+  .ncj-share-wide .ncj-share-copy { left: 45cqw; right: 5.3cqw; top: 8cqw; bottom: 7cqw; display: grid; align-content: space-between; }
+  .ncj-share-tall .ncj-share-copy { left: 7cqw; right: 7cqw; bottom: 7.5cqw; text-align: center; }
+  .ncj-share-big { font-weight: 850; line-height: 0.86; text-transform: uppercase; }
+  .ncj-share-wide .ncj-share-big { font-size: 8cqw; }
+  .ncj-share-tall .ncj-share-big { font-size: 10cqw; }
+  .ncj-share-sub { font-family: var(--font-sans); font-size: 2.1cqw; line-height: 1.35; color: #c2cbd9; margin-top: 2cqw; }
+  .ncj-share-foot { display: flex; justify-content: space-between; gap: 2cqw; font-weight: 800; letter-spacing: 0.06em; color: #c2cbd9; }
+  .ncj-share-wide .ncj-share-foot { font-size: 2cqw; }
+  .ncj-share-tall .ncj-share-foot { display: block; font-size: 3.2cqw; margin-top: 3cqw; }
+  .ncj-share-ex {
+    position: absolute;
+    top: 2.6cqw;
+    right: 3cqw;
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    font-size: 1.8cqw;
+    padding: 0.3cqw 1cqw;
+    border-radius: 0.5cqw;
+    background: #ff7a4d;
+    color: #0f1829;
+  }
+  .ncj-share-tall .ncj-share-ex { font-size: 3cqw; }
+}
+@layer components {
+  .ncj-share .ncj-tag-example { display: none; }
 }
