@@ -195,14 +195,22 @@ describe("paid intro (settle before effect)", () => {
 describe("not implemented actions", () => {
   it("answer 501 not_implemented before asking for any payment", async () => {
     const co = addCompany(db.raw);
-    const { key } = await addApiKey(db.raw, co); // без підписки: місяць USDC платний
+    const { key } = await addApiKey(db.raw, co);
     const ctx = await contextFor(db, { authorization: `Bearer ${key}` });
-    const call = runAction("buy_usdc_month", {}, ctx);
+    const call = runAction("post_job", { title: "Solidity engineer", roles: ["engineer"], work_mode: ["remote"] }, ctx);
     await expect(call).rejects.toMatchObject({ code: "not_implemented", status: 501 });
     await expect(call).rejects.not.toBeInstanceOf(PaymentRequired);
     // Навіть з хибним входом: спершу 501.
     expect(() => prepareAction("post_job", { nonsense: true }, ctx)).toThrow(expect.objectContaining({ code: "not_implemented" }));
     expect(facilitator.verify + facilitator.settle).toBe(0);
+  });
+
+  it("the USDC month is live now and never runs without a payment", async () => {
+    const co = addCompany(db.raw);
+    const { key } = await addApiKey(db.raw, co);
+    const ctx = await contextFor(db, { authorization: `Bearer ${key}` });
+    await expect(runAction("buy_usdc_month", {}, ctx)).rejects.toBeInstanceOf(PaymentRequired);
+    expect(all(db.raw, "SELECT id FROM subscriptions")).toEqual([]);
   });
 
   it("unpaid steps write nothing until commit", async () => {

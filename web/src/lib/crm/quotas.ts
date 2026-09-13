@@ -322,6 +322,15 @@ export async function checkBurst(env: CrmEnv, actor: Actor, ip: string): Promise
       : actor.kind === "member" || actor.kind === "admin"
         ? [env.RL_WEB, `user:${actor.userId}`]
         : [env.RL_IP, `ip:${ip}`];
+  await limitOrThrow(binding, key);
+}
+
+/** Публічний search_jobs: 30/хв на IP (RL_PUBLIC, розділ 9). Без прив'язки пропускає. */
+export async function checkPublicBurst(env: CrmEnv, ip: string): Promise<void> {
+  await limitOrThrow(env.RL_PUBLIC, `ip:${ip}`);
+}
+
+async function limitOrThrow(binding: RateLimit | undefined, key: string): Promise<void> {
   if (!binding) return;
   const { success } = await binding.limit({ key });
   if (!success) {
