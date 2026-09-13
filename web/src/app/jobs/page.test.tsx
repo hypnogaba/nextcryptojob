@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomToken, sha256Hex } from "@/lib/auth/hash";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
+import { resetNextrolePool } from "@/lib/jobs/nextrole-pool";
 import { crmDb, run } from "@/test/crm-fixtures";
 import { exec, harness, RedirectCalled, resetHarness } from "@/test/harness";
+import { addPoolJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
 import { migratedD1 } from "@/test/sqlite-d1";
 import JobsPage from "./page";
 
@@ -21,6 +23,8 @@ vi.mock("@/lib/jobs-db", async (importOriginal) => ({
 
 beforeEach(() => {
   resetHarness();
+  resetNextrolePool();
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
   const { raw, d1 } = crmDb();
   harness.raw = raw;
   harness.env.DB = d1;
@@ -96,5 +100,87 @@ describe("/jobs", () => {
     expect(html).toContain("Your first jobs are coming.");
     expect(html).toContain("every day at 07:00 (UTC), by email.");
     expect(html).toContain('href="/settings"');
+  });
+});
+
+describe("/jobs: Jobs for you now", () => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+
+  beforeEach(() => {
+    const nr = nextroleJobsDb();
+    const f = hoursAgo(2);
+    addPoolJob(nr.raw, { id: "eng1", title: "Solidity Engineer", company: "Aave", postedAt: hoursAgo(5), fetchedAt: f });
+    addPoolJob(nr.raw, { id: "eng2", title: "Rust Engineer", company: "Lido", postedAt: hoursAgo(9), fetchedAt: f, salaryMin: 120_000, salaryMax: 150_000, currency: "USD" });
+    addPoolJob(nr.raw, { id: "trd1", title: "Crypto Trader", company: "Wintermute", postedAt: hoursAgo(3), fetchedAt: f });
+    addPoolJob(nr.raw, { id: "lis1", title: "Backend Engineer", company: "Kiln", location: "Lisbon", remote: false, postedAt: hoursAgo(4), fetchedAt: f });
+    jobsHolder.db = readOnlyJobsDb(nr.d1);
+    exec("UPDATE users SET roles = '[\"trader\"]', remote_mode = 'remote' WHERE id = 'bob'");
+    exec("UPDATE users SET remote_mode = 'remote' WHERE id = 'ada'");
+  });
+
+  it("shows live matches for the signed-in person's brief only, right away", async () => {
+    await signIn("ada");
+    const ada = await render();
+    expect(ada).toContain("Jobs for you now");
+    expect(ada).toContain("Solidity Engineer");
+    expect(ada).toContain("Rust Engineer");
+    expect(ada).toContain("Lido · Remote · $120k to $150k");
+    expect(ada).toContain("Matches your Engineer role. Remote.");
+    // Бобова роль і місто, яке ніхто не просив, у вибір Ади не йдуть.
+    expect(ada).not.toContain("Crypto Trader");
+    expect(ada).not.toContain("Backend Engineer");
+
+    harness.jar.delete(SESSION_COOKIE);
+    await signIn("bob");
+    const bob = await render();
+    expect(bob).toContain("Crypto Trader");
+    expect(bob).not.toContain("Solidity Engineer");
+  });
+
+  it("leaves out what the digest already sent to this person, and only to this person", async () => {
+    run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_b', 'bob', '2026-09-12', 'sent', 1, 'email'), ('dg_a', 'ada', '2026-09-12', 'sent', 1, 'email')");
+    run(harness.raw, `INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES
+      ('bob', 'nr:eng1', 'nextrole', 'dg_b', 1, 'sent', 'email', 'x'),
+      ('ada', 'nr:eng2', 'nextrole', 'dg_a', 1, 'failed', 'email', 'x')`);
+    await signIn("ada");
+    const html = await render();
+    const now = html.slice(html.indexOf("Jobs for you now"), html.indexOf("Sent to you"));
+    expect(now).toContain("Solidity Engineer");
+    expect(now).not.toContain("Rust Engineer");
+  });
+
+  it("says why nothing matched and offers to edit the brief", async () => {
+    exec("UPDATE users SET remote_mode = 'city', city = 'Berlin' WHERE id = 'ada'");
+    await signIn("ada");
+    const html = await render();
+    expect(html).toContain("Nothing in Berlin right now.");
+    expect(html).toContain("2 jobs for your roles are remote. Add remote work to see them.");
+    expect(html).toContain('href="/welcome?step=place"');
+  });
+
+  it("asks for roles first when the brief has none", async () => {
+    exec("UPDATE users SET roles = '[]' WHERE id = 'ada'");
+    await signIn("ada");
+    const html = await render();
+    expect(html).toContain("Pick your roles first.");
+    expect(html).not.toContain("Sent to you");
+  });
+
+  it("says live jobs are unavailable when the jobs database fails, and keeps the rest of the page", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    jobsHolder.db = { all: async () => Promise.reject(new Error("D1_ERROR: overloaded")), first: async () => null };
+    await signIn("ada");
+    const html = await render();
+    expect(html).toContain("We could not load live jobs right now.");
+    expect(html).toContain("Your first jobs are coming.");
+  });
+
+  it("offers the optional stand out steps after the brief, and not before or after them", async () => {
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('ada', 'scoring', 1, 'v1')");
+    exec("UPDATE users SET onboarding_step = 'x' WHERE id = 'ada'");
+    await signIn("ada");
+    expect(await render()).toContain("Stand out to companies");
+    exec("UPDATE users SET onboarding_step = 'done' WHERE id = 'ada'");
+    expect(await render()).not.toContain("Stand out to companies");
   });
 });

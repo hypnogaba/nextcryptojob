@@ -1,4 +1,6 @@
 import type { JobsDb } from "@/lib/jobs-db";
+import type { BriefRow } from "@/lib/jobs/instant";
+import { normalizeSavedStep, parseSavedStep, type SavedStep } from "@/lib/onboarding/steps";
 import type { Channel } from "@/lib/telegram/channel";
 import { cleanText, companyJobLocation, formatSalary, safeUrl } from "./format";
 
@@ -17,6 +19,13 @@ import { cleanText, companyJobLocation, formatSalary, safeUrl } from "./format";
 export const HISTORY_DAYS = 14;
 /** 14 днів по 5 вакансій. */
 export const HISTORY_LIMIT = 70;
+/**
+ * Скільки надісланих посилань читаємо, щоб «Jobs for you now» не повторював надісланого
+ * (добірка engine виключає всі). Індекс idx_sent_user (user_id, created_at): читання =
+ * повернуті рядки. 1 000 це понад пів року щоденних добірок, а пул NextRole тримає лише
+ * вакансії за 30 днів, тож давніші посилання однаково не збіглися б.
+ */
+export const EXCLUDE_LIMIT = 1000;
 
 export type JobDetails = {
   title: string;
@@ -64,19 +73,26 @@ export type DigestSetup = {
 
 export type JobsPage = {
   setup: DigestSetup;
+  /** Анкета людини для «Jobs for you now» (lib/jobs/instant.ts). */
+  brief: BriefRow;
+  /** Досягнутий крок анкети (як loadAnswers): чи показувати «Stand out to companies». */
+  step: SavedStep;
+  /** sent.job_ref цієї людини, будь-який статус; порожньо, якщо історію не прочитали. */
+  sentRefs: ReadonlySet<string>;
   digests: SentDigest[];
   /** Історію з нашої бази зараз не прочитали: сторінка просить спробувати пізніше. */
   historyError: boolean;
 };
 
-type UserRow = {
+type UserRow = BriefRow & {
   email: string | null;
   telegram_id: string | null;
   channel: Channel;
   digest_hour: number;
   timezone: string | null;
   digest_paused: number;
-  roles: string;
+  onboarding_step: string | null;
+  scoring: number | null;
 };
 
 type SentRow = {
@@ -131,9 +147,12 @@ function channelOf(u: UserRow): Channel | null {
 }
 
 /** Надіслані вакансії й останній прогін людини; null, якщо база зараз не відповіла. */
-async function digestRows(d: D1Database, userId: string): Promise<{ sent: SentRow[]; lastRun: RunStatus | null } | null> {
+async function digestRows(
+  d: D1Database,
+  userId: string,
+): Promise<{ sent: SentRow[]; lastRun: RunStatus | null; refs: Set<string> } | null> {
   try {
-    const [sent, last] = await d.batch([
+    const [sent, last, refs] = await d.batch([
       d
         .prepare(
           `SELECT s.job_ref, s.source, s.digest_id, s.position, s.why, s.channel, r.local_date
@@ -144,9 +163,14 @@ async function digestRows(d: D1Database, userId: string): Promise<{ sent: SentRo
         )
         .bind(userId, `-${HISTORY_DAYS} days`, HISTORY_LIMIT),
       d.prepare("SELECT status FROM digest_runs WHERE user_id = ? ORDER BY local_date DESC LIMIT 1").bind(userId),
+      d.prepare("SELECT job_ref FROM sent WHERE user_id = ? ORDER BY created_at DESC LIMIT ?").bind(userId, EXCLUDE_LIMIT),
     ]);
     const lastRow = (last.results as { status: RunStatus }[])[0];
-    return { sent: sent.results as SentRow[], lastRun: lastRow?.status ?? null };
+    return {
+      sent: sent.results as SentRow[],
+      lastRun: lastRow?.status ?? null,
+      refs: new Set((refs.results as { job_ref: string }[]).map((r) => r.job_ref)),
+    };
   } catch (e) {
     console.warn(`jobs page: history read failed (${errorName(e)})`);
     return null;
@@ -231,7 +255,9 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
   const [user, history] = await Promise.all([
     d
       .prepare(
-        `SELECT email, telegram_id, channel, digest_hour, timezone, digest_paused, roles
+        `SELECT email, telegram_id, channel, digest_hour, timezone, digest_paused,
+                roles, remote_mode, city, salary_min, salary_currency, onboarding_step,
+                (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
            FROM users WHERE id = ?`,
       )
       .bind(userId)
@@ -266,5 +292,13 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     const state = details ? "ok" : source === null ? "unavailable" : "gone";
     digest.jobs.push({ ref: s.job_ref, source: s.source, why: s.why ? cleanText(s.why, 300) : null, state, details });
   }
-  return { setup, digests, historyError: history === null };
+  const brief: BriefRow = {
+    roles: user.roles,
+    remote_mode: user.remote_mode,
+    city: user.city,
+    salary_min: user.salary_min,
+    salary_currency: user.salary_currency,
+  };
+  const step = normalizeSavedStep(parseSavedStep(user.onboarding_step), user.scoring === 1);
+  return { setup, brief, step, sentRefs: history?.refs ?? new Set(), digests, historyError: history === null };
 }
