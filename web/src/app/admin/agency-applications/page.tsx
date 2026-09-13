@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AdminNav } from "@/components/admin-nav";
 import { Button } from "@/components/ui/button";
 import { currentAdmin } from "@/lib/auth/admin";
 import { listApplicationsForAdmin, REVIEW_NOTE_MAX, type AdminApplication } from "@/lib/crm/agency";
@@ -84,6 +85,7 @@ export default async function AgencyApplicationsPage({
 
   return (
     <section className="mx-auto grid max-w-4xl gap-6 px-4 py-10 sm:px-6 sm:py-14">
+      <AdminNav current="/admin/agency-applications" className="" />
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Agency applications</h1>
 
       {done && DONE[done] ? (

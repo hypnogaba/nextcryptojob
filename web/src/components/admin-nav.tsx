@@ -4,6 +4,7 @@ import Link from "next/link";
 export const ADMIN_PAGES = [
   { href: "/admin/companies", label: "Companies" },
   { href: "/admin/sources", label: "Job sources" },
+  { href: "/admin/agency-applications", label: "Agency applications" },
 ] as const;
 
 export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];
