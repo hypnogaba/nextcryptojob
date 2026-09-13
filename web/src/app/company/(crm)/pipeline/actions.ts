@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction } from "@/lib/crm/actions";
 import { assertFormCompany, userFacingError } from "@/lib/crm/company";
-import { resolveWebActor } from "@/lib/crm/context";
+import { crmActionActor } from "@/lib/crm/context";
 import { isId } from "@/lib/ids";
 import { ActionError, CandidateId, type Stage } from "@/lib/crm/types";
 
@@ -29,9 +29,9 @@ function backUrl(form: FormData, extra: Record<string, string>): string {
   return `${page}?${q.toString()}`;
 }
 
-async function act(form: FormData, done: string, run: (ctx: Awaited<ReturnType<typeof resolveWebActor>>) => Promise<unknown>): Promise<never> {
+async function act(form: FormData, done: string, run: (ctx: Awaited<ReturnType<typeof crmActionActor>>) => Promise<unknown>): Promise<never> {
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     await run(ctx);
   } catch (err) {

@@ -32,8 +32,12 @@ describe("reads for the CRM screens", () => {
     await readAction("list_pipeline", {}, a.ctx);
     await readAction("get_account", {}, a.ctx);
     expect(all(db.raw, "SELECT * FROM usage_events")).toEqual([]);
+    // Облікові (квота, журнал) і змінні дії лише через runAction: жодна з них не виконується.
     await expect(readAction("search_candidates", {}, a.ctx)).rejects.toThrow("use runAction");
+    await expect(readAction("get_candidate", { candidate_id: crypto.randomUUID() }, a.ctx)).rejects.toThrow("use runAction");
     await expect(readAction("add_note", { candidate_id: crypto.randomUUID(), body: "x" }, a.ctx)).rejects.toThrow("use runAction");
+    expect(all(db.raw, "SELECT * FROM usage_events")).toEqual([]);
+    expect(all(db.raw, "SELECT * FROM audit_log")).toEqual([]);
     await expect(readAction("list_pipeline", { stage: "nope" }, a.ctx)).rejects.toMatchObject({ code: "validation_failed" });
   });
 

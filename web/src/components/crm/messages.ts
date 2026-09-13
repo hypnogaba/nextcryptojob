@@ -1,4 +1,5 @@
 import { COMPANY_SWITCHED_TEXT } from "@/lib/crm/company";
+import { WEB_BURST_TEXT } from "@/lib/crm/context";
 
 /**
  * Тексти відповіді дій, що повертають на сторінку переходом (?done=… або
@@ -17,6 +18,8 @@ export const ERROR_TEXT: Record<string, string> = {
   forbidden: "Your role in the team cannot do this.",
   validation_failed: "Some fields are not valid. Check them and try again.",
   unauthorized: "Sign in again to continue.",
+  rate_limited: WEB_BURST_TEXT,
+  daily_quota_exceeded: "Daily limit reached. It resets at 00:00 UTC.",
 };
 
 export const DONE_TEXT: Record<string, string> = {

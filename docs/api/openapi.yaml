@@ -571,6 +571,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
     delete:
       tags: [Saved searches]
       operationId: deleteSavedSearch
@@ -1605,7 +1606,11 @@ components:
         sort: { type: string, enum: [score, level, coverage, newest] }
         alert: { type: string, enum: [off, daily] }
         last_alert_at: { type: [string, "null"], format: date-time }
-        last_match_count: { type: [integer, "null"] }
+        last_match_count:
+          type: [integer, "null"]
+          description: |
+            How many candidates were new at the last daily alert (not the total of current matches).
+            null until the first alert after the search was created or its filters or sort changed.
         created_at: { type: string, format: date-time }
     SavedSearchCreate:
       type: object

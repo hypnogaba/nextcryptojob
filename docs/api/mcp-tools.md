@@ -206,6 +206,10 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 | `update_saved_search` | `PATCH /saved-searches/{id}` | `{"saved_search_id": "ss_…", "name"?, "filters"?, "sort"?, "alert"?}` | `SavedSearch` |
 | `delete_saved_search` | `DELETE /saved-searches/{id}` | `{"saved_search_id": "ss_…"}` | `{}` |
 
+`SavedSearch.last_match_count`: скільки кандидатів були новими в останньому щоденному сповіщенні (не скільки
+збігів зараз); `null`, доки після створення або зміни фільтрів чи сортування не було сповіщення. Фільтри одного
+збереженого пошуку можна змінити не більше 10 разів на добу (UTC), далі 429 `daily_quota_exceeded`.
+
 ### 4.7 Вебхук
 
 | Інструмент | REST | Вхід | Вихід |

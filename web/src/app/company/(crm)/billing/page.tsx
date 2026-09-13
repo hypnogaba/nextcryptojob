@@ -8,7 +8,7 @@ import { loadBillingState, type BillingState, type SubscriptionView } from "@/li
 import { TRIAL_DAYS } from "@/lib/billing/checkout";
 import { requestOrigin } from "@/lib/billing/origin";
 import { stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
-import { resolveWebActor, type ActionContext } from "@/lib/crm/context";
+import { resolveWebActor, WEB_BURST_TEXT, type ActionContext } from "@/lib/crm/context";
 import { CRM_HOME } from "@/lib/crm/company";
 import { can } from "@/lib/crm/permissions";
 import { appEnv, db } from "@/lib/db";
@@ -34,6 +34,7 @@ const ERRORS: Record<BillingError, string> = {
   company_not_active: "Your company account is not active, so it cannot subscribe yet.",
   no_customer: "There is no card subscription to manage yet.",
   stripe_failed: "We could not reach Stripe. Try again in a minute.",
+  rate_limited: WEB_BURST_TEXT,
 };
 
 const DAY_MS = 86_400_000;

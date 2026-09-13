@@ -1,12 +1,12 @@
 "use server";
 
-import { readAction, runAction } from "@/lib/crm/actions";
+import { prepareAction, readAction, runAction } from "@/lib/crm/actions";
 import { assertFormCompany, userFacingError } from "@/lib/crm/company";
-import { resolveWebActor, type ActionContext } from "@/lib/crm/context";
+import { crmActionActor, type ActionContext } from "@/lib/crm/context";
 import { STAGE_TEXT } from "@/lib/crm/labels";
 import { companyIntroNotice } from "@/lib/crm/notify";
-import { getCard } from "@/lib/crm/pipeline";
-import { ActionError, CandidateId, IntroId, tagKey, type Intro, type Stage } from "@/lib/crm/types";
+import { changeTag } from "@/lib/crm/pipeline";
+import { ActionError, CandidateId, IntroId, type Intro, type Stage } from "@/lib/crm/types";
 import { candidatePanel } from "@/lib/crm/views";
 import type { PanelState } from "./panel-state";
 
@@ -44,13 +44,6 @@ async function snapshot(
   };
 }
 
-async function currentTags(ctx: ActionContext, candidateId: string): Promise<string[]> {
-  if (!ctx.company) throw new ActionError("unauthorized", 401, "Sign in again to continue.");
-  const card = await getCard(ctx.db, ctx.company.id, candidateId);
-  if (!card) throw new ActionError("not_found", 404, "This candidate is not in your pipeline.");
-  return card.tags;
-}
-
 async function perform(ctx: ActionContext, op: string, id: string, form: FormData): Promise<{ message: string; intro?: Intro }> {
   switch (op) {
     case "add":
@@ -67,14 +60,16 @@ async function perform(ctx: ActionContext, op: string, id: string, form: FormDat
     case "tag_add": {
       const tag = text(form, "tag").trim();
       if (!tag) throw new ActionError("validation_failed", 422, "Write a tag first.", { fields: { tags: "Write a tag first." } });
-      const tags = await currentTags(ctx, id);
-      await runAction("update_stage", { candidate_id: id, tags: [...tags, tag] }, ctx);
+      // Право й доступ тієї самої дії реєстру (update_stage); сама зміна одним UPDATE над поточним списком.
+      prepareAction("update_stage", { candidate_id: id, tags: [tag.slice(0, 32)] }, ctx);
+      await changeTag(ctx, { candidate_id: id, add: tag });
       return { message: "Tags saved." };
     }
     case "tag_remove": {
-      const remove = tagKey(text(form, "tag"));
-      const tags = await currentTags(ctx, id);
-      await runAction("update_stage", { candidate_id: id, tags: tags.filter((t) => tagKey(t) !== remove) }, ctx);
+      const tag = text(form, "tag").trim();
+      if (!tag) throw new ActionError("validation_failed", 422, "Choose a tag to remove.");
+      prepareAction("update_stage", { candidate_id: id, tags: [] }, ctx);
+      await changeTag(ctx, { candidate_id: id, remove: tag });
       return { message: "Tag removed." };
     }
     case "note":
@@ -111,7 +106,7 @@ export async function panelAction(prev: PanelState, form: FormData): Promise<Pan
   const candidateId = text(form, "candidate_id");
   if (!CandidateId.safeParse(candidateId).success) return { ...prev, op, error: "This candidate is not available.", message: undefined };
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     const done = await perform(ctx, op, candidateId, form);
     return { ...(await snapshot(ctx, candidateId)), op, message: done.message };

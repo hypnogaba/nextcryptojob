@@ -3,10 +3,10 @@
 import type { FormMessage } from "@/components/form/form-message";
 import { runAction } from "@/lib/crm/actions";
 import { assertFormCompany, userFacingError } from "@/lib/crm/company";
-import { resolveWebActor } from "@/lib/crm/context";
+import { crmActionActor } from "@/lib/crm/context";
 import type { PipelineCard } from "@/lib/crm/pipeline";
 import { paramsFromQuery, parseSearchParams } from "@/lib/crm/search-params";
-import type { SearchResponse, Stage } from "@/lib/crm/types";
+import { CandidateId, type SearchResponse, type Stage } from "@/lib/crm/types";
 
 /**
  * Дії сторінки пошуку (W2). Кожна визначає актора з сесії (server action це
@@ -18,10 +18,21 @@ import type { SearchResponse, Stage } from "@/lib/crm/types";
 
 export type LoadMoreResult = { ok: true; page: SearchResponse } | { ok: false; error: string };
 
+const BAD_REQUEST = "This request is not valid. Reload the page and try again.";
+
+function isText(v: unknown, max: number): v is string {
+  return typeof v === "string" && v.length > 0 && v.length <= max;
+}
+
 /** "Load more": наступна сторінка того самого пошуку за курсором. */
 export async function loadMoreAction(input: { companyId: string; query: string; cursor: string }): Promise<LoadMoreResult> {
+  // Server action це публічна кінцева точка: вхід може бути будь-яким.
+  const i = (input ?? {}) as Record<string, unknown>;
+  if (!isText(i.companyId, 64) || typeof i.query !== "string" || i.query.length > 2000 || !isText(i.cursor, 512)) {
+    return { ok: false, error: BAD_REQUEST };
+  }
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, input.companyId);
     const parsed = parseSearchParams(paramsFromQuery(input.query));
     const res = await runAction(
@@ -41,8 +52,12 @@ export type AddResult = { ok: true; stage: Stage; tags: string[] } | { ok: false
 
 /** "Add to pipeline" з рядка результату. */
 export async function addFromSearchAction(input: { companyId: string; candidateId: string; role?: string }): Promise<AddResult> {
+  const i = (input ?? {}) as Record<string, unknown>;
+  if (!isText(i.companyId, 64) || !CandidateId.safeParse(i.candidateId).success || (i.role !== undefined && !isText(i.role, 40))) {
+    return { ok: false, error: BAD_REQUEST };
+  }
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, input.companyId);
     const res = await runAction(
       "add_to_pipeline",
@@ -65,7 +80,7 @@ export async function saveSearchAction(_prev: SaveSearchState, form: FormData): 
   const name = String(form.get("name") ?? "");
   const parsed = parseSearchParams(paramsFromQuery(String(form.get("query") ?? "")));
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     await runAction(
       "create_saved_search",

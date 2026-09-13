@@ -242,6 +242,7 @@ describe("search", () => {
     expect(saved.message?.text).toBe("Saved. You get a daily email when new candidates match.");
     const list = await html(SavedSearchesPage(sp()));
     expect(list).toContain("Solidity, remote");
+    expect(list).toContain("No alert yet.");
     expect(list).toContain("Engineer, score 60+, remote, by score");
     expect(list).toContain("/company/search?role=engineer&min_score=60&work=remote&q=1");
 
@@ -467,6 +468,86 @@ describe("pipeline board and list", () => {
   it("an empty pipeline says where to find candidates", async () => {
     await company("Acme Labs");
     expect(await html(PipelinePage(sp()))).toContain("Your pipeline is empty. Find candidates in Search and add them here.");
+  });
+});
+
+describe("tags under concurrency", () => {
+  it("tags added from two tabs both stay, a case repeat is ignored, removing one keeps the others", async () => {
+    const a = await company("Acme Labs");
+    const x = candidate(81);
+    await panel(a.co, x, "add");
+    await Promise.all([panel(a.co, x, "tag_add", { tag: "solidity" }), panel(a.co, x, "tag_add", { tag: "lending" })]);
+    const [{ tags }] = rows<{ tags: string }>("SELECT tags FROM pipeline");
+    expect(JSON.parse(tags).sort()).toEqual(["lending", "solidity"]);
+    // Той самий тег іншим регістром удруге не додається; подія й журнал лише на справжні зміни.
+    await Promise.all([panel(a.co, x, "tag_add", { tag: "Rust" }), panel(a.co, x, "tag_add", { tag: "RUST" })]);
+    expect(JSON.parse(rows<{ tags: string }>("SELECT tags FROM pipeline")[0].tags)).toHaveLength(3);
+    await Promise.all([panel(a.co, x, "tag_remove", { tag: "SOLIDITY" }), panel(a.co, x, "tag_add", { tag: "defi" })]);
+    const after = JSON.parse(rows<{ tags: string }>("SELECT tags FROM pipeline")[0].tags) as string[];
+    expect(after.map((t) => t.toLowerCase()).sort()).toEqual(["defi", "lending", "rust"]);
+    expect(rows("SELECT COUNT(*) AS n FROM pipeline_events WHERE kind = 'tags_changed'")).toEqual([{ n: 5 }]);
+    expect(rows("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'pipeline.tags'")).toEqual([{ n: 5 }]);
+    const [last] = rows<{ meta_json: string }>("SELECT meta_json FROM audit_log WHERE action = 'pipeline.tags' ORDER BY id DESC LIMIT 1");
+    expect(JSON.parse(last.meta_json).tag_count).toBe(3);
+  });
+
+  it("the eleventh tag is refused with a field message", async () => {
+    const a = await company("Acme Labs");
+    const x = candidate(81);
+    await panel(a.co, x, "add");
+    for (let i = 0; i < 10; i++) await panel(a.co, x, "tag_add", { tag: `t${i}` });
+    const s = await panel(a.co, x, "tag_add", { tag: "eleven" });
+    expect(s.fields?.tags).toBe("Use at most 10 tags.");
+    expect(JSON.parse(rows<{ tags: string }>("SELECT tags FROM pipeline")[0].tags)).toHaveLength(10);
+  });
+});
+
+describe("burst limit for web actions (RL_WEB)", () => {
+  it("over the limit every CRM action answers Too many actions, wait a minute. and changes nothing", async () => {
+    const a = await company("Acme Labs");
+    const x = candidate(81);
+    const counts = new Map<string, number>();
+    // Як Workers Rate Limiting: ключ на людину, межа 2 (у проді 120 на хвилину).
+    harness.env.RL_WEB = {
+      limit: async ({ key }: { key: string }) => {
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        return { success: (counts.get(key) ?? 0) <= 2 };
+      },
+    } as unknown as RateLimit;
+    expect((await panel(a.co, x, "add")).card?.stage).toBe("found");
+    expect((await panel(a.co, x, "note", { body: "One" })).message).toBe("Note saved.");
+
+    const busy = "Too many actions, wait a minute.";
+    expect((await panel(a.co, x, "note", { body: "Two" })).error).toBe(busy);
+    expect(await addFromSearchAction({ companyId: a.co, candidateId: candidate(70) })).toEqual({ ok: false, error: busy });
+    expect((await saveSearchAction({}, form({ company_id: a.co, name: "S", query: "" }))).error).toBe(busy);
+    expect(await redirectOf(moveCardAction(form({ company_id: a.co, candidate_id: x, stage: "declined" })))).toBe(
+      "/company/pipeline?error=rate_limited",
+    );
+    expect(await html(PipelinePage(sp({ error: "rate_limited" })))).toContain(busy);
+    const { inviteAction } = await import("./(crm)/team/actions");
+    expect((await inviteAction({}, form({ company_id: a.co, email: "lee@acme.io" }))).error).toBe(busy);
+    const { updateCompanySettingsAction } = await import("./(crm)/settings/actions");
+    const settings = await updateCompanySettingsAction({}, form({ company_id: a.co, name: "Acme", website: "acme.io", country: "FR" }));
+    expect(settings.message?.text).toBe(busy);
+    expect(rows("SELECT note_count, stage FROM pipeline WHERE user_id = ?", x)).toEqual([{ note_count: 1, stage: "found" }]);
+    expect(rows("SELECT * FROM saved_searches")).toEqual([]);
+    expect([...counts.keys()]).toEqual([`user:${a.owner}`]);
+
+    // Інша людина має свій лічильник.
+    const b = await company("Beta Labs");
+    expect((await panel(b.co, x, "add")).card?.stage).toBe("found");
+  });
+});
+
+describe("search actions refuse malformed input with a readable error", () => {
+  it("null, wrong types or a bad candidate id", async () => {
+    await company("Acme Labs");
+    const bad = "This request is not valid. Reload the page and try again.";
+    expect(await loadMoreAction(null as never)).toEqual({ ok: false, error: bad });
+    expect(await loadMoreAction({ companyId: "x", query: 5, cursor: "" } as never)).toEqual({ ok: false, error: bad });
+    expect(await addFromSearchAction(null as never)).toEqual({ ok: false, error: bad });
+    expect(await addFromSearchAction({ companyId: "co_x", candidateId: "not-a-uuid" })).toEqual({ ok: false, error: bad });
   });
 });
 

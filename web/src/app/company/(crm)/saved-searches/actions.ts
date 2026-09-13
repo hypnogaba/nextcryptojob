@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction } from "@/lib/crm/actions";
 import { assertFormCompany, userFacingError } from "@/lib/crm/company";
-import { resolveWebActor } from "@/lib/crm/context";
+import { crmActionActor } from "@/lib/crm/context";
 import { isId } from "@/lib/ids";
 import { ActionError } from "@/lib/crm/types";
 
@@ -16,10 +16,10 @@ import { ActionError } from "@/lib/crm/types";
 
 const PAGE = "/company/saved-searches";
 
-async function act(form: FormData, done: string, run: (ctx: Awaited<ReturnType<typeof resolveWebActor>>, id: string) => Promise<unknown>): Promise<never> {
+async function act(form: FormData, done: string, run: (ctx: Awaited<ReturnType<typeof crmActionActor>>, id: string) => Promise<unknown>): Promise<never> {
   const id = form.get("saved_search_id");
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     if (!isId("ss", id)) throw new ActionError("not_found", 404, "This saved search was not found.");
     await run(ctx, id);

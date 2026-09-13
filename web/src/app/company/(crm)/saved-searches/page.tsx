@@ -63,9 +63,9 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
                   <h2 className="font-semibold tracking-tight break-words">{s.name}</h2>
                   <p className="text-sm text-ink-muted">{describeFilters(s.filters, s.sort)}</p>
                   <p className="text-xs text-ink-muted">
-                    {s.last_alert_at
-                      ? `Last alert ${TIME.format(new Date(s.last_alert_at))} UTC${s.last_match_count !== null ? `, ${s.last_match_count} new` : ""}.`
-                      : "No alert sent yet."}
+                    {s.last_alert_at && s.last_match_count !== null
+                      ? `Last alert ${TIME.format(new Date(s.last_alert_at))} UTC: ${s.last_match_count} new.`
+                      : "No alert yet."}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -81,6 +81,7 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={`/company/search?${searchQuery(s.filters, s.sort)}`}
+                      prefetch={false}
                       className={cn(buttonVariants({ variant: "outline" }), "h-11 px-4 text-sm")}
                     >
                       Run

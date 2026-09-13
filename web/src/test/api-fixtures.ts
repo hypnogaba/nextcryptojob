@@ -5,6 +5,7 @@ import type { PaymentPayload, PaymentRequired, PaymentRequirements, SettleRespon
 import { parse } from "yaml";
 import type { CrmEnv } from "@/lib/crm/context";
 import { clearResourceServerCache } from "@/lib/x402/server";
+import { crmDb } from "./crm-fixtures";
 import { harness, resetHarness } from "./harness";
 import { introEnv, PAYER, stubNetwork, type Network } from "./intro-fixtures";
 import type { TestDb } from "./sqlite-d1";
@@ -25,6 +26,11 @@ export const ORIGIN = "https://nextcryptojob.xyz";
 export function setupApi(env: Partial<CrmEnv> = {}): { db: TestDb; net: Network } {
   const net = stubNetwork();
   resetHarness({ ...(introEnv(net) as object), ...(env as object) });
+  // Усі міграції з db/migrations (як у коментарі вгорі), а не лише накочені на прод:
+  // код, що чекає нової колонки, тестується на схемі, яку він потребує.
+  const { raw, d1 } = crmDb();
+  harness.raw = raw;
+  harness.env.DB = d1;
   clearResourceServerCache();
   return { db: { raw: harness.raw, d1: harness.env.DB }, net };
 }

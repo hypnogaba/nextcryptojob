@@ -248,7 +248,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                 <p>{emptyReasonText(empty, result.role_visible_count)}</p>
                 {empty === "filters_too_narrow" ? (
                   <p className="mt-2">
-                    <Link href={parsed.filters.role ? `/company/search?role=${parsed.filters.role}&q=1` : "/company/search"} className={LINK}>
+                    <Link
+                      href={parsed.filters.role ? `/company/search?role=${parsed.filters.role}&q=1` : "/company/search"}
+                      prefetch={false}
+                      className={LINK}
+                    >
                       Clear filters
                     </Link>
                   </p>
