@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, crmDb, run } from "@/test/crm-fixtures";
-import { APPLIED_AFTER_CRM, APPLIED_MIGRATIONS, migratedD1, type TestDb } from "@/test/sqlite-d1";
+import { migratedD1, type TestDb } from "@/test/sqlite-d1";
 import { HISTORY_LIMIT, loadJobsPage } from "./history";
 
 let t: TestDb;
@@ -190,7 +190,8 @@ describe("loadJobsPage: what it shows", () => {
     expect(d.jobs.map((j) => [j.ref, j.state, j.details])).toEqual([
       ["nr:1", "ok", { title: "Protocol Engineer", company: "Paying Labs", location: "Remote", salary: "$120k to $150k", url: "https://jobs.example.com/1", postedBy: null }],
       ["nr:2", "ok", { title: "Job 2", company: "Company 2", location: "Remote", salary: null, url: null, postedBy: null }],
-      ["co:job_live", "ok", { title: "Solidity Auditor", company: "Acme Labs", location: "Remote or Lisbon", salary: "€8k to €10k a month", url: "/jobs/job_live", postedBy: "Acme Labs" }],
+      // Сторінки /jobs/<id> ще немає (T12): посилання на apply_url компанії.
+      ["co:job_live", "ok", { title: "Solidity Auditor", company: "Acme Labs", location: "Remote or Lisbon", salary: "€8k to €10k a month", url: "https://acme.io/jobs", postedBy: "Acme Labs" }],
       ["co:job_hidden", "gone", null],
       ["nr:gone", "gone", null],
     ]);
@@ -210,14 +211,29 @@ describe("loadJobsPage: what it shows", () => {
     expect(jobsCalls).toEqual([]);
   });
 
-  it("works before 0006 is applied: no history, no error", async () => {
-    const early = migratedD1([...APPLIED_MIGRATIONS, ...APPLIED_AFTER_CRM]);
-    user(early.raw, "ada");
-    const page = await loadJobsPage(early.d1, jobs, "ada");
-    expect(page).toEqual({
-      setup: { paused: false, channel: "email", hasRoles: true, hour: 7, timezone: "Europe/Paris", lastRun: null },
-      digests: [],
-    });
+  it("says the history could not be read when our DB fails on it, instead of crashing", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    digest("ada", "dg_a", "2026-09-12", ["nr:1"]);
+    const broken = { ...t.d1, prepare: t.d1.prepare, batch: async () => Promise.reject(new Error("D1_ERROR: overloaded")) } as unknown as D1Database;
+    const page = await loadJobsPage(broken, jobs, "ada");
+    expect(page).toMatchObject({ digests: [], historyError: true, setup: { channel: "email", hour: 7 } });
+  });
+
+  it("marks company jobs unavailable when their read fails, and keeps the rest", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    nrJob("1");
+    digest("ada", "dg_a", "2026-09-12", ["co:job_x", "nr:1"]);
+    const d1 = t.d1;
+    const flaky = {
+      prepare: (sql: string) => {
+        if (sql.includes("FROM company_jobs")) throw new Error("D1_ERROR: overloaded");
+        return d1.prepare(sql);
+      },
+      batch: d1.batch.bind(d1),
+    } as unknown as D1Database;
+    const page = await loadJobsPage(flaky, jobs, "ada");
+    expect(page!.historyError).toBe(false);
+    expect(page!.digests[0].jobs.map((j) => [j.ref, j.state])).toEqual([["co:job_x", "unavailable"], ["nr:1", "ok"]]);
   });
 });
 

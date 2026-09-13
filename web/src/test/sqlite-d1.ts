@@ -30,8 +30,10 @@ export const APPLIED_AFTER_CRM = [
   "0012_access_views.sql",
   // 2026-09-12, доріжка web (W6, налаштування): users.digest_paused. Накочено після 0012.
   "0011_user_settings.sql",
-  // Доріжка web (W3b): sessions.method. Ще НЕ накочено: controller накочує до деплою W3b.
+  // Доріжка web (W3b): sessions.method. Накочено (за словами controller).
   "0013_session_method.sql",
+  // Доріжка engine (E7): sent і digest_runs. Накочено (за словами controller).
+  "0006_digest.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

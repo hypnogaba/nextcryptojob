@@ -1,10 +1,12 @@
 import { cleanText, safeUrl, shortDate } from "@/lib/digest/format";
+import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
 
 /**
  * Лист щоденної добірки (W7). Вакансії приходять з чужих дощок через engine,
- * тож кожне поле в HTML екрануємо, а посиланням стає лише адреса http(s).
- * Текст англійською, без довгого тире.
+ * тож кожне поле в HTML екрануємо, а посиланням стає лише адреса http(s) або mailto.
+ * Текст англійською, без довгого тире. Відписка одним натисканням: заголовки
+ * List-Unsubscribe (RFC 8058) і видиме посилання «Pause daily jobs» унизу.
  */
 
 export type DigestEmailJob = {
@@ -49,12 +51,22 @@ const MUTED = "#58646a";
 const BRAND = "#0b6e63";
 const LINE = "#d5dcda";
 
-export function digestEmail(input: { localDate: string; jobs: DigestEmailJob[]; origin: string }): Omit<MailMessage, "to"> {
+export type DigestEmailInput = {
+  localDate: string;
+  jobs: DigestEmailJob[];
+  /** Походження сайту з оточення (lib/site.ts), не з запиту. */
+  site: string;
+  /** Підписана адреса відписки (lib/digest/unsubscribe.ts). */
+  unsubscribeUrl: string;
+};
+
+export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const jobs = [...input.jobs].sort((a, b) => a.position - b.position).map(tidy);
   const n = jobs.length;
   const heading = `Your ${n} crypto job${n === 1 ? "" : "s"} for ${shortDate(input.localDate)}`;
-  const jobsUrl = new URL("/jobs", input.origin).toString();
-  const settingsUrl = new URL("/settings", input.origin).toString();
+  const jobsUrl = new URL("/jobs", input.site).toString();
+  const settingsUrl = new URL("/settings", input.site).toString();
+  const pauseUrl = input.unsubscribeUrl;
 
   const textBlocks = jobs.map((j, i) =>
     [
@@ -73,7 +85,8 @@ export function digestEmail(input: { localDate: string; jobs: DigestEmailJob[]; 
       ...textBlocks,
       [
         `All jobs we sent you: ${jobsUrl}`,
-        `Change the channel or pause daily jobs: ${settingsUrl}`,
+        `Change the channel or the hour: ${settingsUrl}`,
+        `Pause daily jobs: ${pauseUrl}`,
         DIGEST_FOOTER_REASON,
       ].join("\n"),
     ].join("\n\n") + "\n";
@@ -101,9 +114,14 @@ export function digestEmail(input: { localDate: string; jobs: DigestEmailJob[]; 
     htmlJobs +
     `<p style="margin:16px 0 0;color:${MUTED};font-size:13px">` +
     `<a href="${escapeHtml(jobsUrl)}" style="color:${BRAND}">All jobs we sent you</a>. ` +
-    `<a href="${escapeHtml(settingsUrl)}" style="color:${BRAND}">Change the channel or pause daily jobs</a>.</p>` +
+    `<a href="${escapeHtml(settingsUrl)}" style="color:${BRAND}">Change the channel or the hour</a>. ` +
+    `<a href="${escapeHtml(pauseUrl)}" style="color:${BRAND}">Pause daily jobs</a>.</p>` +
     `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">${DIGEST_FOOTER_REASON}</p>` +
     `</div>`;
 
-  return { subject: heading, text, html };
+  // Email Service приймає List-Unsubscribe лише з https (не http), і One-Click лише разом з ним.
+  const headers = pauseUrl.startsWith("https://")
+    ? { "List-Unsubscribe": `<${pauseUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
+    : undefined;
+  return { subject: heading, text, html, from: DIGEST_FROM, ...(headers ? { headers } : {}) };
 }

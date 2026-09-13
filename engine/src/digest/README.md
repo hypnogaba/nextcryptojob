@@ -79,7 +79,7 @@
       "location": "Remote",
       "salary": "$120k to $150k",
       "why": "Matches your Engineer role. Remote. Salary listed: $120k to $150k.",
-      "url": "https://nextcryptojob.xyz/jobs/job_…",
+      "url": "https://paying.example/apply",
       "posted_by": "Paying Labs",
       "source": "company"
     }
@@ -88,7 +88,9 @@
 ```
 
 `location`, `salary`, `posted_by` можуть бути `null`. `posted_by` не `null` лише для вакансій компаній
-(показати "Posted by {Company} on NextCryptoJob"). Адреси пошти в тілі немає: сайт бере `users.email`
+(показати "Posted by {Company} on NextCryptoJob"). `url` вакансії компанії поки її `apply_url` (https або
+mailto; у Telegram mailto йде рядком "Apply: …", не посиланням), бо сторінки `/jobs/<id>` ще немає (T12).
+`ts` ставиться під час кожної спроби відправки, а не на початку прогону. Адреси пошти в тілі немає: сайт бере `users.email`
 за `user_id` (інваріант §10: пошта лише перевірена) і сам вирішує про згоду й посилання «Unsubscribe».
 
 Що сайт мусить робити:
@@ -100,6 +102,8 @@
 
 Відповіді, які розуміє engine: 2xx і 409 = доставлено; 503 = `email not configured`; інші 4xx =
 `failed` без повтору (`email endpoint HTTP <код>`); 5xx і мережа = один повтор через 2 с, потім `failed`.
+409 сайт дає лише тоді, коли лист цього `digest_id` справді пішов; поки інший запит ще шле, відповідь 425
+(engine пише `failed`, другого листа немає). Повні коди сайту: `web/src/lib/digest/email.ts`.
 
 ## Змінні оточення
 

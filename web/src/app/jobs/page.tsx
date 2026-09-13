@@ -34,10 +34,10 @@ function JobItem({ job }: { job: SentJob }) {
       <h3 className={`font-sans text-base font-semibold ${WRAP}`}>
         {d.url === null ? (
           <span className={WRAP}>{d.title}</span>
-        ) : d.url.startsWith("/") ? (
-          <Link href={d.url} className={titleClass}>
+        ) : d.url.startsWith("mailto:") ? (
+          <a href={d.url} className={titleClass}>
             {d.title}
-          </Link>
+          </a>
         ) : (
           <a href={d.url} target="_blank" rel="noopener noreferrer nofollow" className={titleClass}>
             {d.title}
@@ -80,8 +80,8 @@ export default async function JobsPage() {
   const user = await requireUser();
   const page = await loadJobsPage(db(), jobsDb(), user.id);
   if (!page) redirect("/login");
-  const { setup, digests } = page;
-  const empty = digests.length === 0 ? emptyState(setup) : null;
+  const { setup, digests, historyError } = page;
+  const empty = digests.length === 0 && !historyError ? emptyState(setup) : null;
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-14">
@@ -95,7 +95,12 @@ export default async function JobsPage() {
         </Link>
       </div>
 
-      {empty ? (
+      {historyError ? (
+        <div role="alert" className="grid gap-1 rounded-xl border border-line bg-surface p-4 sm:p-5">
+          <p className="font-medium text-ink">We could not load your jobs right now.</p>
+          <p className={HINT}>Nothing is lost. Try again in a minute.</p>
+        </div>
+      ) : empty ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
           <div className="grid gap-1">
             <p className="font-medium text-ink">{empty.title}</p>

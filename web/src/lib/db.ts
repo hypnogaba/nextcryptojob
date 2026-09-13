@@ -18,6 +18,8 @@ export type AppEnv = Omit<CloudflareEnv, "SESSION_SECRET" | "EMAIL" | "TWITTER_T
   EMAIL?: SendEmail;
   /** Спільний з engine ключ підпису внутрішніх запитів (engine/src/digest/README.md). Worker secret. */
   INTERNAL_API_SECRET?: string;
+  /** Адреса сайту для посилань у листах (lib/site.ts); без неї https://nextcryptojob.xyz. */
+  SITE_URL?: string;
 };
 
 /** Оточення Worker. Викликати лише під час запиту. */

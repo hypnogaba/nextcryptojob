@@ -123,11 +123,16 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
   const head = `<b>Your crypto jobs for ${escapeHtml(shortDate(m.localDate))}</b>`;
   const blocks = m.jobs.map((j) => {
     const meta = [cleanText(j.company, 60), j.location ? cleanText(j.location, 60) : null, j.salary].filter(Boolean).join(" · ");
+    // Посиланням у Telegram лише http(s). Вакансія компанії може подаватись поштою (apply_url mailto:):
+    // тоді адреса окремим рядком, а не href, який Bot API відкинув би разом з усім повідомленням.
+    const title = `<b>${escapeHtml(cleanText(j.title))}</b>`;
+    const linked = /^https?:\/\//i.test(j.url);
     const lines = [
-      `${j.position}. <a href="${escapeHtml(j.url)}"><b>${escapeHtml(cleanText(j.title))}</b></a>`,
+      linked ? `${j.position}. <a href="${escapeHtml(j.url)}">${title}</a>` : `${j.position}. ${title}`,
       escapeHtml(meta),
       `<i>${escapeHtml(j.why)}</i>`,
     ];
+    if (!linked && /^mailto:/i.test(j.url)) lines.push(`Apply: ${escapeHtml(j.url.replace(/^mailto:/i, "").split("?")[0]!)}`);
     if (j.postedBy) lines.push(`Posted by ${escapeHtml(cleanText(j.postedBy, 60))} on NextCryptoJob`);
     return lines.join("\n");
   });
@@ -238,11 +243,13 @@ export async function sendEmail(m: DigestMessage, deps: DeliverDeps): Promise<Em
   if (!site || !secret) return { ok: false, error: EMAIL_NOT_CONFIGURED };
   const fetchImpl = deps.fetchImpl ?? fetch;
   const sleep = deps.sleep ?? defaultSleep;
-  const body = JSON.stringify(emailPayload(m, (deps.now ?? (() => new Date()))()));
+  const clock = deps.now ?? (() => new Date());
   const url = `${site}${EMAIL_PATH}`;
   const host = new URL(url).host;
   let last = "email endpoint unreachable";
   for (let attempt = 1; attempt <= 2; attempt++) {
+    // ts і підпис на кожну спробу окремо: сайт відкидає ts, старший за 5 хвилин.
+    const body = JSON.stringify(emailPayload(m, clock()));
     try {
       const status = await limiterFor(host).run(async () => {
         const res = await fetchImpl(url, {

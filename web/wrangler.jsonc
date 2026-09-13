@@ -50,12 +50,12 @@
   // записи MX і SPF на cf-bounce, DKIM cf-bounce._domainkey, DMARC на _dmarc.
   // Без цього блоку у продакшені вхід поштою каже «Email sign-in opens soon.»,
   // а в `next dev` код пишеться в журнал (src/lib/mail/log.ts).
-  // Адреса та сама, що MAIL_FROM у src/lib/mail/cloudflare.ts.
+  // Адреси ті самі, що MAIL_FROM (коди входу) і DIGEST_FROM (добірка) у src/lib/mail/cloudflare.ts.
   // Документація: https://developers.cloudflare.com/email-service/configuration/send-bindings/
   "send_email": [
     {
       "name": "EMAIL",
-      "allowed_sender_addresses": ["login@nextcryptojob.xyz"]
+      "allowed_sender_addresses": ["login@nextcryptojob.xyz", "jobs@nextcryptojob.xyz"]
     }
   ],
   "observability": {

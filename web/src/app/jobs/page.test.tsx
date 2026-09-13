@@ -63,6 +63,16 @@ describe("/jobs", () => {
     expect(html).not.toContain("Other Labs");
   });
 
+  it("says the jobs could not be loaded when our DB fails, instead of an error page", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await signIn("ada");
+    const d1 = harness.env.DB;
+    harness.env.DB = { prepare: d1.prepare.bind(d1), batch: async () => Promise.reject(new Error("D1_ERROR: overloaded")) } as unknown as D1Database;
+    const html = await render();
+    expect(html).toContain("We could not load your jobs right now.");
+    expect(html).not.toContain("Your first jobs are coming.");
+  });
+
   it("explains an empty page and links to settings", async () => {
     await signIn("bob");
     const html = await render();

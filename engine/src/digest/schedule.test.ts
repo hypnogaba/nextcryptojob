@@ -209,7 +209,22 @@ describe("runDigestDue", () => {
     expect(rows[0]!.job_ref).toMatch(/^co:job_[12]$/);
     const shown = db.all<{ id: string; digest_shown: number }>("SELECT id, digest_shown FROM company_jobs ORDER BY id");
     expect(shown.reduce((a, r) => a + r.digest_shown, 0)).toBe(1);
-    expect(JSON.parse(tgCalls[0]!).text).toContain("Posted by Paying Labs on NextCryptoJob");
+    const text = JSON.parse(tgCalls[0]!).text as string;
+    expect(text).toContain("Posted by Paying Labs on NextCryptoJob");
+    // Сторінки /jobs/<id> ще немає (T12): посилання веде на apply_url компанії.
+    expect(text).toContain('href="https://paying.example/apply"');
+    expect(text).not.toContain("/jobs/job_");
+  });
+
+  it("ts листа ставиться під час відправки, а не на початку прогону", async () => {
+    addUser("u1", { channel: "email", telegram: null });
+    addJobs(5);
+    // Перший виклик годинника = початок прогону; далі минуло 10 хвилин (паузи Telegram у інших людей).
+    const later = new Date(NOW.getTime() + 10 * 60_000);
+    let calls = 0;
+    const s = await runDigestDue(deps({ now: () => (calls++ === 0 ? NOW : later) }));
+    expect(s.sent).toBe(1);
+    expect(JSON.parse(emailCalls[0]!).ts).toBe(later.getTime() / 1000);
   });
 
   it("вакансія компанії без ролі людини не йде", async () => {

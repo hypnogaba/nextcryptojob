@@ -35,7 +35,7 @@ type NrRow = {
 };
 
 type CompanyRow = {
-  id: string; company_id: string; company_name: string; title: string; roles: string; remote_mode: string;
+  id: string; company_id: string; company_name: string; title: string; roles: string; remote_mode: string; apply_url: string | null;
   city: string | null; country: string | null; salary_min: number | null; salary_max: number | null;
   salary_currency: string | null; salary_period: string | null; published_at: string | null;
 };
@@ -106,32 +106,37 @@ export async function loadNextrolePool(jobs: JobsDb, now: Date): Promise<{ jobs:
   };
 }
 
-/** Посилання на вакансію компанії: публічна сторінка на сайті (специфікація CRM 5.6). */
+/**
+ * Посилання на вакансію компанії: публічна сторінка на сайті (специфікація CRM 5.6).
+ * Сторінки /jobs/<id> ще немає (T12), тож поки добірка веде на apply_url компанії (companyJob).
+ */
 export function companyJobUrl(siteUrl: string, id: string): string {
   return `${siteUrl.replace(/\/+$/, "")}/jobs/${encodeURIComponent(id)}`;
 }
 
-export function companyJob(r: CompanyRow, siteUrl: string): DigestJob | null {
+export function companyJob(r: CompanyRow): DigestJob | null {
   const roles = parseRoles(r.roles);
-  if (roles.length === 0) return null;
+  // Відкрита вакансія без apply_url неможлива (CHECK у 0003); без адреси нема куди вести людину.
+  if (roles.length === 0 || !r.apply_url) return null;
   const modes = r.remote_mode.split(",").map((m) => m.trim());
   const remote = modes.includes("remote");
   const city = modes.includes("city") ? r.city?.trim() || null : null;
   const location = [remote ? "Remote" : null, city].filter(Boolean).join(" or ") || null;
   return {
     ref: `co:${r.id}`, source: "company", id: r.id, title: r.title.trim(), company: r.company_name.trim(),
-    companyKey: companyKey(r.company_name), url: companyJobUrl(siteUrl, r.id), location, placeText: city, remote,
+    // TODO(T12): companyJobUrl(siteUrl, r.id), коли буде сторінка /jobs/<id> (docs/plans/next-web-tasks.md).
+    companyKey: companyKey(r.company_name), url: r.apply_url, location, placeText: city, remote,
     country: r.country, salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, r.salary_period),
     postedAt: parseDbTime(r.published_at), seenAt: null, dedupeKey: null, roles,
   };
 }
 
 /** Живі вакансії компаній (company_jobs_live, 0004/0012). Без подання (база без 0003/0004) → порожньо. */
-export async function loadCompanyPool(db: Db, siteUrl: string, log: (l: string) => void): Promise<DigestJob[]> {
+export async function loadCompanyPool(db: Db, log: (l: string) => void): Promise<DigestJob[]> {
   let rows: CompanyRow[];
   try {
     rows = await db.query<CompanyRow>(
-      `SELECT id, company_id, company_name, title, roles, remote_mode, city, country, salary_min, salary_max,
+      `SELECT id, company_id, company_name, title, roles, remote_mode, apply_url, city, country, salary_min, salary_max,
               salary_currency, salary_period, published_at
          FROM company_jobs_live`);
   } catch (e) {
@@ -141,5 +146,5 @@ export async function loadCompanyPool(db: Db, siteUrl: string, log: (l: string) 
     }
     throw e;
   }
-  return rows.map((r) => companyJob(r, siteUrl)).filter((j): j is DigestJob => j !== null);
+  return rows.map(companyJob).filter((j): j is DigestJob => j !== null);
 }

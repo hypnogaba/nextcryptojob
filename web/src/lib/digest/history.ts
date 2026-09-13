@@ -10,6 +10,8 @@ import { cleanText, companyJobLocation, formatSalary, safeUrl } from "./format";
  * одному запиту на джерело з IN (...) лише за вікно HISTORY_DAYS і не більше
  * HISTORY_LIMIT посилань (менше за межу D1 у 100 параметрів на запит).
  * Кожен запит до `sent` і `digest_runs` обмежено user_id людини з сесії.
+ * Збій нашої бази на історії чи вакансіях компаній не валить сторінку: вона
+ * каже, що зараз не вийшло (historyError або state 'unavailable').
  */
 
 export const HISTORY_DAYS = 14;
@@ -21,7 +23,7 @@ export type JobDetails = {
   company: string;
   location: string | null;
   salary: string | null;
-  /** http(s) або шлях на сайті; null, якщо адреса з джерела непридатна. */
+  /** http(s) або mailto; null, якщо адреса з джерела непридатна. */
   url: string | null;
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
@@ -31,7 +33,7 @@ export type SentJob = {
   ref: string;
   source: "nextrole" | "company";
   why: string | null;
-  /** gone: вакансії вже немає в джерелі; unavailable: базу вакансій зараз не прочитали. */
+  /** gone: вакансії вже немає в джерелі; unavailable: джерело зараз не прочитали. */
   state: "ok" | "gone" | "unavailable";
   details: JobDetails | null;
 };
@@ -57,7 +59,12 @@ export type DigestSetup = {
   lastRun: RunStatus | null;
 };
 
-export type JobsPage = { setup: DigestSetup; digests: SentDigest[] };
+export type JobsPage = {
+  setup: DigestSetup;
+  digests: SentDigest[];
+  /** Історію з нашої бази зараз не прочитали: сторінка просить спробувати пізніше. */
+  historyError: boolean;
+};
 
 type UserRow = {
   email: string | null;
@@ -94,6 +101,7 @@ type NrRow = {
 type CoRow = {
   id: string;
   title: string;
+  apply_url: string | null;
   remote_mode: string;
   city: string | null;
   salary_min: number | null;
@@ -103,7 +111,7 @@ type CoRow = {
   company_name: string;
 };
 
-const isMissingTable = (e: unknown) => e instanceof Error && /no such table/i.test(e.message);
+const errorName = (e: unknown) => (e instanceof Error ? e.name : "unknown");
 
 function hasRoles(json: string): boolean {
   try {
@@ -120,11 +128,8 @@ function channelOf(u: UserRow): Channel | null {
   return u.telegram_id ? "telegram" : null;
 }
 
-/**
- * Надіслані вакансії й останній прогін людини. Поки 0006 не накочено, таблиць
- * добірки немає: тоді історії просто ще нема, сторінка не падає.
- */
-async function digestRows(d: D1Database, userId: string): Promise<{ sent: SentRow[]; lastRun: RunStatus | null }> {
+/** Надіслані вакансії й останній прогін людини; null, якщо база зараз не відповіла. */
+async function digestRows(d: D1Database, userId: string): Promise<{ sent: SentRow[]; lastRun: RunStatus | null } | null> {
   try {
     const [sent, last] = await d.batch([
       d
@@ -141,8 +146,8 @@ async function digestRows(d: D1Database, userId: string): Promise<{ sent: SentRo
     const lastRow = (last.results as { status: RunStatus }[])[0];
     return { sent: sent.results as SentRow[], lastRun: lastRow?.status ?? null };
   } catch (e) {
-    if (isMissingTable(e)) return { sent: [], lastRun: null };
-    throw e;
+    console.warn(`jobs page: history read failed (${errorName(e)})`);
+    return null;
   }
 }
 
@@ -159,7 +164,7 @@ async function nextroleDetails(jobs: JobsDb, ids: string[]): Promise<Map<string,
     );
   } catch (e) {
     // База NextRole чужа й буває зайнята (429): сторінка лишається, без подробиць.
-    console.warn(`jobs page: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
+    console.warn(`jobs page: JOBS_DB read failed (${errorName(e)})`);
     return null;
   }
   return new Map(
@@ -177,18 +182,24 @@ async function nextroleDetails(jobs: JobsDb, ids: string[]): Promise<Map<string,
   );
 }
 
-async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string, JobDetails>> {
+async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string, JobDetails> | null> {
   if (ids.length === 0) return new Map();
-  // Закриту вакансію показуємо (її сторінка скаже, що набір завершено), приховану адміном ні.
-  const { results } = await d
-    .prepare(
-      `SELECT j.id, j.title, j.remote_mode, j.city, j.salary_min, j.salary_max, j.salary_currency, j.salary_period,
-              c.name AS company_name
-         FROM company_jobs j JOIN companies c ON c.id = j.company_id
-        WHERE j.id IN (${placeholders(ids.length)}) AND j.hidden_by_admin_at IS NULL`,
-    )
-    .bind(...ids)
-    .all<CoRow>();
+  // Закриту вакансію показуємо, приховану адміном ні.
+  let results: CoRow[];
+  try {
+    ({ results } = await d
+      .prepare(
+        `SELECT j.id, j.title, j.apply_url, j.remote_mode, j.city, j.salary_min, j.salary_max, j.salary_currency,
+                j.salary_period, c.name AS company_name
+           FROM company_jobs j JOIN companies c ON c.id = j.company_id
+          WHERE j.id IN (${placeholders(ids.length)}) AND j.hidden_by_admin_at IS NULL`,
+      )
+      .bind(...ids)
+      .all<CoRow>());
+  } catch (e) {
+    console.warn(`jobs page: company jobs read failed (${errorName(e)})`);
+    return null;
+  }
   return new Map(
     results.map((r) => {
       const company = cleanText(r.company_name, 100);
@@ -204,7 +215,8 @@ async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string,
             currency: r.salary_currency,
             period: r.salary_period === "month" ? "month" : "year",
           }),
-          url: `/jobs/${encodeURIComponent(r.id)}`,
+          // TODO(T12): /jobs/<id>, коли буде публічна сторінка вакансії (docs/plans/next-web-tasks.md).
+          url: safeUrl(r.apply_url),
           postedBy: company,
         },
       ];
@@ -225,6 +237,7 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     digestRows(d, userId),
   ]);
   if (!user) return null;
+  const sent = history?.sent ?? [];
 
   const setup: DigestSetup = {
     paused: user.digest_paused === 1,
@@ -232,24 +245,24 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     hasRoles: hasRoles(user.roles),
     hour: user.digest_hour,
     timezone: user.timezone || "UTC",
-    lastRun: history.lastRun,
+    lastRun: history?.lastRun ?? null,
   };
 
   const refs = (prefix: string) =>
-    [...new Set(history.sent.filter((s) => s.job_ref.startsWith(prefix)).map((s) => s.job_ref.slice(prefix.length)))];
+    [...new Set(sent.filter((s) => s.job_ref.startsWith(prefix)).map((s) => s.job_ref.slice(prefix.length)))];
   const [nr, co] = await Promise.all([nextroleDetails(jobs, refs("nr:")), companyDetails(d, refs("co:"))]);
 
   const digests: SentDigest[] = [];
-  for (const s of history.sent) {
+  for (const s of sent) {
     let digest = digests.at(-1);
     if (!digest || digest.digestId !== s.digest_id) {
       digest = { digestId: s.digest_id, localDate: s.local_date, channel: s.channel, jobs: [] };
       digests.push(digest);
     }
-    const isNr = s.job_ref.startsWith("nr:");
-    const details = (isNr ? nr?.get(s.job_ref) : co.get(s.job_ref)) ?? null;
-    const state = details ? "ok" : isNr && nr === null ? "unavailable" : "gone";
+    const source = s.job_ref.startsWith("nr:") ? nr : co;
+    const details = source?.get(s.job_ref) ?? null;
+    const state = details ? "ok" : source === null ? "unavailable" : "gone";
     digest.jobs.push({ ref: s.job_ref, source: s.source, why: s.why ? cleanText(s.why, 300) : null, state, details });
   }
-  return { setup, digests };
+  return { setup, digests, historyError: history === null };
 }

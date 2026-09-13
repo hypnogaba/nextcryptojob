@@ -10,12 +10,15 @@ export function cleanText(text: string, max = 140): string {
   return t.length > max ? `${t.slice(0, max - 3).trimEnd()}...` : t;
 }
 
-/** Адреса вакансії, лише http(s). Інше (javascript:, data:) з чужих дощок посиланням не стає. */
+/**
+ * Адреса вакансії: http(s) або mailto (так подають вакансії компаній, 0003 apply_url).
+ * Інше (javascript:, data:) з чужих дощок посиланням не стає.
+ */
 export function safeUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
   try {
     const u = new URL(raw);
-    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+    return ["https:", "http:", "mailto:"].includes(u.protocol) ? u.toString() : null;
   } catch {
     return null;
   }

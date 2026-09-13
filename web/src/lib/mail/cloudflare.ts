@@ -6,6 +6,9 @@ import type { Mailer } from "./index";
  */
 export const MAIL_FROM = { email: "login@nextcryptojob.xyz", name: "NextCryptoJob" };
 
+/** Відправник щоденної добірки: окрема адреса, щоб лист з вакансіями не виглядав як код входу. */
+export const DIGEST_FROM = { email: "jobs@nextcryptojob.xyz", name: "NextCryptoJob" };
+
 /**
  * Cloudflare Email Service через Worker binding (send_email у wrangler.jsonc).
  * API: https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
@@ -14,8 +17,8 @@ export const MAIL_FROM = { email: "login@nextcryptojob.xyz", name: "NextCryptoJo
  */
 export function cloudflareMailer(binding: SendEmail): Mailer {
   return {
-    async send({ to, subject, text, html }) {
-      await binding.send({ from: MAIL_FROM, to, subject, text, html });
+    async send({ to, subject, text, html, from, headers }) {
+      await binding.send({ from: from ?? MAIL_FROM, to, subject, text, html, ...(headers ? { headers } : {}) });
     },
   };
 }
