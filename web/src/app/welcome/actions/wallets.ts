@@ -39,3 +39,10 @@ export async function saveWalletsAction(_prev: StepState, form: FormData): Promi
   if (res.added + res.removed > 0) await recordChange(ctx, "wallets");
   return goNext(ctx, "wallets");
 }
+
+/** «Skip for now»: гаманці не обов'язкові, добірка без них працює. Адрес не чіпає. */
+export async function skipWalletsAction(): Promise<void> {
+  const ctx = await stepContext("wallets");
+  await saveStep(ctx.d, ctx.user.id, "wallets", {}, ctx.answers.step);
+  await goNext(ctx, "wallets");
+}

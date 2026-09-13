@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     template: "%s | NextCryptoJob",
   },
   description:
-    "Your onchain and social track record, turned into your next crypto job.",
+    "Crypto jobs that fit you. Answer a short brief and get a few matching jobs every day by Telegram or email, free.",
 };
 
 export const viewport: Viewport = {

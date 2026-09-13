@@ -2,11 +2,12 @@ import { SubmitButton } from "@/components/form/submit-button";
 import type { Identity } from "@/lib/identity/store";
 import { continueXAction, resetXAction } from "../actions/x";
 import { ClaimXForm } from "./claim-x-form";
+import { SkipForNow } from "./skip-for-now";
 import { VerifiedBadge } from "./verified-badge";
 import { VerifyPanel } from "./verify-panel";
 
 const WHY_X =
-  "X is the main source for most roles: BD, community, product, marketing and creator scores need it. You can add it later.";
+  "Optional. Your daily jobs keep coming without it. X helps companies find you: BD, community, product, marketing and creator scores need it.";
 
 /** Крок X у трьох станах: немає ніка → є нік і код → підтверджено. */
 export function XStep({ identity, editing }: { identity: Identity | null; editing: boolean }) {
@@ -16,12 +17,7 @@ export function XStep({ identity, editing }: { identity: Identity | null; editin
     return (
       <div className="grid gap-8">
         <ClaimXForm />
-        <form action={continueXAction} className="grid gap-2 border-t border-line pt-6">
-          <p className="text-sm text-ink-muted">{WHY_X}</p>
-          <SubmitButton variant="outline" pendingLabel="Skipping..." className="h-11 text-base">
-            Skip for now
-          </SubmitButton>
-        </form>
+        {editing ? null : <SkipForNow action={continueXAction} note={WHY_X} />}
       </div>
     );
   }
@@ -59,12 +55,7 @@ export function XStep({ identity, editing }: { identity: Identity | null; editin
       </VerifyPanel>
       <div className="grid gap-2">
         {change}
-        <form action={continueXAction} className="grid gap-2 border-t border-line pt-6">
-          <p className="text-sm text-ink-muted">{WHY_X} Until you check the code, we do not use this account.</p>
-          <SubmitButton variant="outline" pendingLabel="Skipping..." className="h-11 text-base">
-            Skip for now
-          </SubmitButton>
-        </form>
+        {editing ? null : <SkipForNow action={continueXAction} note={`${WHY_X} Until you check the code, we do not use this account.`} />}
       </div>
     </div>
   );

@@ -3,11 +3,13 @@
 import { redirect } from "next/navigation";
 import { audit } from "@/lib/audit";
 import { grantConsent, SCORING_CONSENT } from "@/lib/consent";
-import { finishOnboarding } from "@/lib/onboarding/store";
+import { saveStep } from "@/lib/onboarding/store";
 import { enqueueScoreJob } from "@/lib/score/queue";
 import { field, stepContext, type StepState } from "../flow";
 
-// Останній крок: згода на бал, завершення анкети й перше завдання в чергу.
+// Останній крок анкети: згода на бал, перше завдання в чергу й одразу вакансії на /jobs.
+// Добірка engine бере лише людей з рядком у scores, а він з'являється після першого
+// перерахунку, тож згода стоїть тут, до необов'язкових кроків «Stand out».
 
 export async function finishAction(_prev: StepState, form: FormData): Promise<StepState> {
   const ctx = await stepContext("consent");
@@ -18,8 +20,9 @@ export async function finishAction(_prev: StepState, form: FormData): Promise<St
   if (await grantConsent(ctx.d, ctx.user.id, SCORING_CONSENT.kind, SCORING_CONSENT.version)) {
     await audit(ctx.user.id, "consent.grant", ctx.user.id, { kind: SCORING_CONSENT.kind, version: SCORING_CONSENT.version });
   }
-  await finishOnboarding(ctx.d, ctx.user.id);
+  // Досягнутий крок: перший крок «Stand out» (або лишається «done» при редагуванні).
+  await saveStep(ctx.d, ctx.user.id, "consent", {}, ctx.answers.step);
   // Правило 60 с і «не дублювати» стежить сама черга; тут результат не важливий.
   await enqueueScoreJob(ctx.d, ctx.user.id, "connect");
-  redirect("/profile");
+  redirect("/jobs");
 }

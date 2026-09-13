@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MiniCard } from "@/components/card/mini-card";
 import { Button } from "@/components/ui/button";
+import { fnv1a } from "@/lib/card/pattern";
 
 export const metadata: Metadata = {
   title: "For companies",
@@ -25,6 +27,14 @@ const POINTS = [
     title: "A pipeline for your team and your agents",
     body: "Track candidates from Found to Hired with notes and tags. The same actions work through the REST API and MCP.",
   },
+] as const;
+
+// Дошка з прикладом: мітки кандидатів анонімні, як у CRM («#» + 6 знаків id).
+const BOARD = [
+  { label: "#7A3F1C", level: 8, score: 73, pos: "ENG", note: "GitHub 74.2, merged PRs in other people's repos", stage: "Contact shared", yes: true },
+  { label: "#B21E90", level: 9, score: 81, pos: "TRD", note: "Trading 86.0 across 3 chains", stage: "Intro requested", yes: false },
+  { label: "#40C7D2", level: 7, score: 68, pos: "SEC", note: "Audit contests 71.5, 4 high findings", stage: "Found", yes: false },
+  { label: "#E5098B", level: 8, score: 77, pos: "DRL", note: "GitHub 84.1 and a YouTube channel", stage: "Interview", yes: false },
 ] as const;
 
 const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
@@ -61,6 +71,53 @@ export default function CompanyLandingPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section id="scouts" aria-labelledby="scouts-h" className={`${WRAP} scroll-mt-6 pb-16 sm:pb-20`}>
+        <div className="mb-8 grid max-w-[62ch] gap-3">
+          <h2 id="scouts-h" className="display text-section">
+            Scouting board
+          </h2>
+          <p className="text-lg text-ink-muted">
+            Filter by position and level, keep a board, and request an intro. Contact details open only after the
+            candidate says yes.
+          </p>
+        </div>
+        {/* relative: sr-only підписи в клітинках інакше тікають з рамки й розширюють сторінку на телефоні. */}
+        <div className="relative overflow-x-auto rounded-[10px] border-2 border-ink bg-surface">
+          <table className="w-full min-w-[720px] border-collapse text-left">
+            <caption className="px-5 pt-4 text-left text-sm text-ink-muted">Board: Solana infra team. Example data.</caption>
+            <thead>
+              <tr className="font-display text-[0.9375rem] font-extrabold tracking-[0.02em]">
+                <th scope="col" className="border-b-2 border-ink px-5 py-3">Card</th>
+                <th scope="col" className="border-b-2 border-ink px-5 py-3">Candidate</th>
+                <th scope="col" className="border-b-2 border-ink px-5 py-3">Pos</th>
+                <th scope="col" className="border-b-2 border-ink px-5 py-3">Scout note</th>
+                <th scope="col" className="border-b-2 border-ink px-5 py-3">Stage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BOARD.map((row) => (
+                <tr key={row.label} className="border-b border-line last:border-b-0 hover:bg-brand-soft">
+                  <td className="px-5 py-3">
+                    <MiniCard level={row.level} seed={fnv1a(row.label)} value={row.score} className="w-11" />
+                    <span className="sr-only">
+                      Score {row.score}, level {row.level}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 font-mono text-sm">{row.label}</td>
+                  <td className="px-5 py-3 font-display text-[1.375rem] font-black">{row.pos}</td>
+                  <td className="px-5 py-3 text-[0.9375rem] text-ink-muted">{row.note}</td>
+                  <td className={`px-5 py-3 font-semibold ${row.yes ? "text-brand" : ""}`}>{row.stage}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-6 max-w-[60ch] text-ink-muted">
+          Candidates stay hidden until they turn visibility on. You see scores and reasons, never names or wallets.
+          Company plan: $100 a month. Candidates never pay.
+        </p>
       </section>
 
       <section aria-labelledby="pricing" className="bg-sleeve py-16 sm:py-20">

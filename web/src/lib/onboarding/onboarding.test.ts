@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
 import { parsePlace, parseSalary, whereFromMode } from "./place";
 import { finishOnboarding, loadAnswers, placeFields, rolesFields, saveStep, targetFields } from "./store";
-import { advance, canVisit, parseSavedStep, stepToShow } from "./steps";
+import { advance, briefDone, canVisit, nextStep, parseSavedStep, prevStep, stepPosition, stepToShow } from "./steps";
 
 describe("steps", () => {
   it("resumes from the saved step and starts at the beginning without one", () => {
@@ -26,8 +26,32 @@ describe("steps", () => {
   it("only moves the saved step forward", () => {
     expect(advance("target", "target")).toBe("roles");
     expect(advance("wallets", "roles")).toBe("wallets");
-    expect(advance("consent", "consent")).toBe("done");
+    // Після згоди (кінець анкети) досягнуто перший крок «Stand out», після джерел усе.
+    expect(advance("consent", "consent")).toBe("x");
+    expect(advance("sources", "sources")).toBe("done");
     expect(advance("done", "x")).toBe("done");
+  });
+});
+
+describe("brief first, stand out after", () => {
+  it("asks what, roles, where, how to send and consent, then the optional X, wallets and sources", () => {
+    const order: string[] = [];
+    for (let s = parseSavedStep(null); s !== "done"; s = nextStep(s)) order.push(s);
+    expect(order).toEqual(["target", "roles", "place", "delivery", "consent", "x", "wallets", "sources"]);
+  });
+
+  it("counts steps in their own part and does not go back from stand out into the brief", () => {
+    expect(stepPosition("delivery")).toEqual({ part: "brief", n: 4, of: 5 });
+    expect(stepPosition("wallets")).toEqual({ part: "standout", n: 2, of: 3 });
+    expect(prevStep("x")).toBeNull();
+    expect(prevStep("sources")).toBe("wallets");
+    expect(prevStep("roles")).toBe("target");
+  });
+
+  it("the brief is done once consent moves a person to the stand out steps", () => {
+    expect(briefDone("consent")).toBe(false);
+    expect(briefDone("x")).toBe(true);
+    expect(briefDone("done")).toBe(true);
   });
 });
 
@@ -116,9 +140,16 @@ describe("answers store", () => {
       city: null,
       salaryMin: 100000,
       salaryCurrency: "USD",
-      step: "x",
+      step: "delivery",
     });
     await finishOnboarding(t.d1, "a");
     expect((await loadAnswers(t.d1, "a")).step).toBe("done");
+  });
+
+  it("a stand out step without consent (saved under the old order) resumes at the brief", async () => {
+    t.raw.exec("UPDATE users SET onboarding_step = 'wallets' WHERE id = 'a'");
+    expect((await loadAnswers(t.d1, "a")).step).toBe("delivery");
+    t.raw.exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('a', 'scoring', 1, 'v1')");
+    expect((await loadAnswers(t.d1, "a")).step).toBe("wallets");
   });
 });

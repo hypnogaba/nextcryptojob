@@ -1,6 +1,7 @@
 import type { z } from "zod";
-import { cleanText } from "@/lib/digest/format";
+import { cleanText, companyJobLocation } from "@/lib/digest/format";
 import { jobsDb, type JobsDb } from "@/lib/jobs-db";
+import { companyKey } from "@/lib/jobs/nextrole-clean";
 import { nextrolePool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/nextrole-pool";
 import { foldText, mentionsCity } from "@/lib/jobs/nextrole-place";
 import { isoTime, sqlTime } from "@/lib/time";
@@ -95,15 +96,30 @@ function companyPoolJob(r: LiveRow, env: { SITE_URL?: string }): PoolJob {
     postedAt: isoTime(r.published_at),
     postedMs,
     haystack: foldText([r.title, r.company_name, ...tagsOf(r.tags)].join(" ")),
+    // Як companyJob в engine/src/digest/jobs.ts: ключ компанії з назви, місце «Remote or Lisbon».
+    companyKey: companyKey(r.company_name),
+    location: companyJobLocation(r.remote_mode, r.city),
+    country: r.country,
+    seenMs: null,
+    dedupeKey: null,
+    origin: null,
   };
 }
 
-async function companyPool(ctx: ActionContext): Promise<PoolJob[]> {
-  const { results } = await ctx.db
+/**
+ * Живі вакансії компаній (подання company_jobs_live): одне читання, не більше
+ * COMPANY_POOL_CAP рядків. Спільне для search_jobs, «Jobs for you now» на /jobs і головної.
+ */
+export async function loadCompanyJobs(db: D1Database, env: { SITE_URL?: string }): Promise<PoolJob[]> {
+  const { results } = await db
     .prepare(`SELECT ${LIVE_COLUMNS} FROM company_jobs_live ORDER BY published_at DESC, id LIMIT ?`)
     .bind(COMPANY_POOL_CAP)
     .all<LiveRow>();
-  return results.map((r) => companyPoolJob(r, ctx.env));
+  return results.map((r) => companyPoolJob(r, env));
+}
+
+function companyPool(ctx: ActionContext): Promise<PoolJob[]> {
+  return loadCompanyJobs(ctx.db, ctx.env);
 }
 
 // ---------------------------------------------------------------------------

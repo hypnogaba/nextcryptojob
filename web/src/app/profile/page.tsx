@@ -7,6 +7,7 @@ import { cardEligibility } from "@/lib/card/eligibility";
 import { hasConsent, SCORING_CONSENT } from "@/lib/consent";
 import { db } from "@/lib/db";
 import { listIdentities } from "@/lib/identity/store";
+import { briefDone } from "@/lib/onboarding/steps";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { cardBack } from "@/lib/card/back";
 import { sealSeed } from "@/lib/card/seal";
@@ -46,7 +47,8 @@ export default async function ProfilePage({ searchParams }: Props) {
     hasConsent(d, user.id, SCORING_CONSENT.kind),
     listActiveCards(d, user.id),
   ]);
-  const done = answers.step === "done";
+  // Анкету пройдено й згоду дано: бал уже рахується, навіть якщо «Stand out» ще попереду.
+  const done = briefDone(answers.step);
   const state = sourceState(identities);
   const x = identities.find((i) => i.kind === "x") ?? null;
   const github = identities.find((i) => i.kind === "github") ?? null;
@@ -74,7 +76,7 @@ export default async function ProfilePage({ searchParams }: Props) {
 
       {!done ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
-          <p className="text-ink">Finish setting up your profile to get your score.</p>
+          <p className="text-ink">Finish your brief to get jobs and your score.</p>
           <Button asChild size="lg" className="w-fit">
             <Link href="/welcome">Continue setup</Link>
           </Button>

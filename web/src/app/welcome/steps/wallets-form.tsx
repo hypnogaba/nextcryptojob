@@ -86,8 +86,13 @@ export function WalletsForm({ initial, editing }: { initial: string; editing: bo
       ) : null}
 
       <FormMessageLine message={state.message} />
-      <SubmitButton pendingLabel="Saving..." className="h-11 text-base" disabled={parsed.errors.length > 0}>
-        {inputs.length === 0 ? (editing ? "Save without wallets" : "Skip for now") : editing ? "Save" : "Continue"}
+      {/* Без адрес під час першого проходу є окреме «Skip for now» (сторінка кроку). */}
+      <SubmitButton
+        pendingLabel="Saving..."
+        className="h-11 text-base"
+        disabled={parsed.errors.length > 0 || (!editing && inputs.length === 0)}
+      >
+        {inputs.length === 0 && editing ? "Save without wallets" : editing ? "Save" : "Save and continue"}
       </SubmitButton>
     </form>
   );

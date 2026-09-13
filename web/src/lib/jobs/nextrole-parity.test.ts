@@ -27,12 +27,8 @@ describe("NextRole rules in web are the engine's rules", () => {
     expect(fromFirstExport(read("./nextrole-clean.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/clean.ts")));
   });
 
-  it("remote and city: the code is the same as engine/src/digest/match.ts from foldText to isRemoteLocation", () => {
-    const engine = read("../../../../engine/src/digest/match.ts");
-    const start = engine.indexOf("/** Нижній регістр без діакритики");
-    const end = engine.indexOf("\n}\n", engine.indexOf("export function isRemoteLocation")) + 3;
-    const web = read("./nextrole-place.ts");
-    expect(web.slice(web.indexOf("/** Нижній регістр без діакритики"))).toBe(engine.slice(start, end));
+  it("matching (role, place, salary, one per company, freshness): the code is the same as engine/src/digest/match.ts", () => {
+    expect(fromFirstExport(read("./nextrole-match.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/match.ts")));
   });
 
   it("the same pool query and the same freshness windows", () => {

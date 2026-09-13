@@ -1,7 +1,7 @@
 import type { RoleKey } from "@/lib/card/roles";
 import { cleanText, plausibleSalary, safeUrl } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
-import { isNonCryptoCompany } from "./nextrole-clean";
+import { companyKey, isNonCryptoCompany } from "./nextrole-clean";
 import { foldText, isRemoteLocation } from "./nextrole-place";
 import { titleRoles } from "./nextrole-roles";
 
@@ -30,6 +30,13 @@ export const NEXTROLE_POOL_SQL = `SELECT id, url, company, company_key, title, l
        salary_currency, tags, posted_at, fetched_at, country, dedupe_key
   FROM jobs_cache
  WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
+
+/**
+ * Запит пулу на сайті: той самий, що в engine (NEXTROLE_POOL_SQL, тест звіряє), плюс
+ * стовпець source для рядка «N live crypto jobs from M sources» на головній. Умова WHERE
+ * та сама, тож і рядки ті самі.
+ */
+export const POOL_READ_SQL = NEXTROLE_POOL_SQL.replace("country, dedupe_key\n", "country, dedupe_key, source\n");
 
 /** Скільки рядків пул бере найбільше (живий кеш 12.09: ~3 100 свіжих з тегом web3). */
 export const POOL_ROW_CAP = 10_000;
@@ -66,6 +73,18 @@ export interface PoolJob {
   postedMs: number | null;
   /** foldText назви, компанії й тегів: по ньому шукає `q`. */
   haystack: string;
+  /** Ключ компанії для правила добірки «одна вакансія на компанію» (як companyKey в engine). */
+  companyKey: string;
+  /** Місце, як його показати людині: «Remote», «Lisbon», «Remote or Lisbon». */
+  location: string | null;
+  /** Країна національної дошки NextRole; такі вакансії добірка не бере у «віддалено». */
+  country: string | null;
+  /** Коли скан бачив вакансію востаннє (мс); запасна дата свіжості в добірці. */
+  seenMs: number | null;
+  /** Ключ змісту NextRole: та сама вакансія під новою адресою. */
+  dedupeKey: string | null;
+  /** jobs_cache.source (дошка, з якої скан узяв вакансію); null для вакансій компаній. */
+  origin: string | null;
 }
 
 type NrRow = {
@@ -84,6 +103,8 @@ type NrRow = {
   fetched_at: string;
   country: string | null;
   dedupe_key: string | null;
+  /** Є в POOL_READ_SQL; у запиті engine його немає. */
+  source?: string | null;
 };
 
 /** Дата з бази: ISO ('…T…Z') або SQLite ('YYYY-MM-DD HH:MM:SS', UTC), як parseDbTime в engine. */
@@ -160,6 +181,12 @@ export function nextroleJob(r: NrRow): PoolJob | null {
     postedAt: postedMs === null ? null : new Date(postedMs).toISOString().replace(/\.\d{3}Z$/, "Z"),
     postedMs,
     haystack: foldText([title, company, ...tags].join(" ")),
+    companyKey: r.company_key || companyKey(r.company),
+    location: location ?? (remote ? "Remote" : null),
+    country: r.country,
+    seenMs: parseDbTime(r.fetched_at),
+    dedupeKey: r.dedupe_key,
+    origin: r.source ?? null,
   };
 }
 
@@ -179,7 +206,7 @@ async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<PoolJob[]
   let rows: NrRow[];
   try {
     // Найсвіжіше бачені першими: якщо межа спрацює, відріжуться ті, кого скан бачив давніше.
-    rows = await jobs.all<NrRow>(`${NEXTROLE_POOL_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, live, posted, cap);
+    rows = await jobs.all<NrRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, live, posted, cap);
   } catch (e) {
     console.warn(`search_jobs: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
     return null;

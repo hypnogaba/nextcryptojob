@@ -1,219 +1,201 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CardBackFace } from "@/components/card/card-back";
-import { CardFlip } from "@/components/card/card-flip";
 import { CardFront } from "@/components/card/card-front";
-import { MiniCard } from "@/components/card/mini-card";
-import { SharePreview } from "@/components/landing/share-preview";
 import { Button } from "@/components/ui/button";
-import { builtFrom } from "@/lib/card/back";
-import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, exampleFace } from "@/lib/card/example";
-import { levelRange, tierFor } from "@/lib/card/tiers";
-import { fnv1a } from "@/lib/card/pattern";
-import { ROLES } from "@/lib/card/roles";
-import { POSITION_CODE, recipeBonus, recipeCore, SCORED_ROLE_KEYS } from "@/lib/roles/recipes";
+import { exampleFace } from "@/lib/card/example";
+import { appEnv, db } from "@/lib/db";
+import { countLine, todayJobs, type ShownJob, type TodayJobs } from "@/lib/jobs/instant";
+import { jobsDb } from "@/lib/jobs-db";
 
 export const metadata: Metadata = {
   description:
-    "Rated on what you shipped. GitHub, X and your wallets become a 0 to 100 score for one of ten crypto roles, with the math on the back of the card.",
+    "Answer a short brief and get a few crypto jobs that fit you, right away and every day by Telegram or email. Free.",
 };
 
-const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
+// Живий список з пулу вакансій: сторінку рендеримо на запит (кеш у пам'яті ізолята, lib/jobs/instant.ts),
+// бо статична збірка не бачить бази, а ISR цей кеш OpenNext не вміє (open-next.config.ts).
+export const dynamic = "force-dynamic";
 
-// Дошка з прикладом: мітки кандидатів анонімні, як у CRM («#» + 6 знаків id).
-const BOARD = [
-  { label: "#7A3F1C", level: 8, score: 73, pos: "ENG", note: "GitHub 74.2, merged PRs in other people's repos", stage: "Contact shared", yes: true },
-  { label: "#B21E90", level: 9, score: 81, pos: "TRD", note: "Trading 86.0 across 3 chains", stage: "Intro requested", yes: false },
-  { label: "#40C7D2", level: 7, score: 68, pos: "SEC", note: "Audit contests 71.5, 4 high findings", stage: "Found", yes: false },
-  { label: "#E5098B", level: 8, score: 77, pos: "DRL", note: "GitHub 84.1 and a YouTube channel", stage: "Interview", yes: false },
+const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
+const LINK =
+  "font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand";
+
+const STEPS = [
+  {
+    title: "Tell us what you want",
+    body: "Your roles, remote or a city, the lowest salary you would take, and a few words of your own. About 2 minutes.",
+  },
+  {
+    title: "We match you",
+    body: "You see the jobs that fit right away, one per company, with a line on why each one matches.",
+  },
+  {
+    title: "Get a few jobs every day",
+    body: "Up to 5 new jobs a day by Telegram or email, at the hour you pick. Pause any time.",
+  },
 ] as const;
 
-// Справжній запит API (docs/api/openapi.yaml): пошук кандидатів, x402 для гостя.
-const AGENT_LOG: readonly (readonly [string, string])[] = [
-  ["POST", "/api/v1/candidates/search"],
-  ["", '{"filters":{"role":"trader","min_level":8}}'],
-  ["402", "Payment Required, x402: $0.50 USDC"],
-  ["POST", "same body + PAYMENT-SIGNATURE"],
-  ["200", '{"data":[{"label":"#B21E90","headline":{"role":"trader","score":81,"level":9}}]}'],
-];
-
-function SectionHead({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function PreviewJob({ job, n }: { job: ShownJob; n: number }) {
+  const meta = [job.company, job.location, job.salary].filter(Boolean).join(" · ");
+  const title = "font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand";
   return (
-    <div className="mb-10 grid max-w-[62ch] gap-3 sm:mb-12">
-      <h2 id={id} className="display text-section">
-        {title}
-      </h2>
-      <p className="text-lg text-ink-muted">{children}</p>
-    </div>
+    <li className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 border-b border-line px-4 py-3.5 last:border-b-0 sm:px-5">
+      <span aria-hidden className="font-display text-[1.375rem] leading-[1.1] font-black text-ink-muted">
+        {n}
+      </span>
+      <div className="grid min-w-0 gap-0.5 wrap-anywhere">
+        {job.url === null ? (
+          <span className="font-semibold text-ink">{job.title}</span>
+        ) : job.url.startsWith("/") ? (
+          <Link href={job.url} prefetch={false} className={title}>
+            {job.title}
+          </Link>
+        ) : (
+          <a href={job.url} target="_blank" rel="noopener noreferrer nofollow" className={title}>
+            {job.title}
+          </a>
+        )}
+        {meta ? <p className="text-sm text-ink-muted">{meta}</p> : null}
+      </div>
+    </li>
   );
 }
 
-export default function HomePage() {
+/** «Today's jobs»: приклад добірки з живого пулу. Без бази сторінка однаково відкривається. */
+function TodayPanel({ today }: { today: TodayJobs }) {
+  const count = countLine(today);
+  const shown = today.available && today.jobs.length > 0;
+  return (
+    <section
+      id="today"
+      aria-labelledby="today-h"
+      className="scroll-mt-6 overflow-hidden rounded-[10px] border-2 border-ink bg-surface shadow-rest"
+    >
+      <div className="grid gap-1 border-b-2 border-ink px-4 pt-4 pb-3 sm:px-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="today-h" className="font-display text-[1.75rem] leading-none font-extrabold uppercase">
+            Today&apos;s jobs
+          </h2>
+          <span className="font-display text-[0.8125rem] font-extrabold tracking-[0.08em] text-brand uppercase">
+            Example list
+          </span>
+        </div>
+        <p className="text-sm text-ink-muted">
+          {shown
+            ? "What a daily list looks like for a remote brief from $50k. Yours follows your own brief."
+            : "Today's jobs did not load just now. Your brief still works: we show your matches as soon as they load."}
+        </p>
+      </div>
+      {shown ? (
+        <ol>
+          {today.jobs.map((job, i) => (
+            <PreviewJob key={job.ref} job={job} n={i + 1} />
+          ))}
+        </ol>
+      ) : null}
+      {count ? <p className="border-t border-line bg-sleeve px-4 py-3 text-sm text-ink-muted sm:px-5">{count}</p> : null}
+    </section>
+  );
+}
+
+export default async function HomePage() {
+  const today = await todayJobs({ db, env: safeEnv(), jobs: jobsDb, now: new Date() });
   const face = exampleFace();
-  const reasons = builtFrom(EXAMPLE_BACK) ?? "";
 
   return (
     <>
-      <section className={`${WRAP} grid items-center gap-12 pt-12 pb-16 sm:pt-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-20 lg:pb-20`}>
+      <section
+        className={`${WRAP} grid items-start gap-10 pt-10 pb-16 sm:pt-16 lg:items-center lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 lg:pb-24`}
+      >
         <div>
-          <h1 className="display text-hero">Rated on what you shipped.</h1>
-          <p className="mt-6 max-w-[34ch] text-xl text-ink-muted">
-            GitHub, X and your wallets become a 0 to 100 score for one of ten crypto roles, with the math on the back
-            of the card. Then we send you a few jobs that fit, every day.
+          <h1 className="display text-[clamp(3rem,1.5rem+5.4vw,6rem)] leading-[0.88]">Crypto jobs that fit you.</h1>
+          <p className="mt-6 max-w-[36ch] text-xl text-ink-muted">
+            Answer a short brief and get a few matching crypto jobs right away, then every day by Telegram or email.
+            Free.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
             <Button asChild size="lg">
-              <Link href="/login">Get my card</Link>
+              <Link href="/login">Get my jobs</Link>
             </Button>
-            <Link
-              href="#positions"
-              className="inline-flex min-h-11 items-center font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand"
-            >
-              See the ten positions
+            <Link href="#today" className={`inline-flex min-h-11 items-center ${LINK}`}>
+              See today&apos;s jobs
             </Link>
           </div>
         </div>
-        <CardFlip
-          className="mx-auto w-full max-w-[380px]"
-          front={<CardFront face={face} draw />}
-          back={<CardBackFace face={face} back={EXAMPLE_BACK} meta={`Formula ${EXAMPLE_BREAKDOWN.formula}. Example data.`} />}
-        />
+        <TodayPanel today={today} />
       </section>
 
-      <section aria-labelledby="ladder-h" className={`${WRAP} pb-20 sm:pb-24`}>
-        <div className="grid gap-2 border-t border-line pt-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <h2 id="ladder-h" className="font-sans text-lg font-semibold">
-            Every ten points adds a layer to your seal.
-          </h2>
-          <p className="text-sm text-ink-muted">Four finishes. The seal comes from your card, so no two look alike.</p>
-        </div>
-        <ol className="mt-6 grid grid-cols-5 gap-x-3 gap-y-6 sm:gap-x-4 lg:grid-cols-10">
-          {Array.from({ length: 10 }, (_, i) => {
-            const level = i + 1;
-            const tier = tierFor(level);
-            return (
-              <li key={level} className="grid content-start gap-2">
-                <MiniCard level={level} seed={face.sealSeed!} value={level} />
-                <p className="text-[0.8125rem] leading-tight text-ink-muted">
-                  <span className="font-semibold text-ink">{tier.finishName}</span>
-                  <br />
-                  {levelRange(level)}
-                </p>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      <section id="positions" aria-labelledby="positions-h" className={`${WRAP} scroll-mt-6 pb-24 sm:pb-28`}>
-        <SectionHead id="positions-h" title="Ten positions">
-          Pick the one you want to be hired for. Each position reads its own sources, with published weights.
-        </SectionHead>
-        <ol className="-mx-[clamp(16px,4vw,56px)] flex snap-x snap-mandatory scroll-px-[clamp(16px,4vw,56px)] gap-3 overflow-x-auto px-[clamp(16px,4vw,56px)] pb-3">
-          {SCORED_ROLE_KEYS.map((role) => (
-            <li
-              key={role}
-              className="grid w-[168px] shrink-0 snap-start grid-rows-[auto_1fr_auto] gap-3 rounded-[10px] border-2 border-ink bg-surface p-3.5"
-            >
-              <span className="font-display text-[2.75rem] leading-[0.85] font-black">{POSITION_CODE[role]}</span>
-              <span className="self-end text-[0.9375rem] leading-tight font-semibold">{ROLES[role].name}</span>
-              <span className="grid gap-1 text-xs leading-snug text-ink-muted">
-                <span>{recipeCore(role)}</span>
-                <span>Bonus: {recipeBonus(role)}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-4 text-sm text-ink-muted">
-          <Link href="/how-scoring-works" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
-            How scoring works
-          </Link>
-          , with every formula and weight.
-        </p>
-      </section>
-
-      <section aria-labelledby="share-h" className="bg-sleeve py-24 sm:py-28">
+      <section aria-labelledby="how-h" className="bg-sleeve py-16 sm:py-24">
         <div className={WRAP}>
-          <SectionHead id="share-h" title="Post your card">
-            Two sizes for X. The finish is your level and the seal is yours alone, so people read the card before
-            they read the number.
-          </SectionHead>
-          <div className="grid items-end gap-6 md:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
-            <figure>
-              <SharePreview face={face} format="wide" reasons={reasons} />
-              <figcaption className="mt-3 text-sm text-ink-muted">
-                1200 x 675. The link preview (1200 x 630) keeps the card and the headline.
-              </figcaption>
-            </figure>
-            <figure>
-              <SharePreview face={face} format="tall" reasons={reasons} />
-              <figcaption className="mt-3 text-sm text-ink-muted">1080 x 1350, portrait.</figcaption>
-            </figure>
+          <h2 id="how-h" className="display text-section">
+            How it works
+          </h2>
+          <ol className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <li key={step.title} className="grid content-start gap-3 border-t-2 border-ink pt-4">
+                <span aria-hidden className="font-display text-[4rem] leading-[0.8] font-black">
+                  {i + 1}
+                </span>
+                <h3 className="font-sans text-lg font-semibold text-ink">{step.title}</h3>
+                <p className="max-w-[40ch] text-ink-muted">{step.body}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-12">
+            <Button asChild size="lg">
+              <Link href="/login">Get my jobs</Link>
+            </Button>
           </div>
         </div>
       </section>
 
-      <section id="scouts" aria-labelledby="scouts-h" className={`${WRAP} py-24 sm:py-28`}>
-        <SectionHead id="scouts-h" title="Scouting board">
-          For companies. Filter by position and level, keep a board, and request an intro. Contact details open only
-          after the candidate says yes.
-        </SectionHead>
-        <div className="overflow-x-auto rounded-[10px] border-2 border-ink bg-surface">
-          <table className="w-full min-w-[720px] border-collapse text-left">
-            <caption className="px-5 pt-4 text-left text-sm text-ink-muted">Board: Solana infra team. Example data.</caption>
-            <thead>
-              <tr className="font-display text-[0.9375rem] font-extrabold tracking-[0.02em]">
-                <th scope="col" className="border-b-2 border-ink px-5 py-3">Card</th>
-                <th scope="col" className="border-b-2 border-ink px-5 py-3">Candidate</th>
-                <th scope="col" className="border-b-2 border-ink px-5 py-3">Pos</th>
-                <th scope="col" className="border-b-2 border-ink px-5 py-3">Scout note</th>
-                <th scope="col" className="border-b-2 border-ink px-5 py-3">Stage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {BOARD.map((row) => (
-                <tr key={row.label} className="border-b border-line last:border-b-0 hover:bg-brand-soft">
-                  <td className="px-5 py-3">
-                    <MiniCard level={row.level} seed={fnv1a(row.label)} value={row.score} className="w-11" />
-                    <span className="sr-only">
-                      Score {row.score}, level {row.level}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-sm">{row.label}</td>
-                  <td className="px-5 py-3 font-display text-[1.375rem] font-black">{row.pos}</td>
-                  <td className="px-5 py-3 text-[0.9375rem] text-ink-muted">{row.note}</td>
-                  <td className={`px-5 py-3 font-semibold ${row.yes ? "text-brand" : ""}`}>{row.stage}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <p className="max-w-[60ch] text-ink-muted">
-            Candidates stay hidden until they turn visibility on. You see scores and reasons, never names or wallets.
-            Company plan: $100 a month. Candidates never pay.
-          </p>
-          <Button asChild size="lg">
-            <Link href="/company">Open the board</Link>
-          </Button>
+      <section aria-labelledby="standout-h" className={`${WRAP} py-16 sm:py-20`}>
+        <div className="grid items-center gap-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-10">
+          <div className="ncj-card w-[112px] rotate-[-3deg] sm:w-[132px]">
+            <CardFront face={face} />
+          </div>
+          <div className="grid max-w-[60ch] gap-2">
+            <h2 id="standout-h" className="font-sans text-xl font-semibold text-ink">
+              Stand out to companies
+            </h2>
+            <p className="text-ink-muted">
+              Optional. Connect X, GitHub or your wallets and we score your public work for one of ten crypto roles,
+              with a card you can share. Companies see it only if you turn that on.
+            </p>
+            <p>
+              <Link href="/scoring" className={`inline-flex min-h-11 items-center ${LINK}`}>
+                How scoring works
+              </Link>
+            </p>
+          </div>
         </div>
       </section>
 
-      <section id="agents" aria-labelledby="agents-h" className={`${WRAP} scroll-mt-6 pb-24 sm:pb-28`}>
-        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-12">
-          <SectionHead id="agents-h" title="Agents scout too">
-            REST and MCP, the same cards. An agent without a key pays per search in USDC on Base or Solana with x402.
-          </SectionHead>
-          <pre className="overflow-x-auto rounded-[10px] border-2 border-ink bg-surface p-5 font-mono text-sm leading-relaxed">
-            {AGENT_LOG.map(([verb, rest]) => (
-              <span key={rest} className="block">
-                <span className="text-ink-muted">{verb.padEnd(5)}</span>
-                {rest}
-              </span>
-            ))}
-          </pre>
-        </div>
-      </section>
+      <div className={`${WRAP} pb-4`}>
+        <p className="flex flex-wrap gap-x-8 gap-y-1 border-t border-line pt-5 text-ink-muted">
+          <span>
+            Hiring?{" "}
+            <Link href="/company" className={`inline-flex min-h-11 items-center ${LINK}`}>
+              Search scored candidates
+            </Link>
+          </span>
+          <span>
+            Building an agent?{" "}
+            <Link href="/agents" className={`inline-flex min-h-11 items-center ${LINK}`}>
+              Use the API and MCP
+            </Link>
+          </span>
+        </p>
+      </div>
     </>
   );
+}
+
+/** SITE_URL для посилань на вакансії компаній; без оточення Worker порожньо (посилання відносні). */
+function safeEnv(): { SITE_URL?: string } {
+  try {
+    return { SITE_URL: appEnv().SITE_URL };
+  } catch {
+    return {};
+  }
 }

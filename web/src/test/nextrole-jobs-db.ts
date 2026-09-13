@@ -60,3 +60,37 @@ export function addCachedJob(raw: DatabaseSync, j: CachedJob): void {
     j.salaryMin ?? null, j.salaryMax ?? null,
   );
 }
+
+/** Рядок кешу NextRole з усіма стовпцями, які читає пул добірки (NEXTROLE_POOL_SQL + source). */
+export type PoolRowInput = {
+  id: string;
+  title: string;
+  fetchedAt: string;
+  company?: string;
+  companyKey?: string;
+  location?: string | null;
+  remote?: boolean;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  tags?: string[];
+  postedAt?: string | null;
+  country?: string | null;
+  dedupeKey?: string;
+  source?: string;
+  url?: string;
+};
+
+export function addPoolJob(raw: DatabaseSync, j: PoolRowInput): void {
+  const company = j.company ?? "Chain Labs";
+  raw.prepare(
+    `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, salary_min, salary_max, salary_currency,
+                             source, tags, dedupe_key, posted_at, fetched_at, country)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    j.id, j.url ?? `https://boards.example.com/${j.id}`, company, j.companyKey ?? company.toLowerCase(), j.title,
+    j.location === undefined ? "Remote" : j.location, (j.remote ?? true) ? 1 : 0, j.salaryMin ?? null, j.salaryMax ?? null,
+    j.currency ?? null, j.source ?? "greenhouse:chainlabs", JSON.stringify(j.tags ?? ["web3"]), j.dedupeKey ?? `${j.id}-d`,
+    j.postedAt === undefined ? null : j.postedAt, j.fetchedAt, j.country ?? null,
+  );
+}
