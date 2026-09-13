@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { CRM_HOME, listMemberships, touchMember } from "@/lib/crm/company";
-import { db } from "@/lib/db";
+import { limitWebActions, type CrmEnv } from "@/lib/crm/context";
+import { appEnv, db } from "@/lib/db";
 import { isId } from "@/lib/ids";
 import { setCurrentCompany } from "./crm";
 
@@ -25,6 +26,12 @@ export async function switchCompanyAction(form: FormData): Promise<void> {
   const user = await requireUser();
   const companyId = form.get("company_id");
   const next = safeNext(form.get("next"));
+  try {
+    await limitWebActions(appEnv() as unknown as CrmEnv, user.id);
+  } catch {
+    // Забагато дій за хвилину (RL_WEB): компанію не перемикаємо.
+    redirect(next);
+  }
   if (!isId("co", companyId)) redirect(next);
   const d = db();
   const mine = (await listMemberships(d, user.id)).some((m) => m.companyId === companyId);

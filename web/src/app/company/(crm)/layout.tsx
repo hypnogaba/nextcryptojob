@@ -1,18 +1,23 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { AccessNotice } from "@/components/crm/access-notice";
 import { CompanySwitcher } from "@/components/crm/company-switcher";
 import { CrmNav, type NavItem } from "@/components/crm/crm-nav";
-import { StatusBanner } from "@/components/crm/status-banner";
+import { accessBannerText, StatusBanner } from "@/components/crm/status-banner";
 import { loadCrm, pageAllowed, type CrmPage } from "./crm";
 
 /**
- * Оболонка CRM: назва компанії (перемикач, якщо їх кілька), плашка стану,
- * навігація. Пункти лише ті, що відкриті в цьому стані компанії.
- * TODO(T7): додати Dashboard, Search, Pipeline, Saved searches, Jobs, Developers.
+ * Оболонка CRM: назва компанії (перемикач, якщо їх кілька), плашки стану й
+ * доступу, навігація (специфікація 10.1). Пункти лише ті, що відкриті в цьому
+ * стані компанії. Jobs і Developers додадуть T12 і T11 разом зі своїми сторінками.
  */
 
 const NAV: { page: CrmPage; href: string; label: string }[] = [
   { page: "apply", href: "/company/apply", label: "Application" },
+  { page: "dashboard", href: "/company/dashboard", label: "Dashboard" },
+  { page: "search", href: "/company/search", label: "Search" },
+  { page: "pipeline", href: "/company/pipeline", label: "Pipeline" },
+  { page: "saved-searches", href: "/company/saved-searches", label: "Saved searches" },
   { page: "team", href: "/company/team", label: "Team" },
   { page: "billing", href: "/company/billing", label: "Billing" },
   { page: "settings", href: "/company/settings", label: "Settings" },
@@ -38,6 +43,7 @@ export default async function CrmLayout({ children }: { children: ReactNode }) {
             </span>
           </div>
           <StatusBanner company={company} application={application} />
+          <AccessNotice banner={accessBannerText(company, view.ctx.now)} />
           <CrmNav items={items} />
         </div>
       </div>

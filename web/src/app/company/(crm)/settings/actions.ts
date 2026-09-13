@@ -14,7 +14,7 @@ import {
   userFacingError,
   type Fields,
 } from "@/lib/crm/company";
-import { COMPANY_COOKIE, resolveWebActor } from "@/lib/crm/context";
+import { COMPANY_COOKIE, crmActionActor } from "@/lib/crm/context";
 import { appEnv } from "@/lib/db";
 
 export type CompanySettingsState = { message?: FormMessage; errors?: Fields; values?: Fields };
@@ -28,7 +28,7 @@ export async function updateCompanySettingsAction(_prev: CompanySettingsState, f
   if (!parsed.ok) return { errors: parsed.errors, values, message: { tone: "error", text: "Check the fields above." } };
   let res;
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     res = await updateCompanySettings(ctx, parsed.value);
   } catch (err) {
@@ -52,7 +52,7 @@ export async function closeCompanyAction(_prev: CompanySettingsState, form: Form
   let closedId: string | null = null;
   try {
     // Актор усередині try: сесія, що скінчилась (401), дає текст, а не сторінку помилки.
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     await closeCompany(ctx, { stripe: stripeClient(appEnv() as unknown as StripeEnv) });
     closedId = ctx.company?.id ?? null;

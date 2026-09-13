@@ -309,3 +309,30 @@ export async function resolveWebActor(base: ContextBase = crmBase()): Promise<Ac
   const companyId = (await cookies()).get(COMPANY_COOKIE)?.value ?? null;
   return resolveActor(base, { channel: "web", sessionUserId: user?.id ?? null, companyId });
 }
+
+// ---------------------------------------------------------------------------
+// Server actions інтерфейсу CRM
+
+export const WEB_BURST_TEXT = "Too many actions, wait a minute.";
+
+/**
+ * Ліміт сплесків інтерфейсу (специфікація 9: RL_WEB, 120 на хвилину на людину).
+ * Лічильник Workers Rate Limiting приблизний і локальний для локації: він лише
+ * від сплесків, квоти рахує D1. Без прив'язки (тест, розробка) ліміту немає.
+ */
+export async function limitWebActions(env: Pick<CrmEnv, "RL_WEB">, userId: string): Promise<void> {
+  const binding = env.RL_WEB;
+  if (!binding) return;
+  const { success } = await binding.limit({ key: `user:${userId}` });
+  if (!success) throw new ActionError("rate_limited", 429, WEB_BURST_TEXT, undefined, { "Retry-After": "60" });
+}
+
+/**
+ * Актор для server action CRM (усі actions.ts під app/company/(crm)): сесія, компанія з
+ * кукі, потім RL_WEB. Кожна така дія бере актора тут, а не з resolveWebActor.
+ */
+export async function crmActionActor(base: ContextBase = crmBase()): Promise<ActionContext> {
+  const ctx = await resolveWebActor(base);
+  if (ctx.actor.kind === "member") await limitWebActions(ctx.env, ctx.actor.userId);
+  return ctx;
+}

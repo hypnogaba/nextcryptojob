@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
 import { requestOrigin } from "@/lib/billing/origin";
 import { assertFormCompany, userFacingError } from "@/lib/crm/company";
-import { COMPANY_COOKIE, resolveWebActor, type ActionContext } from "@/lib/crm/context";
+import { COMPANY_COOKIE, crmActionActor, type ActionContext } from "@/lib/crm/context";
 import { changeRole, inviteMember, leaveCompany, removeMember, revokeInvite } from "@/lib/crm/team";
 import { appEnv } from "@/lib/db";
 import { getMailer } from "@/lib/mail";
@@ -24,7 +24,7 @@ export type InviteState = { message?: FormMessage; email?: string; link?: string
 export async function inviteAction(_prev: InviteState, form: FormData): Promise<InviteState> {
   const email = String(form.get("email") ?? "");
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     const res = await inviteMember(ctx, email, {
       origin: requestOrigin(await headers()),
@@ -55,7 +55,7 @@ function back(query: string): never {
  */
 async function rowAction(form: FormData, done: string, act: (ctx: ActionContext) => Promise<void>): Promise<never> {
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     await act(ctx);
   } catch (err) {
@@ -92,7 +92,7 @@ export async function leaveAction(form: FormData): Promise<void> {
   let companyId: string | null = null;
   const from = form.get("from") === "settings" ? "/company/settings" : PAGE;
   try {
-    const ctx = await resolveWebActor();
+    const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
     companyId = ctx.company?.id ?? null;
     await leaveCompany(ctx);

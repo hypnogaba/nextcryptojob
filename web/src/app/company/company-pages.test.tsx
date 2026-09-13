@@ -202,7 +202,7 @@ describe("team pages", () => {
     // Та сама пошта.
     await signIn("lee@acme.io");
     expect(await html(JoinPage(params({ t })))).toContain("Join Acme Labs");
-    expect(await redirectOf(acceptInviteAction(form({ t })))).toBe("/company/team");
+    expect(await redirectOf(acceptInviteAction(form({ t })))).toBe("/company/dashboard");
     expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(companyId);
     const team = await html(TeamPage(params()));
     expect(team).toContain("dana@acme.io");
@@ -246,7 +246,7 @@ describe("company switcher", () => {
     addMember(harness.raw, a, dana, "owner");
     addMember(harness.raw, b, dana, "member");
 
-    expect(await redirectOf(switchCompanyAction(form({ company_id: b })))).toBe("/company/team");
+    expect(await redirectOf(switchCompanyAction(form({ company_id: b })))).toBe("/company/dashboard");
     expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(b);
     const shell = await html(CrmLayout({ children: null }));
     expect(shell).toContain("Beta");

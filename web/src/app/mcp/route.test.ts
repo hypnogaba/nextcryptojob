@@ -170,6 +170,29 @@ describe("same actions as REST", () => {
   });
 });
 
+describe("saved searches (T7) through the registry", () => {
+  it("an agent creates, changes and deletes a saved search over MCP; REST sees the same; another company cannot touch it", async () => {
+    const a = await company({ name: "Acme Labs" });
+    const b = await company({ name: "Other Co" });
+    const created = await callTool(POST, "create_saved_search", { name: "Solidity", filters: { role: "engineer" } }, { key: a.key });
+    expect(created.isError).toBeUndefined();
+    expect(created.structuredContent).toMatchObject({ name: "Solidity", alert: "daily", last_match_count: null });
+    const id = created.structuredContent.saved_search_id as string;
+
+    const viaRest = await rest(restGet, "GET", "/saved-searches", { key: a.key });
+    expect(viaRest.body.data).toEqual([created.structuredContent]);
+    const changed = await callTool(POST, "update_saved_search", { saved_search_id: id, filters: { role: "trader" } }, { key: a.key });
+    expect(changed.structuredContent.filters).toEqual({ role: "trader" });
+
+    const foreign = await callTool(POST, "delete_saved_search", { saved_search_id: id }, { key: b.key });
+    expect(foreign.structuredContent.error.code).toBe("not_found");
+    expect((await callTool(POST, "list_saved_searches", {}, { key: b.key })).structuredContent.data).toEqual([]);
+    const gone = await callTool(POST, "delete_saved_search", { saved_search_id: id }, { key: a.key });
+    expect(gone.isError).toBeUndefined();
+    expect(all(db.raw, "SELECT COUNT(*) AS n FROM saved_searches")).toEqual([{ n: 0 }]);
+  });
+});
+
 describe("x402 through _meta", () => {
   it("a guest search: payment required as a tool result, then the paid page with x402/payment-response", async () => {
     const id = engineer();

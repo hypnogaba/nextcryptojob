@@ -12,6 +12,7 @@ import {
   listActivity,
   loadCompanyProfile,
 } from "@/lib/crm/company";
+import { WEB_BURST_TEXT } from "@/lib/crm/context";
 import { can } from "@/lib/crm/permissions";
 import { COUNTRIES, countryName } from "@/lib/crm/countries";
 import { fromSqlTime } from "@/lib/time";
@@ -35,6 +36,7 @@ const LEAVE_ERRORS: Record<string, string> = {
   last_owner: LAST_OWNER_TEXT,
   company_switched: COMPANY_SWITCHED_TEXT,
   unauthorized: "Sign in again to continue.",
+  rate_limited: WEB_BURST_TEXT,
 };
 
 function Section({ id, title, intro, children }: { id: string; title: string; intro?: ReactNode; children: ReactNode }) {

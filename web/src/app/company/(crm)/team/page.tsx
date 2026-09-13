@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { COMPANY_SWITCHED_TEXT, LAST_OWNER_TEXT } from "@/lib/crm/company";
+import { WEB_BURST_TEXT } from "@/lib/crm/context";
 import { can } from "@/lib/crm/permissions";
 import { loadTeam } from "@/lib/crm/team";
 import { fromSqlTime } from "@/lib/time";
@@ -28,6 +29,7 @@ const ERRORS: Record<string, string> = {
   validation_failed: "Use Leave the team to leave this company.",
   company_switched: COMPANY_SWITCHED_TEXT,
   unauthorized: "Sign in again to continue.",
+  rate_limited: WEB_BURST_TEXT,
 };
 
 function first(value: string | string[] | undefined): string | undefined {

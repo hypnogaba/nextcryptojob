@@ -23,11 +23,8 @@ import { ActionError } from "./types";
 /** Версія умов для компаній (docs/legal/terms-companies.md, "Version: 0.1"). */
 export const COMPANY_TERMS_VERSION = "0.1";
 
-/**
- * Куди йде людина, коли компанія готова. TODO(T7): "/company/dashboard",
- * коли з'явиться дашборд; доти перша сторінка CRM, що вже є.
- */
-export const CRM_HOME = "/company/team";
+/** Куди йде людина, коли компанія готова: дашборд CRM (W1). */
+export const CRM_HOME = "/company/dashboard";
 
 /** Скільки компаній людина може створити за добу: захист від засмічення. */
 export const COMPANIES_PER_DAY = 3;

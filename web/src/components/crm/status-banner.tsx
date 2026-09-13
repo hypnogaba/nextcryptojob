@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Application } from "@/lib/crm/agency";
 import type { CompanyInfo } from "@/lib/crm/context";
+import { fromSqlTime } from "@/lib/time";
 
 const LINK = "font-medium text-brand underline underline-offset-4";
 
@@ -74,4 +75,35 @@ export function StatusBanner({ company, application }: { company: Pick<CompanyIn
       ) : null}
     </div>
   );
+}
+
+export type AccessBanner = { tone: "info" | "warning"; title: string; body?: string; link: { href: string; label: string } };
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Плашка доступу активної компанії (специфікація 10.1): немає доступу, лише
+ * читання без підписки, дні пробного. null, коли підписка звичайна або компанія
+ * не active (тоді говорить statusBannerText).
+ */
+export function accessBannerText(
+  company: Pick<CompanyInfo, "status" | "access" | "plan" | "subscription">,
+  now: Date,
+): AccessBanner | null {
+  if (company.status !== "active") return null;
+  const billing = { href: "/company/billing", label: "Go to billing" };
+  if (company.access === "none") return { tone: "warning", title: "Your company does not have access yet.", link: billing };
+  if (company.access === "pay_per_request") {
+    return {
+      tone: "info",
+      title: "Read-only: no active subscription.",
+      body: "Your agent can still search and request intros through the API, paying with x402.",
+      link: billing,
+    };
+  }
+  if (company.plan === "trial" && company.subscription?.periodEnd) {
+    const n = Math.max(0, Math.ceil((fromSqlTime(company.subscription.periodEnd).getTime() - now.getTime()) / DAY_MS));
+    return { tone: "info", title: `Trial: ${n} ${n === 1 ? "day" : "days"} left`, link: { href: "/company/billing", label: "Subscribe" } };
+  }
+  return null;
 }

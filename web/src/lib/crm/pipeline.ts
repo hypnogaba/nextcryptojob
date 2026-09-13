@@ -579,6 +579,91 @@ export async function updateCard(rawCtx: ActionContext, input: UpdateInput): Pro
   return card;
 }
 
+export interface TagChange {
+  candidate_id: string;
+  /** Додати один тег (як ввели). */
+  add?: string;
+  /** Прибрати тег без огляду на регістр. */
+  remove?: string;
+}
+
+/**
+ * Додати або прибрати ОДИН тег однією інструкцією UPDATE з функціями JSON над
+ * поточним значенням колонки (json_insert / json_group_array), а не заміною
+ * всього списку, прочитаного раніше: два одночасні додавання різних тегів
+ * обидва лишаються. Повтор без огляду на регістр і межа 10 перевіряються в тій
+ * самій інструкції (для латиниці через lower(), для решти абеток за написаннями,
+ * що вже були в картці). Подія tags_changed і журнал pipeline.tags пишуться тим
+ * самим пакетом і лише тоді, коли UPDATE справді змінив картку.
+ * Для інтерфейсу; право й доступ перевіряє викликач через реєстр (prepareAction update_stage).
+ */
+export async function changeTag(rawCtx: ActionContext, input: TagChange): Promise<PipelineCard> {
+  const { ctx, actor } = companyActor(rawCtx);
+  const company = ctx.company;
+  const raw = input.add ?? input.remove;
+  if (raw === undefined || (input.add !== undefined && input.remove !== undefined)) {
+    throw tagsError("Add or remove one tag.");
+  }
+  const [tag] = normalizeTags([raw]);
+  const row = await cardBase(ctx.db, company.id, input.candidate_id);
+  if (!row) throw notInPipeline();
+  const key = tagKey(tag);
+  // Написання цього тегу, що вже є в картці (для абеток, яких не знає lower() у SQLite).
+  const spellings = JSON.stringify(tagsOf(row.tags).filter((t) => tagKey(t) === key));
+  const same = `(t.value IN (SELECT value FROM json_each(?)) OR lower(trim(t.value)) = lower(?))`;
+  const at = sqlTime(ctx.now);
+
+  const update = input.add
+    ? ctx.db
+        .prepare(
+          `UPDATE pipeline SET tags = json_insert(CASE WHEN json_valid(tags) THEN tags ELSE '[]' END, '$[#]', ?), updated_at = ?
+            WHERE id = ? AND company_id = ?
+              AND json_array_length(CASE WHEN json_valid(tags) THEN tags ELSE '[]' END) < ?
+              AND NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(pipeline.tags) THEN pipeline.tags ELSE '[]' END) t
+                               WHERE ${same})`,
+        )
+        .bind(tag, at, row.id, company.id, MAX_TAGS, spellings, tag)
+    : ctx.db
+        .prepare(
+          `UPDATE pipeline
+              SET tags = (SELECT json_group_array(value) FROM (
+                            SELECT t.value AS value FROM json_each(CASE WHEN json_valid(pipeline.tags) THEN pipeline.tags ELSE '[]' END) t
+                             WHERE NOT ${same} ORDER BY t.key)),
+                  updated_at = ?
+            WHERE id = ? AND company_id = ?
+              AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(pipeline.tags) THEN pipeline.tags ELSE '[]' END) t
+                           WHERE ${same})`,
+        )
+        .bind(spellings, tag, at, row.id, company.id, spellings, tag);
+  const [actorLabel, , target, meta] = auditValues(ctx, { action: "pipeline.tags", target: input.candidate_id });
+  const results = await ctx.db.batch([
+    update,
+    // Лише коли UPDATE змінив картку (changes() тієї самої транзакції): подія з новим списком.
+    ctx.db
+      .prepare(
+        `INSERT INTO pipeline_events (pipeline_id, company_id, kind, meta_json, actor_kind, actor_user_id, actor_key_id, created_at)
+         SELECT p.id, p.company_id, 'tags_changed', json_object('tags', json(p.tags)), ?, ?, ?, ?
+           FROM pipeline p WHERE p.id = ? AND changes() > 0`,
+      )
+      .bind(actor.kind, actor.userId, actor.keyId, at, row.id),
+    // Текст тегів у журнал не пишемо, лише кількість (як updateCard).
+    ctx.db
+      .prepare(
+        `INSERT INTO audit_log (actor, action, target, meta_json, at)
+         SELECT ?, 'pipeline.tags', ?, json_set(?, '$.tag_count', json_array_length(p.tags)), ?
+           FROM pipeline p WHERE p.id = ? AND changes() > 0`,
+      )
+      .bind(actorLabel, target, meta, at, row.id),
+  ]);
+
+  const card = await getCard(ctx.db, company.id, input.candidate_id);
+  if (!card) throw notInPipeline();
+  if ((results[0].meta.changes ?? 0) === 0 && input.add && card.tags.length >= MAX_TAGS && !card.tags.some((t) => tagKey(t) === key)) {
+    throw tagsError(`Use at most ${MAX_TAGS} tags.`);
+  }
+  return card;
+}
+
 /** Нотатка на картку: лише додавання (редагування й видалення нотаток немає). */
 export async function addNote(rawCtx: ActionContext, input: { candidate_id: string; body: string }): Promise<PipelineEvent> {
   const { ctx, actor } = companyActor(rawCtx);

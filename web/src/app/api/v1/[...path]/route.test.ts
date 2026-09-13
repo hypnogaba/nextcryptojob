@@ -298,7 +298,6 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
     const alice = addCandidate(db);
     const bob = addCandidate(db);
     const job = `job_${"a".repeat(20)}`;
-    const ss = `ss_${"b".repeat(20)}`;
     const results: { op: string; status: number; errors: string[] }[] = [];
     const check = async (method: Method, template: string, path: string, body?: unknown) => {
       const res = await call(method, path, { key, body });
@@ -325,7 +324,8 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
     await check("PATCH", "/jobs/{job_id}", `/jobs/${job}`, { title: "Senior Solidity engineer" });
     await check("POST", "/jobs/{job_id}/close", `/jobs/${job}/close`);
     await check("GET", "/saved-searches", "/saved-searches");
-    await check("POST", "/saved-searches", "/saved-searches", { name: "Solidity", filters: { role: "engineer" } });
+    const saved = await check("POST", "/saved-searches", "/saved-searches", { name: "Solidity", filters: { role: "engineer" } });
+    const ss = saved.body.saved_search_id as string;
     await check("PATCH", "/saved-searches/{saved_search_id}", `/saved-searches/${ss}`, { alert: "off" });
     await check("DELETE", "/saved-searches/{saved_search_id}", `/saved-searches/${ss}`);
     await check("GET", "/webhook", "/webhook");
@@ -350,11 +350,15 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
       "GET /intros/{intro_id}": 200,
       "POST /intros/{intro_id}/cancel": 200,
       "DELETE /pipeline/{candidate_id}": 204,
+      "GET /saved-searches": 200,
+      "POST /saved-searches": 201,
+      "PATCH /saved-searches/{saved_search_id}": 200,
+      "DELETE /saved-searches/{saved_search_id}": 204,
       "GET /usage": 200,
       // Місяць USDC платний навіть з підпискою: без платежу 402 з вимогою.
       "POST /billing/usdc-month": 402,
     });
-    // Ще не запущені дії (T7, T11, T12): 501 до будь-якої оплати.
+    // Ще не запущені дії (T11, T12): 501 до будь-якої оплати.
     const pending = results.filter((r) => r.status === 501).map((r) => r.op);
     expect(pending.sort()).toEqual(
       [
@@ -363,10 +367,6 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
         "GET /jobs/{job_id}",
         "PATCH /jobs/{job_id}",
         "POST /jobs/{job_id}/close",
-        "GET /saved-searches",
-        "POST /saved-searches",
-        "PATCH /saved-searches/{saved_search_id}",
-        "DELETE /saved-searches/{saved_search_id}",
         "GET /webhook",
         "PUT /webhook",
         "POST /webhook/test",

@@ -7,8 +7,9 @@ import { createCheckout, type CheckoutResult } from "@/lib/billing/checkout";
 import { requestOrigin } from "@/lib/billing/origin";
 import { createPortal, type PortalResult } from "@/lib/billing/portal";
 import { stripeClient, stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
-import { resolveWebActor, type ActionContext } from "@/lib/crm/context";
+import { crmActionActor, type ActionContext } from "@/lib/crm/context";
 import { can } from "@/lib/crm/permissions";
+import { ActionError } from "@/lib/crm/types";
 import { appEnv, db } from "@/lib/db";
 
 /**
@@ -26,7 +27,8 @@ export type BillingError =
   | "already_subscribed"
   | "company_not_active"
   | "no_customer"
-  | "stripe_failed";
+  | "stripe_failed"
+  | "rate_limited";
 
 function fail(code: BillingError): never {
   redirect(`${BILLING}?error=${code}`);
@@ -36,11 +38,14 @@ async function owner(): Promise<{ companyId: string; userId: string; email: stri
   const user = await currentUser();
   if (!user) redirect("/login");
   let ctx: ActionContext | null = null;
+  let limited = false;
   try {
-    ctx = await resolveWebActor();
-  } catch {
-    // Не член жодної компанії: сторінка сама скаже, що робити.
+    ctx = await crmActionActor();
+  } catch (err) {
+    // Забагато дій (RL_WEB) сторінка пояснить; не член жодної компанії: сторінка сама скаже, що робити.
+    limited = err instanceof ActionError && err.code === "rate_limited";
   }
+  if (limited) fail("rate_limited");
   if (!ctx) redirect(BILLING);
   if (ctx.actor.kind !== "member" || !can(ctx.actor.role, "billing.stripe")) fail("owner_only");
   return { companyId: ctx.actor.companyId, userId: user.id, email: user.email };
