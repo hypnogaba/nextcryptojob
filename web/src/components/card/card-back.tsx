@@ -20,7 +20,7 @@ export function CardBackFace({
 }: {
   face: CardFace;
   back: CardBack | null;
-  /** «Formula v5, checked 13 Sep 2026.» */
+  /** «Formula v6, checked 13 Sep 2026.» */
   meta: string;
   /** Чому розкладу немає. */
   missing?: string | null;

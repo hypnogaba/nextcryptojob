@@ -25,5 +25,7 @@ describe("recipes", () => {
     expect(recipeCore("engineer")).toBe("GitHub 80, X 20");
     expect(recipeBonus("engineer")).toBe("Onchain up to 5, Website up to 5");
     expect(recipeCore("security_auditor")).toBe("Audit contests 60, GitHub 25, X 15, or GitHub 70, X 30");
+    expect(recipeCore("trader")).toBe("Trading 90, Onchain 10");
+    expect(recipeBonus("trader")).toBe("X up to 5, Website up to 5");
   });
 });

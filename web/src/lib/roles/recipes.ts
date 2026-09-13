@@ -1,4 +1,4 @@
-// Рецепти ролей формули v5 (docs/contracts.md, §4) для показу: код позиції на
+// Рецепти ролей формули v6 (docs/contracts.md, §4) для показу: код позиції на
 // картці, ядро з вагами й додатки. Числа ті самі, що в engine/src/formula/roles.ts;
 // якщо договір зміниться, міняти обидва місця (тест recipes.test.ts тримає суми).
 import type { RoleKey } from "@/lib/card/roles";
@@ -78,7 +78,7 @@ export const RECIPES = {
   marketing_content: { paths: [[["media", 100]]], bonus: [["site", 7], ["onchain", 3]] },
   creator_kol: { paths: [[["media", 100]]], bonus: [["onchain", 5], ["site", 5]] },
   community: { paths: [[["x", 100]]], bonus: [["onchain", 7], ["site", 3]] },
-  trader: { paths: [[["trading", 80], ["onchain", 20]]], bonus: [["x", 5], ["site", 5]] },
+  trader: { paths: [[["trading", 90], ["onchain", 10]]], bonus: [["x", 5], ["site", 5]] },
 } as const satisfies Partial<Record<RoleKey, Recipe>>;
 
 export type ScoredRoleKey = keyof typeof RECIPES;
