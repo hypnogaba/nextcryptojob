@@ -175,6 +175,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0012_access_views.sql | web: оплата | перебудова в'ю company_access і company_jobs_live (past_due 7 днів від початку періоду) |
 | 0014_digest_email.sql | web: лист добірки (W7) | digest_emails (ідемпотентність листа за digest_id; після 0006) |
 | 0016_x402_no_result.sql | web: оплата й агенти | x402_payments.no_result_*, refunded_* («Paid without result»); індекс audit_log за payment_id пошуку |
+| 0017_saved_search_baseline.sql | web: CRM | saved_searches.baseline_at, filter_changes, filter_changes_day; last_match_count = нові на останньому сповіщенні |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)
