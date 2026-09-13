@@ -1,24 +1,6 @@
-// Генеративний візерунок картки: той самий рядок завжди дає той самий малюнок,
-// тож дві картки одного рівня різняться, а одна картка не змінюється між показами.
-//
-// Координати в полотні 1200×630 (розмір картинки для X). Фігури тяжіють праворуч:
-// ліворуч на картці стоїть біла плашка з текстом, і текст по візерунку не йде.
-
-export const PATTERN_WIDTH = 1200;
-export const PATTERN_HEIGHT = 630;
-
-export type Rings = { cx: number; cy: number; r: number; count: number; gap: number; width: number };
-export type Arc = { cx: number; cy: number; r: number; start: number; sweep: number; width: number };
-export type Stripes = { cx: number; cy: number; r: number; angle: number; gap: number; width: number };
-
-export type Pattern = {
-  /** Диск зі смугами під кутом. */
-  stripes: Stripes;
-  /** Групи концентричних кілець. */
-  rings: Rings[];
-  /** Товсті дуги. */
-  arcs: Arc[];
-};
+// Детерміновані випадкові числа для малюнків картки: той самий рядок завжди
+// дає ту саму послідовність. Печатка (seal.ts) бере звідси зерно й генератор.
+// Раніше тут жив візерунок картки 1200×630; його замінила печатка.
 
 /** FNV-1a, 32 біти: короткий стабільний хеш рядка (UTF-16 одиниці). */
 export function fnv1a(input: string): number {
@@ -31,7 +13,7 @@ export function fnv1a(input: string): number {
 }
 
 /** mulberry32: детермінований генератор чисел [0, 1) з 32-бітного зерна. */
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -40,85 +22,4 @@ function mulberry32(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
-
-export function patternSeed(displayName: string, role: string): string {
-  return `${role}\u0000${displayName}`;
-}
-
-export function makePattern(seed: string): Pattern {
-  const rand = mulberry32(fnv1a(seed));
-  const int = (min: number, max: number) => min + Math.floor(rand() * (max - min + 1));
-
-  const stripesGap = int(16, 30);
-  const stripes: Stripes = {
-    cx: int(760, 1060),
-    cy: int(140, 490),
-    r: int(150, 250),
-    angle: int(0, 179),
-    gap: stripesGap,
-    width: int(3, Math.floor(stripesGap / 3)),
-  };
-
-  const rings: Rings[] = Array.from({ length: int(1, 2) }, () => ({
-    cx: int(700, 1180),
-    cy: int(-40, 670),
-    r: int(24, 90),
-    count: int(3, 6),
-    gap: int(18, 34),
-    width: int(2, 5),
-  }));
-
-  const arcs: Arc[] = Array.from({ length: int(2, 3) }, () => ({
-    cx: int(650, 1200),
-    cy: int(0, 630),
-    r: int(120, 380),
-    start: int(0, 359),
-    sweep: int(60, 200),
-    width: int(6, 16),
-  }));
-
-  return { stripes, rings, arcs };
-}
-
-function point(cx: number, cy: number, r: number, deg: number): string {
-  const rad = (deg * Math.PI) / 180;
-  return `${(cx + r * Math.cos(rad)).toFixed(1)} ${(cy + r * Math.sin(rad)).toFixed(1)}`;
-}
-
-/** SVG-рядок візерунка: лише лінії кольору `color` з прозорістю `opacity`. */
-export function patternSvg(pattern: Pattern, color: string, opacity: number): string {
-  const { stripes: s } = pattern;
-  // Колір і прозорість на кожній фігурі, а не на <g>: resvg у збірці для Worker
-  // не успадковує stroke-opacity від групи (у Node успадковує), і лінії ставали білими.
-  const paint = `fill="none" stroke="${color}" stroke-opacity="${opacity}" stroke-linecap="round"`;
-  const lines: string[] = [];
-  for (let y = s.cy - s.r; y <= s.cy + s.r; y += s.gap) {
-    lines.push(`<line x1="${s.cx - s.r}" y1="${y}" x2="${s.cx + s.r}" y2="${y}" stroke-width="${s.width}" ${paint}/>`);
-  }
-  const rings = pattern.rings.flatMap((g) =>
-    Array.from({ length: g.count }, (_, i) =>
-      `<circle cx="${g.cx}" cy="${g.cy}" r="${g.r + i * g.gap}" stroke-width="${g.width}" ${paint}/>`,
-    ),
-  );
-  const arcs = pattern.arcs.map(
-    (a) =>
-      `<path d="M ${point(a.cx, a.cy, a.r, a.start)} A ${a.r} ${a.r} 0 ${a.sweep > 180 ? 1 : 0} 1 ` +
-      `${point(a.cx, a.cy, a.r, a.start + a.sweep)}" stroke-width="${a.width}" ${paint}/>`,
-  );
-
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PATTERN_WIDTH} ${PATTERN_HEIGHT}" ` +
-    `width="${PATTERN_WIDTH}" height="${PATTERN_HEIGHT}" preserveAspectRatio="xMidYMid slice">` +
-    `<defs><clipPath id="disc"><circle cx="${s.cx}" cy="${s.cy}" r="${s.r}"/></clipPath></defs>` +
-    `<g clip-path="url(#disc)"><g transform="rotate(${s.angle} ${s.cx} ${s.cy})">${lines.join("")}</g></g>` +
-    rings.join("") +
-    arcs.join("") +
-    `</svg>`
-  );
-}
-
-/** Візерунок як data:-адреса для <img>: працює і на сторінці (CSP img-src data:), і в next/og. */
-export function patternDataUri(pattern: Pattern, color: string, opacity: number): string {
-  return `data:image/svg+xml;base64,${btoa(patternSvg(pattern, color, opacity))}`;
 }

@@ -3,12 +3,24 @@ import { headers } from "next/headers";
 import { cache } from "react";
 import { currentUser } from "@/lib/auth/session";
 import { isCardOwner } from "@/lib/card/owner";
-import { getCard } from "@/lib/card/store";
+import { getCard, getCardEvidence } from "@/lib/card/store";
+import { cardView } from "@/lib/card/view";
 
 /** Картка за slug з D1; cache() дає одне читання на запит для сторінки й метаданих. */
 export const loadCard = cache(async (slug: string) => {
   const { env } = await getCloudflareContext({ async: true });
   return getCard(env.DB, slug);
+});
+
+/**
+ * Картка з тим, що за нею стоїть (зворот, печатка з гаманця). Разом з loadCard
+ * два читання D1 на запит; хто власник, у вигляд не потрапляє.
+ */
+export const loadCardView = cache(async (slug: string) => {
+  const card = await loadCard(slug);
+  if (!card) return null;
+  const { env } = await getCloudflareContext({ async: true });
+  return cardView(card, await getCardEvidence(env.DB, slug));
 });
 
 /** Чи дивиться власник картки: так/ні, без id людини. */

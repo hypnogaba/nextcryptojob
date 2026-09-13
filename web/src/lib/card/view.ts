@@ -1,35 +1,66 @@
 // Усе, що треба для показу картки, одним об'єктом: його бере і сторінка /c/<slug>,
-// і картинка для X, тож вони не розходяться в цифрах, кольорах чи візерунку.
+// і картинки для X, тож вони не розходяться в цифрах, обробці чи печатці.
+import type { IdentityKind } from "@/lib/identity/normalize";
+import { POSITION_CODE } from "@/lib/roles/recipes";
+import { cardBack, frontStats, type CardBack } from "./back";
 import { walletMarker } from "./eligibility";
-import { makePattern, patternDataUri, patternSeed } from "./pattern";
-import { ROLES } from "./roles";
+import { ROLES, type RoleKey } from "./roles";
+import { sealSeed } from "./seal";
 import type { PublicCard } from "./store";
-import { displayScore, levelRange, MAX_LEVEL, tierBackground, tierFor, type Tier } from "./tiers";
+import { displayScore, levelRange, MAX_LEVEL, tierFor, type Tier } from "./tiers";
 
-/** Прозорість ліній візерунка на кольорі ступеня. */
-export const PATTERN_OPACITY = 0.3;
-
-export type CardView = {
-  slug: string;
+/**
+ * Лицьовий бік картки. `kind`:
+ * - "real": видана картка (slug є);
+ * - "example": приклад на головній, лише з lib/card/example.ts, з позначкою EXAMPLE;
+ * - "draft": бал у профілі, картку ще не видано, печатки немає.
+ * Позначку EXAMPLE малює лише "example", тож на справжній картці її не буде.
+ */
+export type CardFace = {
+  kind: "real" | "example" | "draft";
   roleName: string;
+  positionCode: string;
   score: number;
   level: number;
-  /** «Level 8 / 10» */
+  tier: Tier;
+  displayName: string;
+  /** Зерно печатки (FNV-1a) або null, поки картку не видано. Сам гаманець сюди не йде. */
+  sealSeed: number | null;
+  /** До шести джерел ролі: код і значення, null = прогалина. */
+  stats: { code: string; value: number | null }[];
+  /** «No. aB3_-x9QzK» або null. */
+  number: string | null;
+  /** «Wallets not verified» для трейдера або null. */
+  marker: string | null;
+  /** Одним реченням для alt і aria-label. */
+  summary: string;
+};
+
+export type CardView = CardFace & {
+  slug: string;
+  role: RoleKey;
+  /** «Level 8 of 10» */
   levelLabel: string;
   /** «70 to 79» */
   levelRange: string;
-  displayName: string;
-  tier: Tier;
-  background: ReturnType<typeof tierBackground>;
-  /** data:image/svg+xml;base64,… */
-  patternSrc: string;
   formulaVersion: string;
   /** «12 Sep 2026» */
   issuedOn: string;
-  /** Одним реченням для alt і aria-label. */
-  summary: string;
-  /** Позначка на картці («Wallets not verified» для трейдера) або null. */
-  marker: string | null;
+  /** Розклад балу на звороті або null. */
+  back: CardBack | null;
+  /** Чому звороту немає (бал змінився після видачі) або null. */
+  backMissing: string | null;
+};
+
+/** Рядок scores власника картки й те, що рахується з його підключень. */
+export type CardEvidence = {
+  score: number | null;
+  breakdownJson: string;
+  formulaVersion: string;
+  /** Підтверджений гаманець для печатки або null (підпису гаманців у релізі 1 ще немає). */
+  wallet: string | null;
+  /** Підключення, які рахуються (для причин прогалин). */
+  connected: IdentityKind[];
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -41,27 +72,58 @@ export function formatIssuedOn(sqlTime: string): string {
   return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
 }
 
-export function cardView(card: PublicCard): CardView {
+export function summaryOf(f: Pick<CardFace, "displayName" | "roleName" | "score" | "level" | "marker">): string {
+  return (
+    `${f.displayName}: ${f.roleName}, score ${f.score} of 100, level ${f.level} of ${MAX_LEVEL}` +
+    (f.marker ? `. ${f.marker}.` : "")
+  );
+}
+
+/**
+ * Вигляд картки. `evidence` дає зворот і рядок статистики, лише якщо бал людини
+ * досі той, з яким картку видали (та сама формула й те саме ціле число):
+ * картка знімок, і розклад новішого балу під нею був би неправдою.
+ */
+export function cardView(card: PublicCard, evidence?: CardEvidence | null): CardView {
   const tier = tierFor(card.level);
   const roleName = ROLES[card.role].name;
   const score = displayScore(card.score);
   const marker = walletMarker(card.role);
-  return {
-    slug: card.slug,
+  const current =
+    evidence &&
+    evidence.score !== null &&
+    evidence.formulaVersion === card.formulaVersion &&
+    displayScore(evidence.score) === score;
+  const back = current ? cardBack(evidence.breakdownJson, new Set(evidence.connected)) : null;
+  const issuedOn = formatIssuedOn(card.createdAt);
+  const face: CardFace = {
+    kind: "real",
     roleName,
+    positionCode: POSITION_CODE[card.role],
     score,
     level: tier.level,
-    levelLabel: `Level ${tier.level} / ${MAX_LEVEL}`,
-    levelRange: levelRange(tier.level),
-    displayName: card.displayName,
     tier,
-    background: tierBackground(tier),
-    patternSrc: patternDataUri(makePattern(patternSeed(card.displayName, card.role)), tier.ink, PATTERN_OPACITY),
-    formulaVersion: card.formulaVersion,
-    issuedOn: formatIssuedOn(card.createdAt),
-    summary:
-      `${card.displayName}: ${roleName}, score ${score} of 100, level ${tier.level} of ${MAX_LEVEL}` +
-      (marker ? `. ${marker}.` : ""),
+    displayName: card.displayName,
+    sealSeed: sealSeed({ wallet: evidence?.wallet ?? null, slug: card.slug }),
+    stats: frontStats(back),
+    number: `No. ${card.slug}`,
     marker,
+    summary: "",
+  };
+  face.summary = summaryOf(face);
+  return {
+    ...face,
+    slug: card.slug,
+    role: card.role,
+    levelLabel: `Level ${tier.level} of ${MAX_LEVEL}`,
+    levelRange: levelRange(tier.level),
+    formulaVersion: card.formulaVersion,
+    issuedOn,
+    back,
+    backMissing: back
+      ? null
+      : evidence
+        ? `The holder's score changed after this card was issued on ${issuedOn}. The card keeps the score it was issued with.`
+        : null,
   };
 }

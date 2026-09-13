@@ -1,12 +1,12 @@
-Fonts in this folder (subsets served by the Google Fonts API, glyph outlines unchanged):
+Fonts in this folder (static instances made with fontTools varLib.instancer from the variable
+fonts in github.com/google/fonts, then subset; glyph outlines unchanged; see scripts/card-fonts.py):
 
-- Unbounded 600 (unbounded-600.ts): Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
-- IBM Plex Sans 600 (plex-sans-600.ts), IBM Plex Mono 500 (plex-mono-500.ts): Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
+- Big Shoulders 800, opsz 72 (big-shoulders-800.ts): Copyright 2019 The Big Shoulders Project Authors (https://github.com/xotypeco/big_shoulders)
+- Familjen Grotesk 500 (familjen-grotesk-500.ts): Copyright 2021 The Familjen Grotesk Project Authors (https://github.com/Familjen-Sthlm/Familjen-Grotesk)
+- NCJ Card Cyrillic (ncj-cyrillic-600.ts), a Cyrillic subset of IBM Plex Sans 600: Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
 
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-https://openfontlicense.org
-
+All of them are licensed under the SIL Open Font License, Version 1.1, reproduced below.
+"Plex" is a Reserved Font Name, so the Cyrillic subset is renamed "NCJ Card Cyrillic" in its name table.
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007

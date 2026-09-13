@@ -1,0 +1,77 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { SharePreview } from "@/components/landing/share-preview";
+import { EXAMPLE_BACK, exampleFace } from "@/lib/card/example";
+import { ShareImage } from "@/lib/card/og";
+import { makeSeal } from "@/lib/card/seal";
+import type { PublicCard } from "@/lib/card/store";
+import { cardView } from "@/lib/card/view";
+import { CardBackFace } from "./card-back";
+import { CardFront } from "./card-front";
+import { Seal } from "./seal";
+
+const CARD: PublicCard = {
+  slug: "aB3_-x9QzK",
+  role: "engineer",
+  score: 73.2,
+  level: 8,
+  displayName: "@ada_ships",
+  formulaVersion: "v5",
+  createdAt: "2026-09-12 08:30:00",
+};
+
+describe("EXAMPLE tag", () => {
+  it("never renders on a real card, on the page or in the images for X", () => {
+    for (let level = 1; level <= 10; level++) {
+      const view = cardView({ ...CARD, level, score: (level - 1) * 10 + 3 });
+      expect(view.kind).toBe("real");
+      const html = [
+        renderToStaticMarkup(<CardFront face={view} draw />),
+        renderToStaticMarkup(<CardBackFace face={view} back={null} meta="" />),
+        renderToStaticMarkup(<SharePreview face={view} format="wide" reasons="" />),
+        renderToStaticMarkup(<ShareImage view={view} format="wide" />),
+        renderToStaticMarkup(<ShareImage view={view} format="tall" />),
+      ].join("");
+      expect(html).not.toMatch(/example|specimen/i);
+    }
+  });
+
+  it("marks the landing example, and only there", () => {
+    const html = renderToStaticMarkup(<CardFront face={exampleFace()} />);
+    expect(html).toContain(">EXAMPLE<");
+    expect(renderToStaticMarkup(<CardFront face={{ ...exampleFace(), kind: "draft" }} />)).not.toContain("EXAMPLE");
+  });
+});
+
+describe("CardFront", () => {
+  it("shows score, position, level, finish, name, stats with gaps, and the card number", () => {
+    const html = renderToStaticMarkup(<CardFront face={exampleFace()} />);
+    for (const text of [">73<", ">ENG<", "Black", "@kestrel.dev", ">gap<", ">WEB<", "No. kSt7rEl0dv", "SEASON 1"]) {
+      expect(html).toContain(text);
+    }
+  });
+
+  it("draws the seal only once the card is issued", () => {
+    expect(renderToStaticMarkup(<CardFront face={{ ...exampleFace(), sealSeed: null, kind: "draft" }} />)).toContain(
+      "The seal is drawn when you create the card.",
+    );
+  });
+});
+
+describe("Seal", () => {
+  it.each([1, 4, 8, 10])("renders %s layers, one petal each repeated around the centre", (level) => {
+    const html = renderToStaticMarkup(<Seal seed={42} level={level} inks={["#000000", "#555555"]} />);
+    const layers = makeSeal(42, level);
+    expect(html.match(/class="ncj-layer"/g)).toHaveLength(level);
+    expect(html.match(/<use /g)).toHaveLength(layers.reduce((n, l) => n + l.petals, 0));
+  });
+});
+
+describe("CardBackFace", () => {
+  it("itemizes the formula and prints none with the reason", () => {
+    const html = renderToStaticMarkup(<CardBackFace face={exampleFace()} back={EXAMPLE_BACK} meta="Formula v5." />);
+    for (const text of [">Weight<", ">74.2<", ">59.4<", ">+5<", ">none<", "none: no website linked", ">68.6<", ">100%<"]) {
+      expect(html).toContain(text);
+    }
+  });
+});
