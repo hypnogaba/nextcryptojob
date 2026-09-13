@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ACTIONS } from "@/lib/crm/actions";
+import { ACTIONS, getAction } from "@/lib/crm/actions";
 import { respondToIntro } from "@/lib/crm/intros";
 import { callTool, evmPayment, mcp, rest, setupApi, type Json } from "@/test/api-fixtures";
 import { addApiKey, addCompany, addScore, addSubscription, addUser, all, publishFormula } from "@/test/crm-fixtures";
@@ -159,7 +159,7 @@ describe("same actions as REST", () => {
     expect(JSON.parse(row.meta_json).channel).toBe("mcp");
   });
 
-  it("without a subscription all 28 tools stay listed; a tool that is not live yet answers not_implemented", async () => {
+  it("without a subscription all 28 tools stay listed; a tool that needs one says so; a tool that is not live yet answers not_implemented", async () => {
     const { key } = await company({ subscribed: false });
     const list = await mcp(POST, "tools/list", {}, { key });
     expect(list.body.result.tools).toHaveLength(28);
@@ -167,8 +167,16 @@ describe("same actions as REST", () => {
     expect(res.structuredContent.access.mode).toBe("pay_per_request");
     const job = await callTool(POST, "post_job", { title: "Solidity engineer", roles: ["engineer"], work_mode: ["remote"] }, { key });
     expect(job.structuredContent.error.code).toBe("subscription_required");
-    const pending = await callTool(POST, "get_webhook", {}, { key });
-    expect(pending.structuredContent.error.code).toBe("not_implemented");
+    // Усі 28 уже працюють: обробник знімаємо на час тесту, як у нової дії.
+    const def = getAction("get_usage")!;
+    const handler = def.handler;
+    delete def.handler;
+    try {
+      const pending = await callTool(POST, "get_usage", {}, { key });
+      expect(pending.structuredContent.error.code).toBe("not_implemented");
+    } finally {
+      def.handler = handler;
+    }
   });
 });
 

@@ -263,6 +263,8 @@ export async function expireDue(
   now: Date,
   notifier: Notifier | null,
   limit = 50,
+  /** Час запуску cron вичерпано: решту добере наступний (cron/intros.ts). */
+  stop?: () => boolean,
 ): Promise<number> {
   const where = ["status = 'pending'", "respond_token_hash IS NOT NULL", "expires_at <= ?"];
   const params: (string | number)[] = [sqlTime(now)];
@@ -284,6 +286,7 @@ export async function expireDue(
     .all<{ id: string }>();
   let expired = 0;
   for (const { id } of results) {
+    if (stop?.()) break;
     if (!(await expireIntro(db, id, now))) continue;
     expired++;
     if (notifier) await notifyRequester(db, id, "expired", notifier);

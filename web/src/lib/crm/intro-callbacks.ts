@@ -4,6 +4,7 @@ import type { TgCallbackQuery } from "@/lib/telegram/bot";
 import { callTelegram, escapeHtml, type SendDeps } from "@/lib/telegram/send";
 import { answerText, candidateIntroRow, respondToIntro, type IntroDecision, type RespondOutcome } from "./intros";
 import { ANSWER_TEXT, siteOrigin, type NotifyEnv } from "./notify";
+import { deliverWebhookSoon } from "./webhook-kick";
 
 /**
  * Кнопки під запитом на знайомство в Telegram (специфікація CRM, 5.5):
@@ -83,6 +84,8 @@ export async function handleIntroCallback(query: TgCallbackQuery, env: IntroCall
       send: env.deps,
     },
   });
+  // Вебхук компанії: перша спроба одразу (після відповіді), решту зробить cron.
+  if (outcome.kind === "accepted" || outcome.kind === "declined") deliverWebhookSoon(introId);
   const text = answerText(outcome);
 
   const message = query.message;

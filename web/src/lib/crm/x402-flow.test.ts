@@ -17,6 +17,7 @@ import {
 import type { TestDb } from "@/test/sqlite-d1";
 import {
   commit,
+  getAction,
   PaymentRequired,
   prepareAction,
   release,
@@ -197,12 +198,20 @@ describe("not implemented actions", () => {
     const co = addCompany(db.raw);
     const { key } = await addApiKey(db.raw, co);
     const ctx = await contextFor(db, { authorization: `Bearer ${key}` });
-    const call = runAction("set_webhook", { url: "https://acme.io/hooks/ncj" }, ctx);
-    await expect(call).rejects.toMatchObject({ code: "not_implemented", status: 501 });
-    await expect(call).rejects.not.toBeInstanceOf(PaymentRequired);
-    // Навіть з хибним входом: спершу 501.
-    expect(() => prepareAction("set_webhook", { nonsense: true }, ctx)).toThrow(expect.objectContaining({ code: "not_implemented" }));
-    expect(facilitator.verify + facilitator.settle).toBe(0);
+    // Усі 28 дій уже працюють: обробник платного пошуку знімаємо на час тесту, як у нової дії.
+    const def = getAction("search_candidates")!;
+    const handler = def.handler;
+    delete def.handler;
+    try {
+      const call = runAction("search_candidates", { filters: { role: "engineer" } }, ctx);
+      await expect(call).rejects.toMatchObject({ code: "not_implemented", status: 501 });
+      await expect(call).rejects.not.toBeInstanceOf(PaymentRequired);
+      // Навіть з хибним входом: спершу 501.
+      expect(() => prepareAction("search_candidates", { nonsense: true }, ctx)).toThrow(expect.objectContaining({ code: "not_implemented" }));
+      expect(facilitator.verify + facilitator.settle).toBe(0);
+    } finally {
+      def.handler = handler;
+    }
   });
 
   it("the USDC month is live now and never runs without a payment", async () => {

@@ -22,6 +22,9 @@ export interface ExpireIntrosOptions {
   notifier?: Notifier;
   now?: Date;
   limit?: number;
+  /** Після цієї миті (мс за `clock`) нових знайомств не беремо. */
+  deadline?: number;
+  clock?: () => Date;
 }
 
 export interface ExpireIntrosResult {
@@ -33,7 +36,9 @@ export interface ExpireIntrosResult {
 export async function expireIntros(db: D1Database, opts: ExpireIntrosOptions = {}): Promise<ExpireIntrosResult> {
   const now = opts.now ?? new Date();
   const notifier = opts.notifier ?? notifierFromEnv(opts.env ?? {});
-  const expired = await expireDue(db, {}, now, notifier, opts.limit ?? EXPIRE_BATCH);
+  const clock = opts.clock ?? (() => new Date());
+  const stop = opts.deadline === undefined ? undefined : () => clock().getTime() >= opts.deadline!;
+  const expired = await expireDue(db, {}, now, notifier, opts.limit ?? EXPIRE_BATCH, stop);
   const holdsPurged = await purgeStaleHolds(db, now);
   return { expired, holdsPurged };
 }

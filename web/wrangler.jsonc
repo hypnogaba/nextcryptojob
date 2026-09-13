@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
+  // Власна точка входу: fetch від OpenNext (.open-next/worker.js) + scheduled для cron.
+  // https://opennext.js.org/cloudflare/howtos/custom-worker
+  "main": "worker.ts",
   "name": "nextcryptojob",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
@@ -60,6 +62,12 @@
       "allowed_sender_addresses": ["login@nextcryptojob.xyz", "jobs@nextcryptojob.xyz"]
     }
   ],
+  // Cron (специфікація CRM 3.6, src/lib/cron/index.ts): кожні 5 хв знайомства й
+  // вебхуки, щогодини сповіщення збережених пошуків, щодня о 03:00 UTC прибирання.
+  // Рядки мусять збігатися з CRONS у src/lib/cron/index.ts (тест cron/index.test.ts).
+  "triggers": {
+    "crons": ["*/5 * * * *", "0 * * * *", "0 3 * * *"]
+  },
   "observability": {
     "enabled": true
   }

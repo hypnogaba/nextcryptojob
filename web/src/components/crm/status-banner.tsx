@@ -107,3 +107,25 @@ export function accessBannerText(
   }
   return null;
 }
+
+/**
+ * Плашка "Your webhook is failing" (специфікація 7.6 і 10.1): подію не прийнято за
+ * 6 спроб. Знімається, щойно приймач відповість 2xx або власник змінить адресу.
+ */
+export function WebhookFailingBanner({ company }: { company: Pick<CompanyInfo, "status" | "webhookFailingSince"> }) {
+  if (company.status !== "active" || !company.webhookFailingSince) return null;
+  return (
+    <div
+      role="status"
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg border border-line-strong bg-wash px-4 py-2 text-sm text-ink"
+    >
+      <p>
+        <span className="font-medium">Your webhook is failing</span>
+        <span className="text-ink-muted"> Intro events did not reach your endpoint after 6 tries.</span>
+      </p>
+      <Link href="/company/developers#webhook" className="inline-flex min-h-11 items-center font-medium text-brand underline underline-offset-4">
+        Open Developers
+      </Link>
+    </div>
+  );
+}

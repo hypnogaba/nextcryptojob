@@ -31,6 +31,7 @@ import { ActionError, validationError } from "./types";
 import { createSavedSearch, deleteSavedSearch, listSavedSearches, updateSavedSearch } from "./saved-searches";
 import { getUsage } from "./usage";
 import { isVisibleTo } from "./visibility";
+import { getWebhook, setWebhook, testWebhook } from "./webhooks";
 
 /**
  * Єдиний реєстр дій (специфікація CRM, 3.2 і 5.1). Кожна дія описана один раз:
@@ -45,7 +46,7 @@ import { isVisibleTo } from "./visibility";
  *
  * Обробники (handler) є в діях T2–T5 (get_account, search_candidates,
  * get_candidate, воронка, знайомства), T7 (збережені пошуки), T9 (get_usage,
- * buy_usdc_month) і T12 (вакансії, search_jobs); вебхук допише T11. Дія без обробника відповідає 501
+ * buy_usdc_month), T11 (вебхук) і T12 (вакансії, search_jobs). Дія без обробника відповідає 501
  * not_implemented ще до перевірки оплати. Маршрути REST і інструменти MCP
  * беруться з цього реєстру (lib/api/rest.ts, lib/api/mcp.ts), тож нова дія
  * з'являється в обох сама.
@@ -470,6 +471,7 @@ export const ACTIONS = [
     output: T.Webhook,
     permission: "webhook.read",
     access: ALL_ACCESS,
+    handler: getWebhook,
   }),
   defineAction({
     name: "set_webhook",
@@ -480,6 +482,9 @@ export const ACTIONS = [
     output: T.Webhook,
     permission: "webhook.write",
     access: ALL_ACCESS,
+    // Журнал webhook.update або webhook.rotate (без адреси: у ній буває токен приймача).
+    audit: "webhook.update",
+    handler: setWebhook,
   }),
   defineAction({
     name: "test_webhook",
@@ -490,6 +495,8 @@ export const ACTIONS = [
     output: T.WebhookTestResult,
     permission: "webhook.write",
     access: ALL_ACCESS,
+    // Рядок журналу доставок (webhook.test) пише сам обробник.
+    handler: testWebhook,
   }),
   defineAction({
     name: "get_usage",

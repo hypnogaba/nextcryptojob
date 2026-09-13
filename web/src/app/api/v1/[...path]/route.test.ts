@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sha256Hex } from "@/lib/auth/hash";
+import { getAction } from "@/lib/crm/actions";
 import { respondToIntro } from "@/lib/crm/intros";
 import { sqlTime } from "@/lib/time";
 import { rest, schemaErrors, setupApi } from "@/test/api-fixtures";
@@ -285,10 +286,19 @@ describe("request parsing and routing", () => {
   });
 
   it("an operation that is not live yet answers 501 not_implemented before anything else", async () => {
-    const { key } = await company({ subscribed: false });
-    const res = await call("PUT", "/webhook", { key, body: { nonsense: true } });
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe("not_implemented");
+    // Усі 28 уже працюють: обробник платного пошуку знімаємо на час тесту, як у нової дії.
+    const def = getAction("search_candidates")!;
+    const handler = def.handler;
+    delete def.handler;
+    try {
+      const { key } = await company({ subscribed: false });
+      const res = await call("POST", "/candidates/search", { key, body: { nonsense: true } });
+      expect(res.status).toBe(501);
+      expect(res.body.error.code).toBe("not_implemented");
+      expect(net.verify + net.settle).toBe(0);
+    } finally {
+      def.handler = handler;
+    }
   });
 });
 
@@ -371,9 +381,13 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
       "GET /public/jobs": 200,
       // Місяць USDC платний навіть з підпискою: без платежу 402 з вимогою.
       "POST /billing/usdc-month": 402,
+      // Вебхук (T11): читання працює; без WEBHOOK_SIGNING_KEY зміна каже, чого бракує (503),
+      // а тест без адреси відповідає 409 webhook_not_set.
+      "GET /webhook": 200,
+      "PUT /webhook": 503,
+      "POST /webhook/test": 409,
     });
-    // Ще не запущені дії (T11): 501 до будь-якої оплати.
-    const pending = results.filter((r) => r.status === 501).map((r) => r.op);
-    expect(pending.sort()).toEqual(["GET /webhook", "PUT /webhook", "POST /webhook/test"].sort());
+    // Усі 28 операцій уже працюють: жодної 501.
+    expect(results.filter((r) => r.status === 501).map((r) => r.op)).toEqual([]);
   });
 });

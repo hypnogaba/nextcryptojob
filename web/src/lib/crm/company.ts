@@ -673,6 +673,8 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   "team.leave": "left the team",
   "api_key.create": "created an API key",
   "api_key.revoke": "revoked an API key",
+  "webhook.update": "changed the webhook settings",
+  "webhook.rotate": "rotated the webhook signing secret",
   "candidate.search": "searched candidates",
   "candidate.view": "viewed {c}",
   "candidate.erased": "noted: {c} deleted their account",
@@ -707,10 +709,11 @@ export async function listActivity(ctx: ActionContext, limit = 50): Promise<Acti
   const { lo, hi } = companyAuditRange(me.companyId);
   const { results } = await ctx.db
     .prepare(
+      // Без журналу доставок вебхука (актор <company>:webhook): його показує сторінка Developers.
       `SELECT actor, action, target, at FROM audit_log
-        WHERE actor >= ? AND actor < ? ORDER BY at DESC, id DESC LIMIT ?`,
+        WHERE actor >= ? AND actor < ? AND actor <> ? ORDER BY at DESC, id DESC LIMIT ?`,
     )
-    .bind(lo, hi, limit)
+    .bind(lo, hi, `${me.companyId}:webhook`, limit)
     .all<{ actor: string; action: string; target: string | null; at: string }>();
 
   const userIds: string[] = [];

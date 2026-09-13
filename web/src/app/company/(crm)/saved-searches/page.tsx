@@ -64,7 +64,9 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
                   <p className="text-sm text-ink-muted">{describeFilters(s.filters, s.sort)}</p>
                   <p className="text-xs text-ink-muted">
                     {s.last_alert_at && s.last_match_count !== null
-                      ? `Last alert ${TIME.format(new Date(s.last_alert_at))} UTC: ${s.last_match_count} new.`
+                      ? s.last_match_count === 0
+                        ? `Checked ${TIME.format(new Date(s.last_alert_at))} UTC: no new candidates.`
+                        : `Last alert ${TIME.format(new Date(s.last_alert_at))} UTC: ${s.last_match_count} new.`
                       : "No alert yet."}
                   </p>
                 </div>

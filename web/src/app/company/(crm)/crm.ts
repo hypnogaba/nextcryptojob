@@ -36,6 +36,7 @@ export type CrmPage =
   | "jobs"
   | "team"
   | "billing"
+  | "developers"
   | "settings"
   | "apply";
 
