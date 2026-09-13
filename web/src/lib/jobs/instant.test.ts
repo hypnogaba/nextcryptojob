@@ -9,19 +9,15 @@ import { addPoolJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
 import type { TestDb } from "@/test/sqlite-d1";
 import {
   type BriefRow,
-  countLine,
   instantMatches,
   profileOf,
-  resetTodayJobs,
   roughCount,
-  todayJobs,
 } from "./instant";
 import { NEXTROLE_POOL_SQL, POOL_READ_SQL, resetNextrolePool } from "./nextrole-pool";
 
 /**
- * «Jobs for you now» і «Today's jobs»: ті самі вакансії й той самий порядок, що вибрала б
- * щоденна добірка engine; причина, коли нічого не підійшло; кількість без прикрашання;
- * головна без бази вакансій не падає.
+ * «Jobs for you now»: ті самі вакансії й той самий порядок, що вибрала б щоденна добірка
+ * engine; причина, коли нічого не підійшло; кількість без прикрашання.
  */
 
 const NOW = new Date("2026-09-13T12:00:00Z");
@@ -62,7 +58,6 @@ function seedCompanyJob(raw: DatabaseSync) {
 
 beforeEach(() => {
   resetNextrolePool();
-  resetTodayJobs();
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   nr = nextroleJobsDb();
   seed(nr.raw);
@@ -191,41 +186,7 @@ describe("Jobs for you now", () => {
   });
 });
 
-describe("Today's jobs on the home page", () => {
-  const home = (j: () => JobsDb = jobs) => todayJobs({ db: () => ours.d1, env: {}, jobs: j, now: NOW });
-
-  it("an example list by the digest rules, and the live count from the same pool", async () => {
-    const today = await home();
-    expect(today.available).toBe(true);
-    expect(today.jobs.length).toBeGreaterThan(0);
-    expect(today.jobs.length).toBeLessThanOrEqual(5);
-    expect(new Set(today.jobs.map((j) => j.company)).size).toBe(today.jobs.length);
-    // 9 рядків пройшли сито (без старого й «Head Chef») + 1 вакансія компанії.
-    expect(today.live).toBe(10);
-    // greenhouse:chainlabs, ashby:lido, board:de-web3, ashby:wintermute + вакансії компаній у нас.
-    expect(today.sources).toBe(5);
-  });
-
-  it("reads the jobs database at most once per 10 minutes", async () => {
-    await home();
-    await home();
-    expect(reads).toBe(1);
-  });
-
-  it("still answers when the jobs database fails: no list, no count, no error", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const broken = () => ({ all: async () => Promise.reject(new Error("D1_ERROR: overloaded")), first: async () => null });
-    expect(await home(broken)).toEqual({ available: false, jobs: [], live: 0, sources: 0 });
-  });
-
-  it("still answers when the Worker has no database binding at all", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const unbound = () => {
-      throw new Error("no binding");
-    };
-    expect(await home(unbound)).toMatchObject({ available: false });
-  });
-
+describe("the site pool", () => {
   it("reads the same rows as the engine, plus the source of each", () => {
     expect(POOL_READ_SQL).toBe(NEXTROLE_POOL_SQL.replace("dedupe_key\n", "dedupe_key, source\n"));
     expect(POOL_READ_SQL).not.toBe(NEXTROLE_POOL_SQL);
@@ -238,11 +199,5 @@ describe("counting honestly", () => {
     expect([0, 7, 99, 100, 117, 120, 999, 1000, 1909, 2000, 12_345].map(roughCount)).toEqual([
       "0", "7", "99", "100", "110+", "120", "990+", "1,000", "1,900+", "2,000", "12,300+",
     ]);
-  });
-
-  it("writes the count line", () => {
-    expect(countLine({ live: 1909, sources: 117 })).toBe("1,900+ live crypto jobs from 117 sources, updated daily.");
-    expect(countLine({ live: 1, sources: 1 })).toBe("1 live crypto job from 1 source, updated daily.");
-    expect(countLine({ live: 0, sources: 0 })).toBeNull();
   });
 });

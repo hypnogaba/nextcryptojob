@@ -11,13 +11,12 @@ import {
   selectJobs,
   workModes,
 } from "./nextrole-match";
-import { FAILURE_BACKOFF_MS, nextrolePool, POOL_TTL_MS, type PoolJob } from "./nextrole-pool";
+import { nextrolePool, type PoolJob } from "./nextrole-pool";
 import { parseRoles, ROLE_NAMES } from "./nextrole-roles";
 
 /**
- * Вакансії «зараз», тими самими правилами, що й щоденна добірка engine:
- * - «Jobs for you now» на /jobs: вибір для людини з сесії одразу після анкети;
- * - «Today's jobs» на головній: приклад добірки для вигаданої анкети й рядок про кількість.
+ * «Jobs for you now» на /jobs: вакансії «зараз» для людини з сесії одразу після анкети,
+ * тими самими правилами, що й щоденна добірка engine.
  *
  * Правила не свої: selectJobs і решта з nextrole-match.ts (дослівна копія engine/src/digest/match.ts),
  * пул той самий, що в search_jobs (nextrole-pool.ts, пам'ять ізолята POOL_TTL_MS) плюс живі
@@ -25,7 +24,7 @@ import { parseRoles, ROLE_NAMES } from "./nextrole-roles";
  * Сторінка нічого не пише: вибір «зараз» не займає місця в добірці й не рахується як надісланий.
  */
 
-/** Вакансія, як її показати людині (сторінка /jobs і головна). */
+/** Вакансія, як її показати людині (сторінка /jobs). */
 export type ShownJob = {
   /** 'nr:<id>' або 'co:<id>', як sent.job_ref. */
   ref: string;
@@ -173,74 +172,7 @@ export async function instantMatches(deps: InstantDeps, brief: BriefRow, exclude
 }
 
 // ---------------------------------------------------------------------------
-// Головна: приклад добірки й кількість
-
-/**
- * Вигадана анкета для прикладу на головній: п'ять різних ролей, віддалено, від $50k.
- * Добірка бере одну вакансію на роль і на компанію, тож приклад різноманітний, а мінімум
- * зарплати піднімає вгору вакансії з указаною зарплатою (як у справжній добірці).
- */
-export const SAMPLE_BRIEF: BriefRow = {
-  roles: JSON.stringify(["engineer", "product_manager", "marketing_content", "bd", "trader"] satisfies RoleKey[]),
-  remote_mode: "remote",
-  city: null,
-  salary_min: 50_000,
-  salary_currency: "USD",
-};
-
-export type TodayJobs = {
-  /** false: базу вакансій зараз не прочитали; сторінка показує запасний текст. */
-  available: boolean;
-  jobs: ShownJob[];
-  /** Живих вакансій у пулі (NextRole після сита + компаній). */
-  live: number;
-  /** Різних джерел: дошки NextRole (jobs_cache.source) і, якщо є, вакансії компаній у нас. */
-  sources: number;
-};
-
-const UNAVAILABLE: TodayJobs = { available: false, jobs: [], live: 0, sources: 0 };
-
-let today: { at: number; value: TodayJobs } | null = null;
-
-/** Для тестів: наступний виклик рахує знову. */
-export function resetTodayJobs(): void {
-  today = null;
-}
-
-/**
- * Приклад добірки й кількість для головної. Готовий результат живе в пам'яті ізолята
- * POOL_TTL_MS, тож головна читає базу не частіше: пул NextRole раз на 10 хвилин (свій кеш),
- * вакансії компаній раз на 10 хвилин. Невдача (база NextRole не відповіла, попереднього пулу
- * немає) кешується на FAILURE_BACKOFF_MS і дає available: false, а не помилку сторінки.
- */
-export async function todayJobs(deps: { db: () => D1Database; env: { SITE_URL?: string }; jobs: () => JobsDb; now: Date }): Promise<TodayJobs> {
-  const t = Date.now();
-  if (today && t - today.at < (today.value.available ? POOL_TTL_MS : FAILURE_BACKOFF_MS)) return today.value;
-  let value: TodayJobs;
-  try {
-    const crawl = await nextrolePool(deps.jobs, deps.now);
-    if (!crawl) {
-      value = UNAVAILABLE;
-    } else {
-      const company = await companyJobs(deps.db(), deps.env, "home");
-      const pool: Pool = { nextrole: crawl.map(digestJobOf), company: company.map(digestJobOf) };
-      const picks = selectJobs(pool, profileOf(SAMPLE_BRIEF), { now: deps.now, exclude: new Set() });
-      const origins = new Set(crawl.map((j) => j.origin).filter((o): o is string => Boolean(o)));
-      value = {
-        available: true,
-        jobs: picks.map(shown),
-        live: crawl.length + company.length,
-        sources: origins.size + (company.length > 0 ? 1 : 0),
-      };
-    }
-  } catch (e) {
-    // Напр. немає прив'язки DB поза Worker: головна однаково відкривається.
-    console.warn(`home: today's jobs failed (${e instanceof Error ? e.name : "unknown"})`);
-    value = UNAVAILABLE;
-  }
-  today = { at: Date.now(), value };
-  return value;
-}
+// Кількість
 
 /**
  * Кількість без прикрашання: до 100 точно, далі вниз до десятка чи сотні з «+»
@@ -251,12 +183,4 @@ export function roughCount(n: number): string {
   const step = n < 1000 ? 10 : 100;
   const floor = Math.floor(n / step) * step;
   return `${floor.toLocaleString("en-US")}${floor < n ? "+" : ""}`;
-}
-
-/** «1,900+ live crypto jobs from 117 sources, updated daily.»; null, якщо показати нічого. */
-export function countLine(t: Pick<TodayJobs, "live" | "sources">): string | null {
-  if (t.live <= 0) return null;
-  const jobs = `${roughCount(t.live)} live crypto job${t.live === 1 ? "" : "s"}`;
-  const from = t.sources > 0 ? ` from ${t.sources} source${t.sources === 1 ? "" : "s"}` : "";
-  return `${jobs}${from}, updated daily.`;
 }

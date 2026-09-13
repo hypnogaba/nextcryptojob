@@ -51,6 +51,14 @@
   --elev-lift: 0 2px 4px rgb(18 20 24 / 8%), 0 28px 50px -24px rgb(18 20 24 / 45%);
   --elev-rest: 0 1px 2px rgb(18 20 24 / 12%);
 
+  /* Табло головної (лічильники й стрічка): темне в обох темах, акцент у темному варіанті.
+     Контраст: board-ink/board 16.9, board-muted/board 8.9, board-accent/board 7.3. */
+  --board:        #121418;
+  --board-ink:    #eef1f6;
+  --board-muted:  #a8b3c4;
+  --board-line:   #2e333b;
+  --board-accent: #ff7a4d;
+
   /* Імена з макета, як синоніми. */
   --ink-2: var(--ink-muted);
   --rule: var(--line);
@@ -86,6 +94,8 @@
     --sleeve:      rgb(255 255 255 / 4%);
     --elev-lift: 0 2px 4px rgb(0 0 0 / 30%), 0 28px 50px -24px rgb(0 0 0 / 80%);
     --elev-rest: 0 1px 2px rgb(0 0 0 / 40%);
+    --board:       #0a1120;
+    --board-line:  #22314a;
   }
 }
 
@@ -107,6 +117,8 @@
   --sleeve:      rgb(255 255 255 / 4%);
   --elev-lift: 0 2px 4px rgb(0 0 0 / 30%), 0 28px 50px -24px rgb(0 0 0 / 80%);
   --elev-rest: 0 1px 2px rgb(0 0 0 / 40%);
+  --board:       #0a1120;
+  --board-line:  #22314a;
 }
 
 /* Змінні shadcn/ui, зведені до токенів. accent у shadcn = тло наведення. */
@@ -563,4 +575,167 @@
 }
 @layer components {
   .ncj-share .ncj-tag-example { display: none; }
+}
+
+@layer components {
+  /* ─── Табло головної: лічильники й стрічка ────────────────────
+     Темна смуга в обох темах, як табло на стадіоні: помаранчеві цифри на чорному. */
+  .ncj-board {
+    background: var(--board);
+    color: var(--board-ink);
+    border-block: 1px solid var(--board-line);
+    color-scheme: dark;
+  }
+  .ncj-board ::selection { background: var(--board-accent); color: var(--board); }
+  .ncj-board :focus-visible { outline-color: var(--board-accent); }
+  .ncj-board-cell {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1.5rem 1rem 1.25rem 0;
+    border-bottom: 1px solid var(--board-line);
+  }
+  .ncj-board-cell:nth-child(odd) { padding-right: 1rem; border-right: 1px solid var(--board-line); }
+  .ncj-board-cell:nth-child(even) { padding-left: 1.25rem; }
+  @media (min-width: 64rem) {
+    .ncj-board-cell { padding: 2rem 1.5rem 1.75rem; border-bottom: 0; }
+    .ncj-board-cell:first-child { padding-left: 0; }
+    .ncj-board-cell:nth-child(n) { border-right: 1px solid var(--board-line); }
+    .ncj-board-cell:last-child { border-right: 0; }
+  }
+  .ncj-board-num {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(2.75rem, 1.6rem + 4.2vw, 5.25rem);
+    color: var(--board-accent);
+    letter-spacing: -0.005em;
+  }
+  .ncj-board-note {
+    padding-block: 0.875rem;
+    font-size: 0.875rem;
+    color: var(--board-muted);
+  }
+  @media (min-width: 64rem) {
+    .ncj-board-note { border-top: 1px solid var(--board-line); }
+  }
+
+  /* Лічильник (components/landing/odometer.tsx). Вікно в один рядок; над кожною цифрою
+     ::before з рядками 0, 1, 2 ...; колонка їде вгору з translateY(rows) до 0, тож цифри
+     пробігають і стають на справжню. Рядки з content мають порожній alt ("" після /):
+     їх немає в тексті й озвученні. Без підтримки alt рядків немає, цифра просто виїжджає. */
+  .ncj-odo {
+    display: inline-flex;
+    height: 1em;
+    line-height: 1;
+    overflow: clip;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .ncj-odo > span { display: inline-block; }
+  .ncj-odo-col { position: relative; }
+  @supports (content: "0" / "") {
+    .ncj-odo-col::before {
+      content: var(--seq) / "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      white-space: pre;
+      text-align: center;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .ncj-odo-col {
+      animation: ncj-odo 820ms var(--ease-out) both;
+      animation-delay: var(--odo-delay, 0ms);
+    }
+    [data-roll="wait"] .ncj-odo-col {
+      animation: none;
+      transform: translateY(calc(var(--rows) * 1em));
+    }
+  }
+  @keyframes ncj-odo {
+    from { transform: translateY(calc(var(--rows) * 1em)); }
+    to { transform: none; }
+  }
+
+  /* Стрічка вакансій (components/landing/job-ticker.tsx). Доріжка = два однакові списки,
+     кожен з відступом справа, як між пунктами, тож зсув на -50% дає безшовне коло.
+     Рух лінійний (постійна швидкість), пауза під курсором і фокусом. З клавіатури
+     (:focus-visible всередині) стрічка стає і гортається, щоб пункт у фокусі було видно. */
+  .ncj-ticker {
+    --ticker-gap: 2.5rem;
+    position: relative;
+    border-top: 1px solid var(--board-line);
+    overflow: clip;
+    mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+  }
+  .ncj-ticker-track { display: flex; width: max-content; }
+  .ncj-ticker-list { display: flex; padding-block: 1rem; }
+  /* Кожен пункт однаковий: [риска][пів проміжку][вакансія][пів проміжку], тож два списки
+     поспіль не мають шва. */
+  .ncj-ticker-list > li { display: flex; align-items: center; padding-right: calc(var(--ticker-gap) / 2); }
+  .ncj-ticker-list > li::before {
+    content: "";
+    width: 1px;
+    height: 1.25rem;
+    margin-right: calc(var(--ticker-gap) / 2);
+    background: var(--board-line);
+  }
+  .ncj-ticker[data-moving="false"] .ncj-ticker-list,
+  .ncj-ticker:has(:focus-visible) .ncj-ticker-list { padding-inline: clamp(16px, 4vw, 56px); }
+  .ncj-ticker[data-moving="false"] .ncj-ticker-list > li:first-child::before,
+  .ncj-ticker:has(:focus-visible) .ncj-ticker-list > li:first-child::before { display: none; }
+  .ncj-ticker-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    white-space: nowrap;
+    border-radius: 2px;
+    color: var(--board-ink);
+  }
+  .ncj-ticker-title { font-weight: 600; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 0.25em; transition: text-decoration-color 150ms ease; }
+  .ncj-ticker-meta { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--board-muted); font-size: 0.9375rem; }
+  .ncj-ticker-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+  .ncj-ticker-pay {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.1875rem;
+    letter-spacing: 0.01em;
+    color: var(--board-accent);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .ncj-ticker-item:hover .ncj-ticker-title { text-decoration-color: var(--board-accent); }
+  }
+  .ncj-ticker-item:focus-visible .ncj-ticker-title { text-decoration-color: var(--board-accent); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ncj-ticker[data-moving="true"] .ncj-ticker-track {
+      animation: ncj-ticker var(--ticker-dur, 120s) linear infinite;
+    }
+    .ncj-ticker:hover .ncj-ticker-track,
+    .ncj-ticker:focus-within .ncj-ticker-track { animation-play-state: paused; }
+  }
+  @keyframes ncj-ticker {
+    to { transform: translateX(-50%); }
+  }
+  /* Стоїть: гортається пальцем чи колесом, копії немає, краї без маски. */
+  .ncj-ticker[data-moving="false"],
+  .ncj-ticker:has(:focus-visible) {
+    overflow-x: auto;
+    mask-image: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--board-line) transparent;
+  }
+  .ncj-ticker:has(:focus-visible) .ncj-ticker-track { animation: none; }
+  .ncj-ticker:has(:focus-visible) .ncj-ticker-list[aria-hidden],
+  .ncj-ticker[data-moving="false"] .ncj-ticker-list[aria-hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .ncj-ticker { overflow-x: auto; mask-image: none; scrollbar-width: thin; scrollbar-color: var(--board-line) transparent; }
+    .ncj-ticker-list[aria-hidden] { display: none; }
+    .ncj-ticker-list { padding-inline: clamp(16px, 4vw, 56px); }
+    .ncj-ticker-list > li:first-child::before { display: none; }
+    .ncj-ticker-title { transition: none; }
+  }
 }

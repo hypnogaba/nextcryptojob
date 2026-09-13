@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CardBackFace } from "@/components/card/card-back";
+import { CardFlip } from "@/components/card/card-flip";
 import { CardFront } from "@/components/card/card-front";
+import { MiniCard } from "@/components/card/mini-card";
+import { LiveBoard } from "@/components/landing/live-board";
 import { Button } from "@/components/ui/button";
-import { exampleFace } from "@/lib/card/example";
+import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, exampleFace } from "@/lib/card/example";
+import { FINISHES } from "@/lib/card/tiers";
 import { appEnv, db } from "@/lib/db";
-import { countLine, todayJobs, type ShownJob, type TodayJobs } from "@/lib/jobs/instant";
+import { homeBoard } from "@/lib/jobs/home-board";
 import { jobsDb } from "@/lib/jobs-db";
 
 export const metadata: Metadata = {
@@ -12,8 +17,8 @@ export const metadata: Metadata = {
     "Answer a short brief and get a few crypto jobs that fit you, right away and every day by Telegram or email. Free.",
 };
 
-// Живий список з пулу вакансій: сторінку рендеримо на запит (кеш у пам'яті ізолята, lib/jobs/instant.ts),
-// бо статична збірка не бачить бази, а ISR цей кеш OpenNext не вміє (open-next.config.ts).
+// Живі числа й стрічка з пулу вакансій: сторінку рендеримо на запит (кеш у пам'яті ізолята,
+// lib/jobs/home-board.ts), бо статична збірка не бачить бази, а ISR цей кеш OpenNext не вміє.
 export const dynamic = "force-dynamic";
 
 const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
@@ -35,144 +40,121 @@ const STEPS = [
   },
 ] as const;
 
-function PreviewJob({ job, n }: { job: ShownJob; n: number }) {
-  const meta = [job.company, job.location, job.salary].filter(Boolean).join(" · ");
-  const title = "font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand";
-  return (
-    <li className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 border-b border-line px-4 py-3.5 last:border-b-0 sm:px-5">
-      <span aria-hidden className="font-display text-[1.375rem] leading-[1.1] font-black text-ink-muted">
-        {n}
-      </span>
-      <div className="grid min-w-0 gap-0.5 wrap-anywhere">
-        {job.url === null ? (
-          <span className="font-semibold text-ink">{job.title}</span>
-        ) : job.url.startsWith("/") ? (
-          <Link href={job.url} prefetch={false} className={title}>
-            {job.title}
-          </Link>
-        ) : (
-          <a href={job.url} target="_blank" rel="noopener noreferrer nofollow" className={title}>
-            {job.title}
-          </a>
-        )}
-        {meta ? <p className="text-sm text-ink-muted">{meta}</p> : null}
-      </div>
-    </li>
-  );
-}
-
-/** «Today's jobs»: приклад добірки з живого пулу. Без бази сторінка однаково відкривається. */
-function TodayPanel({ today }: { today: TodayJobs }) {
-  const count = countLine(today);
-  const shown = today.available && today.jobs.length > 0;
-  return (
-    <section
-      id="today"
-      aria-labelledby="today-h"
-      className="scroll-mt-6 overflow-hidden rounded-[10px] border-2 border-ink bg-surface shadow-rest"
-    >
-      <div className="grid gap-1 border-b-2 border-ink px-4 pt-4 pb-3 sm:px-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 id="today-h" className="font-display text-[1.75rem] leading-none font-extrabold uppercase">
-            Today&apos;s jobs
-          </h2>
-          <span className="font-display text-[0.8125rem] font-extrabold tracking-[0.08em] text-brand uppercase">
-            Example list
-          </span>
-        </div>
-        <p className="text-sm text-ink-muted">
-          {shown
-            ? "What a daily list looks like for a remote brief from $50k. Yours follows your own brief."
-            : "Today's jobs did not load just now. Your brief still works: we show your matches as soon as they load."}
-        </p>
-      </div>
-      {shown ? (
-        <ol>
-          {today.jobs.map((job, i) => (
-            <PreviewJob key={job.ref} job={job} n={i + 1} />
-          ))}
-        </ol>
-      ) : null}
-      {count ? <p className="border-t border-line bg-sleeve px-4 py-3 text-sm text-ink-muted sm:px-5">{count}</p> : null}
-    </section>
-  );
-}
+const ON_CARD = [
+  {
+    title: "A score for your role",
+    body: "0 to 100 for one of ten crypto roles, from GitHub, X and your wallets. The math is on the back.",
+  },
+  {
+    title: "A level and a finish",
+    body: "Every ten points is a level. The card goes from paper to chrome to black, and level 10 gets the red seal.",
+  },
+  {
+    title: "A seal that is yours",
+    body: "One layer per level, drawn from your card, so no two look alike.",
+  },
+] as const;
 
 export default async function HomePage() {
-  const today = await todayJobs({ db, env: safeEnv(), jobs: jobsDb, now: new Date() });
+  const now = new Date();
+  const board = await homeBoard({ db, env: safeEnv(), jobs: jobsDb, now });
   const face = exampleFace();
 
   return (
     <>
       <section
-        className={`${WRAP} grid items-start gap-10 pt-10 pb-16 sm:pt-16 lg:items-center lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 lg:pb-24`}
+        className={`${WRAP} grid items-center gap-x-16 gap-y-10 pt-8 pb-12 sm:pt-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:pb-16`}
       >
         <div>
-          <h1 className="display text-[clamp(3rem,1.5rem+5.4vw,6rem)] leading-[0.88]">Crypto jobs that fit you.</h1>
-          <p className="mt-6 max-w-[36ch] text-xl text-ink-muted">
-            Answer a short brief and get a few matching crypto jobs right away, then every day by Telegram or email.
-            Free.
+          <h1 className="display text-[clamp(3rem,1.6rem+5vw,6rem)] leading-[0.88]">Crypto jobs that fit you.</h1>
+          <p className="mt-5 max-w-[40ch] text-lg text-ink-muted sm:mt-6 sm:text-xl">
+            Answer a short brief and get a few matching jobs every day. Add GitHub, X or a wallet and you also get a
+            card that scores your work for that role.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-            <Button asChild size="lg">
+          <div className="mt-7 grid justify-items-start gap-3 sm:mt-8">
+            <Button asChild size="lg" className="h-12 px-6 text-[1.0625rem]">
               <Link href="/login">Get my jobs</Link>
             </Button>
-            <Link href="#today" className={`inline-flex min-h-11 items-center ${LINK}`}>
-              See today&apos;s jobs
-            </Link>
+            <p className="text-sm text-ink-muted">Free. About 2 minutes. Jobs by Telegram or email.</p>
           </div>
         </div>
-        <TodayPanel today={today} />
+        <figure className="mx-auto grid w-full max-w-[250px] justify-items-center gap-1 sm:max-w-[320px] lg:max-w-[350px]">
+          <CardFlip
+            className="w-full"
+            front={<CardFront face={face} draw />}
+            back={<CardBackFace face={face} back={EXAMPLE_BACK} meta={`Formula ${EXAMPLE_BREAKDOWN.formula}. Example data.`} />}
+            frontLabel="See how the score adds up"
+          />
+          <figcaption className="max-w-[34ch] text-center text-sm text-ink-muted">
+            What you get: a 0 to 100 score for your role, and jobs for that role every day.
+          </figcaption>
+        </figure>
       </section>
 
-      <section aria-labelledby="how-h" className="bg-sleeve py-16 sm:py-24">
-        <div className={WRAP}>
-          <h2 id="how-h" className="display text-section">
-            How it works
-          </h2>
-          <ol className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-3">
-            {STEPS.map((step, i) => (
-              <li key={step.title} className="grid content-start gap-3 border-t-2 border-ink pt-4">
-                <span aria-hidden className="font-display text-[4rem] leading-[0.8] font-black">
-                  {i + 1}
-                </span>
-                <h3 className="font-sans text-lg font-semibold text-ink">{step.title}</h3>
-                <p className="max-w-[40ch] text-ink-muted">{step.body}</p>
-              </li>
-            ))}
-          </ol>
-          <div className="mt-12">
-            <Button asChild size="lg">
-              <Link href="/login">Get my jobs</Link>
-            </Button>
-          </div>
+      <LiveBoard board={board} now={now.getTime()} />
+
+      <section aria-labelledby="how-h" className={`${WRAP} py-16 sm:py-24`}>
+        <h2 id="how-h" className="display text-section">
+          How it works
+        </h2>
+        <ol className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-3">
+          {STEPS.map((step, i) => (
+            <li key={step.title} className="grid content-start gap-3 border-t-2 border-ink pt-4">
+              <span aria-hidden className="font-display text-[4rem] leading-[0.8] font-black">
+                {i + 1}
+              </span>
+              <h3 className="font-sans text-lg font-semibold text-ink">{step.title}</h3>
+              <p className="max-w-[40ch] text-ink-muted">{step.body}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-12">
+          <Button asChild size="lg" className="h-12 px-6 text-[1.0625rem]">
+            <Link href="/login">Get my jobs</Link>
+          </Button>
         </div>
       </section>
 
-      <section aria-labelledby="standout-h" className={`${WRAP} py-16 sm:py-20`}>
-        <div className="grid items-center gap-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-10">
-          <div className="ncj-card w-[112px] rotate-[-3deg] sm:w-[132px]">
-            <CardFront face={face} />
-          </div>
-          <div className="grid max-w-[60ch] gap-2">
-            <h2 id="standout-h" className="font-sans text-xl font-semibold text-ink">
-              Stand out to companies
+      <section aria-labelledby="card-h" className="bg-sleeve py-16 sm:py-20">
+        <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16`}>
+          <div>
+            <h2 id="card-h" className="display text-title">
+              What&apos;s on your card
             </h2>
-            <p className="text-ink-muted">
-              Optional. Connect X, GitHub or your wallets and we score your public work for one of ten crypto roles,
-              with a card you can share. Companies see it only if you turn that on.
+            <dl className="mt-8 grid gap-5">
+              {ON_CARD.map((item) => (
+                <div key={item.title} className="grid gap-1 border-t border-line pt-3">
+                  <dt className="font-semibold text-ink">{item.title}</dt>
+                  <dd className="max-w-[52ch] text-ink-muted">{item.body}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-6 max-w-[52ch] text-sm text-ink-muted">
+              Optional. Companies see your card only if you turn that on.
             </p>
-            <p>
+            <p className="mt-1">
               <Link href="/scoring" className={`inline-flex min-h-11 items-center ${LINK}`}>
                 How scoring works
               </Link>
             </p>
           </div>
+          <ol className="grid grid-cols-4 gap-3 sm:gap-5" aria-label="The four finishes">
+            {FINISHES.map((f) => (
+              <li key={f.finish} className="grid content-start gap-2">
+                <MiniCard level={f.sample} seed={face.sealSeed!} value={f.sample} />
+                <p className="text-[0.8125rem] leading-tight text-ink-muted">
+                  <span className="font-semibold text-ink">{f.name}</span>
+                  <br />
+                  {f.levels}
+                </p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
-      <div className={`${WRAP} pb-4`}>
-        <p className="flex flex-wrap gap-x-8 gap-y-1 border-t border-line pt-5 text-ink-muted">
+      <div className={`${WRAP} pt-10 pb-4`}>
+        <p className="flex flex-wrap gap-x-8 gap-y-1 text-ink-muted">
           <span>
             Hiring?{" "}
             <Link href="/company" className={`inline-flex min-h-11 items-center ${LINK}`}>
