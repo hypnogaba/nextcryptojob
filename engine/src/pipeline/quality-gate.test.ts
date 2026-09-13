@@ -45,19 +45,29 @@ describe("evaluateGate", () => {
     return evaluateGate(people, scored, 45_000);
   };
 
-  it("промах на 2 рівні з прогалиною в джерелі ролі пояснений: ворота проходять", () => {
+  it("промах на 2 рівні з прогалиною в джерелі ролі: рахується як «з прогалиною», ворота проходять", () => {
     const r = eightWithMiss({ x: "x: HTTP 503" });
-    expect(r).toMatchObject({ nearPct: 87.5, passed: true });
+    expect(r).toMatchObject({ nearPct: 87.5, passed: true, twoBandWithGap: 1, twoBandWithoutGap: 0, rule: "within-one >= 85%" });
     expect(r.twoBandMisses).toEqual([{ id: "p7", dataGap: true, gaps: ["x"] }]);
   });
 
-  it("промах на 2 рівні без прогалини (або з прогалиною в чужому для ролі джерелі): ворота не проходять", () => {
+  it("промах на 2 рівні без прогалини (або з прогалиною в чужому для ролі джерелі) не блокує, але лишається в звіті", () => {
     for (const gaps of [{}, { youtube: "youtube: HTTP 403" }] as Array<Record<string, string>>) {
       const r = eightWithMiss(gaps);
-      expect(r.passed).toBe(false);
+      expect(r).toMatchObject({ passed: true, failReasons: [], twoBandWithGap: 0, twoBandWithoutGap: 1 });
       expect(r.twoBandMisses).toEqual([{ id: "p7", dataGap: false, gaps: [] }]);
-      expect(r.failReasons.join()).toMatch(/2-band misses without a data gap: p7/);
     }
+  });
+
+  it("вирішує лише сусідній рівень: 84,x% не проходить навіть без жодного промаху на 2 рівні", () => {
+    // 19 людей: 16 точно, 3 промахи на 2 рівні → 16/19 = 84,2% у межах сусіднього; з 17 точно вже 89,5%.
+    const people = Array.from({ length: 19 }, (_, i) => person(`q${i}`, "bd", "A"));
+    const scored = new Map(people.map((p, i) => [p.id, fakeScore("bd", i < 16 ? 90 : 45)]));
+    const r = evaluateGate(people, scored, 1);
+    expect(r).toMatchObject({ nearPct: 84.2, passed: false, twoBandWithoutGap: 3 });
+    expect(r.failReasons).toEqual(["within-one 84.2% < 85%"]);
+    const ok = new Map(people.map((p, i) => [p.id, fakeScore("bd", i < 17 ? 90 : 45)]));
+    expect(evaluateGate(people, ok, 1)).toMatchObject({ nearPct: 89.5, passed: true, twoBandWithoutGap: 2 });
   });
 
   it("прогалина одного ланцюга EVM рахується для трейдера", () => {
@@ -139,13 +149,45 @@ describe("quality-gate: прогін", () => {
     expect(Object.keys(JSON.parse(row!.report_json).results).sort()).toEqual(["r1", "r2", "r3"].concat("r4").sort());
   });
 
-  it("промах на 2 рівні без прогалини: код 1 і passed = 0", async () => {
+  it("промах на 2 рівні (1 з 3 = 66,7% у межах сусіднього): код 1, passed = 0, промах у звіті", async () => {
     const bands = actualBands();
     bands[2] = "A";   // слабкий назван сильним: D проти A
     const { code, out } = await cli([writePeople(bands)]);
     expect(code).toBe(1);
-    expect(out).toMatch(/quality gate: FAILED .*2-band misses without a data gap: r3/);
-    expect(runs()[0]).toMatchObject({ passed: 0 });
+    expect(out).toMatch(/quality gate: FAILED \(within-one 66.7% < 85%\)/);
+    expect(out).toMatch(/2-band misses 1 \(with a data gap 0, without 1; tracked, not a gate rule\)/);
+    const [row] = runs();
+    expect(row).toMatchObject({ passed: 0 });
+    expect(JSON.parse(row!.report_json)).toMatchObject({ rule: "within-one >= 85%", twoBandWithoutGap: 1,
+      twoBandMisses: [{ id: "r3", dataGap: false }] });
+  });
+
+  it("--note іде в report_json.note; звіт каже, скільки фактів з кешу, а скільки зібрано", async () => {
+    const { code, out } = await cli([writePeople(actualBands()), "--note", "cached facts from 2026-09-12, reference set 3"]);
+    expect(code).toBe(0);
+    expect(out).toMatch(/note: cached facts from 2026-09-12, reference set 3/);
+    const report = JSON.parse(runs()[0]!.report_json);
+    expect(report).toMatchObject({ note: "cached facts from 2026-09-12, reference set 3", facts: { cached: 0, collected: 4 } });
+    expect((await cli([writePeople(actualBands()), "--note", "x".repeat(201)])).code).toBe(2);
+  });
+
+  it("--cache-only: без каталогу кешу код 2; з неповним кешем падає до збору; з повним нічого не збирає", async () => {
+    const path = writePeople(actualBands());
+    expect((await cli([path, "--cache-only"])).code).toBe(2);
+
+    const cacheDir = join(dir, "cache");
+    const calls: string[] = [];
+    const counting = () => fakeRegistry({ collectX: async (h: string) => { calls.push(h); return { ok: true, facts: X_BY_HANDLE[h]! }; } });
+    const run = (args: string[]) => runCli(["quality-gate", ...args], { env: {}, db: () => db, registry: counting,
+      out: () => undefined, err: () => undefined });
+    expect(await run([path, cacheDir, "--cache-only", "--no-db"])).toBe(1);
+    expect(calls).toEqual([]);
+
+    expect(await run([path, cacheDir, "--no-db"])).toBe(0);   // наповнює кеш
+    calls.length = 0;
+    expect(await run([path, cacheDir, "--cache-only"])).toBe(0);
+    expect(calls).toEqual([]);
+    expect(JSON.parse(runs()[0]!.report_json).facts).toEqual({ cached: 4, collected: 0 });
   });
 
   it("--no-db нічого не пише; зіпсований файл дає код 2 без цитати вмісту", async () => {

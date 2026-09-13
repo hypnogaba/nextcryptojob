@@ -116,8 +116,12 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js score-facts --x <н�
 
 Ворота якості: файл еталону (реальні люди) лежить поза репозиторієм і поза `/opt`; на VPS кладемо його
 тимчасово в `/var/lib/nextcryptojob-engine/` (власник nextcryptojob, `600`) і видаляємо після прогону.
-У `quality_runs` пишуться лише id. Код виходу 1, якщо в межах сусіднього рівня менше 85% або є промах
-на 2 рівні без прогалини в даних. Каталог кешу теж містить факти про людей: без потреби не вказуйте його.
+У `quality_runs` пишуться лише id. Код виходу 1 (і `passed = 0`), якщо в межах сусіднього рівня менше 85%.
+Промахи на 2 рівні з 13.09 не блокують (рішення власника, варіант A): прогін друкує їх і пише в `report_json`
+(`twoBandMisses`, `twoBandWithGap`, `twoBandWithoutGap`). Каталог кешу теж містить факти про людей: без
+потреби не вказуйте його. `--cache-only` бере факти лише з кешу й падає до збору, якщо чогось бракує;
+`--note <текст>` підписує прогін (`report_json.note`, до 200 символів): у `quality_runs` окремої колонки
+для цього немає, тож позначка живе в JSON.
 
 Прогони 12.09 з VPS (`people_all.json` + ніки Sherlock з `extra_handles.json`, 49 людей з рівнем, `--no-db`,
 межа 45 с, без HELIUS_KEY, BLOCKSCOUT_KEY, YOUTUBE_KEY; GITHUB_TOKEN тимчасово):
@@ -250,28 +254,61 @@ journalctl -u nextcryptojob-engine -f      # рядок на людину; че�
 6. Сайт з `FORMULA_VERSION = "v6"` (рецепт трейдера 90/10 на головній і картках): звичайний деплой web з
    main. Раніше за рушій не варто: рецепт казав би 90/10, поки зворот картки ще показує бал v5 з 80/20.
 
-### Ворота v6: чесний шлях
+### Ворота v6: запис прогону на фактах дослідження
 
-Прогін правила рушія (`evaluateGate`) на кеші фактів дослідження (13.09, без мережі, без запису):
+З 13.09 ворота = в межах сусіднього рівня ≥ 85% (варіант A). Правило рушія на кеші фактів дослідження
+(без мережі, без запису):
 
-| Формула | exact | within-one | unscored | промахи на 2 рівні | з них з прогалиною | ворота |
+| Формула | exact | within-one | unscored | промахи на 2 рівні | з них з прогалиною | ворота (A) |
 |---|---|---|---|---|---|---|
-| v5 (як на проді) | 40,8% | 85,7% | 1 | 6 | 1 | не пройдено |
-| v6 | 42,9% | 85,7% | 1 | 6 | 1 | не пройдено |
+| v5 (як на проді) | 40,8% | 85,7% | 1 | 6 | 1 | пройдено б |
+| v6 | 42,9% | 85,7% | 1 | 6 | 1 | пройдено |
 
-Перша умова (≥ 85% у межах сусіднього) виконана, друга («жодного промаху на 2 рівні без прогалини в
-даних») ні: 5 промахів без прогалини (1 аудитор безпеки, 2 продакти, 1 інженер, 1 креатор; шостий, другий
-аудитор, має прогалину `audits`). Усі поза роллю трейдера, у v5 і v6 ті самі. На VPS без ключів результат гірший (81,6% для v5).
+5 промахів без прогалини (1 аудитор безпеки, 2 продакти, 1 інженер, 1 креатор) у `docs/BACKLOG.md`.
+Живий прогін з VPS без ключів гірший (81,6% для v5 12.09), тому чесний запис для v6 це прогін рушія на
+тих самих фактах, що дало дослідження: кеш `quality-gate` з `research/data` робить
+`scripts/research-cache.ts` (формат дослідження інший, тож потрібен перекладач; той самий `adaptHarness`,
+що в `npm run parity`, скрипт сам звіряє бали з кешу з ним і друкує очікуваний результат воріт).
 
-Тому записати результат дослідження як пройдений прогін v6 не можна: за правилом рушія він не пройдений,
-так само як v5. Що можна чесно:
-- записати прогін v6 з VPS (крок 4) з `passed = 0`: історія є, на сайт не впливає;
-- додати на VPS `GITHUB_TOKEN`, `HELIUS_KEY`, `YOUTUBE_KEY`, `BLOCKSCOUT_KEY` і повторити крок 4: це закриє
-  прогалини VPS, але 5 промахів формули лишаться;
-- розібрати 5 промахів (звіт §8): для кожного або виправлення формули тієї ролі з прогоном воріт, або
-  справжня причина-прогалина від збирача. Змінити саме правило воріт може лише власник (запис у
-  `docs/DECISIONS.md`), не рушій і не сайт.
-Доки пройденого прогону немає, компанії балів не бачать ні з v5, ні з v6; людям їхні бали видно.
+Локально, з main після злиття `track/gate-a` (рушій з `--cache-only` і `--note` має бути на VPS: §2, §Оновлення):
+
+```sh
+cd engine
+npx tsc -p tsconfig.scripts.json
+OUT=$(mktemp -d /tmp/ncj-gate.XXXXXX)
+(umask 077; node dist-scripts/scripts/research-cache.js ../research/data "$OUT")
+#   очікуємо: 50 people, 184 source answers, 0 planned sources not in the research data;
+#   max diff 0.000; exact 21 (42.9%), within one 42 (85.7%), unscored 1; 2-band misses 6 (1 / 5); PASSED
+scp -rq "$OUT" tradebot-vps:/var/lib/nextcryptojob-engine/gate-v6 && rm -rf "$OUT"
+```
+
+На VPS:
+
+```sh
+G=/var/lib/nextcryptojob-engine/gate-v6
+chown -R nextcryptojob:nextcryptojob "$G" && chmod 700 "$G" "$G/cache" && chmod 600 "$G/people.json" "$G"/cache/*.json
+cd /opt/nextcryptojob-engine && set -a; . /etc/nextcryptojob-engine.env; set +a
+NOTE='research cached facts (raw_all 2026-09-11, raw_extra 2026-09-12), reference set 49, no live collection'
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js quality-gate "$G/people.json" "$G/cache" --cache-only --no-db --note "$NOTE"
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js quality-gate "$G/people.json" "$G/cache" --cache-only --note "$NOTE"
+rm -rf "$G"
+```
+
+Очікуваний кінець друку обох прогонів (код виходу 0; сотні балів можуть зсунутись від віку гаманців):
+
+```
+formula v6, deadline 45000 ms, people 49: exact 21 (42.9%), within one 42 (85.7%), unscored 1
+2-band misses 6 (with a data gap 1, without 5; tracked, not a gate rule)
+facts: 184 source answers from cache, 0 collected now
+note: research cached facts (raw_all 2026-09-11, raw_extra 2026-09-12), reference set 49, no live collection
+quality gate: PASSED (within-one >= 85%)
+```
+
+Другий прогін пише рядок `quality_runs`: `formula_version = 'v6'`, `people = 49`, `exact_pct = 42.9`,
+`near_pct = 85.7`, `unscored = 1`, `passed = 1`, у `report_json` `rule`, `note`, `facts`, `twoBandMisses`.
+Відтоді компанії бачать бали v6. Якщо `facts` показує `collected` > 0 або прогін каже `cache-only: …`,
+кеш не збігся з еталоном: нічого не записано (для `--cache-only` падіння до збору), перезібрати кеш тим
+самим скриптом. Живий прогін з ключами (крок 4 порядку) лишається наступною перевіркою.
 
 ## Оновлення
 

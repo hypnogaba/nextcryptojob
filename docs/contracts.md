@@ -145,6 +145,12 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 20·logn(hlVolume,5000000), 15·logn(held,20)) з `held` = null; trader: ядро trading 80, onchain 20.
 Бали з `formula_version = "v5"` у базі рахувались саме так.
 
+Ворота якості (реліз 1, рішення власника 13.09): рядок `quality_runs` має `passed = 1`, якщо серед людей
+еталону з рівнем (без "?") у межах сусідньої смуги ≥ 85%. Промахи на 2 смуги не блокують: їх рахуємо й
+зберігаємо в `report_json` (`rule`, `exact`, `exactPct`, `twoBandMisses` з id і ознакою прогалини,
+`twoBandWithGap`, `twoBandWithoutGap`, `facts` = відповідей з кешу / зібрано, необов'язкова `note`), відомий
+список у `docs/BACKLOG.md`. Сайт показує бал компаніям лише для версії формули з рядком `passed = 1`.
+
 `breakdown_json`:
 ```json
 { "formula": "v6", "sources": {"x": 46.3, "gh_eng": 28.9, "...": null},

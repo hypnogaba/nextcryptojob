@@ -3,7 +3,7 @@
 //   node dist/cli.js worker
 //   node dist/cli.js score-user <user-id>
 //   node dist/cli.js enqueue-refresh [--per-hour N] [--stale-formula]
-//   node dist/cli.js quality-gate <people.json> [raw-cache-dir] [--no-db] [--deadline-ms N]
+//   node dist/cli.js quality-gate <people.json> [raw-cache-dir] [--no-db] [--cache-only] [--note <text>] [--deadline-ms N]
 //   node dist/cli.js score-facts --x <h> --github <l> --site <url> --evm <a,...> --solana <a,...> [--sherlock <h>]
 //   node dist/cli.js digest-due [--dry-run [--user <id> | --profile <json>]]
 import { readFileSync, realpathSync } from "node:fs";
@@ -31,7 +31,10 @@ export const USAGE = `usage: nextcryptojob-engine <command>
       [--stale-formula]                    instead: queue everyone with a score from another formula
                                            version, whatever the age of the facts (--per-hour N = at most N)
   quality-gate <people.json> [cache-dir]   run the reference set, write quality_runs, exit 1 if the gate fails
+                                           (gate: within one band >= 85%; 2-band misses are reported, not a rule)
       [--no-db]                            do not write quality_runs
+      [--cache-only]                       use only cache-dir; fail before collecting if any source is missing
+      [--note <text>]                      label the run (stored in report_json.note, up to 200 characters)
       [--deadline-ms N]                    per-person collection deadline (default ENGINE_DEADLINE_MS or 45000)
   score-facts [--x h] [--github l] [--youtube h] [--site url] [--evm a,b] [--solana a,b] [--sherlock h]
       [--json] [--deadline-ms N]           collect and score identities given here, without D1; X and GitHub
@@ -114,17 +117,20 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
       }
       case "quality-gate": {
         const noDb = has(args, "--no-db");
+        const cacheOnly = has(args, "--cache-only");
+        const note = flag(args, "--note")?.trim() || null;
+        if (note && note.length > 200) { err("quality-gate: --note longer than 200 characters"); return 2; }
         const deadlineMs = posInt(flag(args, "--deadline-ms"), "--deadline-ms")
           ?? intEnv(deps.env, "ENGINE_DEADLINE_MS", DEFAULT_DEADLINE_MS);
         const [peoplePath, cacheDir, ...rest] = args;
-        if (!peoplePath || rest.length) { err(USAGE); return 2; }
+        if (!peoplePath || rest.length || (cacheOnly && !cacheDir)) { err(USAGE); return 2; }
         let json: unknown;
         // Без тексту помилки JSON.parse: він цитує шматок файлу, а там реальні люди.
         try { json = JSON.parse(readFileSync(peoplePath, "utf8")); } catch { err(`quality-gate: ${peoplePath} не читається як JSON`); return 2; }
         const people = parseReferencePeople(json);
         const report = await runQualityGate(people, {
           registry: registry(), env: deps.env, deadlineMs, cacheDir: cacheDir ?? null, db: noDb ? null : db(),
-          concurrency: intEnv(deps.env, "ENGINE_CONCURRENCY", 3), log: out,
+          concurrency: intEnv(deps.env, "ENGINE_CONCURRENCY", 3), log: out, cacheOnly, note,
         });
         return report.passed ? 0 : 1;
       }

@@ -1,6 +1,7 @@
 // Ворота якості (план 1.7): еталонні люди → ті самі збирачі й дедлайн, що в продукті → формула →
-// звірка з очікуваним рівнем. Межа: в межах сусіднього рівня ≥ 85% і жодного промаху на 2 рівні
-// без причини в даних. Файл еталону (реальні люди) живе поза репозиторієм; у базу йдуть лише id.
+// звірка з очікуваним рівнем. Межа (реліз 1, рішення власника 13.09): в межах сусіднього рівня ≥ 85%.
+// Промахи на 2 рівні не блокують: їх рахуємо й пишемо в звіт (з прогалиною і без), щоб історія їх
+// зберігала. Файл еталону (реальні люди) живе поза репозиторієм; у базу йдуть лише id.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SCORED_ROLES, type ScoredRoleKey, UNSCORED_ROLES } from "../formula/roles.js";
@@ -16,6 +17,8 @@ export type Band = "A" | "B" | "C" | "D";
 const ORDER: readonly Band[] = ["D", "C", "B", "A"];
 /** Поріг «в межах сусіднього рівня», %. */
 export const NEAR_THRESHOLD_PCT = 85;
+/** Правило воріт словами: пишеться в кожен звіт, щоб старі рядки quality_runs читались правильно. */
+export const GATE_RULE = `within-one >= ${NEAR_THRESHOLD_PCT}%`;
 
 /** Рівні як у research/harness/evaluate2.py: A ≥ 80, B 60–80, C 40–60, D < 40 (бал ролі). */
 export const band = (score: number): Band => (score >= 80 ? "A" : score >= 60 ? "B" : score >= 40 ? "C" : "D");
@@ -55,6 +58,8 @@ export type PersonResult = {
 
 export type GateReport = {
   formula: typeof FORMULA_VERSION;
+  /** Правило, за яким вирішено `passed` (GATE_RULE). */
+  rule: string;
   deadlineMs: number;
   /** Скільки людей з очікуваним рівнем (без "?"). */
   people: number;
@@ -63,7 +68,14 @@ export type GateReport = {
   exactPct: number;
   nearPct: number;
   unscored: number;
+  /** Промахи на 2 рівні: метрика, не умова воріт. */
   twoBandMisses: Array<{ id: string; dataGap: boolean; gaps: string[] }>;
+  twoBandWithGap: number;
+  twoBandWithoutGap: number;
+  /** Звідки факти: скільки відповідей джерел узято з кешу, скільки зібрано зараз (лише runQualityGate). */
+  facts?: { cached: number; collected: number };
+  /** Позначка прогону від людини (`--note`), напр. звідки кеш фактів. */
+  note?: string;
   passed: boolean;
   failReasons: string[];
   results: Record<string, PersonResult>;
@@ -127,11 +139,11 @@ export function evaluateGate(
   const failReasons: string[] = [];
   if (n === 0) failReasons.push("no reference people with an expected band");
   else if ((near / n) * 100 < NEAR_THRESHOLD_PCT) failReasons.push(`within-one ${pct(near)}% < ${NEAR_THRESHOLD_PCT}%`);
-  const unexplained = twoBandMisses.filter((m) => !m.dataGap);
-  if (unexplained.length) failReasons.push(`2-band misses without a data gap: ${unexplained.map((m) => m.id).join(", ")}`);
+  const withGap = twoBandMisses.filter((m) => m.dataGap).length;
 
-  return { formula: FORMULA_VERSION, deadlineMs, people: n, exact, near, exactPct: pct(exact), nearPct: pct(near), unscored,
-    twoBandMisses, passed: failReasons.length === 0, failReasons, results };
+  return { formula: FORMULA_VERSION, rule: GATE_RULE, deadlineMs, people: n, exact, near, exactPct: pct(exact), nearPct: pct(near),
+    unscored, twoBandMisses, twoBandWithGap: withGap, twoBandWithoutGap: twoBandMisses.length - withGap,
+    passed: failReasons.length === 0, failReasons, results };
 }
 
 function list(v: unknown, what: string): string[] {
@@ -205,6 +217,10 @@ export interface QualityGateOptions {
   cacheDir?: string | null;
   /** Куди писати рядок quality_runs; null = не писати. */
   db?: Db | null;
+  /** Лише кеш: якщо для когось у кеші бракує джерела, прогін падає до будь-якого збору. */
+  cacheOnly?: boolean;
+  /** Позначка прогону (іде в report_json.note). */
+  note?: string | null;
   signal?: AbortSignal;
   now?: () => number;
   log?: (line: string) => void;
@@ -223,11 +239,26 @@ export async function runQualityGate(people: readonly ReferencePerson[], o: Qual
   const log = o.log ?? ((l: string) => console.log(l));
   const now = o.now ?? Date.now;
   const scored = new Map<string, { score: PersonScore; ms: number }>();
+  let cachedN = 0, collectedN = 0;
+
+  if (o.cacheOnly) {
+    if (!o.cacheDir) throw new Error("cache-only потребує каталогу кешу");
+    let short = 0;
+    for (const p of people) {
+      const inputs = inputsFromReference(p);
+      const cached = await readCache(o.cacheDir, p.id, inputs);
+      if (plannedSources(inputs).some((s) => !cached[s])) short++;
+    }
+    // Лише кількість: id і джерела людей у повідомлення про помилку не йдуть.
+    if (short) throw new Error(`cache-only: ${short} people have sources missing from the cache (or other inputs)`);
+  }
 
   await pool(people, o.concurrency ?? 3, async (p) => {
     const inputs = inputsFromReference(p);
     const cached = o.cacheDir ? await readCache(o.cacheDir, p.id, inputs) : {};
     const missing = plannedSources(inputs).filter((s) => !cached[s]);
+    cachedN += Object.keys(cached).length;
+    collectedN += missing.length;
     const fresh = missing.length
       ? await collectPerson(inputs, { registry: o.registry, env: o.env, deadlineMs, only: missing, ...(o.signal ? { signal: o.signal } : {}) })
       : { outcomes: {}, ms: 0 };
@@ -240,7 +271,8 @@ export async function runQualityGate(people: readonly ReferencePerson[], o: Qual
     scored.set(p.id, { score: scorePerson(toPersonFacts(outcomes), now()), ms: fresh.ms });
   });
 
-  const report = evaluateGate(people, scored, deadlineMs);
+  const report: GateReport = { ...evaluateGate(people, scored, deadlineMs), facts: { cached: cachedN, collected: collectedN },
+    ...(o.note ? { note: o.note } : {}) };
   if (o.db) {
     await o.db.run(
       "INSERT INTO quality_runs (formula_version, people, exact_pct, near_pct, unscored, report_json, passed) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -262,7 +294,10 @@ export function formatReport(people: readonly ReferencePerson[], r: GateReport):
   });
   lines.push("",
     `formula ${r.formula}, deadline ${r.deadlineMs} ms, people ${r.people}: exact ${r.exact} (${r.exactPct}%), ` +
-    `within one ${r.near} (${r.nearPct}%), unscored ${r.unscored}, 2-band misses ${r.twoBandMisses.length}`,
-    r.passed ? "quality gate: PASSED" : `quality gate: FAILED (${r.failReasons.join("; ")})`);
+    `within one ${r.near} (${r.nearPct}%), unscored ${r.unscored}`,
+    `2-band misses ${r.twoBandMisses.length} (with a data gap ${r.twoBandWithGap}, without ${r.twoBandWithoutGap}; tracked, not a gate rule)`);
+  if (r.facts) lines.push(`facts: ${r.facts.cached} source answers from cache, ${r.facts.collected} collected now`);
+  if (r.note) lines.push(`note: ${r.note}`);
+  lines.push(r.passed ? `quality gate: PASSED (${r.rule})` : `quality gate: FAILED (${r.failReasons.join("; ")})`);
   return lines;
 }
