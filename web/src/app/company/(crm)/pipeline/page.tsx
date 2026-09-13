@@ -40,7 +40,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
 
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
         <PageTitle>Pipeline</PageTitle>
         <NoAccess />
       </div>
@@ -78,7 +78,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
   const filtered = Boolean(job || tag);
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
       <PageTitle aside={total ? `${total} ${total === 1 ? "candidate" : "candidates"}` : undefined}>Pipeline</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -157,8 +157,8 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
           })}
         </div>
       ) : list ? (
-        <div className="grid gap-3">
-          <div className={`${CARD} overflow-x-auto`}>
+        <div className="grid min-w-0 gap-3">
+          <div className={`${CARD} relative min-w-0 overflow-x-auto`}>
             <table className="w-full min-w-[48rem] text-sm">
               <caption className="sr-only">Pipeline cards, newest activity first</caption>
               <thead>
@@ -217,9 +217,11 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
                     <td className="px-3 py-2 whitespace-nowrap text-ink-muted">
                       <time dateTime={card.updated_at}>{DATE.format(new Date(card.updated_at))}</time>
                     </td>
-                    <td className="grid w-60 gap-2 px-3 py-2">
-                      <MoveForm card={card} back={back} canWrite={canWrite} />
-                      <WithdrawForm card={card} back={back} canWrite={canWrite} />
+                    <td className="w-60 px-3 py-2">
+                      <div className="grid gap-2">
+                        <MoveForm card={card} back={back} canWrite={canWrite} />
+                        <WithdrawForm card={card} back={back} canWrite={canWrite} />
+                      </div>
                     </td>
                   </tr>
                 ))}

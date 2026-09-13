@@ -108,7 +108,7 @@ async function redirectOf(p: Promise<unknown>): Promise<string> {
 const sp = (p: Record<string, string | string[]> = {}) => ({ searchParams: Promise.resolve(p) });
 const cand = (id: string, p: Record<string, string> = {}) => ({ params: Promise.resolve({ id }), searchParams: Promise.resolve(p) });
 
-const EMPTY: PanelState = { card: null, intro: null, history: [], introNotice: null };
+const EMPTY: PanelState = { card: null, intro: null, history: [], introNotice: null, now: new Date().toISOString() };
 
 async function panel(companyId: string, candidateId: string, op: string, extra: Record<string, string> = {}, prev = EMPTY) {
   return panelAction(prev, form({ company_id: companyId, candidate_id: candidateId, op, ...extra }));
@@ -277,6 +277,8 @@ describe("candidate profile as a company sees it", () => {
     expect(page).toContain("Not in your pipeline yet.");
     expect(page).toContain("Request intro");
     expect(page).toContain("You see the contact only after the candidate accepts.");
+    // Попередній перегляд у діалозі той самий, що отримає кандидат (notify.ts).
+    expect(page).toContain("Acme Labs wants to talk to you about an Engineer role.");
     noContact(page);
     // Кожен показ профілю це один перегляд із квоти і рядок журналу; решта читань сторінки облік не пише.
     expect(rows("SELECT action FROM usage_events")).toEqual([{ action: "get_candidate" }]);

@@ -31,6 +31,13 @@ export function roleText(role: string | null | undefined): string {
   return role && isRoleKey(role) ? ROLES[role].name : "Unknown role";
 }
 
+/** "about an Engineer role" / "about a role": так кандидат читає запит на знайомство (notify.ts). */
+export function aboutRoleText(role: string | null | undefined): string {
+  if (!role || !isRoleKey(role)) return "about a role";
+  const name = ROLES[role].name;
+  return `about ${/^[aeiou]/i.test(name) ? "an" : "a"} ${name} role`;
+}
+
 /** Головне джерело ролі словами (contracts §4, «Головні»): для "Not scored: needs …". */
 const ANCHOR_TEXT: Partial<Record<RoleKey, string>> = {
   engineer: "GitHub",

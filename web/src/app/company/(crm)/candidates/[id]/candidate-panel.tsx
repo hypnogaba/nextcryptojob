@@ -5,7 +5,7 @@ import { ERROR, FIELD, HINT, LABEL, TEXTAREA } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
 import { CARD, Chip, Notice, StageChip } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
-import { expiresInText, INTRO_STATUS_TEXT, roleText, STAGE_TEXT } from "@/lib/crm/labels";
+import { aboutRoleText, expiresInText, INTRO_STATUS_TEXT, roleText, STAGE_TEXT } from "@/lib/crm/labels";
 import type { PipelineEvent } from "@/lib/crm/pipeline";
 import type { Contact, RoleKey, Stage } from "@/lib/crm/types";
 import { panelAction } from "./actions";
@@ -25,12 +25,12 @@ export interface PanelProps {
   roles: RoleKey[];
   defaultRole: RoleKey | null;
   jobs: { id: string; title: string }[];
+  /** "Company site: acme.io (domain verified)" як у запиті кандидату; null без сайту. */
+  siteLine: string | null;
   /** "Intros left …" для діалогу; null, коли межі немає. */
   quotaLine: string | null;
   canWrite: boolean;
   initial: PanelState;
-  /** Мить показу сторінки (ISO): від неї "Expires in …". */
-  now: string;
 }
 
 function Hidden({ companyId, candidateId, op }: { companyId: string; candidateId: string; op: string }) {
@@ -81,7 +81,7 @@ export function CandidatePanel(props: PanelProps) {
   const { companyId, candidateId, canWrite, visible } = props;
   const [state, action] = useActionState(panelAction, props.initial);
   const { card, intro } = state;
-  const at = new Date(props.now);
+  const at = new Date(state.now);
   const h = { companyId, candidateId };
   const pendingIntro = intro && intro.status === "pending" ? intro : null;
   const contact = card?.contact ?? (intro?.contact ?? null);
@@ -494,12 +494,12 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
             <div className="grid gap-1 rounded-lg border border-line bg-wash p-3 text-sm">
               <p className="font-medium text-ink">What the candidate sees</p>
               <p className="text-ink">
-                {companyName}
-                {isAgency && hiringFor.trim() ? ` (hiring for ${hiringFor.trim()})` : ""} wants to talk to you about{" "}
-                {role ? `a ${roleText(role)} role` : "a role"}.
+                {companyName} wants to talk to you {aboutRoleText(role)}.
               </p>
               {message.trim() ? <p className="break-words text-ink-muted">&ldquo;{message.trim()}&rdquo;</p> : null}
+              {isAgency && hiringFor.trim() ? <p className="text-ink-muted">Hiring for: {hiringFor.trim()}</p> : null}
               {job ? <p className="text-ink-muted">Job: {job.title}</p> : null}
+              {props.siteLine ? <p className="text-ink-muted">{props.siteLine}</p> : null}
               <p className="text-ink-muted">This request expires on {FULL_DATE.format(expires)}.</p>
             </div>
           ) : null}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { FIELD } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
-import { Chip, StageChip } from "@/components/crm/ui";
+import { Chip } from "@/components/crm/ui";
 import { expiresInText, roleScoreText, STAGE_TEXT } from "@/lib/crm/labels";
 import type { PipelineCard } from "@/lib/crm/pipeline";
 import { HIDDEN_NOTICE, type Stage } from "@/lib/crm/types";
@@ -32,13 +32,13 @@ export function MoveForm({ card, back, canWrite }: { card: PipelineCard; back: P
   if (!canWrite || moves.length === 0) return null;
   const id = `move-${card.candidate_id}-${back.view ?? "board"}`;
   return (
-    <form action={moveCardAction} className="flex gap-2">
+    <form action={moveCardAction} className="grid gap-2">
       <BackFields {...back} />
       <input type="hidden" name="candidate_id" value={card.candidate_id} />
       <label htmlFor={id} className="sr-only">
         Move {card.label} to
       </label>
-      <select id={id} name="stage" defaultValue="" required className={`${FIELD} h-11 min-w-0 flex-1 text-sm`}>
+      <select id={id} name="stage" defaultValue="" required className={`${FIELD} h-11 text-sm`}>
         <option value="" disabled>
           Move to...
         </option>
@@ -48,7 +48,7 @@ export function MoveForm({ card, back, canWrite }: { card: PipelineCard; back: P
           </option>
         ))}
       </select>
-      <SubmitButton pendingLabel="..." variant="outline" className="h-11 shrink-0 px-3 text-sm" aria-label={`Move ${card.label}`}>
+      <SubmitButton pendingLabel="Moving..." variant="outline" className="h-11 px-3 text-sm" aria-label={`Move ${card.label}`}>
         Move
       </SubmitButton>
     </form>
@@ -85,7 +85,7 @@ export function BoardCard({ card, back, canWrite, now }: { card: PipelineCard; b
       ) : card.headline ? (
         <p className="text-sm text-ink">{roleScoreText(card.headline)}</p>
       ) : null}
-      {card.stage === "declined" ? <StageChip stage="declined" declinedBy={card.declined_by} className="w-fit" /> : null}
+      {card.stage === "declined" && card.declined_by ? <p className="text-sm text-ink-muted">by {card.declined_by}</p> : null}
       {card.tags.length ? (
         <p className="flex flex-wrap gap-1">
           {card.tags.map((t) => (

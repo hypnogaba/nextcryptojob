@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CARD, LINK, NoAccess, Notice } from "@/components/crm/ui";
 import { isRoleKey } from "@/lib/card/roles";
 import { readAction, runAction } from "@/lib/crm/actions";
-import { userFacingError } from "@/lib/crm/company";
+import { loadCompanyProfile, userFacingError } from "@/lib/crm/company";
 import {
   badgeTexts,
   CHAIN_TEXT,
@@ -59,7 +59,7 @@ export default async function CandidatePage({
     </Link>
   );
   const shell = (children: React.ReactNode) => (
-    <div className="mx-auto grid max-w-6xl gap-4 px-4 pt-6 pb-20 sm:px-6 sm:pt-10">
+    <div className="mx-auto grid max-w-5xl gap-4 px-4 pt-6 pb-20 sm:px-6 sm:pt-10">
       <div className="flex flex-wrap gap-x-4">
         {back}
         <Link href="/company/pipeline" className={`${LINK} inline-flex min-h-11 items-center text-sm`}>
@@ -83,10 +83,11 @@ export default async function CandidatePage({
   }
 
   const canWrite = company.access === "subscription";
-  const [panel, jobs, account] = await Promise.all([
+  const [panel, jobs, account, profileRow] = await Promise.all([
     candidatePanel(ctx, id),
     companyJobs(ctx),
     readAction("get_account", {}, ctx).then((out) => out as Account),
+    loadCompanyProfile(ctx.db, company.id),
   ]);
   const history = panel.card
     ? ((await readAction("list_candidate_history", { candidate_id: id, limit: 50 }, ctx)) as { data: PipelineEvent[] }).data
@@ -112,14 +113,15 @@ export default async function CandidatePage({
       roles={roles}
       defaultRole={defaultRole}
       jobs={jobs.filter((j) => j.linkable).map((j) => ({ id: j.id, title: j.title }))}
+      siteLine={profileRow?.domain ? `Company site: ${profileRow.domain}${profileRow.domainVerifiedAt ? " (domain verified)" : ""}` : null}
       quotaLine={quotaLine(account.quotas)}
       canWrite={canWrite}
-      now={ctx.now.toISOString()}
       initial={{
         card: panel.card,
         intro: panel.intro,
         history,
         introNotice: panel.intro ? companyIntroNotice(panel.intro) : null,
+        now: ctx.now.toISOString(),
       }}
     />
   );

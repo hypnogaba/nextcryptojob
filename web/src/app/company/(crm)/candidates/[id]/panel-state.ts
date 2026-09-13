@@ -8,6 +8,8 @@ export interface PanelState {
   history: PipelineEvent[];
   /** Текст для компанії про знайомство, що не дійшло до кандидата (companyIntroNotice, T5), або null. */
   introNotice: string | null;
+  /** Мить, коли сервер прочитав цей стан (ISO): від неї "Expires in …". */
+  now: string;
   /** Яка дія відповіла останньою (add, move, tag_add, note, intro…). */
   op?: string;
   message?: string;

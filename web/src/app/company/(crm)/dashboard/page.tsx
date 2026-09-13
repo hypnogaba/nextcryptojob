@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   const { ctx, company } = await crmPage("dashboard");
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
         <PageTitle>Dashboard</PageTitle>
         <NoAccess />
       </div>
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
   const fresh = board.total === 0 && board.savedSearches.total === 0 && board.jobs.length === 0;
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
       <PageTitle>Dashboard</PageTitle>
 
       {fresh ? (

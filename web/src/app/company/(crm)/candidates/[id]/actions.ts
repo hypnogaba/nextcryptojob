@@ -28,14 +28,20 @@ function text(form: FormData, name: string): string {
 async function snapshot(
   ctx: ActionContext,
   candidateId: string,
-): Promise<Pick<PanelState, "card" | "intro" | "history" | "introNotice">> {
+): Promise<Pick<PanelState, "card" | "intro" | "history" | "introNotice" | "now">> {
   const panel = await candidatePanel(ctx, candidateId);
   const history = panel.card
     ? ((await readAction("list_candidate_history", { candidate_id: candidateId, limit: 50 }, ctx)) as {
         data: PanelState["history"];
       }).data
     : [];
-  return { card: panel.card, intro: panel.intro, history, introNotice: panel.intro ? companyIntroNotice(panel.intro) : null };
+  return {
+    card: panel.card,
+    intro: panel.intro,
+    history,
+    introNotice: panel.intro ? companyIntroNotice(panel.intro) : null,
+    now: new Date().toISOString(),
+  };
 }
 
 async function currentTags(ctx: ActionContext, candidateId: string): Promise<string[]> {

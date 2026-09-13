@@ -1,7 +1,7 @@
-import { ROLES, isRoleKey } from "@/lib/card/roles";
 import { getMailer, type Mailer, type MailMessage } from "@/lib/mail";
 import { escapeHtml, sendMessage, type SendDeps } from "@/lib/telegram/send";
 import { fromSqlTime } from "@/lib/time";
+import { aboutRoleText } from "./labels";
 import { candidateLabel } from "./project";
 
 /**
@@ -138,12 +138,8 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** "about an Engineer role" / "about a role". */
-function aboutRole(role: string | null): string {
-  if (!role || !isRoleKey(role)) return "about a role";
-  const name = ROLES[role].name;
-  return `about ${/^[aeiou]/i.test(name) ? "an" : "a"} ${name} role`;
-}
+/** "about an Engineer role" / "about a role" (той самий текст показує попередній перегляд у діалозі CRM). */
+const aboutRole = aboutRoleText;
 
 export interface IntroRequestDetails {
   introId: string;

@@ -213,7 +213,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const empty = result && result.data.length === 0 && result.empty_reason;
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
       <PageTitle
         aside={
           quota && quota.limit !== null && quota.remaining !== null
