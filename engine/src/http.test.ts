@@ -1,4 +1,4 @@
-// Перенесено з NextRole (написано до запуску 14.09.2026).
+// Перенесено з NextRole.
 import type { LookupAddress } from "node:dns";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";

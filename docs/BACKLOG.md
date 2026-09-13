@@ -1,4 +1,4 @@
-# Беклог після запуск�
+# Беклог
 
 ## Юридичне (з чернеток docs/legal, 12.09)
 - DPIA перед публічним запуском (CNIL: профілювання алгоритмом найму).
@@ -13,7 +13,7 @@
 - Налаштування: safeHref не має приймати `/\host`; вивантаження має включати знайомства кандидата (без respond_token_hash), коли T5 злито; аудит без історії при вимкненні видимості, коли згода вже 0.
 
 ## CRM (T6)
-- An agency can skip review by choosing Our own team at /company/start; decide after the hackathon whether to detect it.
+- An agency can skip review by choosing Our own team at /company/start; decide later whether to detect it.
 
 ## Після редизайну (13.09)
 - Печатка на картці береться з гаманця. Коли з'явиться підпис гаманця, seed печатки робити через секретний ключ (HMAC), інакше за списком адрес можна зіставити печатки з картками.

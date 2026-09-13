@@ -112,11 +112,11 @@ describe("grant and revoke", () => {
   it("grants access until the end of the chosen day and then revokes it", async () => {
     const end = inDays(20);
     const url = await redirectOf(
-      grantAccessAction(form({ company_id: company, status: "trialing", period_end: end, note: "Hackathon jury" })),
+      grantAccessAction(form({ company_id: company, status: "trialing", period_end: end, note: "Partner access" })),
     );
     expect(url).toBe(`/admin/companies?done=granted&company=${company}`);
     expect(rows("SELECT provider, status, current_period_end, granted_by, note FROM subscriptions")).toEqual([
-      { provider: "manual", status: "trialing", current_period_end: `${end} 23:59:59`, granted_by: admin, note: "Hackathon jury" },
+      { provider: "manual", status: "trialing", current_period_end: `${end} 23:59:59`, granted_by: admin, note: "Partner access" },
     ]);
     expect(await hasAccess(harness.env.DB, company)).toBe(true);
 

@@ -1,4 +1,4 @@
-// Перенесено з NextRole (написано до запуску 14.09.2026).
+// Перенесено з NextRole.
 import { limiterFor, MAX_BACKOFF_MS } from "./limits.js";
 
 export interface D1Credentials { accountId: string; databaseId: string; token: string }
