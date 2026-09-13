@@ -63,7 +63,9 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 - Вихід: `structuredContent` = тіло REST; `content` = `[{"type":"text","text": JSON}]` для старих клієнтів.
   Кожен інструмент оголошує `outputSchema` (посилання нижче ведуть у `openapi.yaml#/components/schemas/…`).
 - Помилка дії: `isError: true`, `structuredContent = { "error": { "code", "message", "request_id", "details"? } }`,
-  коди ті самі, що в REST (`openapi.yaml#/components/schemas/Error`). Невалідний вхід: помилка протоколу `-32602`.
+  коди ті самі, що в REST (`openapi.yaml#/components/schemas/Error`). Невалідний вхід: така сама помилка
+  `validation_failed` з `details.fields`, як REST 422 (MCP SDK v2 віддає помилку аргументів лише результатом
+  з `isError`, не помилкою протоколу). Невідомий інструмент: помилка протоколу `-32602`.
   Інструмент, дію якого ще не запущено, відповідає `not_implemented` (REST 501) раніше за будь-яку вимогу оплати.
   Код `forbidden` (роль команди не має права) буває лише в інтерфейсі: ключ діє від імені компанії.
 - Квоти й ліміти ті самі, що в REST (специфікація, розділ 9). Замість заголовків `RateLimit-*` результат

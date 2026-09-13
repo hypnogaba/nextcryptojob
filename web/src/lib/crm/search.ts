@@ -2,6 +2,7 @@ import type { ActionContext } from "./context";
 import { deriveChains, loadCandidates, onchainYears, projectSummary, type FactRow } from "./project";
 import {
   ActionError,
+  EMPTY_REASONS,
   FORMULA_VERSION,
   type EmptyReason,
   type SearchFilters,
@@ -452,6 +453,79 @@ export async function matchingIds(
     if (rows.length < BATCH) break;
   }
   return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Ідемпотентний повтор оплаченої сторінки (x402 payment-identifier)
+
+/**
+ * Що оплачена сторінка пише в meta_json свого рядка журналу `candidate.search`,
+ * крім id: платіж і решту відповіді (без даних людей). Лише id і курсор, тож
+ * журнал не тримає профілів, а видалений акаунт не лишає в ньому нічого, крім id.
+ */
+export function paidSearchMeta(paymentId: string, output: SearchResponse) {
+  return {
+    payment_id: paymentId,
+    next_cursor: output.next_cursor,
+    page_cap_reached: output.page_cap_reached ?? false,
+    empty_reason: output.empty_reason ?? null,
+    role_visible_count: output.role_visible_count ?? null,
+  };
+}
+
+/**
+ * Відповідь на ідемпотентний повтор оплаченої сторінки: ті самі кандидати в тому
+ * самому порядку й той самий курсор, прочитані з рядка журналу цього платежу.
+ * Пошук удруге НЕ виконується (специфікація §17), облік і журнал не пишуться.
+ * Кандидати проходять правило видимості наново: хто сховався після оплати, того
+ * у повторі немає. Рядка немає → null (викликач каже, що результату немає).
+ */
+export async function replaySearch(
+  ctx: Pick<ActionContext, "db" | "company" | "now">,
+  input: SearchRequest,
+  paymentId: string,
+): Promise<SearchResponse | null> {
+  const companyId = ctx.company?.id ?? null;
+  const row = companyId
+    ? await ctx.db
+        .prepare(
+          `SELECT meta_json FROM audit_log
+            WHERE actor >= ? AND actor < ? AND action = 'candidate.search'
+              AND json_extract(meta_json, '$.payment_id') = ?
+            ORDER BY id LIMIT 1`,
+        )
+        .bind(`${companyId}:`, `${companyId};`, paymentId)
+        .first<{ meta_json: string }>()
+    : await ctx.db
+        .prepare("SELECT meta_json FROM audit_log WHERE actor = ? AND action = 'candidate.search' ORDER BY id LIMIT 1")
+        .bind(`x402_guest:${paymentId}`)
+        .first<{ meta_json: string }>();
+  if (!row) return null;
+
+  let meta: Record<string, unknown>;
+  try {
+    meta = JSON.parse(row.meta_json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const ids = Array.isArray(meta.ids) ? meta.ids.filter((id): id is string => typeof id === "string") : [];
+  const page = typeof meta.page === "number" ? meta.page : 1;
+  const rows = await loadCandidates(ctx.db, ids, companyId);
+  const data = ids.flatMap((id) => {
+    const r = rows.get(id);
+    return r ? [projectSummary(r, { role: input.filters?.role, now: ctx.now })] : [];
+  });
+  const emptyReason = (EMPTY_REASONS as readonly unknown[]).includes(meta.empty_reason)
+    ? (meta.empty_reason as EmptyReason)
+    : null;
+  return {
+    data,
+    next_cursor: typeof meta.next_cursor === "string" ? meta.next_cursor : null,
+    page,
+    page_cap_reached: meta.page_cap_reached === true,
+    empty_reason: emptyReason,
+    role_visible_count: typeof meta.role_visible_count === "number" ? meta.role_visible_count : null,
+  };
 }
 
 function passesChainFilters(facts: FactRow[], filters: SearchFilters, now: Date): boolean {

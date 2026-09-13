@@ -14,8 +14,8 @@ import type { Db } from "../pipeline/db.js";
 import { shortError } from "../pipeline/errors.js";
 import type { EngineEnv } from "../pipeline/registry.js";
 import {
-  type ChannelPlan, DEFAULT_SITE_URL, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
-  type DigestMessage, planChannel, siteUrlOf,
+  type ChannelPlan, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
+  type DigestMessage, planChannel,
 } from "./deliver.js";
 import { loadCompanyPool, loadNextrolePool, type PoolStats } from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
@@ -255,10 +255,9 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   }
 
   // 2. Пул: один раз на прогін.
-  const site = siteUrlOf(deps.env) ?? DEFAULT_SITE_URL;
   const nr = await loadNextrolePool(deps.jobs, now);
   summary.pool = nr.stats;
-  const company = db ? await loadCompanyPool(db, site, log) : [];
+  const company = db ? await loadCompanyPool(db, log) : [];
   summary.companyJobs = company.length;
   const pool = { nextrole: nr.jobs, company };
   log(`digest: pool ${nr.stats.kept} jobs (fetched ${nr.stats.fetched}, dropped tag ${nr.stats.dropped.tag} ` +
@@ -281,7 +280,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       }
       const row = p.row!;
       const plan = p.plan as Exclude<ChannelPlan, { skip: string }>;
-      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), now, log);
+      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), log);
       if (outcome === "empty") summary.empty++;
       else if (outcome === "already") summary.already++;
       else if (outcome.status === "sent") summary.sent++;
@@ -302,7 +301,7 @@ function deliveryUser(row: DigestUserRow): DeliveryUser {
 
 async function buildAndDeliver(
   db: Db, deps: DigestDeps, row: DigestUserRow, localDate: string, picks: DigestPick[],
-  plan: { primary: "telegram" | "email"; emailFallback: boolean }, digestId: string, now: Date, log: (l: string) => void,
+  plan: { primary: "telegram" | "email"; emailFallback: boolean }, digestId: string, log: (l: string) => void,
 ): Promise<DeliveryOutcome | "empty" | "already"> {
   if (picks.length === 0) {
     // Запис, щоб наступна година (запас isDueHour) не шукала вдруге того самого дня.
@@ -332,7 +331,9 @@ async function buildAndDeliver(
 
   const message: DigestMessage = { digestId, userId: row.id, localDate, jobs: deliveryJobs(picks) };
   const outcome = await deliverDigest(deliveryUser(row), message, plan,
-    { env: deps.env, fetchImpl: deps.fetchImpl, sleep: deps.sleep, now: () => now, log });
+    // Годинник, а не мить початку прогону: `ts` листа ставиться під час відправки. Прогін
+    // з паузами Telegram (429) може тривати довше за 5 хвилин, і сайт відкинув би старий ts.
+    { env: deps.env, fetchImpl: deps.fetchImpl, sleep: deps.sleep, now: deps.now, log });
   const status = outcome.status;
   const channel = outcome.channel;
   const detail = outcome.status === "sent" ? outcome.note : outcome.error;

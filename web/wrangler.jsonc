@@ -37,7 +37,9 @@
     // 120 запитів на хвилину на сесію члена команди.
     { "name": "RL_WEB", "namespace_id": "4102", "simple": { "limit": 120, "period": 60 } },
     // 10 запитів на хвилину з однієї IP для гостей x402.
-    { "name": "RL_IP", "namespace_id": "4103", "simple": { "limit": 10, "period": 60 } }
+    { "name": "RL_IP", "namespace_id": "4103", "simple": { "limit": 10, "period": 60 } },
+    // 30 запитів на хвилину з однієї IP для публічного пошуку вакансій (search_jobs).
+    { "name": "RL_PUBLIC", "namespace_id": "4104", "simple": { "limit": 30, "period": 60 } }
   ],
   // Власний домен: зона nextcryptojob.xyz active на Cloudflare з 12.09.
   // workers_dev поки лишаємо: на ньому вебхук бота й адреси входу Telegram.
@@ -50,12 +52,12 @@
   // записи MX і SPF на cf-bounce, DKIM cf-bounce._domainkey, DMARC на _dmarc.
   // Без цього блоку у продакшені вхід поштою каже «Email sign-in opens soon.»,
   // а в `next dev` код пишеться в журнал (src/lib/mail/log.ts).
-  // Адреса та сама, що MAIL_FROM у src/lib/mail/cloudflare.ts.
+  // Адреси ті самі, що MAIL_FROM (коди входу) і DIGEST_FROM (добірка) у src/lib/mail/cloudflare.ts.
   // Документація: https://developers.cloudflare.com/email-service/configuration/send-bindings/
   "send_email": [
     {
       "name": "EMAIL",
-      "allowed_sender_addresses": ["login@nextcryptojob.xyz"]
+      "allowed_sender_addresses": ["login@nextcryptojob.xyz", "jobs@nextcryptojob.xyz"]
     }
   ],
   "observability": {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { buyUsdcMonth } from "@/lib/billing/usdc";
 import { isoTime } from "@/lib/time";
 import { readX402Config, type PaidAction } from "@/lib/x402/config";
 import type { SettleTiming } from "@/lib/x402/server";
@@ -22,10 +23,11 @@ import {
   type QuotaSubject,
   type UsageRecord,
 } from "./quotas";
-import { searchCandidates } from "./search";
+import { paidSearchMeta, searchCandidates } from "./search";
 import * as T from "./types";
 import { ActionError, validationError } from "./types";
 import { createSavedSearch, deleteSavedSearch, listSavedSearches, updateSavedSearch } from "./saved-searches";
+import { getUsage } from "./usage";
 import { isVisibleTo } from "./visibility";
 
 /**
@@ -40,8 +42,11 @@ import { isVisibleTo } from "./visibility";
  * Тест actions.test.ts звіряє реєстр з openapi.yaml і mcp-tools.md.
  *
  * Обробники (handler) є в діях T2–T5 (get_account, search_candidates,
- * get_candidate, воронка, знайомства) і T7 (збережені пошуки); решту допишуть T8–T12. Дія без обробника
- * відповідає 501 not_implemented ще до перевірки оплати.
+ * get_candidate, воронка, знайомства), T7 (збережені пошуки) і T9 (get_usage,
+ * buy_usdc_month); решту допишуть T11 і T12. Дія без обробника відповідає 501
+ * not_implemented ще до перевірки оплати. Маршрути REST і інструменти MCP
+ * беруться з цього реєстру (lib/api/rest.ts, lib/api/mcp.ts), тож нова дія
+ * з'являється в обох сама.
  */
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -157,7 +162,14 @@ export const ACTIONS = [
       return {
         output,
         results: output.data.length,
-        audit: { meta: { ids: output.data.map((d) => d.candidate_id), page: output.page } },
+        audit: {
+          meta: {
+            ids: output.data.map((d) => d.candidate_id),
+            page: output.page,
+            // Оплачена сторінка: з цього рядка ідемпотентний повтор збирає ту саму відповідь (search.ts replaySearch).
+            ...(ctx.payment ? paidSearchMeta(ctx.payment.id, output) : {}),
+          },
+        },
       };
     },
   }),
@@ -468,6 +480,7 @@ export const ACTIONS = [
     output: T.Usage,
     permission: "usage.read",
     access: ["subscription", "pay_per_request", "none"],
+    handler: async (ctx, input) => ({ output: await getUsage(ctx, input) }),
   }),
   defineAction({
     name: "buy_usdc_month",
@@ -481,6 +494,7 @@ export const ACTIONS = [
     channels: ["rest", "mcp"],
     price: { usd: "100.00", payers: ["subscription", "pay_per_request"] },
     settle: "before_effect",
+    handler: async (ctx) => ({ output: await buyUsdcMonth(ctx) }),
   }),
   defineAction({
     name: "search_jobs",
@@ -585,16 +599,9 @@ export interface ActionResult {
  *   release        відмова після броні (settle не пройшов, обробник упав): квоту
  *                  повернуто, hold знято.
  *
- * Шлюз x402 (T9/T10):
- *   const prepared = prepareAction(name, input, ctx);           // 404/401/403/422/501
- *   let r: Reservation | undefined;
- *   const paid = gate.withPayment(prepared.payment.action, prepared.payment.settle, {
- *     validate: async (p) => { try { r = await reserve(prepared, { id: p.paymentId, payer: p.payer }); }
- *                              catch (e) { if (e instanceof ActionError) return e; throw e; } },
- *     effect: () => run(prepared),
- *   });
- *   const out = await paid({ payment, input: prepared.input, resource, context });
- *   out.kind === "ok" ? await commit(r!, out.value) : r && (await release(r, 402));
+ * Шлюз x402 для REST і MCP зводить ці кроки в executeAction (lib/crm/execute.ts):
+ * prepareAction → (платна дія) gate.withPayment({ validate: reserve, effect: run })
+ * → commit після вдалого settle або release після відмови; повтор віддає збережене.
  */
 
 /**
@@ -774,8 +781,12 @@ export async function runAction(
   ctx: ActionContext,
   opts: { payment?: PaymentRef } = {},
 ): Promise<ActionResult> {
-  const prepared = prepareAction(name, rawInput, ctx);
-  const reservation = await reserve(prepared, opts.payment ?? null);
+  return runPrepared(prepareAction(name, rawInput, ctx), opts.payment ?? null);
+}
+
+/** reserve → run → commit для вже підготованої дії (release, якщо обробник упав). */
+export async function runPrepared(prepared: PreparedAction, payment: PaymentRef | null = null): Promise<ActionResult> {
+  const reservation = await reserve(prepared, payment);
   let result: HandlerResult<unknown>;
   try {
     result = await run(prepared);

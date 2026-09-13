@@ -111,6 +111,14 @@ describe("Telegram", () => {
     expect(JSON.stringify(r)).not.toContain("SECRET");
   });
 
+  it("вакансія компанії з поштою замість адреси: без href, адреса окремим рядком", () => {
+    const mail = { ...MESSAGE, jobs: [{ ...MESSAGE.jobs[1]!, position: 1, url: "mailto:jobs@beta.example?subject=Hi" }] };
+    const text = telegramText(mail, "https://nextcryptojob.xyz");
+    expect(text).not.toContain("mailto:");
+    expect(text).toContain("1. <b>Protocol Engineer</b>");
+    expect(text).toContain("Apply: jobs@beta.example");
+  });
+
   it("надто довге повідомлення обрізається до 4096 символів цілими вакансіями", () => {
     const long = { ...MESSAGE, jobs: Array.from({ length: 5 }, (_, i) => ({ ...MESSAGE.jobs[0]!, position: i + 1, why: "x".repeat(1500) })) };
     const text = telegramText(long, "https://nextcryptojob.xyz");
@@ -135,6 +143,26 @@ describe("лист через сайт", () => {
     expect((body.jobs as unknown[]).length).toBe(2);
     // Адреси людини в тілі немає: сайт бере її з users за user_id.
     expect(raw).not.toContain("a@example.com");
+  });
+
+  it("повтор після 5xx іде з новим ts і новим підписом", async () => {
+    const f = fakeFetch([new Response(null, { status: 502 }), new Response(null, { status: 200 })]);
+    const times = [new Date("2026-09-12T07:05:00Z"), new Date("2026-09-12T07:05:02Z")];
+    let i = 0;
+    const r = await deliverDigest(TG_USER, MESSAGE, { primary: "email", emailFallback: false },
+      { env: ENV, fetchImpl: f.impl, sleep, now: () => times[Math.min(i++, 1)]! });
+    expect(r).toMatchObject({ status: "sent", channel: "email" });
+    const bodies = f.calls.map((c) => JSON.parse(String(c.init.body)) as { ts: number });
+    expect(bodies.map((b) => b.ts)).toEqual([times[0]!.getTime() / 1000, times[1]!.getTime() / 1000]);
+    const sig = (c: Call) => new Headers(c.init.headers).get(SIGNATURE_HEADER);
+    expect(sig(f.calls[0]!)).not.toBe(sig(f.calls[1]!));
+  });
+
+  it("425 від сайту (лист цієї добірки ще в дорозі): failed без повтору", async () => {
+    const f = fakeFetch([new Response(null, { status: 425 })]);
+    const r = await deliverDigest(TG_USER, MESSAGE, { primary: "email", emailFallback: false }, { env: ENV, fetchImpl: f.impl, sleep });
+    expect(r).toEqual({ status: "failed", channel: "email", error: "email endpoint HTTP 425" });
+    expect(f.calls).toHaveLength(1);
   });
 
   it("503 від сайту = пошта ще не налаштована", async () => {

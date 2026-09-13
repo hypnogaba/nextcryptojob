@@ -63,6 +63,12 @@ export default async function SettingsPage() {
           paused={s.digestPaused}
           zones={timezoneList()}
         />
+        <p className={`${HINT} border-t border-line pt-4`}>
+          <Link href="/jobs" className="font-medium text-brand underline underline-offset-4">
+            See the jobs we sent you
+          </Link>{" "}
+          in the last 14 days.
+        </p>
       </Section>
 
       <Section id="companies" title="Companies">

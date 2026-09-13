@@ -153,7 +153,8 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
   необов'язкові: `ENGINE_CONCURRENCY` (3), `ENGINE_DEADLINE_MS` (45000), `ENGINE_SHUTDOWN_GRACE_MS` (60000),
   `SELECTOR_CACHE` (/var/lib/nextcryptojob-engine/selectors.json).
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
-  `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`; binding `DB` = D1 `nextcryptojob`
+  `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`, `INTERNAL_API_SECRET` (підпис листа
+  добірки, спільний з engine); binding `DB` = D1 `nextcryptojob`
   (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `crypto-jobs-agent` (лише читання в коді).
 
 ## 7. Номери міграцій (щоб доріжки не зіткнулись)
@@ -172,6 +173,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0011_user_settings.sql | web: налаштування | users.digest_paused |
 | 0013_session_method.sql | web: Telegram-доробки | sessions.method ('email'|'telegram') |
 | 0012_access_views.sql | web: оплата | перебудова в'ю company_access і company_jobs_live (past_due 7 днів від початку періоду) |
+| 0014_digest_email.sql | web: лист добірки (W7) | digest_emails (ідемпотентність листа за digest_id; після 0006) |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)

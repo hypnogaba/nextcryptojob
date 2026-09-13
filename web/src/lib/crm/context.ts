@@ -67,6 +67,8 @@ export type CrmEnv = X402Env & {
   RL_API?: RateLimit;
   RL_WEB?: RateLimit;
   RL_IP?: RateLimit;
+  /** Публічний search_jobs: 30 запитів на хвилину з IP. */
+  RL_PUBLIC?: RateLimit;
   /** Сповіщення про знайомства (notify.ts): бот, пошта, адреса сайту для посилань. */
   TELEGRAM_BOT_TOKEN?: string;
   EMAIL?: SendEmail;

@@ -8,7 +8,16 @@ import { logMailer } from "./log";
  * У продакшені без EMAIL поштою не надсилаємо нічого (docs/contracts.md, §8).
  */
 
-export type MailMessage = { to: string; subject: string; text: string; html: string };
+export type MailMessage = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  /** Відправник, якщо не MAIL_FROM (адреса мусить бути в allowed_sender_addresses). */
+  from?: { email: string; name: string };
+  /** Лише дозволені Email Service заголовки (List-Unsubscribe тощо). */
+  headers?: Record<string, string>;
+};
 
 export interface Mailer {
   send(message: MailMessage): Promise<void>;
