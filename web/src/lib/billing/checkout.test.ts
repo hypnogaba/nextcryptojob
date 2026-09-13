@@ -75,7 +75,7 @@ describe("createCheckout", () => {
 
   it("gives no Stripe trial after a manual trial from an admin", async () => {
     const admin = addUser(db.raw);
-    await grantManualAccess(db.d1, { companyId: company, status: "trialing", periodEnd: days(5), note: "Jury", adminUserId: admin });
+    await grantManualAccess(db.d1, { companyId: company, status: "trialing", periodEnd: days(5), note: "Partner access", adminUserId: admin });
     expect(await checkout()).toMatchObject({ ok: true, trial: false });
   });
 
