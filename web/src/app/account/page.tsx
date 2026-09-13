@@ -5,6 +5,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { isAdminSession } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
+import { briefDone } from "@/lib/onboarding/steps";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { AddEmailForm } from "./add-email-form";
 import { TelegramPanel } from "./telegram-panel";
@@ -33,16 +34,16 @@ export default async function AccountPage() {
         </div>
       )}
       <nav aria-label="Your account" className="mt-8 grid max-w-md border-t border-line">
+        <Link href="/jobs" className={LINK}>
+          Your jobs
+          <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
+        </Link>
         <Link href="/profile" className={LINK}>
           Your score and sources
           <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
         </Link>
-        <Link href="/jobs" className={LINK}>
-          Jobs we sent you
-          <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
-        </Link>
         <Link href="/welcome" className={LINK}>
-          {step === "done" ? "Edit your answers" : "Finish setting up"}
+          {step === "done" ? "Edit your answers" : briefDone(step) ? "Stand out to companies" : "Finish your brief"}
           <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
         </Link>
         <Link href="/settings" className={LINK}>

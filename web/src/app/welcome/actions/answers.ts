@@ -18,8 +18,8 @@ export async function saveTargetAction(_prev: StepState, form: FormData): Promis
     return { errors: { target: `Keep it under ${TARGET_MAX} characters.` }, values: { target: text } };
   }
   await saveStep(ctx.d, ctx.user.id, "target", targetFields(text), ctx.answers.step);
-  // Слова й ролі йдуть парою: і після анкети далі крок ролей, а не профіль.
-  return goNext({ ...ctx, wasDone: false }, "target");
+  // Слова й ролі йдуть парою: і після анкети далі крок ролей (goNext).
+  return goNext(ctx, "target");
 }
 
 export async function saveRolesAction(_prev: StepState, form: FormData): Promise<StepState> {
@@ -44,6 +44,6 @@ export async function savePlaceAction(_prev: StepState, form: FormData): Promise
   const parsed = parsePlace(values);
   if (!parsed.ok) return { errors: parsed.errors, values };
   await saveStep(ctx.d, ctx.user.id, "place", placeFields(parsed.place), ctx.answers.step);
-  // Місце й зарплата на бал не впливають.
+  // Місце й зарплата на бал не впливають, лише на вибір вакансій.
   return goNext(ctx, "place");
 }

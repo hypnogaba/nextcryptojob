@@ -1,8 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { prevStep, STEP_TITLES, STEPS, stepNumber, type Step } from "@/lib/onboarding/steps";
+import { prevStep, STEP_TITLES, stepPosition, type Step } from "@/lib/onboarding/steps";
 
-/** Рамка кроку: номер, сім поділок поступу (без заповненої доріжки), заголовок, пояснення і «Back». */
+const TOP_LINK =
+  "-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
+
+/**
+ * Рамка кроку: номер у своїй частині (анкета з п'яти кроків або «Stand out» з трьох),
+ * поділки поступу (без заповненої доріжки), заголовок, пояснення і «Back».
+ */
 export function StepShell({
   step,
   editing,
@@ -11,40 +17,41 @@ export function StepShell({
   children,
 }: {
   step: Step;
-  /** Анкету вже завершено: людина правує відповіді. */
+  /** Крок уже пройдено: людина правує відповідь і повертається туди, звідки прийшла. */
   editing: boolean;
   lead?: ReactNode;
   /** Короткий рядок над кроком, наприклад, коли можна буде оновити бал. */
   notice?: string | null;
   children: ReactNode;
 }) {
-  const n = stepNumber(step);
+  const { part, n, of } = stepPosition(step);
+  const brief = part === "brief";
   const back = prevStep(step);
+  // Правка анкети веде до вакансій, правка джерел до профілю з балом.
+  const home = brief ? { href: "/jobs", label: "Back to your jobs" } : { href: "/profile", label: "Back to profile" };
   return (
     <section className="mx-auto max-w-xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex items-center justify-between gap-4">
         <p className="font-display text-lg font-extrabold tracking-[0.04em] text-ink uppercase">
-          Step {n} <span className="text-ink-muted">of {STEPS.length}</span>
+          {brief ? "Step" : "Stand out"} {n} <span className="text-ink-muted">of {of}</span>
         </p>
         {editing ? (
-          <Link
-            href="/profile"
-            className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
-          >
-            Back to profile
+          <Link href={home.href} className={TOP_LINK}>
+            {home.label}
           </Link>
         ) : null}
       </div>
       <div
-        className="mt-3 grid grid-cols-7 gap-1.5"
+        // Класи повністю, щоб Tailwind їх побачив: 5 кроків анкети, 3 кроки «Stand out».
+        className={`mt-3 grid gap-1.5 ${brief ? "grid-cols-5" : "grid-cols-3"}`}
         role="progressbar"
-        aria-label="Setup progress"
+        aria-label={brief ? "Brief progress" : "Stand out progress"}
         aria-valuemin={1}
-        aria-valuemax={STEPS.length}
+        aria-valuemax={of}
         aria-valuenow={n}
       >
-        {STEPS.map((s, i) => (
-          <span key={s} className={i + 1 < n ? "h-0.5 bg-ink" : i + 1 === n ? "h-1 bg-brand" : "h-0.5 bg-line-strong/50"} />
+        {Array.from({ length: of }, (_, i) => (
+          <span key={i} className={i + 1 < n ? "h-0.5 bg-ink" : i + 1 === n ? "h-1 bg-brand" : "h-0.5 bg-line-strong/50"} />
         ))}
       </div>
 
@@ -63,6 +70,13 @@ export function StepShell({
           className="mt-6 -ml-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink-muted hover:text-ink"
         >
           Back
+        </Link>
+      ) : !brief && !editing ? (
+        <Link
+          href="/jobs"
+          className="mt-6 -ml-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink-muted hover:text-ink"
+        >
+          Back to your jobs
         </Link>
       ) : null}
     </section>

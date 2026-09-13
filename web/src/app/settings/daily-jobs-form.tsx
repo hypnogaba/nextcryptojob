@@ -14,6 +14,11 @@ type Props = {
   timezone: string | null;
   paused: boolean;
   zones: readonly string[];
+  /** Дія форми: за замовчуванням «Save» налаштувань; анкета (/welcome) дає свою. */
+  action?: (prev: SettingsState, form: FormData) => Promise<SettingsState>;
+  /** Показувати «Pause daily jobs» (у налаштуваннях так, в анкеті ні). */
+  showPause?: boolean;
+  submitLabel?: string;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -39,8 +44,19 @@ const RADIO_ROW =
   "has-[:checked]:border-ink has-[:checked]:shadow-[inset_0_0_0_1px_var(--ink)] " +
   "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60";
 
-export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, paused, zones }: Props) {
-  const [state, action] = useActionState(saveDailyJobsAction, {} as SettingsState);
+export function DailyJobsForm({
+  email,
+  telegramLinked,
+  channel,
+  hour,
+  timezone,
+  paused,
+  zones,
+  action: submit = saveDailyJobsAction,
+  showPause = true,
+  submitLabel = "Save",
+}: Props) {
+  const [state, action] = useActionState(submit, {} as SettingsState);
   const zoneRef = useRef<HTMLSelectElement>(null);
   const [detected, setDetected] = useState(false);
 
@@ -163,26 +179,28 @@ export function DailyJobsForm({ email, telegramLinked, channel, hour, timezone, 
         </div>
       </div>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3">
-        <input
-          type="checkbox"
-          name="paused"
-          value="on"
-          defaultChecked={paused}
-          aria-describedby="paused-hint"
-          className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
-        />
-        <span className="grid gap-0.5">
-          <span className="text-base text-ink">Pause daily jobs</span>
-          <span id="paused-hint" className={HINT}>
-            We keep your choices and send nothing until you untick this.
+      {showPause ? (
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3">
+          <input
+            type="checkbox"
+            name="paused"
+            value="on"
+            defaultChecked={paused}
+            aria-describedby="paused-hint"
+            className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
+          />
+          <span className="grid gap-0.5">
+            <span className="text-base text-ink">Pause daily jobs</span>
+            <span id="paused-hint" className={HINT}>
+              We keep your choices and send nothing until you untick this.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      ) : null}
 
       <div className="grid gap-2">
         <SubmitButton pendingLabel="Saving..." className="h-11 w-full px-5 text-base sm:w-fit">
-          Save
+          {submitLabel}
         </SubmitButton>
         <FormMessageLine message={state.message} />
       </div>

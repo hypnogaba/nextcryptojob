@@ -75,7 +75,7 @@ export function SourcesForm({ initial, editing }: { initial: Record<Key, string>
       })}
       <FormMessageLine message={state.message} />
       <SubmitButton pendingLabel="Saving..." className="h-11 text-base">
-        {editing ? "Save" : "Continue"}
+        {editing ? "Save" : "Save and continue"}
       </SubmitButton>
     </form>
   );

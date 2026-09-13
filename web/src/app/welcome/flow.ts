@@ -4,7 +4,7 @@ import { consume, type Limits } from "@/lib/auth/ratelimit";
 import { requireUser, type SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { loadAnswers, type Answers } from "@/lib/onboarding/store";
-import { canVisit, nextStep, type Step } from "@/lib/onboarding/steps";
+import { briefDone, canVisit, isBriefStep, nextStep, type Step } from "@/lib/onboarding/steps";
 import { markSourcesChanged, type ChangeKind } from "@/lib/score/changes";
 import { enqueueScoreJob } from "@/lib/score/queue";
 import { profileStatus } from "@/lib/score/status";
@@ -22,7 +22,11 @@ export type StepState = {
   values?: Record<string, string>;
 };
 
-export type StepContext = { user: SessionUser; d: D1Database; answers: Answers; wasDone: boolean };
+/**
+ * wasDone: пройдено все, і «Stand out» теж (крок відкрито як редагування з профілю).
+ * briefDone: анкету пройдено й згоду дано; зміна джерел одразу ставить бал у чергу.
+ */
+export type StepContext = { user: SessionUser; d: D1Database; answers: Answers; wasDone: boolean; briefDone: boolean };
 
 /**
  * Людина, база й відповіді для дії кроку. Дію можна викликати й запитом
@@ -33,7 +37,7 @@ export async function stepContext(step: Step): Promise<StepContext> {
   const d = db();
   const answers = await loadAnswers(d, user.id);
   if (!canVisit(step, answers.step)) redirect("/welcome");
-  return { user, d, answers, wasDone: answers.step === "done" };
+  return { user, d, answers, wasDone: answers.step === "done", briefDone: briefDone(answers.step) };
 }
 
 /** Ставить бал у чергу; секунди до наступної спроби, якщо «зарано», інакше null. */
@@ -43,14 +47,14 @@ async function rescoreNow(ctx: StepContext): Promise<number | null> {
 }
 
 /**
- * Записує зміну джерел чи ролей. Якщо анкету вже завершено, одразу пробує
+ * Записує зміну джерел чи ролей. Якщо анкету вже пройдено (згода є), одразу пробує
  * поставити бал у чергу й повертає, скільки секунд чекати, якщо зарано.
  * Навіть тоді перерахунок не губиться: профіль бачить мітку зміни й пропонує
  * «Update my score».
  */
 export async function recordChange(ctx: StepContext, what: ChangeKind): Promise<number | null> {
   await markSourcesChanged(ctx.d, ctx.user.id, what);
-  return ctx.wasDone ? rescoreNow(ctx) : null;
+  return ctx.briefDone ? rescoreNow(ctx) : null;
 }
 
 /** Додає ?wait=N (скільки секунд до перерахунку), якщо є що чекати. */
@@ -59,16 +63,22 @@ export function withWait(url: string, wait: number | null): string {
 }
 
 /**
- * Після збереження кроку: під час анкети на наступний крок; після неї назад
- * у профіль, і якщо після останнього перерахунку щось змінилось, бал іде в чергу.
+ * Після збереження кроку.
+ * - Анкета: на наступний крок; якщо її вже пройдено, на /jobs, де видно нові вакансії.
+ *   Слова й ролі йдуть парою: після слів завжди крок ролей.
+ * - «Stand out»: на наступний крок; після останнього (або при редагуванні з профілю)
+ *   у профіль, і якщо після останнього перерахунку щось змінилось, бал іде в чергу.
  */
 export async function goNext(ctx: StepContext, completed: Step): Promise<never> {
-  if (ctx.wasDone) {
+  const next = nextStep(completed);
+  if (isBriefStep(completed)) {
+    redirect(ctx.briefDone && completed !== "target" ? "/jobs" : `/welcome?step=${next}`);
+  }
+  if (ctx.wasDone || next === "done") {
     const status = await profileStatus(ctx.d, ctx.user.id);
     redirect(withWait("/profile", status.sourcesChanged ? await rescoreNow(ctx) : null));
   }
-  const next = nextStep(completed);
-  redirect(next === "done" ? "/profile" : `/welcome?step=${next}`);
+  redirect(`/welcome?step=${next}`);
 }
 
 /** Секунди очікування з адреси (?wait=), лише розумне ціле. */

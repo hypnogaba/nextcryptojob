@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSession } from "@/lib/auth/session";
 import { claimCode } from "@/lib/verify/claim";
 import { exec, fakeCookieJar, harness, RedirectCalled, resetHarness, rows, TEST_SECRET } from "@/test/harness";
-import { saveRolesAction } from "./actions/answers";
+import { loadAnswers } from "@/lib/onboarding/store";
+import { savePlaceAction, saveRolesAction, saveTargetAction } from "./actions/answers";
+import { saveDeliveryAction } from "./actions/delivery";
 import { finishAction } from "./actions/finish";
-import { saveSourcesAction } from "./actions/sources";
+import { continueSourcesAction, saveSourcesAction } from "./actions/sources";
 import { checkCodeAction } from "./actions/verify";
-import { saveWalletsAction } from "./actions/wallets";
+import { saveWalletsAction, skipWalletsAction } from "./actions/wallets";
 import { claimXAction, continueXAction } from "./actions/x";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
@@ -31,9 +33,15 @@ async function run<T>(p: Promise<T>): Promise<string | T> {
   }
 }
 
-/** Людина на кроці `step` з ролями `roles` і власною сесією (кука в новій банці). */
+/**
+ * Людина на кроці `step` з ролями `roles` і власною сесією (кука в новій банці). Кроки
+ * «Stand out» і «done» бувають лише після згоди на бал (кінець анкети), тож тоді й згода.
+ */
 async function signInAt(id: string, step: string | null, roles = "[]") {
   exec("INSERT INTO users (id, email, onboarding_step, roles) VALUES (?, ?, ?, ?)", id, `${id}@example.com`, step, roles);
+  if (step && ["x", "wallets", "sources", "done"].includes(step)) {
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES (?, 'scoring', 1, 'v1')", id);
+  }
   harness.jar = fakeCookieJar();
   await createSession(id, null);
 }
@@ -65,10 +73,12 @@ describe("step guards", () => {
   });
 
   it("lets a person save the step they are on and moves them forward", async () => {
-    await signInAt("u", "wallets");
+    await signInAt("u", "wallets", '["trader"]');
     await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/welcome?step=sources");
     expect(rows("SELECT kind, value FROM identities")).toEqual([{ kind: "evm", value: EVM }]);
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "sources" }]);
+    // Згоду вже дано в кінці анкети, тож нові гаманці одразу йдуть у перерахунок.
+    expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
   });
 
   it("does not finish without roles", async () => {
@@ -119,7 +129,6 @@ describe("claiming an X handle from an unverified squatter", () => {
 describe("rescoring after a finished person changes sources", () => {
   it("shows the wait time when the last job is less than a minute old", async () => {
     await signInAt("u", "done", '["trader"]');
-    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
     exec(
       "INSERT INTO score_jobs (user_id, reason, status, queued_at, started_at) " +
         "VALUES ('u', 'connect', 'done', datetime('now', '-20 seconds'), datetime('now', '-10 seconds'))",
@@ -132,12 +141,69 @@ describe("rescoring after a finished person changes sources", () => {
 
   it("queues a job at once when the spacing allows it", async () => {
     await signInAt("u", "done", '["trader"]');
-    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
     exec(
       "INSERT INTO score_jobs (user_id, reason, status, queued_at, started_at) " +
         "VALUES ('u', 'connect', 'done', datetime('now', '-2 hours'), datetime('now', '-2 hours'))",
     );
     await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/profile");
     expect(rows("SELECT status FROM score_jobs ORDER BY id")).toEqual([{ status: "done" }, { status: "queued" }]);
+  });
+});
+
+describe("brief first, then jobs, then the optional stand out steps", () => {
+  it("saves how and when to send the jobs, then asks for consent", async () => {
+    await signInAt("u", "delivery", '["engineer"]');
+    await expect(run(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "Europe/Paris" })))).resolves.toBe(
+      "/welcome?step=consent",
+    );
+    expect(rows("SELECT channel, digest_hour, timezone, digest_paused, onboarding_step FROM users")).toEqual([
+      { channel: "email", digest_hour: 9, timezone: "Europe/Paris", digest_paused: 0, onboarding_step: "consent" },
+    ]);
+  });
+
+  it("takes Telegram only when it is linked, and saves nothing on an error", async () => {
+    await signInAt("u", "delivery", '["engineer"]');
+    const state = await run(saveDeliveryAction({}, form({ channel: "telegram", hour: "9", timezone: "Europe/Paris" })));
+    expect(state).toMatchObject({ errors: { channel: "Connect Telegram first." } });
+    expect(rows("SELECT channel, digest_hour, timezone, onboarding_step FROM users")).toEqual([
+      { channel: "email", digest_hour: 7, timezone: null, onboarding_step: "delivery" },
+    ]);
+  });
+
+  it("ends the brief with consent and a score job, and shows the jobs at once", async () => {
+    await signInAt("u", "consent", '["engineer"]');
+    await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/jobs");
+    expect(rows("SELECT kind, granted FROM consents")).toEqual([{ kind: "scoring", granted: 1 }]);
+    expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
+    // Досягнуто перший крок «Stand out»: добірці вистачає ролей і першого балу.
+    expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "x" }]);
+  });
+
+  it("lets a person skip X, wallets and sources without touching what they already added", async () => {
+    await signInAt("u", "x", '["engineer"]');
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'evm', ?)", EVM);
+    await expect(run(continueXAction())).resolves.toBe("/welcome?step=wallets");
+    await expect(run(skipWalletsAction())).resolves.toBe("/welcome?step=sources");
+    await expect(run(continueSourcesAction())).resolves.toBe("/profile");
+    expect(rows("SELECT kind, value FROM identities")).toEqual([{ kind: "evm", value: EVM }]);
+    expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "done" }]);
+  });
+
+  it("after the brief, editing an answer goes back to the jobs; words still lead to roles", async () => {
+    await signInAt("u", "wallets", '["engineer"]');
+    await expect(run(savePlaceAction({}, form({ where: "remote", city: "", salary: "", currency: "USD" })))).resolves.toBe(
+      "/jobs",
+    );
+    await expect(run(saveTargetAction({}, form({ target: "Rust engineer" })))).resolves.toBe("/welcome?step=roles");
+    expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "wallets" }]);
+  });
+
+  it("someone who stopped at X under the old order (no consent yet) finishes the brief first", async () => {
+    exec("INSERT INTO users (id, email, onboarding_step, roles) VALUES ('old', 'old@example.com', 'x', '[\"bd\"]')");
+    harness.jar = fakeCookieJar();
+    await createSession("old", null);
+    expect((await loadAnswers(harness.env.DB, "old")).step).toBe("delivery");
+    await expect(run(continueXAction())).resolves.toBe("/welcome");
+    expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "x" }]);
   });
 });

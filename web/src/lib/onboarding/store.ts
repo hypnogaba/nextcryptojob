@@ -3,7 +3,7 @@
 import type { RoleKey } from "@/lib/card/roles";
 import { parseRoles } from "@/lib/roles/catalog";
 import type { Place } from "./place";
-import { advance, parseSavedStep, type SavedStep, type Step } from "./steps";
+import { advance, normalizeSavedStep, parseSavedStep, type SavedStep, type Step } from "./steps";
 
 export const TARGET_MAX = 600;
 
@@ -25,12 +25,15 @@ type UserRow = {
   salary_min: number | null;
   salary_currency: string | null;
   onboarding_step: string | null;
+  scoring: number | null;
 };
 
 export async function loadAnswers(db: D1Database, userId: string): Promise<Answers> {
   const row = await db
     .prepare(
-      "SELECT target_text, roles, remote_mode, city, salary_min, salary_currency, onboarding_step FROM users WHERE id = ?",
+      `SELECT target_text, roles, remote_mode, city, salary_min, salary_currency, onboarding_step,
+              (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
+         FROM users WHERE id = ?`,
     )
     .bind(userId)
     .first<UserRow>();
@@ -41,7 +44,8 @@ export async function loadAnswers(db: D1Database, userId: string): Promise<Answe
     city: row?.city ?? null,
     salaryMin: row?.salary_min ?? null,
     salaryCurrency: row?.salary_currency ?? null,
-    step: parseSavedStep(row?.onboarding_step),
+    // Згода в тому самому читанні: крок «Stand out» без згоди (старий порядок) = ще анкета.
+    step: normalizeSavedStep(parseSavedStep(row?.onboarding_step), row?.scoring === 1),
   };
 }
 
@@ -93,7 +97,7 @@ export function placeFields(place: Place): Fields {
   };
 }
 
-/** Анкету завершено: далі /welcome показує кроки як редагування. */
+/** Усе пройдено (і «Stand out»): далі /welcome показує кроки як редагування. */
 export async function finishOnboarding(db: D1Database, userId: string): Promise<void> {
   await db.prepare("UPDATE users SET onboarding_step = 'done' WHERE id = ?").bind(userId).run();
 }

@@ -9,7 +9,7 @@ import { SCORING_CONSENT } from "@/lib/consent";
 import { finishAction } from "../actions/finish";
 import type { StepState } from "../flow";
 
-export function ConsentForm({ granted }: { granted: boolean }) {
+export function ConsentForm({ granted, editing = false }: { granted: boolean; editing?: boolean }) {
   const [state, action] = useActionState(finishAction, {} as StepState);
   const error = state.errors?.agree;
   return (
@@ -39,7 +39,7 @@ export function ConsentForm({ granted }: { granted: boolean }) {
       ) : null}
       <FormMessageLine message={state.message} />
       <SubmitButton pendingLabel="Finishing..." className="h-11 text-base">
-        Finish and see my score
+        {editing ? "Save" : "See my jobs"}
       </SubmitButton>
     </form>
   );
