@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AdminNav } from "@/components/admin-nav";
 import { SignOutButton } from "@/components/sign-out-button";
+import { isAdminSession } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { appEnv, db } from "@/lib/db";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { AddEmailForm } from "./add-email-form";
 import { TelegramPanel } from "./telegram-panel";
@@ -16,6 +18,7 @@ export const metadata: Metadata = { title: "Account", robots: { index: false } }
 export default async function AccountPage() {
   const user = await requireUser();
   const { step } = await loadAnswers(db(), user.id);
+  const admin = isAdminSession(user, (appEnv() as { ADMIN_EMAILS?: string }).ADMIN_EMAILS);
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-24">
@@ -47,6 +50,7 @@ export default async function AccountPage() {
       <div className="mt-8">
         <SignOutButton />
       </div>
+      {admin ? <AdminNav className="mt-10" /> : null}
     </section>
   );
 }
