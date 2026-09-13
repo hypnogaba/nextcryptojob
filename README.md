@@ -43,8 +43,10 @@ an anchor source it cannot be scored without. Sources:
 | Sherlock | audit contest earnings, only through a verified GitHub or X |
 
 Missing data is shown as a gap with a reason, never hidden. The formula (v5) is written by hand and
-documented in `docs/contracts.md` §4. It was checked against a reference set of known crypto people:
-85% land within one level of the expected level.
+documented in `docs/contracts.md` §4. It was checked against a reference set of 49 known crypto people
+with an expected band (four bands, from newcomer to founder): 42 of 49 land in the expected band or the
+next one, 21 of 49 in the exact band. The same set was used to shape the formula, so treat this as a
+sanity check, not an accuracy claim.
 
 ## Architecture
 

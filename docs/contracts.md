@@ -121,7 +121,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 `cover = Σ w` по ядру з не-null джерелами. Без головного джерела → `score = null`,
 `reason = 'missing_anchor:<ключі>'`. Рівень картки: `level = min(10, floor(score/10) + 1)`.
 
-Зміни v5 (дослідження 12.09: 85% в межах сусіднього рівня на еталоні з 49 людей):
+Зміни v5 (дослідження 12.09: 42 з 49 людей еталону в очікуваній смузі або сусідній, 21 з 49 точно; смуг чотири, не рівні 1-10; формулу підбирали на цьому ж наборі):
 - `audits` = earningsUsd = null або gap → null; інакше combine(60·logn(earningsUsd/1000, 1000), 40·logn(high, 150)).
 - `dune` = spellbookPrs = null або 0 → null; інакше combine(70·logn(spellbookPrs, 300), 30·logn(spellbookPrs12m, 50)).
 - `output` = max(site, gh_eng, dune) з не-null.

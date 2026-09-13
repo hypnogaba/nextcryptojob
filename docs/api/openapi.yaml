@@ -37,7 +37,7 @@ info:
     - Every response has `X-Request-Id`. Metered responses have `RateLimit-*` headers for the daily quota of that action.
   contact:
     name: NextCryptoJob
-    url: https://nextcryptojob.xyz/developers
+    url: https://nextcryptojob.xyz/company/developers
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
