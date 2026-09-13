@@ -3,7 +3,7 @@ import type { Application } from "@/lib/crm/agency";
 import type { CompanyInfo } from "@/lib/crm/context";
 import { fromSqlTime } from "@/lib/time";
 
-const LINK = "font-medium text-brand underline underline-offset-4";
+const LINK = "font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
 
 /** Текст плашки стану компанії на всіх сторінках CRM (специфікація 6.2, 10.1); null, коли все гаразд. */
 export function statusBannerText(
@@ -60,11 +60,11 @@ export function StatusBanner({ company, application }: { company: Pick<CompanyIn
       role="status"
       className={
         b.tone === "info"
-          ? "rounded-lg border border-line bg-brand-soft px-4 py-3 text-sm text-ink"
+          ? "rounded-lg border border-line bg-ground px-4 py-3 text-sm text-ink"
           : "rounded-lg border border-line-strong bg-wash px-4 py-3 text-sm text-ink"
       }
     >
-      <p className="font-medium">{b.title}</p>
+      <p className="font-semibold">{b.title}</p>
       {b.body ? <p className="mt-1 whitespace-pre-line text-ink-muted">{b.body}</p> : null}
       {b.link ? (
         <p className="mt-2">
@@ -117,13 +117,13 @@ export function WebhookFailingBanner({ company }: { company: Pick<CompanyInfo, "
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg border border-line-strong bg-wash px-4 py-2 text-sm text-ink"
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg border border-line-strong bg-wash px-4 py-1 text-sm text-ink"
     >
       <p>
-        <span className="font-medium">Your webhook is failing</span>
+        <span className="font-semibold">Your webhook is failing</span>
         <span className="text-ink-muted"> Intro events did not reach your endpoint after 6 tries.</span>
       </p>
-      <Link href="/company/developers#webhook" className="inline-flex min-h-11 items-center font-medium text-brand underline underline-offset-4">
+      <Link href="/company/developers#webhook" className={`inline-flex min-h-11 items-center ${LINK}`}>
         Open Developers
       </Link>
     </div>

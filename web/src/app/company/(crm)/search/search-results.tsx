@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CandidateRow } from "@/components/crm/candidate-row";
-import { LINK, StageChip } from "@/components/crm/ui";
+import { LINK, StageText } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import type { CandidateSummary, SearchResponse } from "@/lib/crm/types";
 import { addFromSearchAction, loadMoreAction } from "./actions";
@@ -56,16 +56,16 @@ export function SearchResults({
       <p className="text-sm text-ink-muted" aria-live="polite">
         {items.length} {items.length === 1 ? "candidate" : "candidates"} shown
       </p>
-      <ol className="grid gap-3">
+      <ol className="overflow-hidden rounded-[10px] border-2 border-ink bg-surface">
         {items.map((c) => (
-          <li key={c.candidate_id}>
+          <li key={c.candidate_id} className="border-b border-line last:border-b-0 hover:bg-brand-soft">
             <CandidateRow
               c={c}
               roleParam={role}
               action={
                 c.pipeline ? (
-                  <Link href="/company/pipeline" className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted">
-                    In pipeline: <StageChip stage={c.pipeline.stage} />
+                  <Link href="/company/pipeline" className="inline-flex min-h-11 items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
+                    In pipeline: <StageText stage={c.pipeline.stage} />
                   </Link>
                 ) : canWrite ? (
                   <AddButton companyId={companyId} candidate={c} role={role} onAdded={(p) => setStage(c.candidate_id, p)} />
@@ -117,7 +117,7 @@ function AddButton({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="grid justify-items-end gap-1">
+    <div className="grid justify-items-start gap-1 sm:justify-items-end">
       <Button
         type="button"
         variant="outline"

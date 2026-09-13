@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { H2, LINK, PAGE, PageTitle } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { loadBillingState, type BillingState, type SubscriptionView } from "@/lib/billing/access";
@@ -56,12 +57,12 @@ type Tone = "info" | "warning" | "error";
 
 function Banner({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   const styles: Record<Tone, string> = {
-    info: "border-line bg-brand-soft text-ink",
+    info: "border-line bg-surface text-ink",
     warning: "border-line-strong bg-wash text-ink",
-    error: "border-danger/40 bg-danger/10 text-ink",
+    error: "border-destructive/50 bg-surface text-ink",
   };
   return (
-    <div role={tone === "info" ? "status" : "alert"} className={`rounded-md border px-4 py-3 text-sm ${styles[tone]}`}>
+    <div role={tone === "info" ? "status" : "alert"} className={`rounded-lg border px-4 py-3 text-sm ${styles[tone]}`}>
       {children}
     </div>
   );
@@ -164,25 +165,27 @@ function Banners({
       </Banner>,
     );
   }
-  return out.length > 0 ? <div className="mt-6 grid gap-3">{out}</div> : null;
+  return out.length > 0 ? <div className="grid gap-3">{out}</div> : null;
 }
 
 function CardSection({ state, cardsEnabled, isOwner }: { state: BillingState; cardsEnabled: boolean; isOwner: boolean }) {
   return (
-    <section aria-labelledby="card-heading" className="rounded-lg border border-line bg-surface p-5 sm:p-6">
-      <h2 id="card-heading" className="text-lg font-semibold">Pay by card</h2>
+    <section aria-labelledby="card-heading" className="scroll-mt-6 rounded-xl border border-line bg-surface p-4 sm:p-6">
+      <h2 id="card-heading" className={H2}>
+        Pay by card
+      </h2>
       {!cardsEnabled ? (
         <>
-          <p className="mt-2 font-medium text-ink">Card payments are coming soon.</p>
+          <p className="mt-3 font-semibold text-ink">Card payments are coming soon.</p>
           <p className="mt-1 text-sm text-ink-muted">
             Until then, pay 100 USDC for 30 days below, or write to support@nextcryptojob.xyz for access.
           </p>
         </>
       ) : !isOwner ? (
-        <p className="mt-2 text-sm text-ink-muted">Only the company owner can manage billing.</p>
+        <p className="mt-3 text-sm text-ink-muted">Only the company owner can manage billing.</p>
       ) : (
         <>
-          <p className="mt-2 text-sm text-ink-muted">
+          <p className="mt-3 max-w-[65ch] text-sm text-ink-muted">
             $100 per month, plus VAT where it applies. Checkout shows the price in your currency and lets you add a VAT
             ID. Cancel any time: access continues to the end of the paid period.
           </p>
@@ -215,13 +218,12 @@ function CardSection({ state, cardsEnabled, isOwner }: { state: BillingState; ca
 
 /** Три шляхи після реєстрації компанії (6.1). */
 function Welcome({ cardsEnabled, trial }: { cardsEnabled: boolean; trial: boolean }) {
-  const LINK = "font-medium text-brand underline underline-offset-4";
   return (
-    <section aria-labelledby="welcome-heading" className="mt-6 grid gap-3 rounded-lg border border-line bg-brand-soft p-5 sm:p-6">
-      <h2 id="welcome-heading" className="text-lg font-semibold">
+    <section aria-labelledby="welcome-heading" className="grid gap-4 rounded-xl border-2 border-ink bg-surface p-4 sm:p-6">
+      <h2 id="welcome-heading" className={H2}>
         Your company is ready. Choose how to start.
       </h2>
-      <ol className="grid gap-2 text-sm text-ink">
+      <ol className="grid gap-3 text-sm text-ink">
         <li>
           <a href="#card-heading" className={LINK}>
             {trial ? `Start ${TRIAL_DAYS}-day trial` : "Subscribe"}
@@ -258,10 +260,12 @@ function UsdcSection({ origin, enabled }: { origin: string; enabled: boolean }) 
     '  -H "PAYMENT-SIGNATURE: $PAYMENT"',
   ].join("\n");
   return (
-    <section aria-labelledby="usdc-heading" className="rounded-lg border border-line bg-surface p-5 sm:p-6">
-      <h2 id="usdc-heading" className="text-lg font-semibold">Pay with USDC (x402)</h2>
-      {enabled ? null : <p className="mt-2 font-medium text-ink">USDC payments open soon.</p>}
-      <p className="mt-2 text-sm text-ink-muted">
+    <section aria-labelledby="usdc-heading" className="scroll-mt-6 rounded-xl border border-line bg-surface p-4 sm:p-6">
+      <h2 id="usdc-heading" className={H2}>
+        Pay with USDC (x402)
+      </h2>
+      {enabled ? null : <p className="mt-3 font-semibold text-ink">USDC payments open soon.</p>}
+      <p className="mt-3 max-w-[65ch] text-sm text-ink-muted">
         Pay 100 USDC on Base or Solana for 30 days of access. Your agent or any x402 client can pay with an API key of
         this company. There is no automatic renewal: pay again and the next 30 days start when the current ones end.
       </p>
@@ -294,15 +298,15 @@ export default async function BillingPage({
   }
 
   const shell = (children: React.ReactNode) => (
-    <section className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Billing</h1>
+    <section className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+      <PageTitle>Billing</PageTitle>
       {children}
     </section>
   );
 
   const state = ctx?.company ? await loadBillingState(db(), ctx.company.id, { userId: user.id }) : null;
   if (!ctx || ctx.actor.kind !== "member" || !state) {
-    return shell(<p className="mt-4 text-ink-muted">Your account is not part of a company yet.</p>);
+    return shell(<p className="text-ink-muted">Your account is not part of a company yet.</p>);
   }
   if (ctx.company?.status === "pending_review" || ctx.company?.status === "rejected") redirect("/company/apply");
 
@@ -316,7 +320,7 @@ export default async function BillingPage({
 
   return shell(
     <>
-      <p className="mt-2 text-ink-muted">{state.companyName}</p>
+      <p className="-mt-3 text-ink-muted">{state.companyName}</p>
       <Banners
         state={state}
         now={now}
@@ -325,12 +329,12 @@ export default async function BillingPage({
         canManage={isOwner && cardsEnabled}
       />
       {first(params.welcome) === "1" && isOwner ? <Welcome cardsEnabled={cardsEnabled} trial={state.trialAvailable} /> : null}
-      <dl className="mt-8 grid gap-1">
-        <dt className="font-mono text-xs tracking-widest text-ink-muted uppercase">Current plan</dt>
-        <dd className="text-lg font-semibold text-ink">{status.label}</dd>
+      <dl className="grid gap-1 border-y-2 border-ink py-4">
+        <dt className="text-sm font-semibold text-ink-muted">Current plan</dt>
+        <dd className="display text-[1.75rem] leading-none">{status.label}</dd>
         <dd className="text-ink-muted">{status.detail}</dd>
       </dl>
-      <div className="mt-8 grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <CardSection state={state} cardsEnabled={cardsEnabled} isOwner={isOwner} />
         <UsdcSection origin={origin} enabled={usdcEnabled} />
       </div>

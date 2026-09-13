@@ -20,9 +20,9 @@ export default async function StartPage({
   const memberships = (await listMemberships(db(), user.id)).filter((m) => m.status !== "closed");
 
   return (
-    <section className="mx-auto grid max-w-xl gap-8 px-4 pt-10 pb-20 sm:px-6 sm:pt-16">
+    <section className="mx-auto grid max-w-xl gap-8 px-[clamp(16px,4vw,56px)] pt-10 pb-20 sm:pt-16">
       <div className="grid gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="display text-title">
           {agency ? "Apply as a recruiting agency" : "Create a company account"}
         </h1>
         <p className="text-ink-muted">
@@ -32,7 +32,7 @@ export default async function StartPage({
       </div>
 
       {memberships.length > 0 ? (
-        <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+        <div className="grid gap-2 rounded-xl border border-line bg-surface p-4">
           <p className="text-sm text-ink-muted">You already have access to:</p>
           <ul className="grid gap-1">
             {memberships.map((m) => (
@@ -43,8 +43,8 @@ export default async function StartPage({
                     type="submit"
                     className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-2 text-left hover:bg-wash"
                   >
-                    <span className="font-medium text-ink">{m.name}</span>
-                    <span className="text-sm text-brand">Open</span>
+                    <span className="font-semibold text-ink">{m.name}</span>
+                    <span className="text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4">Open</span>
                   </button>
                 </form>
               </li>

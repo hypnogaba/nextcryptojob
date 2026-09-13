@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { ERROR, FIELD, HINT, LABEL, TEXTAREA } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
-import { CARD, Chip, Notice, StageChip } from "@/components/crm/ui";
+import { CARD, Chip, H3, Notice, StageText } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import { aboutRoleText, expiresInText, INTRO_STATUS_TEXT, roleText, STAGE_TEXT } from "@/lib/crm/labels";
 import type { PipelineEvent } from "@/lib/crm/pipeline";
@@ -100,7 +100,7 @@ export function CandidatePanel(props: PanelProps) {
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
       <section aria-labelledby="stage-title" className={`${CARD} grid gap-3 p-4`}>
-        <h3 id="stage-title" className="font-semibold tracking-tight">
+        <h3 id="stage-title" className={H3}>
           Pipeline
         </h3>
         {!card ? (
@@ -119,7 +119,7 @@ export function CandidatePanel(props: PanelProps) {
         ) : (
           <>
             <p className="flex flex-wrap items-center gap-2 text-sm text-ink">
-              Stage: <StageChip stage={card.stage} declinedBy={card.declined_by} />
+              Stage: <StageText stage={card.stage} declinedBy={card.declined_by} />
             </p>
             {canWrite && card.stage !== "intro_requested" && moves.length ? (
               <form action={action} className="flex flex-wrap items-end gap-2">
@@ -159,7 +159,7 @@ export function CandidatePanel(props: PanelProps) {
       {card ? (
         <>
           <section aria-labelledby="tags-title" className={`${CARD} grid gap-3 p-4`}>
-            <h3 id="tags-title" className="font-semibold tracking-tight">
+            <h3 id="tags-title" className={H3}>
               Tags
             </h3>
             {card.tags.length ? (
@@ -169,12 +169,12 @@ export function CandidatePanel(props: PanelProps) {
                     <form action={action} className="inline-flex">
                       <Hidden {...h} op="tag_remove" />
                       <input type="hidden" name="tag" value={t} />
-                      <Chip className="gap-1 pr-0.5">
+                      <Chip className="gap-1 py-0 pr-0">
                         {t}
                         {canWrite ? (
                           <button
                             type="submit"
-                            className="inline-flex size-7 items-center justify-center rounded-full text-ink-muted hover:bg-line hover:text-ink"
+                            className="inline-flex size-7 items-center justify-center rounded-[3px] text-ink-muted hover:bg-line hover:text-ink"
                             aria-label={`Remove tag ${t}`}
                           >
                             <span aria-hidden>&times;</span>
@@ -217,7 +217,7 @@ export function CandidatePanel(props: PanelProps) {
           </section>
 
           <section aria-labelledby="note-title" className={`${CARD} grid gap-3 p-4`}>
-            <h3 id="note-title" className="font-semibold tracking-tight">
+            <h3 id="note-title" className={H3}>
               Add a note
             </h3>
             {canWrite ? (
@@ -229,7 +229,7 @@ export function CandidatePanel(props: PanelProps) {
           </section>
 
           <section aria-labelledby="history-title" className={`${CARD} grid gap-3 p-4`}>
-            <h3 id="history-title" className="font-semibold tracking-tight">
+            <h3 id="history-title" className={H3}>
               History
             </h3>
             {state.history.length ? (
@@ -250,7 +250,7 @@ export function CandidatePanel(props: PanelProps) {
 
           {canWrite ? (
             <details className={`${CARD} p-4`}>
-              <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-destructive">Remove from pipeline</summary>
+              <summary className="min-h-11 cursor-pointer content-center text-sm font-semibold text-destructive">Remove from pipeline</summary>
               <form action={action} className="mt-3 grid gap-2">
                 <Hidden {...h} op="remove" />
                 <p className="text-sm text-ink">
@@ -316,7 +316,7 @@ function IntroSection(
   const intro = state.intro;
   return (
     <section aria-labelledby="intro-title" className={`${CARD} grid gap-3 p-4`}>
-      <h3 id="intro-title" className="font-semibold tracking-tight">
+      <h3 id="intro-title" className={H3}>
         Contact
       </h3>
       {contact ? (
@@ -399,11 +399,11 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
       <dialog
         ref={ref}
         aria-labelledby="intro-dialog-title"
-        className="m-auto w-[min(40rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-0 text-ink shadow-lg backdrop:bg-ink/40"
+        className="m-auto w-[min(40rem,calc(100vw-2rem))] rounded-xl border-2 border-ink bg-surface p-0 text-ink shadow-lift backdrop:bg-ink/40"
       >
         <form action={action} className="grid gap-4 p-4 sm:p-6">
           <Hidden companyId={props.companyId} candidateId={props.candidateId} op="intro" />
-          <h2 id="intro-dialog-title" className="text-lg font-semibold tracking-tight">
+          <h2 id="intro-dialog-title" className="display text-[1.75rem] leading-none break-words">
             {direct ? `Show the Telegram handle of ${label}` : `Request intro with ${label}`}
           </h2>
           {direct ? (
@@ -491,8 +491,8 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
             </div>
           ) : null}
           {!direct ? (
-            <div className="grid gap-1 rounded-lg border border-line bg-wash p-3 text-sm">
-              <p className="font-medium text-ink">What the candidate sees</p>
+            <div className="grid gap-1 border border-line bg-wash p-3 text-sm">
+              <p className="font-semibold text-ink">What the candidate sees</p>
               <p className="text-ink">
                 {companyName} wants to talk to you {aboutRoleText(role)}.
               </p>

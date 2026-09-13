@@ -3,13 +3,14 @@ import Link from "next/link";
 import { SubmitButton } from "@/components/form/submit-button";
 import { SwitchButton } from "@/components/form/switch-button";
 import { doneText, errorText, first } from "@/components/crm/messages";
-import { CARD, EmptyState, LINK, NoAccess, Notice, PageTitle } from "@/components/crm/ui";
+import { CARD, EmptyState, H3, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { readAction } from "@/lib/crm/actions";
 import { savedSearchLimit, type SavedSearchList } from "@/lib/crm/saved-searches";
 import { describeFilters, searchQuery } from "@/lib/crm/search-params";
 import { cn } from "@/lib/utils";
 import { crmPage } from "../crm";
+import { DANGER_SUMMARY } from "../jobs/parts";
 import { deleteSavedSearchAction, toggleAlertAction } from "./actions";
 
 export const metadata: Metadata = { title: "Saved searches", robots: { index: false } };
@@ -30,7 +31,7 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
 
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
         <PageTitle>Saved searches</PageTitle>
         <NoAccess />
       </div>
@@ -41,7 +42,7 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
   const limit = savedSearchLimit(company);
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
       <PageTitle aside={limit ? `${data.length} of ${limit}` : undefined}>Saved searches</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -58,9 +59,9 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
           {data.map((s) => {
             const labelId = `alert-${s.saved_search_id}`;
             return (
-              <li key={s.saved_search_id} className={`${CARD} grid gap-3 p-4`}>
+              <li key={s.saved_search_id} className={`${CARD} grid gap-4 p-4 sm:p-5`}>
                 <div className="grid gap-1">
-                  <h2 className="font-semibold tracking-tight break-words">{s.name}</h2>
+                  <h2 className={`${H3} break-words`}>{s.name}</h2>
                   <p className="text-sm text-ink-muted">{describeFilters(s.filters, s.sort)}</p>
                   <p className="text-xs text-ink-muted">
                     {s.last_alert_at && s.last_match_count !== null
@@ -76,7 +77,7 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
                     <input type="hidden" name="saved_search_id" value={s.saved_search_id} />
                     <input type="hidden" name="alert" value={s.alert === "daily" ? "off" : "daily"} />
                     <SwitchButton checked={s.alert === "daily"} labelledBy={labelId} disabled={!canWrite} />
-                    <span id={labelId} className="text-sm text-ink">
+                    <span id={labelId} className="text-sm font-semibold text-ink">
                       Daily alert
                     </span>
                   </form>
@@ -90,10 +91,10 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
                     </Link>
                     {canWrite ? (
                       <details className="relative">
-                        <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-lg border border-border px-3 text-sm font-medium text-destructive hover:bg-muted [&::-webkit-details-marker]:hidden">
+                        <summary className={DANGER_SUMMARY}>
                           Delete
                         </summary>
-                        <form action={deleteSavedSearchAction} className="absolute right-0 z-10 mt-1 grid w-64 gap-2 rounded-lg border border-line bg-surface p-3 shadow-lg">
+                        <form action={deleteSavedSearchAction} className="absolute right-0 z-10 mt-1 grid w-64 gap-2 rounded-lg border border-line bg-surface p-3 shadow-lift">
                           <input type="hidden" name="company_id" value={company.id} />
                           <input type="hidden" name="saved_search_id" value={s.saved_search_id} />
                           <p className="text-sm text-ink">Delete &ldquo;{s.name}&rdquo; for the whole team?</p>

@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { FIELD } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
+import { POS, ScoreChip } from "@/components/board";
+import { EmptyChip } from "@/components/crm/candidate-row";
 import { Chip } from "@/components/crm/ui";
 import { expiresInText, roleScoreText, STAGE_TEXT } from "@/lib/crm/labels";
 import type { PipelineCard } from "@/lib/crm/pipeline";
 import { HIDDEN_NOTICE, type Stage } from "@/lib/crm/types";
+import { POSITION_CODE } from "@/lib/roles/recipes";
 import { moveCardAction, withdrawIntroAction } from "./actions";
 
 /** Куди картку можна перенести вручну (5.4): Interview і Hired лише з відкритим контактом. */
@@ -71,15 +74,25 @@ export function WithdrawForm({ card, back, canWrite }: { card: PipelineCard; bac
 /** Картка на дошці (W4): мітка, бал, теги, стан знайомства чи контакт, "Move to...". */
 export function BoardCard({ card, back, canWrite, now }: { card: PipelineCard; back: Parameters<typeof BackFields>[0]; canWrite: boolean; now: Date }) {
   return (
-    <article className="grid gap-2 rounded-lg border border-line bg-surface p-3" aria-labelledby={`card-${card.candidate_id}`}>
-      <Link
-        id={`card-${card.candidate_id}`}
-        href={`/company/candidates/${card.candidate_id}`}
-        prefetch={false}
-        className="font-mono font-semibold text-ink underline-offset-4 hover:underline"
-      >
-        {card.label}
-      </Link>
+    <article className="grid gap-2.5 rounded-lg border border-line bg-surface p-3" aria-labelledby={`card-${card.candidate_id}`}>
+      <div className="flex items-center gap-3">
+        {card.visibility !== "hidden" && card.headline?.score != null ? (
+          <ScoreChip score={card.headline.score} level={card.headline.level} className="w-10" />
+        ) : (
+          <EmptyChip className="w-10" />
+        )}
+        <div className="grid min-w-0 gap-1">
+          <Link
+            id={`card-${card.candidate_id}`}
+            href={`/company/candidates/${card.candidate_id}`}
+            prefetch={false}
+            className="font-mono text-sm font-semibold break-all text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
+          >
+            {card.label}
+          </Link>
+          {card.visibility !== "hidden" && card.headline ? <span className={POS}>{POSITION_CODE[card.headline.role]}</span> : null}
+        </div>
+      </div>
       {card.visibility === "hidden" ? (
         <p className="text-sm text-ink-muted">{HIDDEN_NOTICE}</p>
       ) : card.headline ? (

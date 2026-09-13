@@ -21,8 +21,8 @@ export function LeaveTeam({
   from: "team" | "settings";
 }) {
   return (
-    <section aria-labelledby="leave-title" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-6">
-      <h2 id="leave-title" className="text-lg font-semibold tracking-tight">
+    <section aria-labelledby="leave-title" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
+      <h2 id="leave-title" className="display text-[1.75rem] leading-none">
         Leave the team
       </h2>
       {blocked ? (

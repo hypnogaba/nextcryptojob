@@ -14,8 +14,8 @@ export type NavItem = { href: string; label: string };
 export function CrmNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Company" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <ul className="flex min-w-max gap-1">
+    <nav aria-label="Company" className="-mx-[clamp(16px,4vw,56px)] -mb-px overflow-x-auto px-[clamp(16px,4vw,56px)] sm:mx-0 sm:px-0">
+      <ul className="flex min-w-max gap-4">
         {items.map((item) => {
           const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -24,8 +24,8 @@ export function CrmNav({ items }: { items: NavItem[] }) {
                 href={item.href}
                 aria-current={current ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition-colors",
-                  current ? "bg-brand-soft text-ink" : "text-ink-muted hover:bg-wash hover:text-ink",
+                  "inline-flex min-h-11 items-center border-b-2 text-[0.9375rem] font-semibold transition-colors",
+                  current ? "border-ink text-ink" : "border-transparent text-ink-muted hover:border-line-strong hover:text-ink",
                 )}
               >
                 {item.label}

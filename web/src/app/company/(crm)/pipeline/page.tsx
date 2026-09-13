@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FIELD, LABEL } from "@/components/form/styles";
 import { doneText, errorText, first } from "@/components/crm/messages";
-import { CARD, Chip, EmptyState, LINK, NoAccess, Notice, PageTitle, StageChip } from "@/components/crm/ui";
+import { BOARD, POS, ScoreChip, TABLE, TD, TH, TR } from "@/components/board";
+import { EmptyChip } from "@/components/crm/candidate-row";
+import { Chip, EmptyState, LINK, NoAccess, Notice, PAGE, PageTitle, StageText } from "@/components/crm/ui";
+import { POSITION_CODE } from "@/lib/roles/recipes";
 import { Button } from "@/components/ui/button";
 import { readAction } from "@/lib/crm/actions";
 import { userFacingError } from "@/lib/crm/company";
@@ -40,7 +43,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
 
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className={`${PAGE} max-w-5xl`}>
         <PageTitle>Pipeline</PageTitle>
         <NoAccess />
       </div>
@@ -78,14 +81,14 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
   const filtered = Boolean(job || tag);
 
   return (
-    <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-5xl`}>
       <PageTitle aside={total ? `${total} ${total === 1 ? "candidate" : "candidates"}` : undefined}>Pipeline</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {listError ? <Notice tone="error">{listError}</Notice> : null}
       {!canWrite ? <Notice tone="info">Read-only: no active subscription.</Notice> : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="grid gap-4">
         <PipelineTabs current={view} query={filterQuery} />
         <form method="get" action="/company/pipeline" aria-label="Pipeline filters" className="flex flex-wrap items-end gap-2">
           {view === "list" ? <input type="hidden" name="view" value="list" /> : null}
@@ -126,25 +129,25 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
           </Link>
         </EmptyState>
       ) : view === "board" ? (
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6 xl:items-start">
+        <div className="grid grid-cols-1 gap-x-3 gap-y-5 md:grid-cols-3 xl:grid-cols-6 xl:items-start">
           {columns.map(({ stage, list: col }) => {
             const n = filtered ? col.data.length : (counts[stage] ?? 0);
             return (
-              <details key={stage} open={n > 0} className={`${CARD} group p-3`}>
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 font-semibold tracking-tight [&::-webkit-details-marker]:hidden">
-                  <span>
+              <details key={stage} open={n > 0} className="group min-w-0">
+                <summary className="flex min-h-11 cursor-pointer list-none items-end justify-between gap-2 border-b-2 border-ink pb-1.5 [&::-webkit-details-marker]:hidden">
+                  <span className={`display text-base leading-tight ${stage === "contact_shared" ? "text-brand" : ""}`}>
                     {STAGE_TEXT[stage]} ({n}
                     {filtered && col.next_cursor ? "+" : ""})
                   </span>
-                  <span aria-hidden className="text-sm text-ink-muted transition-transform group-open:rotate-180">
+                  <span aria-hidden className="pb-0.5 text-xs text-ink-muted transition-transform group-open:rotate-180">
                     &#9662;
                   </span>
                 </summary>
-                <div className="mt-2 grid gap-2">
+                <div className="mt-3 grid gap-2">
                   {col.data.length ? (
                     col.data.map((card) => <BoardCard key={card.candidate_id} card={card} back={back} canWrite={canWrite} now={ctx.now} />)
                   ) : (
-                    <p className="text-sm text-ink-muted">No candidates here.</p>
+                    <p className="rounded-lg border border-dashed border-line-strong px-3 py-4 text-sm text-ink-muted">No candidates here.</p>
                   )}
                   {col.next_cursor ? (
                     <Link href={`/company/pipeline?view=list${filterQuery ? `&${filterQuery}` : ""}`} className={`${LINK} text-sm`}>
@@ -158,73 +161,87 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
         </div>
       ) : list ? (
         <div className="grid min-w-0 gap-3">
-          <div className={`${CARD} relative min-w-0 overflow-x-auto`}>
-            <table className="w-full min-w-[48rem] text-sm">
+          <div className={BOARD}>
+            <table className={`${TABLE} min-w-[56rem]`}>
               <caption className="sr-only">Pipeline cards, newest activity first</caption>
               <thead>
-                <tr className="border-b border-line text-left text-ink-muted">
-                  <th scope="col" className="px-3 py-2 font-medium">
+                <tr>
+                  <th scope="col" className={TH}>
+                    Card
+                  </th>
+                  <th scope="col" className={TH}>
                     Candidate
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className={TH}>
+                    Pos
+                  </th>
+                  <th scope="col" className={TH}>
                     Stage
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Score
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className={TH}>
                     Tags
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className={TH}>
                     Intro or contact
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className={TH}>
                     Updated
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className={TH}>
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {list.data.map((card) => (
-                  <tr key={card.candidate_id} className="border-b border-line align-top last:border-b-0">
-                    <th scope="row" className="px-3 py-2 text-left font-normal">
-                      <Link href={`/company/candidates/${card.candidate_id}`} prefetch={false} className="font-mono font-semibold text-ink underline-offset-4 hover:underline">
-                        {card.label}
-                      </Link>
-                    </th>
-                    <td className="px-3 py-2">
-                      <StageChip stage={card.stage} declinedBy={card.declined_by} />
-                    </td>
-                    <td className="px-3 py-2 text-ink">
-                      {card.visibility === "hidden" ? <span className="text-ink-muted">{HIDDEN_NOTICE}</span> : card.headline ? roleScoreText(card.headline) : null}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="flex flex-wrap gap-1">
-                        {card.tags.map((t) => (
-                          <Chip key={t}>{t}</Chip>
-                        ))}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-ink">
-                      {card.contact ? (
-                        <span className="font-mono break-all">{card.contact.value}</span>
-                      ) : card.open_intro ? (
-                        <span className="text-ink-muted">{expiresInText(card.open_intro.expires_at, ctx.now)}</span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-ink-muted">
-                      <time dateTime={card.updated_at}>{DATE.format(new Date(card.updated_at))}</time>
-                    </td>
-                    <td className="w-60 px-3 py-2">
-                      <div className="grid gap-2">
-                        <MoveForm card={card} back={back} canWrite={canWrite} />
-                        <WithdrawForm card={card} back={back} canWrite={canWrite} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {list.data.map((card) => {
+                  const h = card.visibility === "hidden" ? null : card.headline;
+                  return (
+                    <tr key={card.candidate_id} className={TR}>
+                      <td className={TD}>
+                        {h?.score != null ? <ScoreChip score={h.score} level={h.level} /> : <EmptyChip />}
+                      </td>
+                      <th scope="row" className={`${TD} min-w-44 font-normal`}>
+                        <Link
+                          href={`/company/candidates/${card.candidate_id}`}
+                          prefetch={false}
+                          className="font-mono font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
+                        >
+                          {card.label}
+                        </Link>
+                        <span className="mt-1 block text-ink-muted">
+                          {card.visibility === "hidden" ? HIDDEN_NOTICE : h ? roleScoreText(h) : null}
+                        </span>
+                      </th>
+                      <td className={TD}>{h ? <span className={POS}>{POSITION_CODE[h.role]}</span> : null}</td>
+                      <td className={TD}>
+                        <StageText stage={card.stage} declinedBy={card.declined_by} />
+                      </td>
+                      <td className={TD}>
+                        <span className="flex flex-wrap gap-1">
+                          {card.tags.map((t) => (
+                            <Chip key={t}>{t}</Chip>
+                          ))}
+                        </span>
+                      </td>
+                      <td className={`${TD} text-ink`}>
+                        {card.contact ? (
+                          <span className="font-mono break-all">{card.contact.value}</span>
+                        ) : card.open_intro ? (
+                          <span className="text-ink-muted">{expiresInText(card.open_intro.expires_at, ctx.now)}</span>
+                        ) : null}
+                      </td>
+                      <td className={`${TD} whitespace-nowrap text-ink-muted`}>
+                        <time dateTime={card.updated_at}>{DATE.format(new Date(card.updated_at))}</time>
+                      </td>
+                      <td className={`${TD} w-56`}>
+                        <div className="grid gap-2">
+                          <MoveForm card={card} back={back} canWrite={canWrite} />
+                          <WithdrawForm card={card} back={back} canWrite={canWrite} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             {list.data.length === 0 ? <p className="p-4 text-sm text-ink-muted">No cards match these filters.</p> : null}

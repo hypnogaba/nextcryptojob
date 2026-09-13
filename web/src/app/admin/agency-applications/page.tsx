@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
+import { TEXTAREA } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
 import { currentAdmin } from "@/lib/auth/admin";
 import { listApplicationsForAdmin, REVIEW_NOTE_MAX, type AdminApplication } from "@/lib/crm/agency";
@@ -39,22 +40,19 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-const TEXTAREA =
-  "block w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none";
-
 function NoteForm({ app, decision, label, submit, variant }: { app: AdminApplication; decision: "needs_info" | "reject"; label: string; submit: string; variant: "outline" | "destructive" }) {
   const id = `${decision}-${app.id}`;
   return (
     <details className="text-sm">
-      <summary className="inline-flex min-h-11 cursor-pointer items-center text-brand">{submit}</summary>
+      <summary className="inline-flex min-h-11 cursor-pointer items-center font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">{submit}</summary>
       <form action={reviewApplicationAction} className="mt-2 grid gap-2 sm:max-w-md">
         <input type="hidden" name="application_id" value={app.id} />
         <input type="hidden" name="decision" value={decision} />
-        <label htmlFor={id} className="text-ink-muted">
+        <label htmlFor={id} className="font-semibold text-ink">
           {label}
         </label>
         <textarea id={id} name="note" required rows={3} maxLength={REVIEW_NOTE_MAX} className={TEXTAREA} />
-        <Button type="submit" variant={variant} className="h-10 w-fit px-3">
+        <Button type="submit" variant={variant} className="h-11 w-fit px-4">
           {submit}
         </Button>
       </form>
@@ -65,7 +63,7 @@ function NoteForm({ app, decision, label, submit, variant }: { app: AdminApplica
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-3">
-      <dt className="text-ink-muted">{label}</dt>
+      <dt className="font-semibold text-ink-muted">{label}</dt>
       <dd className="break-words whitespace-pre-line text-ink">{children}</dd>
     </div>
   );
@@ -84,35 +82,35 @@ export default async function AgencyApplicationsPage({
   const apps = await listApplicationsForAdmin(db());
 
   return (
-    <section className="mx-auto grid max-w-4xl gap-6 px-4 py-10 sm:px-6 sm:py-14">
+    <section className="mx-auto grid max-w-4xl grid-cols-1 gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12">
       <AdminNav current="/admin/agency-applications" className="" />
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Agency applications</h1>
+      <h1 className="display text-title">Agency applications</h1>
 
       {done && DONE[done] ? (
-        <p role="status" className="rounded-md border border-line bg-brand-soft px-4 py-3 text-sm text-ink">
+        <p role="status" className="rounded-lg border border-ink bg-surface px-4 py-3 text-sm text-ink">
           {DONE[done]}
           {emailed === "0" ? " Email not sent: mail is not set up yet, so tell the agency yourself." : " The owners got an email."}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ink">
+        <p role="alert" className="rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
           {ERRORS[error] ?? "Something went wrong."}
         </p>
       ) : null}
 
       {apps.length === 0 ? (
-        <p className="text-ink-muted">No applications waiting.</p>
+        <p className="rounded-xl border border-dashed border-line-strong p-6 text-ink-muted">No applications waiting.</p>
       ) : (
         <ul className="grid gap-4">
           {apps.map((app) => (
-            <li key={app.id} className="grid gap-4 rounded-lg border border-line bg-surface p-4 sm:p-5">
+            <li key={app.id} className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-lg font-semibold">{app.companyName}</h2>
-                <span className="font-mono text-xs text-ink-muted">
+                <h2 className="display text-[1.75rem] leading-none break-words">{app.companyName}</h2>
+                <span className="text-sm text-ink-muted">
                   {app.status === "needs_info" ? "Waiting for the agency" : "New"}, sent {DATE.format(fromSqlTime(app.updatedAt))}
                 </span>
               </div>
-              <dl className="grid gap-2 text-sm">
+              <dl className="grid gap-2 border-t border-line pt-4 text-sm">
                 <Detail label="Contact">
                   {app.contactName}, {app.contactEmail}
                 </Detail>

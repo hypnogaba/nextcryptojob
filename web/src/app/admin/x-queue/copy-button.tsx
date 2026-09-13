@@ -10,7 +10,7 @@ export function CopyButton({ text }: { text: string }) {
     <Button
       type="button"
       variant="outline"
-      className="h-9 px-3"
+      className="h-11 px-3"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

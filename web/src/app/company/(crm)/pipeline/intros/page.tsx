@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SubmitButton } from "@/components/form/submit-button";
 import { doneText, errorText, first } from "@/components/crm/messages";
-import { CARD, EmptyState, LINK, NoAccess, Notice, PageTitle } from "@/components/crm/ui";
+import { EmptyState, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { readAction } from "@/lib/crm/actions";
 import { userFacingError } from "@/lib/crm/company";
 import { expiresInText, INTRO_STATUS_TEXT, roleText } from "@/lib/crm/labels";
@@ -12,7 +12,7 @@ import type { Intro, IntroStatus } from "@/lib/crm/types";
 import { cn } from "@/lib/utils";
 import { crmPage } from "../../crm";
 import { withdrawIntroAction } from "../actions";
-import { PipelineTabs } from "../pipeline-tabs";
+import { PipelineTabs, TAB, TAB_OFF, TAB_ON } from "../pipeline-tabs";
 
 export const metadata: Metadata = { title: "Intros", robots: { index: false } };
 
@@ -44,7 +44,7 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
 
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-4xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className={`${PAGE} max-w-5xl *:max-w-4xl`}>
         <PageTitle>Intros</PageTitle>
         <NoAccess />
       </div>
@@ -62,33 +62,32 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
   }
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-5xl *:max-w-4xl`}>
       <PageTitle>Intros</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {listError ? <Notice tone="error">{listError}</Notice> : null}
-      <PipelineTabs current="intros" />
-      <nav aria-label="Intro status" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <ul className="flex min-w-max gap-1">
-          {FILTERS.map((f) => {
-            const current = (f.key === "all" && !status) || f.key === status;
-            return (
-              <li key={f.key}>
-                <Link
-                  href={f.key === "all" ? "/company/pipeline/intros" : `/company/pipeline/intros?status=${f.key}`}
-                  aria-current={current ? "page" : undefined}
-                  className={cn(
-                    "inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium",
-                    current ? "bg-brand-soft text-ink" : "text-ink-muted hover:bg-wash hover:text-ink",
-                  )}
-                >
-                  {f.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <div className="grid gap-2">
+        <PipelineTabs current="intros" />
+        <nav aria-label="Intro status" className="-mx-[clamp(16px,4vw,56px)] overflow-x-auto px-[clamp(16px,4vw,56px)] sm:mx-0 sm:px-0">
+          <ul className="flex min-w-max gap-4">
+            {FILTERS.map((f) => {
+              const current = (f.key === "all" && !status) || f.key === status;
+              return (
+                <li key={f.key}>
+                  <Link
+                    href={f.key === "all" ? "/company/pipeline/intros" : `/company/pipeline/intros?status=${f.key}`}
+                    aria-current={current ? "page" : undefined}
+                    className={cn(TAB, current ? TAB_ON : TAB_OFF)}
+                  >
+                    {f.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </div>
 
       {intros.data.length === 0 && !listError ? (
         <EmptyState title={status ? "No intros with this status." : "No intros yet."}>
@@ -99,16 +98,22 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
           and press Request intro.
         </EmptyState>
       ) : (
-        <ol className="grid gap-3">
+        <ol className="overflow-hidden rounded-[10px] border-2 border-ink bg-surface">
           {intros.data.map((i) => {
             const notice = companyIntroNotice(i);
             return (
-              <li key={i.intro_id} className={`${CARD} grid gap-2 p-4`}>
+              <li key={i.intro_id} className="grid gap-2 border-b border-line px-4 py-4 last:border-b-0 hover:bg-brand-soft sm:px-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <Link href={`/company/candidates/${i.candidate_id}`} prefetch={false} className="font-mono font-semibold text-ink underline-offset-4 hover:underline">
+                  <Link
+                    href={`/company/candidates/${i.candidate_id}`}
+                    prefetch={false}
+                    className="font-mono font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
+                  >
                     {candidateLabel(i.candidate_id)}
                   </Link>
-                  <span className="text-sm font-medium text-ink">{INTRO_STATUS_TEXT[i.status] ?? i.status}</span>
+                  <span className={cn("text-sm font-semibold", i.status === "accepted" ? "text-brand" : i.status === "pending" ? "text-ink" : "text-ink-muted")}>
+                    {INTRO_STATUS_TEXT[i.status] ?? i.status}
+                  </span>
                 </div>
                 <p className="text-sm text-ink-muted">
                   {i.role ? `${roleText(i.role)} role. ` : ""}Requested on {DATE.format(new Date(i.created_at))}
@@ -116,7 +121,7 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
                   {i.status === "pending" ? ` ${expiresInText(i.expires_at, ctx.now)}.` : ""}
                   {i.responded_at && i.status !== "pending" ? ` Answered on ${DATE.format(new Date(i.responded_at))}.` : ""}
                 </p>
-                <p className="line-clamp-3 text-sm break-words text-ink">&ldquo;{i.message}&rdquo;</p>
+                <p className="line-clamp-3 max-w-[70ch] text-sm break-words text-ink">&ldquo;{i.message}&rdquo;</p>
                 {i.contact ? (
                   <p className="text-sm text-ink">
                     {i.contact.kind === "telegram" ? "Telegram" : "Email"}: <span className="font-mono break-all">{i.contact.value}</span>

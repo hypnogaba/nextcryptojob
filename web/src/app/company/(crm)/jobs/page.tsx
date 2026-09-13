@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { doneText, errorText, first } from "@/components/crm/messages";
-import { CARD, EmptyState, LINK, NoAccess, Notice, PageTitle } from "@/components/crm/ui";
+import { CARD, EmptyState, H3, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { readAction } from "@/lib/crm/actions";
 import { hiddenJobIds, notLiveReason, openJobCount, openJobLimit, placeText, type JobList } from "@/lib/crm/jobs";
@@ -25,7 +25,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
         <PageTitle>Jobs</PageTitle>
         <NoAccess />
       </div>
@@ -41,7 +41,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const limit = openJobLimit(company);
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
       <PageTitle aside={limit ? `${openNow} of ${limit} open` : undefined}>Jobs</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -63,11 +63,11 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
             const x = xPostText(job.x_post);
             const place = placeText(job.work_mode, job.city ?? null);
             return (
-              <li key={job.job_id} className={`${CARD} grid gap-3 p-4`} data-job={job.job_id}>
-                <div className="grid gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="min-w-0 font-semibold tracking-tight break-words">
-                      <Link href={`/company/jobs/${job.job_id}`} className="hover:text-brand hover:underline">
+              <li key={job.job_id} className={`${CARD} grid gap-4 p-4 sm:p-5`} data-job={job.job_id}>
+                <div className="grid gap-1.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h2 className={`${H3} min-w-0 break-words`}>
+                      <Link href={`/company/jobs/${job.job_id}`} className="underline decoration-transparent underline-offset-4 hover:decoration-brand">
                         {job.title}
                       </Link>
                     </h2>
