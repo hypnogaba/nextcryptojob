@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CARD, EmptyState, LINK, Notice, PageTitle } from "@/components/crm/ui";
+import { TABLE, TD, TH, TR } from "@/components/board";
+import { CARD, EmptyState, H2, LINK, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { HINT } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
 import { readAction } from "@/lib/crm/actions";
@@ -41,7 +42,7 @@ function Section({ id, title, intro, children }: { id: string; title: string; in
   return (
     <section id={id} aria-labelledby={`${id}-title`} className={`${CARD} grid scroll-mt-6 gap-4 p-4 sm:p-6`}>
       <div className="grid gap-1">
-        <h2 id={`${id}-title`} className="text-lg font-semibold tracking-tight">
+        <h2 id={`${id}-title`} className={H2}>
           {title}
         </h2>
         {intro ? <div className={HINT}>{intro}</div> : null}
@@ -126,9 +127,9 @@ export default async function DevelopersPage({
   const curl = [`curl ${origin}/api/v1/me \\`, '  -H "Authorization: Bearer $NCJ_API_KEY"'].join("\n");
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-3xl`}>
       <PageTitle>Developers</PageTitle>
-      <nav aria-label="Developer sections" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <nav aria-label="Developer sections" className="-my-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
         {[
           ["#keys", "API keys"],
           ["#webhook", "Webhook"],
@@ -161,9 +162,9 @@ export default async function DevelopersPage({
                 {keys.map((k) => (
                   <li key={k.key_id} className="grid gap-2 border-b border-line pb-3 last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center">
                     <div className="grid min-w-0 gap-0.5">
-                      <p className="font-medium break-words text-ink">
+                      <p className="font-semibold break-words text-ink">
                         {k.name}{" "}
-                        <span className={k.revoked_at ? "text-sm font-normal text-ink-muted" : "text-sm font-normal text-brand"}>
+                        <span className={k.revoked_at ? "text-sm font-normal text-ink-muted" : "text-sm font-normal text-ink"}>
                           {k.revoked_at ? "Revoked" : "Active"}
                         </span>
                       </p>
@@ -204,7 +205,7 @@ export default async function DevelopersPage({
         {!configured ? <Notice tone="info">Webhooks are not available yet. Until then your agent can poll list_intros with updated_since.</Notice> : null}
         {hook.failing_since ? (
           <Notice tone="warning">
-            <p className="font-medium">Your webhook is failing</p>
+            <p className="font-semibold">Your webhook is failing</p>
             <p className="mt-1">
               Since {TIME.format(new Date(hook.failing_since))} UTC your endpoint did not accept events after 6 tries. Fix it and send a test.
             </p>
@@ -225,7 +226,7 @@ export default async function DevelopersPage({
         ) : null}
 
         <div className="grid gap-2">
-          <h3 className="text-sm font-semibold text-ink">Recent deliveries</h3>
+          <h3 className="display text-[1.375rem] leading-none">Recent deliveries</h3>
           {queue.pending || queue.failed ? (
             <p className={HINT}>
               {queue.pending} waiting for a retry, {queue.failed} not delivered after 6 tries.
@@ -241,7 +242,7 @@ export default async function DevelopersPage({
                     {at(d.at)}
                   </time>
                   <span className="min-w-0 break-words text-ink">
-                    <span className="font-medium">{d.kind === "test" ? "Test ping" : d.event}</span>
+                    <span className="font-semibold">{d.kind === "test" ? "Test ping" : d.event}</span>
                     {d.attempt && d.kind === "delivery" ? `, try ${d.attempt} of 6` : ""}:{" "}
                     {d.outcome === "delivered"
                       ? `delivered (HTTP ${d.statusCode})`
@@ -259,17 +260,17 @@ export default async function DevelopersPage({
         {perAction.size === 0 ? (
           <p className={HINT}>No calls yet.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-ink-muted">
+          <div className="min-w-0 overflow-x-auto rounded-[10px] border-2 border-ink">
+            <table className={TABLE}>
+              <thead>
                 <tr>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className={TH}>
                     Action
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th scope="col" className={`${TH} text-right`}>
                     Calls
                   </th>
-                  <th scope="col" className="py-2 text-right font-medium">
+                  <th scope="col" className={`${TH} text-right`}>
                     x402 spend
                   </th>
                 </tr>
@@ -278,10 +279,10 @@ export default async function DevelopersPage({
                 {[...perAction.entries()]
                   .sort((a, b) => b[1].calls - a[1].calls)
                   .map(([action, r]) => (
-                    <tr key={action} className="border-t border-line">
-                      <td className="py-2 pr-4 font-mono text-xs">{action}</td>
-                      <td className="py-2 pr-4 text-right tabular-nums">{r.calls}</td>
-                      <td className="py-2 text-right tabular-nums">${(r.cents / 100).toFixed(2)}</td>
+                    <tr key={action} className={TR}>
+                      <td className={`${TD} font-mono text-xs`}>{action}</td>
+                      <td className={`${TD} text-right tabular-nums`}>{r.calls}</td>
+                      <td className={`${TD} text-right tabular-nums`}>${(r.cents / 100).toFixed(2)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -319,7 +320,7 @@ export default async function DevelopersPage({
           </li>
         </ul>
         <div className="grid gap-2">
-          <h3 className="text-sm font-semibold text-ink">Verify a webhook</h3>
+          <h3 className="display text-[1.375rem] leading-none">Verify a webhook</h3>
           <p className={HINT}>
             Each request has NCJ-Signature: t=unix seconds, v1=hex HMAC-SHA256 of t + &quot;.&quot; + raw body, keyed with the whole
             whsec_ secret. After a rotation we send two v1 values for 24 hours. Drop events older than 5 minutes and dedupe by NCJ-Event-Id.

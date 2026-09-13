@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { HINT } from "@/components/form/styles";
 import { LeaveTeam } from "@/components/crm/leave-team";
+import { H2, LINK, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import {
   ABOUT_MAX,
   CLOSE_CONFIRM_WORD,
@@ -30,7 +31,6 @@ const TIME = new Intl.DateTimeFormat("en-US", {
   hour12: false,
   timeZone: "UTC",
 });
-const LINK = "font-medium text-brand underline underline-offset-4";
 
 const LEAVE_ERRORS: Record<string, string> = {
   last_owner: LAST_OWNER_TEXT,
@@ -43,7 +43,7 @@ function Section({ id, title, intro, children }: { id: string; title: string; in
   return (
     <section aria-labelledby={`${id}-title`} className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
       <div className="grid gap-1">
-        <h2 id={`${id}-title`} className="text-lg font-semibold tracking-tight">
+        <h2 id={`${id}-title`} className={H2}>
           {title}
         </h2>
         {intro ? <p className={HINT}>{intro}</p> : null}
@@ -88,13 +88,9 @@ export default async function CompanySettingsPage({
   const editable = isOwner && (profile.status === "active" || profile.status === "pending_review");
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Company settings</h1>
-      {error ? (
-        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ink">
-          {LEAVE_ERRORS[error] ?? "Something went wrong. Try again."}
-        </p>
-      ) : null}
+    <div className={`${PAGE} max-w-3xl`}>
+      <PageTitle>Company settings</PageTitle>
+      {error ? <Notice tone="error">{LEAVE_ERRORS[error] ?? "Something went wrong. Try again."}</Notice> : null}
 
       <Section id="profile" title="Company profile" intro={isOwner ? undefined : "Only the owner can change these."}>
         {editable ? (
@@ -172,7 +168,7 @@ export default async function CompanySettingsPage({
                   {TIME.format(fromSqlTime(row.at))} UTC
                 </time>
                 <span className="text-ink">
-                  <span className="font-medium">{row.who}</span> {row.what}
+                  <span className="font-semibold">{row.who}</span> {row.what}
                 </span>
               </li>
             ))}

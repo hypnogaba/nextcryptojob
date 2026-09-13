@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { doneText, errorText, first } from "@/components/crm/messages";
-import { CARD, LINK, NoAccess, Notice, PageTitle } from "@/components/crm/ui";
+import { CARD, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { readAction } from "@/lib/crm/actions";
 import { COUNTRIES } from "@/lib/crm/countries";
 import { formValuesOf } from "@/lib/crm/job-form";
@@ -33,7 +33,7 @@ export default async function JobPage({
   const sp = await searchParams;
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className={`${PAGE} max-w-3xl`}>
         <PageTitle>Job</PageTitle>
         <NoAccess />
       </div>
@@ -57,7 +57,7 @@ export default async function JobPage({
   const error = errorText(first(sp.error));
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-3xl`}>
       <p>
         <Link href="/company/jobs" className={`${LINK} text-sm`}>
           Back to jobs
@@ -69,8 +69,8 @@ export default async function JobPage({
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
-      <section aria-label="Status" className={`${CARD} grid gap-2 p-4 text-sm`}>
-        <p className="text-ink">{reason ? `Not live: ${reason}` : "Live: in daily digests, the job search and on its public page."}</p>
+      <section aria-label="Status" className={`${CARD} grid gap-2 p-4 text-sm sm:p-5`}>
+        <p className="font-semibold text-ink">{reason ? `Not live: ${reason}` : "Live: in daily digests, the job search and on its public page."}</p>
         {job.published_at ? (
           <p className="text-ink-muted">
             Published {DATE.format(new Date(job.published_at))}

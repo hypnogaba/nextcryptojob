@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
+import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import {
   ago,
   CACHE_TTL_MS,
@@ -37,9 +38,9 @@ function Seen({ at, now }: { at: number | null; now: number }) {
 
 function Tile({ value, label, note, alert = false }: { value: string; label: string; note?: string; alert?: boolean }) {
   return (
-    <div className="rounded-lg border border-line bg-surface px-4 py-3">
-      <dt className="font-mono text-xs tracking-widest text-ink-muted uppercase">{label}</dt>
-      <dd className={`mt-1 text-xl font-semibold tabular-nums sm:text-2xl ${alert ? "text-danger" : "text-ink"}`}>{value}</dd>
+    <div className={`rounded-xl border bg-surface px-4 py-3 ${alert ? "border-destructive/50" : "border-line"}`}>
+      <dt className="text-sm font-semibold text-ink-muted">{label}</dt>
+      <dd className={`mt-1 font-display text-[1.75rem] leading-none font-black tabular-nums sm:text-[2rem] ${alert ? "text-danger" : "text-ink"}`}>{value}</dd>
       {note ? <dd className="mt-1 text-xs text-ink-muted">{note}</dd> : null}
     </div>
   );
@@ -49,11 +50,11 @@ function SourceName({ source }: { source: JobSource }) {
   return (
     <>
       {source.url ? (
-        <a href={source.url} target="_blank" rel="noreferrer noopener" className="font-medium text-brand hover:underline">
+        <a href={source.url} target="_blank" rel="noreferrer noopener" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
           {source.name}
         </a>
       ) : (
-        <span className="font-medium text-ink">{source.name}</span>
+        <span className="font-semibold text-ink">{source.name}</span>
       )}
       <div className="font-mono text-xs text-ink-muted">
         {source.key}
@@ -63,7 +64,7 @@ function SourceName({ source }: { source: JobSource }) {
   );
 }
 
-const TD = "py-2.5 pr-4 align-top";
+const TD = TD_TIGHT;
 const TD_NUM = `${TD} text-right tabular-nums`;
 
 function Report({ report, now }: { report: JobSourcesReport; now: number }) {
@@ -72,7 +73,7 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
   return (
     <>
       {totals.scannerStale ? (
-        <p role="alert" className="mt-6 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm">
+        <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
           The NextRole scanner has not run for over {STALE_AFTER_HOURS} h
           {scan ? ` (last run ${ago(scan.at, now)})` : ""}. Every source looks stale because of that, not
           because the sources broke.
@@ -100,23 +101,23 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
         />
       </dl>
 
-      <div className="mt-8 overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+      <div className={`mt-8 ${BOARD}`}>
+        <table className={`${TABLE} min-w-[760px]`}>
           <thead>
-            <tr className="border-b border-line text-ink-muted">
-              <th scope="col" className="py-2 pr-4 font-medium">Source</th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">Live</th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">With salary</th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">Total web3</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Newest</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-              <th scope="col" className="py-2 font-medium">Kind</th>
+            <tr>
+              <th scope="col" className={TH_TIGHT}>Source</th>
+              <th scope="col" className={`${TH_TIGHT} text-right`}>Live</th>
+              <th scope="col" className={`${TH_TIGHT} text-right`}>With salary</th>
+              <th scope="col" className={`${TH_TIGHT} text-right`}>Total web3</th>
+              <th scope="col" className={TH_TIGHT}>Newest</th>
+              <th scope="col" className={TH_TIGHT}>Status</th>
+              <th scope="col" className={TH_TIGHT}>Kind</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-line bg-brand-soft/40">
+            <tr className={`${TR} bg-wash`}>
               <td className={TD}>
-                <Link href="/admin/companies" className="font-medium text-brand hover:underline">
+                <Link href="/admin/companies" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
                   Company jobs (NextCryptoJob)
                 </Link>
                 <div className="font-mono text-xs text-ink-muted">company_jobs</div>
@@ -126,10 +127,10 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
               <td className={TD_NUM} title="Open jobs">{NUM.format(company.openJobs)}</td>
               <td className={TD}><Seen at={company.newestAt} now={now} /></td>
               <td className={`${TD} text-xs text-ink-muted`}>Not scanned</td>
-              <td className="py-2.5 align-top text-ink-muted">Posted here</td>
+              <td className={`${TD} text-ink-muted`}>Posted here</td>
             </tr>
             {sources.map((s) => (
-              <tr key={s.key} className="border-b border-line" data-stale={s.stale ? "" : undefined}>
+              <tr key={s.key} className={TR} data-stale={s.stale ? "" : undefined}>
                 <td className={TD}><SourceName source={s} /></td>
                 <td className={TD_NUM}>{NUM.format(s.liveJobs)}</td>
                 <td className={TD_NUM}>{NUM.format(s.liveWithSalary)}</td>
@@ -137,12 +138,12 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
                 <td className={TD}><Seen at={s.newestAt} now={now} /></td>
                 <td className={TD}>
                   {s.stale ? (
-                    <span className="rounded-sm bg-danger/10 px-1.5 py-0.5 text-xs font-medium text-danger">Stale</span>
+                    <span className="text-xs font-semibold text-danger">Stale</span>
                   ) : (
                     <span className="text-xs text-ink-muted">Active</span>
                   )}
                 </td>
-                <td className="py-2.5 align-top text-ink-muted">{s.via}</td>
+                <td className={`${TD} text-ink-muted`}>{s.via}</td>
               </tr>
             ))}
           </tbody>
@@ -180,9 +181,9 @@ export default async function AdminSourcesPage() {
   const now = new Date().getTime();
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+    <section className="mx-auto px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12 max-w-5xl">
       <AdminNav current="/admin/sources" />
-      <h1 className="text-3xl font-semibold tracking-tight">Job sources</h1>
+      <h1 className="display text-title">Job sources</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-muted">
         Where daily jobs come from: the NextRole job cache (read only) and jobs companies post here.
         {report
@@ -190,7 +191,7 @@ export default async function AdminSourcesPage() {
           : ""}
       </p>
       {failure !== null ? (
-        <p role="alert" className="mt-6 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm">
+        <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
           Could not read the job sources: {failure}
         </p>
       ) : null}

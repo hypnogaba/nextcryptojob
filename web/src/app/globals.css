@@ -464,6 +464,58 @@
 }
 
 @layer components {
+  /* Фішка балу для рядків CRM і адмінки: рамка з обробкою рівня, вікно, бал.
+     Без печатки: у списку їх до сотень, а на 44 px печатка однаково не читається.
+     Red seal відрізняє від Black лише число кольором печатки. */
+  .ncj-chip {
+    display: inline-grid;
+    flex-shrink: 0;
+    width: 2.75rem;
+    aspect-ratio: 0.718;
+    padding: 9% 9%;
+    border-radius: var(--radius-card);
+    background: var(--card-frame);
+    background-image: var(--card-sheen);
+    box-shadow: var(--elev-rest);
+    vertical-align: middle;
+  }
+  .ncj-chip > b {
+    display: grid;
+    place-items: center;
+    border-radius: 5% / 3.6%;
+    background: var(--card-window);
+    color: var(--card-ink);
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.375rem;
+    line-height: 1;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .ncj-chip[data-finish="red_seal"] > b { color: #ff7a4d; }
+
+  /* Зворот картки, що росте з вмістом (профіль кандидата в CRM): та сама верстка
+     .ncj-back, але висота не менша за картку й без обрізання. Дрібний текст має
+     нижню межу, щоб на 390 px таблиця лишалась читабельною. */
+  .ncj-sheet {
+    container-type: inline-size;
+    width: 100%;
+  }
+  .ncj-sheet > .ncj-face {
+    position: relative;
+    inset: auto;
+    overflow: visible;
+    min-height: calc(100cqw / 0.718);
+  }
+  .ncj-sheet .ncj-back h3 { font-size: max(7.6cqw, 1.5rem); }
+  .ncj-sheet .ncj-back p { font-size: max(3.3cqw, 0.8125rem); }
+  .ncj-sheet .ncj-back table { font-size: max(3.5cqw, 0.8125rem); }
+  .ncj-sheet .ncj-back th { font-size: max(3.4cqw, 0.75rem); }
+  .ncj-sheet .ncj-back tbody th { font-size: max(3.5cqw, 0.8125rem); }
+  .ncj-sheet .ncj-back .ncj-sum > * { font-size: max(4.2cqw, 0.9375rem); }
+  .ncj-sheet .ncj-back .ncj-total > * { font-size: max(6.6cqw, 1.375rem); }
+}
+
+@layer components {
   /* Прев'ю картинок для X (композиція як у lib/card/og.tsx). Тло завжди темне. */
   .ncj-share {
     container-type: inline-size;

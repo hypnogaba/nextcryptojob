@@ -1,17 +1,27 @@
 import { SubmitButton } from "@/components/form/submit-button";
-import { Chip } from "@/components/crm/ui";
 import type { Job } from "@/lib/crm/jobs";
 import { closeJobAction } from "./actions";
 
 /** Спільне для списку й сторінки вакансії: стан, пост у X, "Close job" з підтвердженням. */
 
+/** Кнопка-розкривачка небезпечної дії (Close job, Delete, Remove): обведена кольором помилки. */
+export const DANGER_SUMMARY =
+  "inline-flex h-11 cursor-pointer list-none items-center rounded-lg border border-destructive/50 bg-surface px-3 text-sm font-semibold text-destructive hover:bg-destructive/10 [&::-webkit-details-marker]:hidden";
+
 const STATUS_TEXT: Record<Job["status"], string> = { draft: "Draft", open: "Open", closed: "Closed" };
 
+/** Стан вакансії словом: живу видно за рамкою кольору тексту, решту приглушено. */
 export function StatusChip({ job }: { job: Pick<Job, "status" | "live"> }) {
   return (
-    <Chip className={job.live ? "bg-brand-soft" : undefined}>
+    <span
+      className={
+        job.live
+          ? "inline-flex items-center rounded-[3px] border border-ink px-1.5 py-0.5 text-xs font-semibold text-ink"
+          : "inline-flex items-center rounded-[3px] border border-line bg-wash px-1.5 py-0.5 text-xs font-medium text-ink-muted"
+      }
+    >
       {job.live ? "Live" : STATUS_TEXT[job.status]}
-    </Chip>
+    </span>
   );
 }
 
@@ -31,7 +41,7 @@ export function xPostText(x: Job["x_post"]): string | null {
 export function CloseJobForm({ companyId, job, back }: { companyId: string; job: Pick<Job, "job_id" | "title">; back: "list" | "job" }) {
   return (
     <details className="max-w-full">
-      <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-lg border border-border px-3 text-sm font-medium text-destructive hover:bg-muted [&::-webkit-details-marker]:hidden">
+      <summary className={DANGER_SUMMARY}>
         Close job
       </summary>
       {/* Підтвердження в потоці, не спливне: на 390 px рядок кнопок переноситься, і спливне вилізло б за край. */}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
+import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import { Button } from "@/components/ui/button";
 import { ADMIN_JOBS_LIMIT, listAdminJobs, type AdminJobError, type AdminJobRow } from "@/lib/admin/jobs";
 import { currentAdmin } from "@/lib/auth/admin";
@@ -37,7 +38,7 @@ function state(row: AdminJobRow): string {
   return "Not live: no active subscription";
 }
 
-const TD = "py-3 pr-4 align-top";
+const TD = TD_TIGHT;
 
 export default async function AdminJobsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   if (!(await currentAdmin())) notFound();
@@ -47,75 +48,75 @@ export default async function AdminJobsPage({ searchParams }: { searchParams: Pr
   const done = first(params.done);
 
   return (
-    <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+    <section className="mx-auto px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12 max-w-6xl">
       <AdminNav current="/admin/jobs" />
-      <h1 className="text-3xl font-semibold tracking-tight">Company jobs</h1>
+      <h1 className="display text-title">Company jobs</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-muted">
         Jobs go live as soon as a subscribed company publishes them. Hide a job to take it out of digests, the job search, its
         public page and the X queue at once. The company sees &ldquo;Hidden by NextCryptoJob&rdquo;.
       </p>
 
       {error && error in ERRORS ? (
-        <p role="alert" className="mt-6 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm">
+        <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
           {ERRORS[error as AdminJobError]}
         </p>
       ) : null}
       {done && done in DONE ? (
-        <p role="status" className="mt-6 rounded-md border border-line bg-brand-soft px-4 py-3 text-sm">
+        <p role="status" className="mt-6 rounded-lg border border-ink bg-surface px-4 py-3 text-sm text-ink">
           Job {first(params.job)} {DONE[done]}.
         </p>
       ) : null}
 
       {rows.length === 0 ? (
-        <p className="mt-8 text-ink-muted">No open or hidden jobs.</p>
+        <p className="mt-8 rounded-xl border border-dashed border-line-strong p-6 text-ink-muted">No open or hidden jobs.</p>
       ) : (
-        <div className="mt-8 overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-line text-ink-muted">
-                <th scope="col" className="py-2 pr-4 font-medium">Job</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Company</th>
-                <th scope="col" className="py-2 pr-4 font-medium">State</th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">Shown / clicks</th>
-                <th scope="col" className="py-2 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-b border-line" data-job={row.id}>
-                  <td className={TD}>
-                    {row.live ? (
-                      <a href={`/jobs/${row.id}`} target="_blank" rel="noopener noreferrer" className="font-medium text-brand hover:underline">
-                        {row.title}
-                      </a>
-                    ) : (
-                      <span className="font-medium text-ink">{row.title}</span>
-                    )}
-                    <div className="font-mono text-xs text-ink-muted">{row.id}</div>
-                  </td>
-                  <td className={TD}>
-                    <div className="text-ink">{row.companyName}</div>
-                    <div className="font-mono text-xs text-ink-muted">{row.companyId}</div>
-                  </td>
-                  <td className={TD}>{state(row)}</td>
-                  <td className={`${TD} text-right tabular-nums`}>
-                    {row.digestShown} / {row.applyClicks}
-                  </td>
-                  <td className="py-3 align-top">
-                    <form action={row.hiddenAt ? unhideJobAction : hideJobAction}>
-                      <input type="hidden" name="job_id" value={row.id} />
-                      <Button type="submit" variant={row.hiddenAt ? "outline" : "destructive"} className="h-9 px-3">
-                        {row.hiddenAt ? "Unhide" : "Hide"}
-                      </Button>
-                    </form>
-                  </td>
+        <div className="mt-8 grid gap-3">
+          <div className={BOARD}>
+            <table className={`${TABLE} min-w-[760px]`}>
+              <thead>
+                <tr>
+                  <th scope="col" className={TH_TIGHT}>Job</th>
+                  <th scope="col" className={TH_TIGHT}>Company</th>
+                  <th scope="col" className={TH_TIGHT}>State</th>
+                  <th scope="col" className={`${TH_TIGHT} text-right`}>Shown / clicks</th>
+                  <th scope="col" className={TH_TIGHT}>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {rows.length === ADMIN_JOBS_LIMIT ? (
-            <p className="mt-3 text-xs text-ink-muted">Showing the newest {ADMIN_JOBS_LIMIT}.</p>
-          ) : null}
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className={TR} data-job={row.id}>
+                    <td className={TD}>
+                      {row.live ? (
+                        <a href={`/jobs/${row.id}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+                          {row.title}
+                        </a>
+                      ) : (
+                        <span className="font-semibold text-ink">{row.title}</span>
+                      )}
+                      <div className="font-mono text-xs text-ink-muted">{row.id}</div>
+                    </td>
+                    <td className={TD}>
+                      <div className="text-ink">{row.companyName}</div>
+                      <div className="font-mono text-xs text-ink-muted">{row.companyId}</div>
+                    </td>
+                    <td className={`${TD} ${row.live ? "font-semibold text-ink" : "text-ink-muted"}`}>{state(row)}</td>
+                    <td className={`${TD} text-right tabular-nums`}>
+                      {row.digestShown} / {row.applyClicks}
+                    </td>
+                    <td className={TD}>
+                      <form action={row.hiddenAt ? unhideJobAction : hideJobAction}>
+                        <input type="hidden" name="job_id" value={row.id} />
+                        <Button type="submit" variant={row.hiddenAt ? "outline" : "destructive"} className="h-11 px-3">
+                          {row.hiddenAt ? "Unhide" : "Hide"}
+                        </Button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {rows.length === ADMIN_JOBS_LIMIT ? <p className="text-xs text-ink-muted">Showing the newest {ADMIN_JOBS_LIMIT}.</p> : null}
         </div>
       )}
     </section>

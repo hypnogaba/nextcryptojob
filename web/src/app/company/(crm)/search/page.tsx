@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ERROR, FIELD, HINT, LABEL } from "@/components/form/styles";
-import { CARD, LINK, NoAccess, Notice, PageTitle } from "@/components/crm/ui";
+import { CARD, H2, H3, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import { ROLES } from "@/lib/card/roles";
 import { readAction, runAction } from "@/lib/crm/actions";
@@ -42,7 +42,7 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
 function Check({ name, label, checked }: { name: string; label: string; checked: boolean }) {
   return (
     <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
-      <input type="checkbox" name={name} value="1" defaultChecked={checked} className="size-4 accent-brand" />
+      <input type="checkbox" name={name} value="1" defaultChecked={checked} className="size-5 shrink-0 accent-brand" />
       {label}
     </label>
   );
@@ -97,6 +97,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       noValidate
     >
       <input type="hidden" name="q" value="1" />
+      <h2 className={H3}>Filters</h2>
       <Field id="role" label="Role" error={e.role}>
         <select id="role" name="role" defaultValue={one(params, "role")} className={FIELD}>
           <option value="">Any role</option>
@@ -134,7 +135,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         <div className="grid grid-cols-2 gap-x-2">
           {CHAINS.map((c) => (
             <label key={c} className="flex min-h-11 items-center gap-2 text-sm text-ink">
-              <input type="checkbox" name="chains" value={c} defaultChecked={chains.has(c)} className="size-4 accent-brand" />
+              <input type="checkbox" name="chains" value={c} defaultChecked={chains.has(c)} className="size-5 shrink-0 accent-brand" />
               {CHAIN_TEXT[c]}
             </label>
           ))}
@@ -157,7 +158,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           ["city", "City"],
         ].map(([value, label]) => (
           <label key={value} className="flex min-h-11 items-center gap-2 text-sm text-ink">
-            <input type="radio" name="work" value={value} defaultChecked={work === value} className="size-4 accent-brand" />
+            <input type="radio" name="work" value={value} defaultChecked={work === value} className="size-5 shrink-0 accent-brand" />
             {label}
           </label>
         ))}
@@ -213,7 +214,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const empty = result && result.data.length === 0 && result.empty_reason;
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-5xl`}>
       <PageTitle
         aside={
           quota && quota.limit !== null && quota.remaining !== null
@@ -226,11 +227,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       {company.access === "none" ? (
         <NoAccess />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[18rem_1fr] lg:items-start">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
           <div className={result ? "order-last lg:order-none" : undefined}>{filtersForm}</div>
           <section aria-labelledby="results-title" className="grid content-start gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="results-title" className="text-lg font-semibold tracking-tight">
+              <h2 id="results-title" className={H2}>
                 Results
               </h2>
               {result ? (
@@ -270,8 +271,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               />
             ) : null}
             {result && canWrite ? (
-              <section aria-labelledby="save-title" className={`${CARD} grid gap-3 p-4`}>
-                <h2 id="save-title" className="font-semibold tracking-tight">
+              <section aria-labelledby="save-title" className={`${CARD} grid gap-3 p-4 sm:p-5`}>
+                <h2 id="save-title" className={H3}>
                   Save this search
                 </h2>
                 <p className={HINT}>{describeFilters(parsed.filters, parsed.sort)}</p>

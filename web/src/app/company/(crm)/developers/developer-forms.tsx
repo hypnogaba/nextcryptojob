@@ -16,7 +16,7 @@ function OneTimeSecret({ label, value, note }: { label: string; value: string; n
   const [copied, setCopied] = useState(false);
   return (
     <div role="status" className="grid gap-2 rounded-lg border border-line-strong bg-wash p-4">
-      <p className="text-sm font-medium text-ink">{note}</p>
+      <p className="text-sm font-semibold text-ink">{note}</p>
       <label className="grid gap-1.5">
         <span className={LABEL}>{label}</span>
         <input readOnly value={value} onFocus={(e) => e.currentTarget.select()} className={`${FIELD} font-mono text-sm`} />
@@ -138,7 +138,7 @@ export function WebhookForm({
             name="enabled"
             defaultChecked={url ? enabled : true}
             disabled={locked}
-            className="size-5 accent-brand"
+            className="size-5 shrink-0 accent-brand"
           />
           Enabled
         </label>

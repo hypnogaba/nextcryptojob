@@ -8,8 +8,10 @@ import { SubmitButton } from "@/components/form/submit-button";
 import type { Country } from "@/lib/crm/countries";
 import { registerCompanyAction, type StartState } from "./actions";
 
+// Вибраний варіант як у налаштуваннях кандидата: рамка кольору тексту подвійної товщини.
 const RADIO_ROW =
-  "flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface p-3 has-[:checked]:border-brand";
+  "flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3 transition-colors hover:border-line-strong " +
+  "has-[:checked]:border-ink has-[:checked]:shadow-[inset_0_0_0_1px_var(--ink)]";
 
 function FieldError({ id, text }: { id: string; text?: string }) {
   return text ? (
@@ -96,7 +98,7 @@ export function StartForm({ countries, agency }: { countries: readonly Country[]
       </div>
 
       <fieldset className="grid gap-2" aria-describedby={e.hiring_for ? "hiring-error" : undefined}>
-        <legend className={`${LABEL} mb-1.5`}>Who are you hiring for?</legend>
+        <legend className={`${LABEL} mb-2`}>Who are you hiring for?</legend>
         <label className={RADIO_ROW}>
           <input
             type="radio"
@@ -106,7 +108,7 @@ export function StartForm({ countries, agency }: { countries: readonly Country[]
             className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
           />
           <span className="grid gap-0.5">
-            <span className="text-base text-ink">Our own team</span>
+            <span className="text-base font-semibold text-ink">Our own team</span>
             <span className={HINT}>You get access right away. Choose how to pay on the next step.</span>
           </span>
         </label>
@@ -119,7 +121,7 @@ export function StartForm({ countries, agency }: { countries: readonly Country[]
             className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
           />
           <span className="grid gap-0.5">
-            <span className="text-base text-ink">Our clients (recruiting agency)</span>
+            <span className="text-base font-semibold text-ink">Our clients (recruiting agency)</span>
             <span className={HINT}>Tell us about your agency next. We review applications within 2 business days.</span>
           </span>
         </label>
@@ -138,7 +140,7 @@ export function StartForm({ countries, agency }: { countries: readonly Country[]
           />
           <span className="text-base text-ink">
             I agree to the{" "}
-            <Link href="/terms/companies" target="_blank" className="font-medium text-brand underline underline-offset-4">
+            <Link href="/terms/companies" target="_blank" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
               Company Terms
             </Link>
             : hiring only, no resale, no bulk export.

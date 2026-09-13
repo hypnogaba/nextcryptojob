@@ -7,6 +7,8 @@ import { loadTeam } from "@/lib/crm/team";
 import { fromSqlTime } from "@/lib/time";
 import { crmPage } from "../crm";
 import { LeaveTeam } from "@/components/crm/leave-team";
+import { H2, Notice, PAGE, PageTitle } from "@/components/crm/ui";
+import { DANGER_SUMMARY } from "../jobs/parts";
 import { changeRoleAction, removeMemberAction, revokeInviteAction } from "./actions";
 import { InviteForm } from "./invite-form";
 
@@ -55,43 +57,34 @@ export default async function TeamPage({
   const seatsLeft = Math.max(0, team.seats.limit - team.seats.used);
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Team</h1>
-        <p className="text-sm text-ink-muted">
-          {team.seats.used} of {team.seats.limit} seats used
-        </p>
-      </div>
+    <div className={`${PAGE} max-w-3xl`}>
+      <PageTitle aside={`${team.seats.used} of ${team.seats.limit} seats used`}>Team</PageTitle>
 
       {done && DONE[done] ? (
-        <p role="status" className="rounded-lg border border-line bg-brand-soft px-4 py-3 text-sm text-ink">
-          {DONE[done]}
-        </p>
+        <Notice tone="success">{DONE[done]}</Notice>
       ) : null}
       {error ? (
-        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ink">
-          {ERRORS[error] ?? "Something went wrong. Try again."}
-        </p>
+        <Notice tone="error">{ERRORS[error] ?? "Something went wrong. Try again."}</Notice>
       ) : null}
 
       {isOwner ? (
-        <section aria-labelledby="invite-title" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-6">
-          <h2 id="invite-title" className="text-lg font-semibold tracking-tight">
+        <section aria-labelledby="invite-title" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
+          <h2 id="invite-title" className={H2}>
             Invite teammate
           </h2>
           <InviteForm seatsLeft={seatsLeft} companyId={company.id} />
         </section>
       ) : null}
 
-      <section aria-labelledby="people-title" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-6">
-        <h2 id="people-title" className="text-lg font-semibold tracking-tight">
+      <section aria-labelledby="people-title" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
+        <h2 id="people-title" className={H2}>
           People at {company.name}
         </h2>
         <ul className="grid gap-3">
           {team.members.map((m) => (
             <li key={m.userId} className="grid gap-2 border-b border-line pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[1fr_auto] sm:items-center">
               <div className="grid gap-0.5">
-                <p className="font-medium break-all text-ink">
+                <p className="font-semibold break-all text-ink">
                   {m.label}
                   {m.isMe ? <span className="font-normal text-ink-muted"> (you)</span> : null}
                 </p>
@@ -110,12 +103,12 @@ export default async function TeamPage({
                     </Button>
                   </form>
                   <details className="relative">
-                    <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-lg border border-border px-3 text-sm font-medium text-destructive hover:bg-muted [&::-webkit-details-marker]:hidden">
+                    <summary className={DANGER_SUMMARY}>
                       Remove
                     </summary>
-                    <form action={removeMemberAction} className="absolute right-0 z-10 mt-1 grid w-64 gap-2 rounded-lg border border-line bg-surface p-3 shadow-lg">
+                    <form action={removeMemberAction} className="absolute right-0 z-10 mt-1 grid w-64 gap-2 rounded-lg border border-line bg-surface p-3 shadow-lift">
                       <input type="hidden" name="company_id" value={company.id} />
-                    <input type="hidden" name="user_id" value={m.userId} />
+                      <input type="hidden" name="user_id" value={m.userId} />
                       <p className="text-sm text-ink">Remove {m.label}? Their notes stay, signed Former member.</p>
                       <Button type="submit" variant="destructive" className="h-11 px-3 text-sm">
                         Remove from team
@@ -127,7 +120,7 @@ export default async function TeamPage({
               {isOwner && m.isMe && m.role === "owner" ? (
                 <form action={changeRoleAction}>
                   <input type="hidden" name="company_id" value={company.id} />
-                    <input type="hidden" name="user_id" value={m.userId} />
+                  <input type="hidden" name="user_id" value={m.userId} />
                   <input type="hidden" name="role" value="member" />
                   <Button type="submit" variant="outline" className="h-11 px-3 text-sm" disabled={team.owners <= 1}>
                     Step down to member
@@ -140,15 +133,15 @@ export default async function TeamPage({
       </section>
 
       {team.invites.length > 0 ? (
-        <section aria-labelledby="invites-title" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-6">
-          <h2 id="invites-title" className="text-lg font-semibold tracking-tight">
+        <section aria-labelledby="invites-title" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
+          <h2 id="invites-title" className={H2}>
             Pending invites
           </h2>
           <ul className="grid gap-3">
             {team.invites.map((i) => (
               <li key={i.id} className="grid gap-2 border-b border-line pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[1fr_auto] sm:items-center">
                 <div className="grid gap-0.5">
-                  <p className="font-medium break-all text-ink">{i.email}</p>
+                  <p className="font-semibold break-all text-ink">{i.email}</p>
                   <p className="text-sm text-ink-muted">
                     {i.expired ? `Expired on ${DATE.format(i.expiresAt)}. Invite again to send a new link.` : `Expires on ${DATE.format(i.expiresAt)}.`}
                   </p>

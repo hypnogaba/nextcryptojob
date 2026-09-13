@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
+import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
+import { FIELD } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
 import {
   explorerUrl,
@@ -63,7 +65,7 @@ function Tx({ network, tx }: { network: string; tx: string | null }) {
   const url = explorerUrl(network, tx);
   const short = tx.length > 18 ? `${tx.slice(0, 10)}...${tx.slice(-6)}` : tx;
   return url ? (
-    <a href={url} target="_blank" rel="noreferrer noopener" className="font-mono text-xs text-brand hover:underline" title={tx}>
+    <a href={url} target="_blank" rel="noreferrer noopener" className="font-mono text-xs text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand" title={tx}>
       {short}
     </a>
   ) : (
@@ -75,33 +77,33 @@ function Refund({ row }: { row: PaidWithoutResultRow }) {
   if (row.refundedAt) {
     return (
       <div className="text-sm">
-        <div className="font-medium text-ink">Refunded {when(row.refundedAt)}</div>
+        <div className="font-semibold text-ink">Refunded {when(row.refundedAt)}</div>
         <div className="text-ink-muted">{row.refundNote}</div>
       </div>
     );
   }
   return (
-    <form action={markRefundedAction} className="grid gap-2 sm:max-w-xs">
+    <form action={markRefundedAction} className="grid w-60 gap-2">
       <input type="hidden" name="payment_id" value={row.id} />
       <label className="grid gap-1 text-sm">
-        <span className="text-ink-muted">Refund note</span>
+        <span className="font-semibold text-ink-muted">Refund note</span>
         <input
           type="text"
           name="note"
           required
           maxLength={MAX_REFUND_NOTE_LENGTH}
           placeholder="Sent 5 USDC back, tx 0x..."
-          className="h-10 rounded-md border border-line-strong bg-surface px-2"
+          className={FIELD}
         />
       </label>
       <div>
-        <Button type="submit" className="h-9 px-3">Mark refunded</Button>
+        <Button type="submit" className="h-11 px-3">Mark refunded</Button>
       </div>
     </form>
   );
 }
 
-const TD = "py-3 pr-4 align-top";
+const TD = TD_TIGHT;
 
 export default async function AdminPaymentsPage({
   searchParams,
@@ -116,47 +118,47 @@ export default async function AdminPaymentsPage({
   const waiting = rows.filter((r) => !r.refundedAt).length;
 
   return (
-    <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+    <section className="mx-auto px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12 max-w-6xl">
       <AdminNav current="/admin/payments" />
-      <h1 className="text-3xl font-semibold tracking-tight">Payments</h1>
+      <h1 className="display text-title">Payments</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-muted">
         x402 payments that settled but gave the payer no result: the action failed after the money moved, or its result
         could not be saved. Send the money back by hand, then mark the payment refunded with a note.
       </p>
 
       {error && error in ERRORS ? (
-        <p role="alert" className="mt-6 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm">
+        <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
           {ERRORS[error as PaymentsAdminError]}
         </p>
       ) : null}
       {done === "refunded" ? (
-        <p role="status" className="mt-6 rounded-md border border-line bg-brand-soft px-4 py-3 text-sm">
+        <p role="status" className="mt-6 rounded-lg border border-ink bg-surface px-4 py-3 text-sm text-ink">
           Payment {first(params.payment)} is marked refunded.
         </p>
       ) : null}
 
-      <h2 className="mt-10 text-xl font-semibold">
+      <h2 className="display mt-12 text-[1.75rem] leading-none">
         Paid without result{rows.length > 0 ? ` (${waiting} waiting)` : ""}
       </h2>
       {rows.length === 0 ? (
-        <p className="mt-4 text-ink-muted">No payments without a result.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-line-strong p-6 text-ink-muted">No payments without a result.</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+        <div className={`mt-4 ${BOARD}`}>
+          <table className={`${TABLE} min-w-[900px]`}>
             <thead>
-              <tr className="border-b border-line text-ink-muted">
-                <th scope="col" className="py-2 pr-4 font-medium">Time</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Company</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Action</th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">Amount</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Network and tx</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Reason</th>
-                <th scope="col" className="py-2 font-medium">Refund</th>
+              <tr>
+                <th scope="col" className={TH_TIGHT}>Time</th>
+                <th scope="col" className={TH_TIGHT}>Company</th>
+                <th scope="col" className={TH_TIGHT}>Action</th>
+                <th scope="col" className={`${TH_TIGHT} text-right`}>Amount</th>
+                <th scope="col" className={TH_TIGHT}>Network and tx</th>
+                <th scope="col" className={TH_TIGHT}>Reason</th>
+                <th scope="col" className={TH_TIGHT}>Refund</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-b border-line" data-payment={row.id}>
+                <tr key={row.id} className={TR} data-payment={row.id}>
                   <td className={TD}>
                     <div>{when(row.noResultAt)}</div>
                     <div className="font-mono text-xs text-ink-muted">{row.id}</div>
@@ -164,7 +166,7 @@ export default async function AdminPaymentsPage({
                   <td className={TD}>
                     {row.companyId ? (
                       <>
-                        <div className="font-medium text-ink">{row.companyName ?? "Deleted company"}</div>
+                        <div className="font-semibold text-ink">{row.companyName ?? "Deleted company"}</div>
                         <div className="font-mono text-xs text-ink-muted">{row.companyId}</div>
                       </>
                     ) : (
@@ -184,7 +186,7 @@ export default async function AdminPaymentsPage({
                     <Tx network={row.network} tx={row.tx} />
                   </td>
                   <td className={`${TD} max-w-xs break-words text-xs text-ink-muted`}>{row.reason ?? "Unknown"}</td>
-                  <td className="py-3 align-top">
+                  <td className={TD}>
                     <Refund row={row} />
                   </td>
                 </tr>
@@ -194,29 +196,29 @@ export default async function AdminPaymentsPage({
         </div>
       )}
 
-      <h2 className="mt-12 text-xl font-semibold">Stuck or unconfirmed</h2>
+      <h2 className="display mt-12 text-[1.75rem] leading-none">Stuck or unconfirmed</h2>
       <p className="mt-2 max-w-prose text-sm text-ink-muted">
         Verified more than 5 minutes ago and never settled, or the facilitator gave no clear answer. Check the transaction
         on the network before doing anything.
       </p>
       {stale.length === 0 ? (
-        <p className="mt-4 text-ink-muted">No stuck payments.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-line-strong p-6 text-ink-muted">No stuck payments.</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+        <div className={`mt-4 ${BOARD}`}>
+          <table className={`${TABLE} min-w-[760px]`}>
             <thead>
-              <tr className="border-b border-line text-ink-muted">
-                <th scope="col" className="py-2 pr-4 font-medium">Created</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Action</th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">Amount</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Network and tx</th>
-                <th scope="col" className="py-2 font-medium">Error</th>
+              <tr>
+                <th scope="col" className={TH_TIGHT}>Created</th>
+                <th scope="col" className={TH_TIGHT}>Status</th>
+                <th scope="col" className={TH_TIGHT}>Action</th>
+                <th scope="col" className={`${TH_TIGHT} text-right`}>Amount</th>
+                <th scope="col" className={TH_TIGHT}>Network and tx</th>
+                <th scope="col" className={TH_TIGHT}>Error</th>
               </tr>
             </thead>
             <tbody>
               {stale.map((p) => (
-                <tr key={p.id} className="border-b border-line">
+                <tr key={p.id} className={TR}>
                   <td className={TD}>
                     <div>{when(p.createdAt)}</div>
                     <div className="font-mono text-xs text-ink-muted">{p.id}</div>
@@ -228,7 +230,7 @@ export default async function AdminPaymentsPage({
                     <div>{NETWORK_LABELS[p.network] ?? p.network}</div>
                     <Tx network={p.network} tx={p.tx} />
                   </td>
-                  <td className="max-w-xs break-words py-3 align-top text-xs text-ink-muted">{p.errorReason ?? ""}</td>
+                  <td className={`${TD} max-w-xs break-words text-xs text-ink-muted`}>{p.errorReason ?? ""}</td>
                 </tr>
               ))}
             </tbody>

@@ -37,10 +37,10 @@ export default async function CrmLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="border-b border-line bg-surface">
-        <div className="mx-auto grid max-w-5xl gap-3 px-4 pt-4 pb-2 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-3 px-[clamp(16px,4vw,56px)] pt-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <CompanySwitcher current={{ id: company.id, name: company.name }} memberships={memberships} />
-            <span className="text-xs text-ink-muted">
+            <span className="text-sm text-ink-muted">
               {company.kind === "agency" ? "Recruiting agency" : "Company"}, {view.role === "owner" ? "owner" : "member"}
             </span>
           </div>

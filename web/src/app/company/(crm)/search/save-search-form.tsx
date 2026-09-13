@@ -40,7 +40,7 @@ export function SaveSearchForm({ companyId, query, suggestedName }: { companyId:
         ) : null}
       </div>
       <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
-        <input type="checkbox" name="alert" value="off" className="size-4 accent-brand" />
+        <input type="checkbox" name="alert" value="off" className="size-5 shrink-0 accent-brand" />
         No daily email for this search
       </label>
       <FormMessageLine message={state.message} />

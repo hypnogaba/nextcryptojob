@@ -28,8 +28,8 @@ function first(value: string | string[] | undefined): string | undefined {
 
 function Shell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="mx-auto grid max-w-md gap-4 px-4 pt-16 pb-24 sm:pt-24">
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+    <section className="mx-auto grid max-w-md gap-4 px-[clamp(16px,4vw,56px)] pt-16 pb-24 sm:pt-24">
+      <h1 className="display text-title break-words">{title}</h1>
       {children}
     </section>
   );
@@ -114,7 +114,7 @@ export default async function JoinPage({
     <Shell title={title}>
       {intro}
       {error ? (
-        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ink">
+        <p role="alert" className="rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
           {ERRORS[error] ?? "Something went wrong. Try again."}
         </p>
       ) : null}

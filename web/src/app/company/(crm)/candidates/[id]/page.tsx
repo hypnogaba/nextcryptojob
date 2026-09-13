@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CARD, LINK, NoAccess, Notice } from "@/components/crm/ui";
+import { MiniCard } from "@/components/card/mini-card";
+import { POS } from "@/components/board";
+import { CARD, H2, LINK, NoAccess, Notice } from "@/components/crm/ui";
+import { fnv1a } from "@/lib/card/pattern";
+import { POSITION_CODE } from "@/lib/roles/recipes";
 import { isRoleKey } from "@/lib/card/roles";
 import { readAction, runAction } from "@/lib/crm/actions";
 import { loadCompanyProfile, userFacingError } from "@/lib/crm/company";
@@ -59,8 +63,8 @@ export default async function CandidatePage({
     </Link>
   );
   const shell = (children: React.ReactNode) => (
-    <div className="mx-auto grid max-w-5xl gap-4 px-4 pt-6 pb-20 sm:px-6 sm:pt-10">
-      <div className="flex flex-wrap gap-x-4">
+    <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 px-[clamp(16px,4vw,56px)] pt-6 pb-20 sm:pt-8">
+      <div className="-my-2 flex flex-wrap gap-x-5">
         {back}
         <Link href="/company/pipeline" className={`${LINK} inline-flex min-h-11 items-center text-sm`}>
           Pipeline
@@ -129,9 +133,9 @@ export default async function CandidatePage({
   if (view.visibility === "hidden") {
     return shell(
       <>
-        <header className="grid gap-1 rounded-xl border border-line bg-wash p-4 sm:p-6">
-          <h1 className="font-mono text-2xl font-semibold tracking-tight text-ink-muted">{view.label}</h1>
-          <p className="font-medium text-ink">{view.notice}</p>
+        <header className="grid gap-2 rounded-xl border border-dashed border-line-strong bg-wash p-4 sm:p-6">
+          <h1 className="display text-title text-ink-muted">{view.label}</h1>
+          <p className="font-semibold text-ink">{view.notice}</p>
           <p className="text-sm text-ink-muted">You keep your own notes, the history and a contact that was already shared. No new data about this person.</p>
         </header>
         <div className="max-w-xl">{panelEl}</div>
@@ -151,9 +155,17 @@ export default async function CandidatePage({
 
   return shell(
     <>
-      <header className={`${CARD} grid gap-2 p-4 sm:p-6`}>
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">{view.label}</h1>
+      <header className={`${CARD} grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-2 p-4 sm:gap-x-6 sm:p-6`}>
+        {h.score !== null && h.level !== null ? (
+          <MiniCard level={h.level} seed={fnv1a(view.label)} value={h.score} className="row-span-2 w-16 sm:row-span-3 sm:w-24" />
+        ) : (
+          <span aria-hidden="true" className="row-span-2 inline-block aspect-[0.718] w-16 rounded-[4.55%/3.5%] border border-dashed border-line-strong sm:row-span-3 sm:w-24" />
+        )}
+        <div className="grid min-w-0 gap-1">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h1 className="display text-title">{view.label}</h1>
+            <span className={POS}>{POSITION_CODE[h.role]}</span>
+          </div>
           {h.score !== null ? (
             <p className="text-base text-ink">
               <span className="font-semibold">{roleScoreText(h)}</span>
@@ -165,20 +177,20 @@ export default async function CandidatePage({
           ) : (
             <p className="text-base text-ink-muted">{unscoredText(h.role, h.unscored_reason)}</p>
           )}
+          {others.length ? <p className="text-sm text-ink-muted">Also: {others.map(roleScoreText).join(", ")}</p> : null}
         </div>
-        {others.length ? <p className="text-sm text-ink-muted">Also: {others.map(roleScoreText).join(", ")}</p> : null}
-        <p className="text-sm text-ink">{facts.join(" · ")}</p>
-        {badges.length ? <p className="text-sm text-ink-muted">{badges.join(" · ")}</p> : null}
-        <p className="text-sm text-ink-muted">{contactModeText(view.contact_mode)}</p>
+        <div className="col-span-2 grid gap-1 border-t border-line pt-3 sm:col-span-1 sm:col-start-2">
+          <p className="text-sm text-ink">{facts.join(" · ")}</p>
+          {badges.length ? <p className="text-sm text-ink-muted">{badges.join(" · ")}</p> : null}
+          <p className="text-sm text-ink-muted">{contactModeText(view.contact_mode)}</p>
+        </div>
       </header>
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
-        <section aria-labelledby="scores-title" className={`${CARD} grid gap-3 p-4 sm:p-6`}>
-          <h2 id="scores-title" className="text-lg font-semibold tracking-tight">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <section aria-labelledby="scores-title" className={`${CARD} grid min-w-0 gap-4 p-4 sm:p-6`}>
+          <h2 id="scores-title" className={H2}>
             Scores by role
           </h2>
-          <div className="overflow-x-auto">
-            <RoleTabs roles={view.roles_detailed} initial={roleParam ?? h.role} />
-          </div>
+          <RoleTabs roles={view.roles_detailed} initial={roleParam ?? h.role} />
         </section>
         {panelEl}
       </div>

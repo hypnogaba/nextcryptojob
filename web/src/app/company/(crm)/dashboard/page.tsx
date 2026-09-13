@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CARD, LINK, NoAccess, PageTitle } from "@/components/crm/ui";
+import { CARD, H2, H3, LINK, NoAccess, PAGE, PageTitle } from "@/components/crm/ui";
 import { readAction } from "@/lib/crm/actions";
 import { expiresInText, STAGE_ORDER, STAGE_TEXT } from "@/lib/crm/labels";
 import { NOT_REACHED_TEXT } from "@/lib/crm/notify";
@@ -24,12 +24,12 @@ function when(iso: string, now: Date): string {
 
 function Tile({ id, title, children, action }: { id: string; title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <section aria-labelledby={id} className={`${CARD} grid content-start gap-3 p-4`}>
-      <h2 id={id} className="font-semibold tracking-tight">
+    <section aria-labelledby={id} className={`${CARD} grid grid-rows-[auto_1fr_auto] gap-3 p-4`}>
+      <h2 id={id} className={`${H3} border-b-2 border-ink pb-2`}>
         {title}
       </h2>
-      <div className="grid gap-1 text-sm">{children}</div>
-      {action ? <div className="mt-auto pt-1">{action}</div> : null}
+      <div className="grid content-start gap-1 text-sm">{children}</div>
+      {action ? <div className="pt-1">{action}</div> : null}
     </section>
   );
 }
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   const { ctx, company } = await crmPage("dashboard");
   if (company.access === "none") {
     return (
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+      <div className={`${PAGE} max-w-5xl`}>
         <PageTitle>Dashboard</PageTitle>
         <NoAccess />
       </div>
@@ -64,31 +64,31 @@ export default async function DashboardPage() {
   const fresh = board.total === 0 && board.savedSearches.total === 0 && board.jobs.length === 0;
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+    <div className={`${PAGE} max-w-5xl`}>
       <PageTitle>Dashboard</PageTitle>
 
       {fresh ? (
         <section aria-labelledby="start-title" className={`${CARD} grid gap-4 p-4 sm:p-6`}>
-          <h2 id="start-title" className="text-lg font-semibold tracking-tight">
+          <h2 id="start-title" className={H2}>
             Get started
           </h2>
           <ol className="grid gap-3 sm:grid-cols-3">
-            <li className="grid gap-1 rounded-lg border border-line p-4">
-              <p className="font-medium text-ink">1. Find candidates</p>
+            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+              <p className="font-semibold text-ink">1. Find candidates</p>
               <p className="text-sm text-ink-muted">Search anonymous profiles by role, score, chains and work mode.</p>
               <Link href="/company/search" className={`${LINK} text-sm`}>
                 Open Search
               </Link>
             </li>
-            <li className="grid gap-1 rounded-lg border border-line p-4">
-              <p className="font-medium text-ink">2. Save a search</p>
+            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+              <p className="font-semibold text-ink">2. Save a search</p>
               <p className="text-sm text-ink-muted">Get a daily email when new candidates match your filters.</p>
               <Link href="/company/saved-searches" className={`${LINK} text-sm`}>
                 Saved searches
               </Link>
             </li>
-            <li className="grid gap-1 rounded-lg border border-line p-4">
-              <p className="font-medium text-ink">3. Post a job</p>
+            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+              <p className="font-semibold text-ink">3. Post a job</p>
               <p className="text-sm text-ink-muted">Jobs you publish appear in daily digests of matching candidates.</p>
               <Link href="/company/jobs/new" className={`${LINK} text-sm`}>
                 New job
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
             {STAGE_ORDER.map((s) => (
               <div key={s} className="flex justify-between gap-2">
                 <dt className="text-ink-muted">{STAGE_TEXT[s]}</dt>
-                <dd className="font-mono tabular-nums text-ink">{board.counts[s]}</dd>
+                <dd className="font-display text-base leading-tight font-extrabold tabular-nums text-ink">{board.counts[s]}</dd>
               </div>
             ))}
           </dl>
@@ -127,7 +127,7 @@ export default async function DashboardPage() {
           }
         >
           <p className="text-ink">
-            <span className="font-mono text-2xl tabular-nums">{board.intros.pending}</span> pending
+            <span className="font-display text-[2.5rem] leading-none font-black tabular-nums">{board.intros.pending}</span> pending
           </p>
           {board.intros.nextExpiry ? <p className="text-ink-muted">Next: {expiresInText(board.intros.nextExpiry, ctx.now).toLowerCase()}</p> : null}
           {board.intros.notReached ? (
@@ -168,7 +168,7 @@ export default async function DashboardPage() {
               return (
                 <div key={key} className="flex justify-between gap-2">
                   <dt className="text-ink-muted">{label}</dt>
-                  <dd className="font-mono tabular-nums text-ink">
+                  <dd className="font-display text-base leading-tight font-extrabold tabular-nums text-ink">
                     {q.limit - q.remaining}/{q.limit}
                   </dd>
                 </div>
@@ -179,10 +179,10 @@ export default async function DashboardPage() {
         </Tile>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section aria-labelledby="activity-title" className={`${CARD} grid content-start gap-3 p-4`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="activity-title" className="font-semibold tracking-tight">
+            <h2 id="activity-title" className={H3}>
               Recent activity
             </h2>
             <Link href="/company/settings#activity-title" className={`${LINK} text-sm`}>
@@ -196,7 +196,7 @@ export default async function DashboardPage() {
               {activity.map((a) => (
                 <li key={a.id} className="grid gap-0.5 border-b border-line pb-2 text-sm last:border-b-0 sm:grid-cols-[1fr_auto] sm:gap-4">
                   <span className="break-words text-ink">
-                    <Link href={`/company/candidates/${a.candidateId}`} prefetch={false} className="underline-offset-4 hover:underline">
+                    <Link href={`/company/candidates/${a.candidateId}`} prefetch={false} className="underline decoration-line underline-offset-4 hover:decoration-brand">
                       {a.text}
                     </Link>
                   </span>
@@ -209,7 +209,7 @@ export default async function DashboardPage() {
           )}
         </section>
         <section aria-labelledby="jobs-title" className={`${CARD} grid content-start gap-3 p-4`}>
-          <h2 id="jobs-title" className="font-semibold tracking-tight">
+          <h2 id="jobs-title" className={H3}>
             Live jobs
           </h2>
           {board.jobs.length === 0 ? (
@@ -218,8 +218,8 @@ export default async function DashboardPage() {
             <ul className="grid gap-2">
               {board.jobs.map((j) => (
                 <li key={j.id} className="grid gap-0.5 text-sm">
-                  <span className="font-medium break-words text-ink">
-                    <Link href={`/company/jobs/${j.id}`} className="hover:text-brand hover:underline">
+                  <span className="font-semibold break-words text-ink">
+                    <Link href={`/company/jobs/${j.id}`} className="underline decoration-line underline-offset-4 hover:decoration-brand">
                       {j.title}
                     </Link>
                     {j.status === "draft" ? <span className="font-normal text-ink-muted"> (draft)</span> : null}
