@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { exec, harness, resetHarness, rows } from "@/test/harness";
+import { resetSettingsCache } from "@/lib/admin/settings";
+import { exec, fakeCookieJar, harness, resetHarness, rows } from "@/test/harness";
 import { CLIENT_ID, CLIENT_SECRET, NOW, rsaSigner, telegramClaims, type TestSigner } from "@/test/jwt";
 import { SESSION_COOKIE, createSession } from "./session";
 import { beginTelegramLogin, finishTelegramLogin, TELEGRAM_CALLBACK_IP_LIMITS } from "./telegram-login";
@@ -49,6 +50,7 @@ beforeEach(async () => {
   claimsOver = {};
   tokenCalls = [];
   lastFlow = null;
+  resetSettingsCache();
   resetHarness({ TELEGRAM_OIDC_CLIENT_ID: CLIENT_ID, TELEGRAM_OIDC_CLIENT_SECRET: CLIENT_SECRET } as never);
   harness.headers = new Headers({ "cf-connecting-ip": "203.0.113.9" });
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -117,6 +119,21 @@ describe("finishTelegramLogin", () => {
     expect(rows("SELECT actor, action, target, meta_json FROM audit_log")).toEqual([
       { actor: u.id, action: "auth.login_telegram", target: u.id, meta_json: '{"created":true}' },
     ]);
+  });
+
+  it("with sign-ups closed, a new Telegram gets the closed-for-now page and no account; a known one signs in", async () => {
+    exec("INSERT INTO app_settings (key, value_json) VALUES ('signups_open', 'false')");
+    await expect(roundTrip()).resolves.toBe("/auth/telegram/error?reason=signups_closed");
+    expect(rows("SELECT id FROM users")).toEqual([]);
+    expect(harness.jar.get(SESSION_COOKIE)).toBeUndefined();
+    expect(rows("SELECT actor, action, meta_json FROM audit_log")).toEqual([
+      { actor: null, action: "auth.signup_closed", meta_json: '{"method":"telegram"}' },
+    ]);
+
+    exec("INSERT INTO users (id, telegram_id, onboarding_step) VALUES ('u1', '987654321', 'done')");
+    harness.jar = fakeCookieJar();
+    await expect(roundTrip()).resolves.toBe("/profile");
+    expect(rows("SELECT user_id, method FROM sessions")).toEqual([{ user_id: "u1", method: "telegram" }]);
   });
 
   it("sends the PKCE verifier from the cookie and the same redirect URI to /token", async () => {

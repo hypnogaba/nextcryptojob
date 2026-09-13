@@ -8,6 +8,10 @@ import type { CodeFailure, RequestCodeResult } from "./email-code";
 
 export type CodeMessage = { tone: "error" | "info"; text: string };
 
+/** Реєстрації закрито (/admin/settings): код правильний, але акаунта з цією поштою немає. */
+export const SIGNUPS_CLOSED =
+  "New sign-ups are closed for now, so we did not create an account for this email. If you already have one, sign in with the email or Telegram you used before.";
+
 function wait(minutes: number | undefined): string {
   const n = Math.max(1, minutes ?? 1);
   return n === 1 ? "1 minute" : `${n} minutes`;

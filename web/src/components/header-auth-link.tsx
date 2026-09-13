@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSiteState } from "@/components/site-state";
 
 const LINK =
   "-mr-2 inline-flex min-h-11 items-center px-2 text-[0.9375rem] font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 transition-colors hover:decoration-brand";
@@ -18,24 +17,12 @@ const NAV = [
 /**
  * Пункти шапки й «Sign in» або «Account». Шапка в спільному layout, і перевірка
  * сесії на сервері зробила б динамічними всі сторінки. Тому стан питаємо в /api/me
- * з браузера, заново після кожного переходу: вхід і вихід закінчуються переходом
- * (/welcome, /). «Jobs» веде на свої вакансії, якщо людина ввійшла, інакше на
- * приклад сьогоднішнього списку на головній.
+ * з браузера (components/site-state.tsx), заново після кожного переходу: вхід і
+ * вихід закінчуються переходом (/welcome, /). «Jobs» веде на свої вакансії, якщо
+ * людина ввійшла, інакше на приклад сьогоднішнього списку на головній.
  */
 export function HeaderNav() {
-  const pathname = usePathname();
-  const [signedIn, setSignedIn] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/me", { cache: "no-store", signal: controller.signal })
-      .then((res) => (res.ok ? (res.json() as Promise<{ signedIn?: boolean }>) : null))
-      .then((body) => setSignedIn(body?.signedIn === true))
-      .catch(() => {
-        // Мережа чи перехід обірвали запит: лишаємо те, що показано.
-      });
-    return () => controller.abort();
-  }, [pathname]);
+  const signedIn = useSiteState()?.signedIn === true;
 
   return (
     <>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getSettings } from "@/lib/admin/settings";
 import { requireUser } from "@/lib/auth/session";
 import { listMemberships } from "@/lib/crm/company";
 import { COUNTRIES } from "@/lib/crm/countries";
@@ -17,7 +18,8 @@ export default async function StartPage({
   const user = await requireUser();
   const params = await searchParams;
   const agency = params.kind === "agency";
-  const memberships = (await listMemberships(db(), user.id)).filter((m) => m.status !== "closed");
+  const [all, settings] = await Promise.all([listMemberships(db(), user.id), getSettings(db())]);
+  const memberships = all.filter((m) => m.status !== "closed");
 
   return (
     <section className="mx-auto grid max-w-xl gap-8 px-[clamp(16px,4vw,56px)] pt-10 pb-20 sm:pt-16">
@@ -53,7 +55,14 @@ export default async function StartPage({
         </div>
       ) : null}
 
-      <StartForm countries={COUNTRIES} agency={agency} />
+      {settings.company_signups_open ? (
+        <StartForm countries={COUNTRIES} agency={agency} />
+      ) : (
+        <p role="status" data-signups="closed" className="rounded-xl border border-line-strong bg-surface p-4 text-ink">
+          New company accounts are closed for now. Teams that already have an account keep working, and invites still
+          open. Check back soon.
+        </p>
+      )}
     </section>
   );
 }

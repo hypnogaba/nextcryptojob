@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { requestCodeMessage, verifyCodeMessage } from "@/lib/auth/code-messages";
+import { requestCodeMessage, SIGNUPS_CLOSED, verifyCodeMessage } from "@/lib/auth/code-messages";
 import {
   CODE_TTL_MINUTES,
   requestCode,
@@ -41,6 +41,7 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
     // redirect кидає виняток, тож стоїть поза try. Новий акаунт іде
     // налаштовувати профіль, той, хто повернувся, у свій кабінет.
     if (res.ok) redirect(res.created ? "/welcome" : "/account");
+    if (res.reason === "signups_closed") return { step: "email", email, message: { tone: "info", text: SIGNUPS_CLOSED } };
     if (res.reason === "invalid_email") return { step: "email", email, message: verifyCodeMessage(res, UNAVAILABLE) };
     return { step: "code", email, message: verifyCodeMessage(res, UNAVAILABLE) };
   }

@@ -26,16 +26,20 @@ function findByTelegram(d: D1Database, telegramId: string) {
 /**
  * Вхід без сесії: профіль із цим Telegram або новий (channel 'telegram').
  * ON CONFLICT робить подвійне натискання й паралельний вхід безпечними.
+ * null: профілю немає, а canCreate каже «не створювати» (нові реєстрації закрито
+ * в /admin/settings). canCreate питаємо лише тоді, тож вхід того, хто вже є, його не кличе.
  */
 export async function signInWithTelegram(
   d: D1Database,
   identity: TelegramIdentity,
-): Promise<{ userId: string; created: boolean }> {
+  canCreate: () => Promise<boolean> = async () => true,
+): Promise<{ userId: string; created: boolean } | null> {
   const existing = await findByTelegram(d, identity.telegramId);
   if (existing) {
     await refreshUsername(d, existing.id, identity.username).run();
     return { userId: existing.id, created: false };
   }
+  if (!(await canCreate())) return null;
 
   const fresh = crypto.randomUUID();
   const inserted = await d

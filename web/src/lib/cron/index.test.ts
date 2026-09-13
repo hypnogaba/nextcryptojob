@@ -89,6 +89,32 @@ describe("runCron", () => {
     expect(report.jobs[2].error).toContain("time budget");
   });
 
+  it("writes one cron_runs row per job with its trigger, start, time, result, counts and error", async () => {
+    let t = Date.parse("2026-09-12T12:00:00Z");
+    const jobs: CronJob[] = [
+      { name: "first", run: async () => ((t += 1500), { done: 3 }) },
+      { name: "broken", run: async () => { throw new Error("D1_ERROR: boom"); } },
+    ];
+    await runCron("*/5 * * * *", env(), { now: () => new Date(t), schedule: { "*/5 * * * *": jobs } });
+    expect(all(db.raw, "SELECT job, cron, started_at, ok, counts_json, error FROM cron_runs ORDER BY id")).toEqual([
+      { job: "first", cron: "*/5 * * * *", started_at: "2026-09-12 12:00:00", ok: 1, counts_json: '{"done":3}', error: null },
+      { job: "broken", cron: "*/5 * * * *", started_at: "2026-09-12 12:00:01", ok: 0, counts_json: null, error: "D1_ERROR: boom" },
+    ]);
+    const [{ ms }] = all<{ ms: number }>(db.raw, "SELECT ms FROM cron_runs WHERE job = 'first'");
+    expect(ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it("still runs every job when cron_runs cannot be written (migration 0019 missing)", async () => {
+    db.raw.exec("DROP TABLE cron_runs");
+    const ran: string[] = [];
+    const report = await runCron("0 * * * *", env(), {
+      schedule: { "0 * * * *": [{ name: "a", run: async () => (ran.push("a"), {}) }, { name: "b", run: async () => (ran.push("b"), {}) }] },
+    });
+    expect(ran).toEqual(["a", "b"]);
+    expect(report.jobs.every((j) => j.ok)).toBe(true);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("cron_runs not written"));
+  });
+
   it("an unknown trigger does nothing", async () => {
     expect(await runCron("7 7 * * *", env())).toEqual({ cron: "7 7 * * *", jobs: [] });
   });

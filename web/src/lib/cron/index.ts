@@ -4,6 +4,7 @@ import { savedSearchAlerts } from "./alerts";
 import { countStalePayments, dailyCleanup } from "./cleanup";
 import { expireIntros } from "./intros";
 import { closeExpiredJobs } from "./jobs";
+import { recordCronRun } from "./runs";
 
 /**
  * Планувальник (специфікація CRM 3.6). Точка входу Worker (web/worker.ts) на
@@ -13,12 +14,13 @@ import { closeExpiredJobs } from "./jobs";
  * |-----------------|-------------------------------------------------------------------|
  * | кожні 5 хв      | прострочення знайомств і мертві броні, потім доставка вебхуків    |
  * | щогодини        | прострочені вакансії компаній, сповіщення збережених пошуків, завислі платежі x402 (лише підрахунок) |
- * | щодня 03:00 UTC | прибирання: сесії, коди входу, лічильники, апдейти бота, облік 400 днів |
+ * | щодня 03:00 UTC | прибирання: сесії, коди входу, лічильники, апдейти бота, облік 400 днів, журнал cron 30 днів |
  *
  * Кожна задача обмежена пачкою і часом (CRON_BUDGET_MS, budgetMs) і добирає
  * решту наступним запуском, повтор безпечний (умовні UPDATE, умови прибирання).
  * Задачі йдуть по черзі, кожна у своєму try: збій однієї не зупиняє інших. Кожна пише рядок JSON з лічильниками
- * в журнал Worker (observability увімкнено у wrangler.jsonc).
+ * в журнал Worker (observability увімкнено у wrangler.jsonc) і рядок у cron_runs (0019, lib/cron/runs.ts):
+ * з нього головна адмінки бачить останній запуск кожної задачі.
  */
 
 export const CRONS = {
@@ -160,6 +162,9 @@ export async function runCron(cron: string, env: CronEnv, opts: RunCronOptions =
     report.jobs.push(entry);
     if (entry.ok) console.log(JSON.stringify({ cron, ...entry }));
     else console.error(JSON.stringify({ cron, ...entry }));
+    // Одразу після задачі, а не пакетом наприкінці: запуск, який обірвався посередині,
+    // лишає рядки задач, що встигли, а решта видно в адмінці як запізнілі.
+    await recordCronRun(env.DB, cron, jobStart, entry);
   }
   return report;
 }

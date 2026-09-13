@@ -38,6 +38,11 @@ export const APPLIED_AFTER_CRM = [
   "0014_digest_email.sql",
   // Доріжка web (оплата й агенти): «Paid without result» і індекс повтору пошуку. Ще НЕ накочено.
   "0016_x402_no_result.sql",
+  // Доріжка web (CRM, T7 і T12): збережені пошуки й переходи "Apply".
+  "0017_saved_search_baseline.sql",
+  "0018_apply_click_seen.sql",
+  // Доріжка web (головна адмінки): cron_runs, app_settings, індекс digest_runs(created_at). Ще НЕ накочено.
+  "0019_admin_home.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

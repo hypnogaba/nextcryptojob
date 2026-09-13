@@ -36,13 +36,24 @@ export const NON_CRYPTO_COMPANIES: readonly string[] = [
   "bcg attorney search",
 ];
 
-/** Джерело, яке скан не бачив довше за це, позначаємо як застигле. */
-export const STALE_AFTER_HOURS = 48;
+/**
+ * Розклад сканера NextRole: лише будні (пн-пт) о 03:00 UTC. У вихідні скану немає, тож
+ * «давно не бачили» міряємо не годинами, а пропущеними плановими сканами: інакше щосуботи
+ * застиглими ставали б усі джерела. Скан рахується таким, що мав відбутися, через
+ * SCAN_GRACE_HOURS після планового часу; почати він міг до SCAN_EARLY_MS раніше.
+ */
+export const SCAN_HOUR_UTC = 3;
+/** Для текстів: «03:00 UTC». */
+export const SCAN_TIME_UTC = `${String(SCAN_HOUR_UTC).padStart(2, "0")}:00 UTC`;
+export const SCAN_GRACE_HOURS = 3;
+/** Джерело застигле, якщо його не було в стільки останніх планових сканах. */
+export const STALE_AFTER_SCANS = 2;
 /** Скільки живе готовий звіт у пам'яті ізолята. */
 export const CACHE_TTL_MS = 10 * 60_000;
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
+const SCAN_EARLY_MS = HOUR_MS;
 
 /**
  * Один запит на весь звіт; jobs_cache читається рівно раз (GROUP BY source).
@@ -244,9 +255,37 @@ export function ago(at: number, now: number): string {
   return `${Math.floor(h / 24)} d ago`;
 }
 
-/** Застигле: скан не бачив з джерела нічого довше за STALE_AFTER_HOURS (або ніколи). */
+/** Будній день UTC: сканер NextRole ходить лише пн-пт. */
+export function isScanDay(at: Date): boolean {
+  const d = at.getUTCDay();
+  return d >= 1 && d <= 5;
+}
+
+/**
+ * Планові скани, що вже мали відбутися (03:00 UTC буднього дня + SCAN_GRACE_HOURS не пізніше
+ * за now), від найсвіжішого. У суботу й неділю найсвіжіший п'ятничний; у понеділок до 06:00
+ * теж п'ятничний.
+ */
+export function pastScanSlots(now: Date, count: number): number[] {
+  const out: number[] = [];
+  const slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), SCAN_HOUR_UTC));
+  while (out.length < count) {
+    if (isScanDay(slot) && slot.getTime() + SCAN_GRACE_HOURS * HOUR_MS <= now.getTime()) out.push(slot.getTime());
+    slot.setUTCDate(slot.getUTCDate() - 1);
+  }
+  return out;
+}
+
+/** Застигле: джерела не було в STALE_AFTER_SCANS останніх планових сканах (або ніколи). */
 export function isStale(newestAt: number | null, now: Date): boolean {
-  return newestAt === null || now.getTime() - newestAt > STALE_AFTER_HOURS * HOUR_MS;
+  if (newestAt === null) return true;
+  const slots = pastScanSlots(now, STALE_AFTER_SCANS);
+  return newestAt < slots[slots.length - 1] - SCAN_EARLY_MS;
+}
+
+/** Сканер пропустив останній плановий скан: жодного запуску з того буднього 03:00 UTC. */
+export function scannerMissed(lastScanAt: number | null, now: Date): boolean {
+  return lastScanAt === null || lastScanAt < pastScanSlots(now, 1)[0] - SCAN_EARLY_MS;
 }
 
 export function toJobSource(row: SourceAggRow, now: Date): JobSource {
@@ -286,14 +325,14 @@ export type JobSourcesTotals = {
   liveJobs: number;
   nextroleLiveJobs: number;
   companyLiveJobs: number;
-  /** Джерела NextRole з вакансіями web3, які скан бачив за останні STALE_AFTER_HOURS. */
+  /** Джерела NextRole з вакансіями web3, які були хоч в одному з STALE_AFTER_SCANS останніх сканів. */
   activeSources: number;
   staleSources: number;
   /** Скільки всього джерел у кеші NextRole, і з web3, і без. */
   allNextroleSources: number;
   /** Останній скан NextRole: scan_runs, а якщо таблиця порожня, найсвіжіший fetched_at. */
   lastScan: LastScan;
-  /** Скан сам давно не бігав: тоді застиглі всі джерела, і причина в ньому. */
+  /** Сканер пропустив плановий будній скан (scannerMissed): тоді й джерела застигають, і причина в ньому. */
   scannerStale: boolean;
 };
 
@@ -321,7 +360,7 @@ export function summarize(rows: SourceAggRow[], sources: JobSource[], company: C
     staleSources: sources.filter((s) => s.stale).length,
     allNextroleSources: Number(first?.all_sources) || 0,
     lastScan,
-    scannerStale: isStale(lastScan?.at ?? null, now),
+    scannerStale: scannerMissed(lastScan?.at ?? null, now),
   };
 }
 

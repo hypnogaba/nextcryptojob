@@ -15,7 +15,7 @@ const exec = (sql: string, ...params: (string | null)[]) => t.raw.prepare(sql).r
 
 describe("signInWithTelegram", () => {
   it("creates a Telegram profile on first sign-in", async () => {
-    const res = await signInWithTelegram(t.d1, ada);
+    const res = (await signInWithTelegram(t.d1, ada))!;
     expect(res.created).toBe(true);
     expect(user(res.userId)).toEqual({
       id: res.userId,
@@ -27,7 +27,7 @@ describe("signInWithTelegram", () => {
   });
 
   it("finds the same profile next time and keeps the username fresh", async () => {
-    const first = await signInWithTelegram(t.d1, ada);
+    const first = (await signInWithTelegram(t.d1, ada))!;
     const again = await signInWithTelegram(t.d1, { ...ada, username: "ada_new" });
     expect(again).toEqual({ userId: first.userId, created: false });
     expect(user(first.userId)).toMatchObject({ telegram_username: "ada_new" });
@@ -86,7 +86,7 @@ describe("users.email invariant", () => {
     await setChannel(t.d1, "nomail", "email");
 
     expect(emails()).toEqual(before);
-    const created = await signInWithTelegram(t.d1, { ...ada, telegramId: "444" });
+    const created = (await signInWithTelegram(t.d1, { ...ada, telegramId: "444" }))!;
     expect(user(created.userId)).toMatchObject({ email: null });
   });
 });

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetSettingsCache } from "@/lib/admin/settings";
 import { randomToken, sha256Hex } from "@/lib/auth/hash";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { COMPANY_COOKIE } from "@/lib/crm/context";
@@ -19,6 +20,7 @@ import TeamPage from "./(crm)/team/page";
 import { acceptInviteAction } from "./join/actions";
 import JoinPage from "./join/page";
 import { registerCompanyAction } from "./start/actions";
+import StartPage from "./start/page";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
@@ -32,6 +34,7 @@ vi.mock("next/navigation", async () => ({
 }));
 
 function setup() {
+  resetSettingsCache();
   resetHarness();
   const { raw, d1 } = crmDb();
   harness.raw = raw;
@@ -108,6 +111,17 @@ describe("company registration", () => {
     expect(shell).toContain("Acme Labs");
     expect(shell).toContain("Team");
     expect(shell).not.toContain("Application received");
+  });
+
+  it("with company sign-ups closed: the start page says so instead of the form, the action creates nothing", async () => {
+    exec("INSERT INTO app_settings (key, value_json) VALUES ('company_signups_open', 'false')");
+    await signIn("dana@acme.io");
+    const page = await html(StartPage(params()));
+    expect(page).toContain("New company accounts are closed for now.");
+    expect(page).not.toContain('name="website"');
+    const state = await registerCompanyAction({}, form(COMPANY));
+    expect(state.message).toEqual({ tone: "error", text: "New company accounts are closed for now. Try again later." });
+    expect(rows("SELECT * FROM companies")).toEqual([]);
   });
 
   it("without the Company Terms nothing is created", async () => {

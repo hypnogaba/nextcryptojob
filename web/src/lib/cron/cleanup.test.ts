@@ -35,6 +35,13 @@ describe("dailyCleanup", () => {
     const co = addCompany(db.raw);
     addUsage(db.raw, 3, { companyId: co, action: "search_candidates", at: "2025-08-01 00:00:00" });
     addUsage(db.raw, 2, { companyId: co, action: "search_candidates", at: "2026-09-01 00:00:00" });
+    // Журнал cron живе 30 днів (0019): рядок з 12.08 уже старший, з 14.08 ще ні.
+    run(
+      db.raw,
+      `INSERT INTO cron_runs (job, cron, started_at, ms, ok) VALUES
+         ('intros.expire', '*/5 * * * *', '2026-08-12 02:55:00', 10, 1),
+         ('intros.expire', '*/5 * * * *', '2026-08-14 03:00:00', 12, 1)`,
+    );
 
     expect(await dailyCleanup(db.d1, { now: NOW })).toEqual({
       sessions: 1,
@@ -42,7 +49,9 @@ describe("dailyCleanup", () => {
       auth_attempts: 1,
       webhook_updates: 1,
       usage_events: 3,
+      cron_runs: 1,
     });
+    expect(all(db.raw, "SELECT started_at FROM cron_runs")).toEqual([{ started_at: "2026-08-14 03:00:00" }]);
     expect(all(db.raw, "SELECT id FROM sessions")).toEqual([{ id: "live" }]);
     expect(all(db.raw, "SELECT email FROM login_codes ORDER BY email")).toEqual([{ email: "b@x.io" }, { email: "c@x.io" }]);
     expect(all(db.raw, "SELECT key FROM auth_attempts ORDER BY key")).toEqual([{ key: "login:blocked" }, { key: "login:fresh" }]);

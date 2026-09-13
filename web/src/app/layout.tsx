@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Big_Shoulders, Familjen_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SiteNotice } from "@/components/site-state";
 import "./globals.css";
 
 // Big Shoulders для чисел і заголовків (вузький, як табло), Familjen Grotesk для
@@ -56,6 +57,7 @@ export default function RootLayout({
           Skip to content
         </a>
         <SiteHeader />
+        <SiteNotice />
         <main id="main" tabIndex={-1} className="flex-1 focus:outline-none">
           {children}
         </main>

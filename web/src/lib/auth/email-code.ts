@@ -1,3 +1,4 @@
+import { getSettings } from "@/lib/admin/settings";
 import { audit } from "@/lib/audit";
 import { appEnv, db } from "@/lib/db";
 import { getMailer } from "@/lib/mail";
@@ -70,7 +71,11 @@ export type CodeFailure = {
   retryAfterMinutes?: number;
 };
 
-export type VerifyCodeResult = { ok: true; userId: string; created: boolean } | CodeFailure;
+export type VerifyCodeResult =
+  | { ok: true; userId: string; created: boolean }
+  | CodeFailure
+  /** Код правильний, акаунта з цією поштою немає, а нові реєстрації закрито (/admin/settings). */
+  | { ok: false; reason: "signups_closed" };
 
 export type AddEmailResult =
   | { ok: true; email: string }
@@ -257,6 +262,10 @@ async function spendCode(
 /**
  * Перевіряє код і, якщо він правильний, входить: знаходить або створює
  * людину, пише audit_log, відкриває сесію (кука). Лише в Server Action.
+ *
+ * Нові реєстрації закрито (signups_open = false): людина з акаунтом входить як
+ * завжди, нової не створюємо. Про це кажемо лише після правильного коду: до нього
+ * відповідь однакова для будь-якої адреси, тож не видно, чи є акаунт.
  */
 export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<VerifyCodeResult> {
   const email = normaliseEmail(rawEmail);
@@ -264,8 +273,14 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
   const spent = await spendCode(email, rawCode, SIGN_IN);
   if (!spent.ok) return spent;
 
-  const { userId, created } = await findOrCreateUser(db(), email);
+  const d = db();
+  const found = await findOrCreateUser(d, email, async () => (await getSettings(d)).signups_open);
   await clearRate(spent.limitKey);
+  if (!found) {
+    await audit(null, "auth.signup_closed", null, { method: "email" });
+    return { ok: false, reason: "signups_closed" };
+  }
+  const { userId, created } = found;
   // Журнал до сесії: якщо запис упаде, людина не лишиться з кукою і
   // повідомленням про помилку водночас. Після createSession нічого не падає.
   await audit(userId, "auth.login_email", userId, { created });
@@ -333,17 +348,21 @@ async function attachEmail(
 /**
  * Людина з цією поштою або нова. Шукаємо без огляду на регістр (старі рядки
  * могли лягти з великими літерами), нові пишемо лише в нижньому регістрі.
- * ON CONFLICT робить повтор і паралельний вхід безпечними.
+ * ON CONFLICT робить повтор і паралельний вхід безпечними. null: людини немає,
+ * а canCreate каже «не створювати» (реєстрації закрито). canCreate питаємо лише
+ * тоді, тож вхід того, хто вже є, налаштувань не читає.
  */
 async function findOrCreateUser(
   d: D1Database,
   email: string,
-): Promise<{ userId: string; created: boolean }> {
+  canCreate: () => Promise<boolean>,
+): Promise<{ userId: string; created: boolean } | null> {
   const find = () =>
     d.prepare("SELECT id FROM users WHERE lower(email) = ? LIMIT 1").bind(email).first<{ id: string }>();
 
   const existing = await find();
   if (existing) return { userId: existing.id, created: false };
+  if (!(await canCreate())) return null;
 
   const fresh = crypto.randomUUID();
   const inserted = await d

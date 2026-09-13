@@ -1,11 +1,12 @@
 import { sqlTime } from "@/lib/time";
+import { CRON_RUNS_KEEP_DAYS } from "./runs";
 
 /**
  * Щоденне прибирання (cron о 03:00 UTC). Решта коду прибирає ліниво (вхід
  * стирає старі коди й лічильники, нова сесія стирає прострочені сесії тієї самої
  * людини, вебхук бота зрідка чистить свої update_id); тут те, що ліниво ніколи
  * не зникне: сесії людей, що більше не входили, коди без нового входу, старий
- * облік використання (специфікація 3.6: purgeUsage, 400 днів).
+ * облік використання (специфікація 3.6: purgeUsage, 400 днів), журнал запусків cron (30 днів).
  *
  * Кожна таблиця шматками по CHUNK рядків (DELETE … WHERE rowid IN (SELECT … LIMIT)),
  * не більше MAX_CHUNKS шматків за запуск: великий хвіст добере наступна ніч.
@@ -37,6 +38,13 @@ const RULES: Rule[] = [
   { table: "webhook_updates", where: "seen_at < ?", params: (now) => [sqlTime(new Date(now.getTime() - 3 * DAY_MS))] },
   // Облік використання живе 400 днів (0004_billing).
   { table: "usage_events", where: "created_at < ?", params: (now) => [sqlTime(new Date(now.getTime() - 400 * DAY_MS))] },
+  // Журнал запусків cron живе CRON_RUNS_KEEP_DAYS (0019). Останнім: таблиця з'являється з 0019,
+  // і поки її немає, збій цього правила не заважає решті прибирання.
+  {
+    table: "cron_runs",
+    where: "started_at < ?",
+    params: (now) => [sqlTime(new Date(now.getTime() - CRON_RUNS_KEEP_DAYS * DAY_MS))],
+  },
 ];
 
 export type CleanupResult = Record<string, number>;

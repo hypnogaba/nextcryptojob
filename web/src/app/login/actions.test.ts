@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RedirectCalled, exec, harness, resetHarness } from "@/test/harness";
+import { resetSettingsCache } from "@/lib/admin/settings";
+import { SIGNUPS_CLOSED } from "@/lib/auth/code-messages";
+import { RedirectCalled, exec, harness, resetHarness, rows } from "@/test/harness";
 import { loginAction, type LoginState } from "./actions";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
@@ -31,6 +33,7 @@ async function signIn(email: string): Promise<string> {
 
 beforeEach(() => {
   outbox = [];
+  resetSettingsCache();
   resetHarness({
     EMAIL: { send: async (m: { subject: string }) => (outbox.push(m), { messageId: "m" }) } as unknown as SendEmail,
   });
@@ -60,6 +63,23 @@ describe("loginAction", () => {
       email: "ada@example.com",
       message: { tone: "info", text: "Email sign-in opens soon." },
     });
+  });
+
+  it("with sign-ups closed, a new email gets a closed-for-now message and no account; an existing one signs in", async () => {
+    exec("INSERT INTO app_settings (key, value_json) VALUES ('signups_open', 'false')");
+    exec("INSERT INTO users (id, email) VALUES ('u1', 'back@example.com')");
+
+    const code = await codeFor("new@example.com");
+    const state = await loginAction({ step: "code", email: "new@example.com" }, form({ intent: "verify", email: "new@example.com", code }));
+    expect(state).toEqual({ step: "email", email: "new@example.com", message: { tone: "info", text: SIGNUPS_CLOSED } });
+    expect(rows("SELECT id FROM users WHERE email = 'new@example.com'")).toEqual([]);
+    expect(rows("SELECT id FROM sessions")).toEqual([]);
+    expect(rows("SELECT actor, action, meta_json FROM audit_log")).toEqual([
+      { actor: null, action: "auth.signup_closed", meta_json: '{"method":"email"}' },
+    ]);
+
+    await expect(signIn("back@example.com")).resolves.toBe("/account");
+    expect(rows("SELECT user_id, method FROM sessions")).toEqual([{ user_id: "u1", method: "email" }]);
   });
 
   it("shows how many tries are left after a wrong code", async () => {

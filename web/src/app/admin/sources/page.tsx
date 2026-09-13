@@ -10,7 +10,8 @@ import {
   LIVE_WINDOW_DAYS,
   loadJobSourcesReport,
   POSTED_WINDOW_DAYS,
-  STALE_AFTER_HOURS,
+  SCAN_TIME_UTC,
+  STALE_AFTER_SCANS,
   type JobSource,
   type JobSourcesReport,
 } from "@/lib/admin/job-sources";
@@ -74,9 +75,9 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
     <>
       {totals.scannerStale ? (
         <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
-          The NextRole scanner has not run for over {STALE_AFTER_HOURS} h
-          {scan ? ` (last run ${ago(scan.at, now)})` : ""}. Every source looks stale because of that, not
-          because the sources broke.
+          The NextRole scanner missed its last scheduled run (weekdays at {SCAN_TIME_UTC})
+          {scan ? `; last run ${ago(scan.at, now)}` : ""}. Sources look stale because of that, not because they
+          broke.
         </p>
       ) : null}
 
@@ -86,11 +87,11 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
           label="Live web3 jobs"
           note={`${NUM.format(totals.nextroleLiveJobs)} NextRole, ${NUM.format(totals.companyLiveJobs)} companies`}
         />
-        <Tile value={NUM.format(totals.activeSources)} label={`Active in ${STALE_AFTER_HOURS} h`} note="NextRole sources" />
+        <Tile value={NUM.format(totals.activeSources)} label="Active sources" note={`In the last ${STALE_AFTER_SCANS} scans`} />
         <Tile
           value={NUM.format(totals.staleSources)}
           label="Stale sources"
-          note={`Nothing seen for ${STALE_AFTER_HOURS} h`}
+          note={`Missed the last ${STALE_AFTER_SCANS} scans`}
           alert={totals.staleSources > 0}
         />
         <Tile
@@ -160,7 +161,9 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
         </p>
         <p>
           {NUM.format(sources.length)} of {NUM.format(totals.allNextroleSources)} NextRole sources have web3 jobs; the
-          rest are left out. Stale: the scan has not seen any job from the source for {STALE_AFTER_HOURS} h.
+          rest are left out. Stale: no job from the source in the last {STALE_AFTER_SCANS} scans. The scanner runs on
+          weekdays at {SCAN_TIME_UTC} only, so weekends do not make a source stale, but the live count drops over
+          the weekend as jobs age out of the {LIVE_WINDOW_DAYS}-day window.
         </p>
       </div>
     </>

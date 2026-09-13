@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { getSettings } from "@/lib/admin/settings";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { telegramEnv } from "@/lib/telegram/env";
@@ -38,6 +39,8 @@ export const TELEGRAM_ERRORS = {
   other_telegram: "Your profile is already linked to a different Telegram account.",
   session_changed: "Your session changed while you were connecting Telegram. Sign in again, then connect Telegram from your account.",
   cross_site: "To connect Telegram, open your account page on this site and press Connect Telegram there.",
+  signups_closed:
+    "New sign-ups are closed for now, so we did not create an account for this Telegram. If you already have one, sign in with the email or Telegram you used before.",
 } as const;
 export type TelegramErrorReason = keyof typeof TELEGRAM_ERRORS;
 
@@ -161,7 +164,12 @@ export async function finishTelegramLogin(params: URLSearchParams, origin: strin
     }
   }
 
-  const { userId, created } = await signInWithTelegram(d, identity);
+  const signedIn = await signInWithTelegram(d, identity, async () => (await getSettings(d)).signups_open);
+  if (!signedIn) {
+    await audit(null, "auth.signup_closed", null, { method: "telegram" });
+    return errorPath("signups_closed");
+  }
+  const { userId, created } = signedIn;
   // Журнал до сесії: якщо запис упаде, людина не лишиться з кукою й помилкою водночас.
   await audit(userId, "auth.login_telegram", userId, { created });
   await createSession(userId, "telegram");

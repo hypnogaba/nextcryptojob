@@ -3,12 +3,14 @@ import { cn } from "@/lib/utils";
 
 /** Сторінки адмінки. Нова сторінка додається сюди, і посилання з'являється на всіх. */
 export const ADMIN_PAGES = [
+  { href: "/admin", label: "Overview" },
   { href: "/admin/companies", label: "Companies" },
   { href: "/admin/sources", label: "Job sources" },
   { href: "/admin/agency-applications", label: "Agency applications" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/jobs", label: "Company jobs" },
   { href: "/admin/x-queue", label: "X queue" },
+  { href: "/admin/settings", label: "Settings" },
 ] as const;
 
 export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];

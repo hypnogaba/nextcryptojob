@@ -8,7 +8,9 @@ import {
   describeSource,
   isStale,
   loadJobSourcesReport,
+  pastScanSlots,
   resetJobSourcesCache,
+  scannerMissed,
   SOURCES_SQL,
   sourcesParams,
   toJobSource,
@@ -16,7 +18,7 @@ import {
   type SourceAggRow,
 } from "./job-sources";
 
-const NOW = new Date("2026-09-12T12:00:00.000Z");
+const NOW = new Date("2026-09-12T12:00:00.000Z"); // субота
 const FRESH = "2026-09-12T03:00:00.000Z"; // сьогоднішній скан
 const OLD = "2026-09-01T03:00:00.000Z"; // поза вікном у 3 дні
 const H = 3_600_000;
@@ -36,7 +38,8 @@ function seedNextrole() {
   add({ source: "aggregator:remotive", fetchedAt: FRESH, tags: ["web3ish", "remote"] });
   // Дошка: свіжа, але опублікована давно, тож не жива.
   add({ source: "board:global-web3career", fetchedAt: FRESH, postedAt: "2026-07-01T00:00:00Z" });
-  // Дошка країни: скан бачив її 60 год тому. Застигла, але ще в 3-денному вікні живих.
+  // Дошка країни: остання поява до четвергового скану, у п'ятничному й четверговому її не було.
+  // Застигла, але ще в 3-денному вікні живих.
   add({ source: "board:dou-blockchain", fetchedAt: "2026-09-10T00:00:00.000Z" });
   // Getro: одна крипто, одна від не-крипто компанії з тегом web3.
   add({ source: "getro:858", company: "Phantom", fetchedAt: FRESH });
@@ -143,16 +146,48 @@ describe("source names and links", () => {
 });
 
 describe("stale flag", () => {
-  it("flags a source the scan has not seen for more than 48 h, or ever", () => {
-    expect(isStale(NOW.getTime() - 47 * H, NOW)).toBe(false);
-    expect(isStale(NOW.getTime() - 48 * H, NOW)).toBe(false);
-    expect(isStale(NOW.getTime() - 48 * H - 1, NOW)).toBe(true);
+  it("counts weekday scans (Mon-Fri at 03:00 UTC) that should have run, not hours", () => {
+    const iso = (at: string) => pastScanSlots(new Date(at), 2).map((t) => new Date(t).toISOString());
+    const friThu = ["2026-09-11T03:00:00.000Z", "2026-09-10T03:00:00.000Z"];
+    expect(iso("2026-09-12T12:00:00Z")).toEqual(friThu); // субота
+    expect(iso("2026-09-13T23:00:00Z")).toEqual(friThu); // неділя
+    expect(iso("2026-09-14T05:59:00Z")).toEqual(friThu); // понеділок до 06:00: понеділковий ще в запасі 3 год
+    expect(iso("2026-09-14T06:00:00Z")).toEqual(["2026-09-14T03:00:00.000Z", "2026-09-11T03:00:00.000Z"]);
+    expect(iso("2026-09-11T02:00:00Z")).toEqual(["2026-09-10T03:00:00.000Z", "2026-09-09T03:00:00.000Z"]);
+  });
+
+  it("a source from Friday's scan stays active all weekend and on Monday morning; one missing two scans is stale", () => {
+    const friday = Date.parse("2026-09-11T03:20:00Z");
+    const thursday = Date.parse("2026-09-10T03:20:00Z");
+    const wednesday = Date.parse("2026-09-09T03:20:00Z");
+    for (const at of ["2026-09-12T12:00:00Z", "2026-09-13T23:00:00Z", "2026-09-14T05:00:00Z"]) {
+      expect(isStale(friday, new Date(at)), at).toBe(false);
+      // Пропустила лише п'ятничний: ще не застигла.
+      expect(isStale(thursday, new Date(at)), at).toBe(false);
+      expect(isStale(wednesday, new Date(at)), at).toBe(true);
+    }
+    // Понеділок після скану: четвергова пропустила п'ятничний і понеділковий.
+    expect(isStale(thursday, new Date("2026-09-14T07:00:00Z"))).toBe(true);
+    expect(isStale(friday, new Date("2026-09-14T07:00:00Z"))).toBe(false);
     expect(isStale(null, NOW)).toBe(true);
   });
 
+  it("calls the scanner late only when a weekday scan is missing 3 h after 03:00 UTC", () => {
+    const fridayScan = Date.parse("2026-09-11T03:00:05Z");
+    expect(scannerMissed(fridayScan, new Date("2026-09-12T12:00:00Z"))).toBe(false); // субота
+    expect(scannerMissed(fridayScan, new Date("2026-09-13T23:59:00Z"))).toBe(false); // неділя
+    expect(scannerMissed(fridayScan, new Date("2026-09-14T05:59:00Z"))).toBe(false); // понеділок, ще в запасі
+    expect(scannerMissed(fridayScan, new Date("2026-09-14T06:00:00Z"))).toBe(true); // понеділкового немає
+    expect(scannerMissed(Date.parse("2026-09-14T03:01:00Z"), new Date("2026-09-14T06:00:00Z"))).toBe(false);
+    // П'ятничного не було: прапорець стоїть усі вихідні.
+    expect(scannerMissed(Date.parse("2026-09-10T03:00:00Z"), new Date("2026-09-12T12:00:00Z"))).toBe(true);
+    expect(scannerMissed(null, NOW)).toBe(true);
+  });
+
   it("reads NextRole ISO and our SQLite times alike", () => {
-    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-10T11:00:00.000Z" }), NOW)).toMatchObject({ stale: true });
-    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-10 13:00:00" }), NOW)).toMatchObject({ stale: false });
+    // У суботу межа: четверговий скан (03:00 UTC, з годиною запасу на ранній старт).
+    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-10T01:00:00.000Z" }), NOW)).toMatchObject({ stale: true });
+    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-10 03:05:00" }), NOW)).toMatchObject({ stale: false });
     expect(toJobSource(row({ source: "lever:safe", newest: null }), NOW)).toMatchObject({ stale: true, newestAt: null });
   });
 
@@ -209,7 +244,8 @@ describe("loadJobSourcesReport", () => {
     expect(report.computedAt).toBe(NOW.getTime());
   });
 
-  it("warns that the scanner itself stopped when its last run is over 48 h old", async () => {
+  it("warns that the scanner itself stopped when it missed a weekday scan", async () => {
+    // Вівторок 12:00: останній скан суботній, понеділкового й вівторкового немає.
     const later = new Date(NOW.getTime() + 3 * 24 * H);
     const report = await loadJobSourcesReport(jobs, main.d1, later);
     expect(report.totals.scannerStale).toBe(true);
