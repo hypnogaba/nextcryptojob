@@ -26,6 +26,13 @@ const GRANTING = `
 /** Статуси Stripe, за яких підписка ще жива: друга через Checkout була б дублем. */
 export const OPEN_STRIPE_STATUSES = ["trialing", "active", "past_due", "unpaid", "paused"] as const;
 
+/**
+ * Що скасувати в Stripe, коли компанію закрито: живі й `incomplete` (перший платіж
+ * ще чекає 3-D Secure і може пройти вже після закриття). Доступу `incomplete` не
+ * дає, тож OPEN_STRIPE_STATUSES (дубль Checkout, доступ) його не містить.
+ */
+export const CANCEL_ON_CLOSE_STRIPE_STATUSES = [...OPEN_STRIPE_STATUSES, "incomplete"] as const;
+
 export interface CompanyAccess {
   access: AccessMode;
   /** Статус найновішої підписки будь-якого провайдера (для плашок), або null. */

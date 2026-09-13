@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AdminNav } from "@/components/admin-nav";
 import { Button } from "@/components/ui/button";
 import { currentAdmin } from "@/lib/auth/admin";
 import { listCompaniesForAdmin, MAX_NOTE_LENGTH, type AdminCompanyRow } from "@/lib/billing/manual";
@@ -103,6 +104,7 @@ export default async function AdminCompaniesPage({
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+      <AdminNav current="/admin/companies" />
       <h1 className="text-3xl font-semibold tracking-tight">Companies</h1>
       <p className="mt-2 text-sm text-ink-muted">
         {stripe.enabled

@@ -199,7 +199,8 @@ async function cardBase(db: D1Database, companyId: string, candidateId: string):
 
 /**
  * SELECT карток компанії з живою видимістю (visibility.ts) і відкритим
- * знайомством. Параметри: спершу видимості, потім company_id.
+ * знайомством. Параметри: спершу видимості, потім company_id. Pending без
+ * токена це бронь пари до оплати (intros.ts, holdIntro), а не відкрите знайомство.
  */
 function cardSelect(companyId: string): { sql: string; params: (string | number | null)[] } {
   const v = visibleToSql(companyId);
@@ -210,6 +211,7 @@ function cardSelect(companyId: string): { sql: string; params: (string | number 
             FROM pipeline p
             JOIN users u ON u.id = p.user_id
             LEFT JOIN intros oi ON oi.company_id = p.company_id AND oi.user_id = p.user_id AND oi.status = 'pending'
+                                AND oi.respond_token_hash IS NOT NULL
            WHERE p.company_id = ?`,
     params: [...v.params, companyId],
   };
