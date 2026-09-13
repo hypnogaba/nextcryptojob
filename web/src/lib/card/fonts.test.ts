@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { isAllowedDisplayNameChar } from "./display-name";
-import plexMono from "./fonts/plex-mono-500";
-import plexSans from "./fonts/plex-sans-600";
-import unbounded from "./fonts/unbounded-600";
+import bigShoulders from "./fonts/big-shoulders-800";
+import familjen from "./fonts/familjen-grotesk-500";
+import cyrillic from "./fonts/ncj-cyrillic-600";
+import { POSITION_CODE, SOURCE_CODE } from "@/lib/roles/recipes";
 import { ROLES } from "./roles";
+import { FINISHES } from "./tiers";
 
 // Мінімальне читання cmap (формати 4 і 12) з TTF: які символи є в шрифті.
 // Satori мовчки малює порожнечу на місці відсутньої літери, тож перевіряємо заздалегідь.
@@ -58,20 +60,38 @@ function missing(font: Set<number>, text: string): string[] {
 }
 
 describe("card fonts", () => {
-  it("Unbounded has every digit of the score", () => {
-    expect(missing(codepoints(unbounded), "0123456789")).toEqual([]);
+  const display = codepoints(bigShoulders);
+  const text = codepoints(familjen);
+  const cyr = codepoints(cyrillic);
+
+  it("Big Shoulders has every digit, role, position code, source code, finish and the site mark", () => {
+    const labels = [
+      ...Object.values(ROLES).map((r) => r.name.toUpperCase()),
+      ...Object.values(POSITION_CODE),
+      ...Object.values(SOURCE_CODE),
+      ...FINISHES.map((f) => f.name.toUpperCase()),
+    ].join("");
+    expect(missing(display, `0123456789${labels}LEVEL SEASON No. RATED gap /NEXTCRYPTOJOB.XYZ`)).toEqual([]);
   });
 
-  it("Plex Mono has every role label, level and the site mark", () => {
-    const labels = Object.values(ROLES).map((r) => r.name.toUpperCase()).join("");
-    expect(missing(codepoints(plexMono), `${labels}Level 0123456789 / 10/100nextcryptojob.xyz`)).toEqual([]);
+  it("Familjen Grotesk has the reason line", () => {
+    expect(missing(text, "Level 0123456789 of 10, black finish. Built from GitHub 74.2, X and an onchain bonus. Wallets not verified.")).toEqual([]);
   });
 
-  it("Plex Sans has every character a display name may use", () => {
+  it("Big Shoulders or the Cyrillic fallback has every character a display name may use", () => {
     const allowed = Array.from({ length: 0x500 }, (_, cp) => String.fromCodePoint(cp)).filter(
       isAllowedDisplayNameChar,
     );
     expect(allowed.length).toBeGreaterThan(300);
-    expect(missing(codepoints(plexSans), `${allowed.join("")}\u2026`)).toEqual([]);
+    // Ім'я на картці пишемо прописними, тож перевіряємо обидва регістри. Виняток: ŉ
+    // прописною стає «ʼN», і апострофа U+02BC немає ні в одному шрифті (N буде).
+    const both = (allowed.join("") + allowed.join("").toUpperCase() + "\u2026").replace(/\u02BC/g, "");
+    const union = new Set([...display, ...cyr]);
+    expect(missing(union, both)).toEqual([]);
+  });
+
+  it("keeps the fallback to Cyrillic and the four letters Big Shoulders lacks, so it stays small", () => {
+    const extra = new Set([0x20, 0x132, 0x133, 0x149, 0x17f]);
+    expect([...cyr].every((cp) => extra.has(cp) || (cp >= 0x400 && cp <= 0x491))).toBe(true);
   });
 });

@@ -32,7 +32,7 @@ export function ClaimPanel({
           ? "Add this code to your X bio or post it, then press Check. You can remove it after."
           : "Add this code to your GitHub bio in your profile settings, then press Check. You can remove it after."}
       </VerifyPanel>
-      <Link href={backHref} className="inline-flex min-h-11 items-center text-sm font-medium text-brand">
+      <Link href={backHref} className="inline-flex min-h-11 items-center text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
         Use a different {kind === "x" ? "handle" : "login"}
       </Link>
     </section>

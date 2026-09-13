@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const LINK =
-  "-mr-3 inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-ink-muted transition-colors hover:text-ink";
+  "-mr-2 inline-flex min-h-11 items-center px-2 text-[0.9375rem] font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 transition-colors hover:decoration-brand";
 
 /**
  * «Sign in» або «Account» у шапці. Шапка в спільному layout, і перевірка

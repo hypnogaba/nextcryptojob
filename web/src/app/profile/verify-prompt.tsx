@@ -32,11 +32,11 @@ export function VerifyPrompt({ x, github }: { x: Identity | null; github: Identi
   }
   if (items.length === 0) return null;
   return (
-    <div className="grid gap-3 rounded-xl border border-brand bg-brand-soft p-4 sm:p-5">
+    <div className="grid gap-3 rounded-xl border-2 border-ink bg-surface p-4 sm:p-5">
       {items.map((i) => (
         <div key={i.key} className="grid gap-1">
           <p className="text-sm text-ink">{i.text}</p>
-          <Link href={i.href} className="inline-flex min-h-11 w-fit items-center text-sm font-medium text-brand underline underline-offset-4">
+          <Link href={i.href} className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-brand underline underline-offset-4">
             {i.action}
           </Link>
         </div>

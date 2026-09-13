@@ -45,7 +45,6 @@ export function StatusPanel({ initial }: { initial: ProfileStatus }) {
     return (
       <div role="status" className="flex items-start gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
         <span aria-hidden className="relative mt-1.5 flex size-2.5 shrink-0">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand opacity-60 motion-reduce:hidden" />
           <span className="relative inline-flex size-2.5 rounded-full bg-brand" />
         </span>
         <div className="grid gap-1">

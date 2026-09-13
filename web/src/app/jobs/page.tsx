@@ -28,7 +28,7 @@ function JobItem({ job }: { job: SentJob }) {
     );
   }
   const meta = [d.company, d.location, d.salary].filter(Boolean).join(" · ");
-  const titleClass = `text-base font-semibold text-ink underline-offset-4 hover:text-brand hover:underline ${WRAP}`;
+  const titleClass = `text-base font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand ${WRAP}`;
   return (
     <li className="grid gap-1.5 rounded-xl border border-line bg-surface p-4 sm:p-5">
       <h3 className={`font-sans text-base font-semibold ${WRAP}`}>
@@ -63,10 +63,10 @@ function Digest({ digest }: { digest: SentDigest }) {
   return (
     <section aria-labelledby={id} className="grid gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id={id} className="text-lg font-semibold tracking-tight">
+        <h2 id={id} className="display text-[1.75rem] leading-none">
           {dayLabel(digest.localDate)}
         </h2>
-        <p className="font-mono text-xs text-ink-muted">
+        <p className="text-sm text-ink-muted">
           {n} job{n === 1 ? "" : "s"}
           {by ? `, ${by}` : ""}
         </p>
@@ -89,12 +89,12 @@ export default async function JobsPage() {
   const empty = digests.length === 0 && !historyError ? emptyState(setup) : null;
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-14">
+    <div className="mx-auto grid max-w-3xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Your jobs</h1>
+        <h1 className="display text-title">Your jobs</h1>
         <Link
           href="/settings"
-          className="-mr-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-ink-muted hover:text-ink"
+          className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
         >
           Daily jobs settings
         </Link>
@@ -111,7 +111,7 @@ export default async function JobsPage() {
             <p className="font-medium text-ink">{empty.title}</p>
             <p className={HINT}>{empty.body}</p>
           </div>
-          <Button asChild className="h-11 w-full px-5 text-base sm:w-fit">
+          <Button asChild size="lg" className="w-full sm:w-fit">
             <Link href={empty.href}>{empty.cta}</Link>
           </Button>
         </div>

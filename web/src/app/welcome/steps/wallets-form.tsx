@@ -11,7 +11,7 @@ import type { StepState } from "../flow";
 
 const CHIP: Record<WalletKind, { label: string; className: string }> = {
   evm: { label: "EVM", className: "border border-line-strong text-ink" },
-  solana: { label: "Solana", className: "border border-brand bg-brand-soft text-ink" },
+  solana: { label: "Solana", className: "border border-ink text-ink" },
 };
 
 export function WalletsForm({ initial, editing }: { initial: string; editing: boolean }) {
@@ -51,11 +51,11 @@ export function WalletsForm({ initial, editing }: { initial: string; editing: bo
             const original = inputs.find((i) => (w.kind === "evm" ? i.toLowerCase() === w.value : i === w.value));
             const error = original ? serverErrors[original] : undefined;
             return (
-              <li key={`${w.kind}:${w.value}`} className="grid gap-1 rounded-lg border border-line bg-surface px-3 py-2">
+              <li key={`${w.kind}:${w.value}`} className="grid gap-1 border border-line bg-surface px-3 py-2">
                 <span className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[0.65rem] tracking-wider uppercase",
+                      "shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-semibold",
                       CHIP[w.kind].className,
                     )}
                   >
@@ -74,7 +74,7 @@ export function WalletsForm({ initial, editing }: { initial: string; editing: bo
           {parsed.errors.map((e) => (
             <li
               key={`err:${e.input}`}
-              className="grid gap-1 rounded-lg border border-destructive/50 bg-surface px-3 py-2"
+              className="grid gap-1 border border-destructive/50 bg-surface px-3 py-2"
             >
               <span className="min-w-0 font-mono text-xs break-all text-ink">{e.input}</span>
               <span role="alert" className="text-sm text-destructive">

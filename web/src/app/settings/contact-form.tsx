@@ -7,8 +7,9 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { setContactModeAction, type SettingsState } from "./actions";
 
 const RADIO_ROW =
-  "flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface p-3 " +
-  "has-[:checked]:border-brand has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60";
+  "flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3 " +
+  "has-[:checked]:border-ink has-[:checked]:shadow-[inset_0_0_0_1px_var(--ink)] " +
+  "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60";
 
 export function ContactForm({
   mode,

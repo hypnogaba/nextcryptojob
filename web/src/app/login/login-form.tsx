@@ -2,16 +2,12 @@
 
 import { useActionState, useEffect, useRef, type ComponentProps } from "react";
 import { useFormStatus } from "react-dom";
+import { FIELD } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { loginAction, type LoginMessage, type LoginState } from "./actions";
 
 const INITIAL: LoginState = { step: "email", email: "" };
-
-const FIELD =
-  "block h-11 w-full rounded-md border border-line-strong bg-surface px-3 text-base text-ink " +
-  "placeholder:text-ink-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 " +
-  "focus-visible:outline-none aria-invalid:border-destructive";
 
 /** Кнопка форми, що знає, чи зараз працює саме вона (з кількох у формі). */
 function SubmitButton({
@@ -65,7 +61,7 @@ export function LoginForm() {
     const invalid = state.message?.tone === "error";
     return (
       <form action={formAction} className="mt-8 grid gap-3">
-        <label htmlFor="email" className="text-sm font-medium text-ink">
+        <label htmlFor="email" className="text-sm font-semibold text-ink">
           Email
         </label>
         <input
@@ -93,7 +89,7 @@ export function LoginForm() {
   return (
     <form action={formAction} className="mt-8 grid gap-3">
       <input type="hidden" name="email" value={state.email} />
-      <label htmlFor="code" className="text-sm font-medium text-ink">
+      <label htmlFor="code" className="text-sm font-semibold text-ink">
         6-digit code
       </label>
       <input

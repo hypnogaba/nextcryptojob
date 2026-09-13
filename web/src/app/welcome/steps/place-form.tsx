@@ -32,8 +32,8 @@ export function PlaceForm({ initial }: { initial: PlaceInitial }) {
             <label
               key={c.value}
               className={cn(
-                "flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border bg-surface px-3 py-3 transition-colors",
-                where === c.value ? "border-brand bg-brand-soft" : "border-line hover:border-line-strong",
+                "flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border bg-surface px-3 py-3 transition-colors",
+                where === c.value ? "border-ink shadow-[inset_0_0_0_1px_var(--ink)]" : "border-line hover:border-line-strong",
               )}
             >
               <input

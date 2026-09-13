@@ -35,7 +35,7 @@ export function CreateCardForm({ role, defaultName }: { role: RoleKey; defaultNa
         </SubmitButton>
       </div>
       <p id={`${id}-hint`} className={HINT}>
-        The card is public at its own link. It shows this name, the role and the score, never your wallets.
+        The card is public at its own link. It shows this name, the role, the score and how it was built. Never your wallets or links.
       </p>
       <FormMessageLine message={state.message} />
     </form>

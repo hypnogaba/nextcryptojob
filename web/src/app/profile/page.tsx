@@ -8,6 +8,9 @@ import { hasConsent, SCORING_CONSENT } from "@/lib/consent";
 import { db } from "@/lib/db";
 import { listIdentities } from "@/lib/identity/store";
 import { loadAnswers } from "@/lib/onboarding/store";
+import { cardBack } from "@/lib/card/back";
+import { sealSeed } from "@/lib/card/seal";
+import { listActiveCards } from "@/lib/card/store";
 import { explainRole, sourceState, type Breakdown } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
 import { isActive, profileStatus } from "@/lib/score/status";
@@ -35,12 +38,13 @@ function reasonOf(json: string | undefined): string | null {
 export default async function ProfilePage({ searchParams }: Props) {
   const user = await requireUser();
   const d = db();
-  const [answers, identities, status, scores, consent] = await Promise.all([
+  const [answers, identities, status, scores, consent, cards] = await Promise.all([
     loadAnswers(d, user.id),
     listIdentities(d, user.id),
     profileStatus(d, user.id),
     loadScores(d, user.id),
     hasConsent(d, user.id, SCORING_CONSENT.kind),
+    listActiveCards(d, user.id),
   ]);
   const done = answers.step === "done";
   const state = sourceState(identities);
@@ -51,15 +55,17 @@ export default async function ProfilePage({ searchParams }: Props) {
   const active = isActive(status);
   const wait = parseWait((await searchParams).wait);
   const changed = done && consent && status.sourcesChanged && !active;
+  // Печатка з підтвердженого гаманця, інакше зі slug картки (підпису гаманців у релізі 1 ще немає).
+  const wallet = identities.find((i) => (i.kind === "evm" || i.kind === "solana") && i.verifiedAt)?.value ?? null;
 
   return (
-    <section className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-14">
+    <section className="mx-auto grid max-w-4xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Your score</h1>
+        <h1 className="display text-title">Your score</h1>
         {done ? (
           <Link
             href="/welcome"
-            className="-mr-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-ink-muted hover:text-ink"
+            className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
           >
             Edit answers
           </Link>
@@ -69,7 +75,7 @@ export default async function ProfilePage({ searchParams }: Props) {
       {!done ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
           <p className="text-ink">Finish setting up your profile to get your score.</p>
-          <Button asChild className="h-11 w-fit px-5 text-base">
+          <Button asChild size="lg" className="w-fit">
             <Link href="/welcome">Continue setup</Link>
           </Button>
         </div>
@@ -93,12 +99,16 @@ export default async function ProfilePage({ searchParams }: Props) {
         <div className="grid gap-4">
           {answers.roles.map((role) => {
             const row = scores.get(role) ?? null;
+            const card = cards.find((c) => c.role === role) ?? null;
             return (
               <RoleCard
                 key={role}
                 view={explainRole(role, row, state)}
+                back={row ? cardBack(row.breakdown_json, state.counted) : null}
                 defaultName={defaultName}
                 eligibility={cardEligibility(role, reasonOf(row?.breakdown_json), verified)}
+                active={card}
+                sealSeed={card ? sealSeed({ wallet, slug: card.slug }) : null}
               />
             );
           })}

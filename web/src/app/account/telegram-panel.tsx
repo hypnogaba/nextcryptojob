@@ -18,7 +18,7 @@ export async function TelegramPanel({ userId }: { userId: string }) {
 
   return (
     <section aria-labelledby="telegram-heading" className="mt-10 grid max-w-md gap-3">
-      <h2 id="telegram-heading" className="font-mono text-xs tracking-widest text-ink-muted uppercase">
+      <h2 id="telegram-heading" className="display text-[1.75rem] leading-none">
         Telegram
       </h2>
       {status.telegramId ? (
@@ -58,7 +58,7 @@ function ChannelSwitch({ on, hasEmail }: { on: boolean; hasEmail: boolean }) {
   return (
     <form action={setChannelAction} className="grid gap-1">
       <input type="hidden" name="channel" value={on ? "email" : "telegram"} />
-      <div className="flex min-h-12 items-center justify-between gap-4 rounded-lg border border-line bg-surface pl-4 pr-1">
+      <div className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-line bg-surface pl-4 pr-1">
         <span id="channel-label" className="text-ink">
           Use Telegram for daily jobs
         </span>
