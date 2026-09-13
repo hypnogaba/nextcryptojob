@@ -195,6 +195,8 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0014_digest_email.sql | web: лист добірки (W7) | digest_emails (ідемпотентність листа за digest_id; після 0006) |
 | 0016_x402_no_result.sql | web: оплата й агенти | x402_payments.no_result_*, refunded_* («Paid without result»); індекс audit_log за payment_id пошуку |
 | 0017_saved_search_baseline.sql | web: CRM | saved_searches.baseline_at, filter_changes, filter_changes_day; last_match_count = нові на останньому сповіщенні |
+| 0018_apply_click_seen.sql | web: вакансії компаній | apply_click_seen (дедуп кліків Apply за HMAC IP+вакансія, 10 хв) |
+| 0019_admin_home.sql | web: адмінка | cron_runs (журнал задач розкладу, 30 днів), app_settings (налаштування з адмінки), індекс digest_runs(created_at) |
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)
