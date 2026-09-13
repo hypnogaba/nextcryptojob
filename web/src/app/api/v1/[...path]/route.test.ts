@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sha256Hex } from "@/lib/auth/hash";
 import { respondToIntro } from "@/lib/crm/intros";
 import { sqlTime } from "@/lib/time";
 import { rest, schemaErrors, setupApi } from "@/test/api-fixtures";
@@ -218,18 +219,27 @@ describe("quotas and burst limits", () => {
     expect(net.messagesTo(alice.telegramId!)).toEqual([]);
   });
 
-  it("the burst limit is counted per key for agents and per IP for guests", async () => {
+  it("the burst limit runs first: per key for agents, per IP for guests, before the body or the key is read", async () => {
     const seen: string[] = [];
     const limiter = (success: boolean) => ({ limit: async ({ key }: { key: string }) => (seen.push(key), { success }) });
-    ({ db, net } = setupApi({ RL_API: limiter(false) as never, RL_IP: limiter(false) as never }));
-    const { keyId, key } = await company();
+    ({ db, net } = setupApi({ RL_API: limiter(false) as never, RL_IP: limiter(false) as never, RL_PUBLIC: limiter(false) as never }));
+    const { key } = await company();
     const agent = await call("GET", "/pipeline", { key });
     expect(agent.status).toBe(429);
     expect(agent.body.error.code).toBe("rate_limited");
     expect(agent.headers.get("Retry-After")).toBe("60");
-    const guest = await call("POST", "/candidates/search", { body: {}, headers: { "cf-connecting-ip": "203.0.113.7" } });
+    expect(seen[0]).toBe(`key:${(await sha256Hex(key)).slice(0, 32)}`);
+
+    // Хибний ключ і зіпсоване тіло: 429 раніше за 401 і 422, тобто ні D1, ні тіла не читали.
+    const d1 = vi.spyOn(db.d1, "prepare");
+    const bogus = await call("POST", "/candidates/search", { key: `ncj_live_${"Q".repeat(43)}`, raw: "{nope" });
+    expect(bogus.status).toBe(429);
+    const guest = await call("POST", "/candidates/search", { raw: "{nope", headers: { "cf-connecting-ip": "203.0.113.7" } });
     expect(guest.body.error.code).toBe("rate_limited");
-    expect(seen).toEqual([`key:${keyId}`, "ip:203.0.113.7"]);
+    const open = await call("GET", "/public/jobs", { headers: { "cf-connecting-ip": "203.0.113.8" } });
+    expect(open.status).toBe(429);
+    expect(d1).not.toHaveBeenCalled();
+    expect(seen.slice(2)).toEqual(["ip:203.0.113.7", "ip:203.0.113.8"]);
     expect(net.verify).toBe(0);
   });
 });

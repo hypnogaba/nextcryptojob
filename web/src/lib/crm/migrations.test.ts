@@ -74,3 +74,35 @@ describe("company_access view", () => {
     expect(access[suspended]).toBe("none");
   });
 });
+
+describe("migration 0016_x402_no_result", () => {
+  it("adds the paid-without-result columns to x402_payments without touching usage links", () => {
+    const { raw } = migratedD1(ALL_MIGRATIONS.filter((m) => m < "0016"));
+    const co = addCompany(raw);
+    run(
+      raw,
+      `INSERT INTO x402_payments (id, payload_hash, request_hash, company_id, network, asset, pay_to, amount_atomic,
+                                  amount_usd_cents, action, channel, status, facilitator)
+       VALUES ('pay_a', 'ph', 'rh', ?, 'eip155:84532', 'usdc', 'to', '500000', 50, 'search_candidates', 'rest', 'settled', 'x402org')`,
+      co,
+    );
+    run(raw, "INSERT INTO usage_events (company_id, channel, action, billing, x402_payment_id, status) VALUES (?, 'rest', 'search_candidates', 'x402', 'pay_a', 200)", co);
+    raw.exec(sql("0016_x402_no_result.sql"));
+    expect(all(raw, "SELECT status, no_result_at, refunded_at FROM x402_payments")).toEqual([
+      { status: "settled", no_result_at: null, refunded_at: null },
+    ]);
+    expect(all(raw, "SELECT x402_payment_id FROM usage_events")).toEqual([{ x402_payment_id: "pay_a" }]);
+    expect(all(raw, "SELECT name FROM schema_migrations WHERE name = '0016_x402_no_result'")).toHaveLength(1);
+  });
+
+  it("finds the audit row of a paid search by its payment id through an index, not by scanning the log", () => {
+    const { raw } = crmDb();
+    const plan = all<{ detail: string }>(
+      raw,
+      `EXPLAIN QUERY PLAN SELECT actor, meta_json FROM audit_log
+        WHERE action = 'candidate.search' AND json_extract(meta_json, '$.payment_id') = ? ORDER BY id LIMIT 1`,
+      "pay_x",
+    ).map((r) => r.detail);
+    expect(plan.join(" | ")).toContain("idx_audit_log_search_payment");
+  });
+});

@@ -5,7 +5,7 @@ import { ACTIONS, type ActionDef } from "@/lib/crm/actions";
 import { crmBase, resolveActor, type ActionContext, type ContextBase } from "@/lib/crm/context";
 import { executeAction } from "@/lib/crm/execute";
 import { can } from "@/lib/crm/permissions";
-import { checkBurst, checkPublicBurst } from "@/lib/crm/quotas";
+import { checkBurst, checkRequestBurst } from "@/lib/crm/quotas";
 import { ActionError } from "@/lib/crm/types";
 import { errorResponse } from "@/lib/x402/http";
 import { mcpError, mcpResult, readPaymentMeta, type ToolResult } from "@/lib/x402/mcp";
@@ -72,8 +72,9 @@ async function callTool(session: McpSession, def: ActionDef, args: unknown, meta
   const now = new Date();
   const ctx: ActionContext = session.agent ? { ...session.agent, now } : guestContext(session, now);
   try {
-    if (def.permission === "public") await checkPublicBurst(ctx.env, session.ip);
-    else await checkBurst(ctx.env, ctx.actor, session.ip);
+    // Кожен HTTP-запит уже пройшов ліміт сплесків (handleMcp). Платний інструмент гостя ще й
+    // у межі гостя x402 (RL_IP, 10/хв на IP), як REST-пошук без ключа.
+    if (!session.agent && def.permission !== "public") await checkBurst(ctx.env, ctx.actor, session.ip);
     const outcome = await executeAction(def.name, args ?? {}, ctx, {
       payment: readPaymentMeta(meta),
       resourceUrl: `mcp://tool/${def.mcp.tool}`,
@@ -117,21 +118,45 @@ const handler = createMcpHandler(
   { route: MCP_ROUTE, allowedHostnames: MCP_HOSTNAMES, allowedOriginHostnames: MCP_HOSTNAMES },
 );
 
-/** Точка входу маршруту app/mcp: ключ перевіряється до MCP, щоб хибний дав HTTP 401. */
+/**
+ * Відповідь на хибний чи відкликаний ключ. Без resource_metadata: OAuth у нас немає. Клієнти на
+ * MCP TypeScript SDK з підтримкою OAuth на будь-який 401 усе одно пробують
+ * /.well-known/oauth-protected-resource (заголовок цього не вимикає), отримують 404 і показують
+ * помилку входу; клієнт без OAuth показує наше тіло помилки (docs/DECISIONS.md, 13.09).
+ */
+const WWW_AUTHENTICATE = 'Bearer realm="nextcryptojob", error="invalid_token", error_description="Send a valid API key: Authorization: Bearer ncj_live_..."';
+
+/** Точка входу маршруту app/mcp: ліміт сплесків і ключ перевіряються до MCP, хибний ключ дає HTTP 401. */
 export async function handleMcp(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
+  try {
+    return await serveMcp(request, requestId);
+  } catch (error) {
+    if (error instanceof ActionError) return errorResponse(error, requestId);
+    // Збій D1 чи ще щось неочікуване: те саме JSON-тіло помилки, що в REST, а не сторінка 500.
+    console.error("mcp: unexpected error", { requestId, error: error instanceof Error ? error.message : String(error) });
+    return errorResponse(new ActionError("internal", 500, "Something went wrong on our side. Try again later."), requestId);
+  }
+}
+
+async function serveMcp(request: Request, requestId: string): Promise<Response> {
   const base = crmBase(requestId);
-  let agent: ActionContext | null = null;
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const authorization = request.headers.get("authorization")?.trim();
-  if (authorization && request.method !== "OPTIONS") {
-    try {
-      agent = await resolveActor(base, { channel: "mcp", authorization });
-    } catch (error) {
-      if (!(error instanceof ActionError)) throw error;
-      return errorResponse(error, requestId, { "WWW-Authenticate": 'Bearer realm="nextcryptojob", error="invalid_token"' });
+  let agent: ActionContext | null = null;
+  if (request.method !== "OPTIONS") {
+    // Кожен запит, і initialize, і tools/list: з ключем у RL_API за ключем, без ключа в RL_PUBLIC за IP.
+    await checkRequestBurst(base.env, { authorization, ip, scope: "public" });
+    if (authorization) {
+      try {
+        agent = await resolveActor(base, { channel: "mcp", authorization });
+      } catch (error) {
+        if (!(error instanceof ActionError)) throw error;
+        return errorResponse(error, requestId, error.status === 401 ? { "WWW-Authenticate": WWW_AUTHENTICATE } : {});
+      }
     }
   }
-  const session: McpSession = { base, requestId, agent, ip: request.headers.get("cf-connecting-ip") ?? "unknown" };
+  const session: McpSession = { base, requestId, agent, ip };
   const response = await handler.fetch(request, {
     authInfo: {
       token: "ncj",

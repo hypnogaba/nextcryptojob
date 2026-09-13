@@ -122,6 +122,8 @@ export interface StoredPayment {
   paymentIdentifier: string | null;
   errorReason: string | null;
   settledAt: string | null;
+  /** Гроші розраховано, а результату немає («Paid without result», 0016); null для решти. */
+  noResultAt: string | null;
 }
 
 export type VerifyResult =
@@ -484,6 +486,38 @@ export async function findStalePayments(db: D1Database, limit = 200): Promise<St
   }));
 }
 
+/**
+ * «Paid without result» (специфікація 7.4): платіж розраховано, а дія впала після settle або її
+ * результат не записався. Рядок лишається 'settled' і з'являється в адмінці /admin/payments, де
+ * адмін вирішує про повернення. Повтор того самого платежу після цього отримує 500, а не 409.
+ * Помилку запису лише пишемо в журнал сервера: відповідь клієнту вже 500 з payment_id.
+ */
+export async function markPaidWithoutResult(db: D1Database, paymentId: string, reason: string): Promise<void> {
+  try {
+    await withD1Retry(() =>
+      db
+        .prepare(
+          `UPDATE x402_payments SET no_result_at = datetime('now'), no_result_reason = ?2
+            WHERE id = ?1 AND status = 'settled' AND no_result_at IS NULL`,
+        )
+        .bind(paymentId, reason.slice(0, 500))
+        .run(),
+    );
+  } catch (error) {
+    console.error("x402: paid-without-result could not be recorded", { paymentId, reason, error: errorText(error) });
+  }
+}
+
+/** Відповідь клієнту на оплачений запит без результату (і на повтор такого платежу). */
+export function paidWithoutResultError(paymentId: string, transaction: string | null): GateError {
+  return {
+    status: 500,
+    code: "internal",
+    message: "Payment was received but the action failed. Contact support with the payment id.",
+    details: { payment_id: paymentId, ...(transaction ? { transaction } : {}) },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // x402ResourceServer з кешем на ізолят Worker
 
@@ -653,7 +687,7 @@ export function createPaymentGate({ db, config, facilitator }: PaymentGateOption
     const row = await db
       .prepare(
         `SELECT id, payload_hash, request_hash, company_id, action, network, status, tx, payer, payment_identifier,
-                error_reason, settled_at
+                error_reason, settled_at, no_result_at
          FROM x402_payments WHERE payment_identifier = ?1`,
       )
       .bind(identifier)
@@ -681,6 +715,7 @@ export function createPaymentGate({ db, config, facilitator }: PaymentGateOption
         paymentIdentifier: row.payment_identifier,
         errorReason: row.error_reason,
         settledAt: row.settled_at,
+        noResultAt: row.no_result_at,
       },
     };
   }
@@ -972,6 +1007,9 @@ export function createPaymentGate({ db, config, facilitator }: PaymentGateOption
         if (verified.kind === "error") return { kind: "error", error: verified.error };
         // Ідемпотентний повтор: effect не запускаємо ніколи.
         const stored = verified.payment;
+        if (stored.status === "settled" && stored.noResultAt) {
+          return { kind: "error", error: paidWithoutResultError(stored.id, stored.tx) };
+        }
         if (stored.status === "settled") return { kind: "replay", payment: stored, settlement: storedSettlement(stored) };
         if (stored.status === "failed") {
           // Той самий платіж уже провалився: повторюємо ту саму відмову, без нової спроби.
@@ -1020,15 +1058,8 @@ export function createPaymentGate({ db, config, facilitator }: PaymentGateOption
         } catch (error) {
           // Оплачено, а дія впала: платіж лишається settled, адмін бачить його в "Paid without result".
           console.error("x402: paid action failed", { paymentId: payment.paymentId, action, error: errorText(error) });
-          return {
-            kind: "error",
-            error: {
-              status: 500,
-              code: "internal",
-              message: "Payment was received but the action failed. Contact support with the payment id.",
-              details: { payment_id: payment.paymentId, transaction: settled.settlement.transaction },
-            },
-          };
+          await markPaidWithoutResult(db, payment.paymentId, `action_failed: ${errorText(error)}`);
+          return { kind: "error", error: paidWithoutResultError(payment.paymentId, settled.settlement.transaction) };
         }
       }
 

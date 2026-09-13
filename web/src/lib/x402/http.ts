@@ -1,4 +1,5 @@
 import type { Outcome } from "@/lib/crm/execute";
+import { rateLimitHeaders } from "@/lib/crm/quotas";
 import type { ActionError } from "@/lib/crm/types";
 import { paymentResponseHeader } from "./server";
 
@@ -45,7 +46,10 @@ export function restResponse(outcome: Outcome, requestId: string): Response {
       return Response.json(result.output, { status: result.status, headers });
     }
     case "payment_required":
-      return Response.json(outcome.body, { status: 402, headers: { ...baseHeaders(requestId), ...outcome.headers } });
+      return Response.json(outcome.body, {
+        status: 402,
+        headers: { ...baseHeaders(requestId), ...(outcome.quota ? rateLimitHeaders(outcome.quota) : {}), ...outcome.headers },
+      });
     case "error":
       return errorResponse(outcome.error, requestId);
   }

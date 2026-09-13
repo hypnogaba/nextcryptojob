@@ -445,21 +445,18 @@ export async function replaySearch(
   paymentId: string,
 ): Promise<SearchResponse | null> {
   const companyId = ctx.company?.id ?? null;
-  const row = companyId
-    ? await ctx.db
-        .prepare(
-          `SELECT meta_json FROM audit_log
-            WHERE actor >= ? AND actor < ? AND action = 'candidate.search'
-              AND json_extract(meta_json, '$.payment_id') = ?
-            ORDER BY id LIMIT 1`,
-        )
-        .bind(`${companyId}:`, `${companyId};`, paymentId)
-        .first<{ meta_json: string }>()
-    : await ctx.db
-        .prepare("SELECT meta_json FROM audit_log WHERE actor = ? AND action = 'candidate.search' ORDER BY id LIMIT 1")
-        .bind(`x402_guest:${paymentId}`)
-        .first<{ meta_json: string }>();
-  if (!row) return null;
+  // Індекс idx_audit_log_search_payment (0016): рядок за id платежу, без перегляду журналу компанії.
+  const row = await ctx.db
+    .prepare(
+      `SELECT actor, meta_json FROM audit_log
+        WHERE action = 'candidate.search' AND json_extract(meta_json, '$.payment_id') = ?
+        ORDER BY id LIMIT 1`,
+    )
+    .bind(paymentId)
+    .first<{ actor: string | null; meta_json: string }>();
+  // Рядок має належати тому самому платнику: компанії цього ключа або гостю з цим платежем.
+  const owner = companyId ? (row?.actor ?? "").startsWith(`${companyId}:`) : row?.actor === `x402_guest:${paymentId}`;
+  if (!row || !owner) return null;
 
   let meta: Record<string, unknown>;
   try {

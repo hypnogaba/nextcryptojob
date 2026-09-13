@@ -70,8 +70,11 @@ export function mcpResult(outcome: Outcome, requestId: string): ToolResult {
         ...(Object.keys(meta).length ? { _meta: meta } : {}),
       };
     }
-    case "payment_required":
-      return mcpPaymentRequired(outcome.body, outcome.settlement ?? undefined);
+    case "payment_required": {
+      const result: ToolResult = mcpPaymentRequired(outcome.body, outcome.settlement ?? undefined);
+      if (outcome.quota) result._meta = { ...(result._meta ?? {}), ...quotaMeta(outcome.quota) };
+      return result;
+    }
     case "error":
       return mcpError(outcome.error, requestId);
   }

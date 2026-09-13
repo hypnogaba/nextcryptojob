@@ -34,6 +34,10 @@ export const APPLIED_AFTER_CRM = [
   "0013_session_method.sql",
   // Доріжка engine (E7): sent і digest_runs. Накочено (за словами controller).
   "0006_digest.sql",
+  // Доріжка web (W7): digest_emails.
+  "0014_digest_email.sql",
+  // Доріжка web (оплата й агенти): «Paid without result» і індекс повтору пошуку. Ще НЕ накочено.
+  "0016_x402_no_result.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

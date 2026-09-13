@@ -2,7 +2,14 @@ import type { FacilitatorClient } from "@x402/core/server";
 import type { PaymentRequired as PaymentRequiredBody, SettleResponse } from "@x402/core/types";
 import { findUsdcMonth } from "@/lib/billing/usdc";
 import { readX402Config, type PaidAction } from "@/lib/x402/config";
-import { createPaymentGate, type GateError, type StoredPayment } from "@/lib/x402/server";
+import { fromSqlTime } from "@/lib/time";
+import {
+  createPaymentGate,
+  markPaidWithoutResult,
+  paidWithoutResultError,
+  type GateError,
+  type StoredPayment,
+} from "@/lib/x402/server";
 import {
   commit,
   prepareAction,
@@ -18,6 +25,7 @@ import {
 } from "./actions";
 import type { ActionContext } from "./context";
 import { findIntroByPayment } from "./intros";
+import { quotaPlan, quotaStateOf, rateLimitHeaders, type QuotaState } from "./quotas";
 import { replaySearch } from "./search";
 import { ActionError, type SearchRequest } from "./types";
 
@@ -37,6 +45,10 @@ import { ActionError, type SearchRequest } from "./types";
  *    ефекту (знайомство, місяць USDC) або до відповіді (пошук) → commit.
  * 6. Ідемпотентний повтор (той самий платіж, payment-identifier і request_hash) →
  *    збережений результат цього платежу; дія вдруге не виконується, облік не пишеться.
+ *    Результату ще немає, а settle свіжий → 409 «ще обробляється, повторіть» (як для броні
+ *    'verified'); settle давній або дія впала → 500 «Paid without result».
+ * 7. Оплачено, а дія впала чи результат не записався → платіж позначено «Paid without result»
+ *    (x402_payments.no_result_at, адмінка /admin/payments), квоту звільнено, клієнт отримує 500 з payment_id.
  */
 
 export interface ExecuteOptions {
@@ -63,6 +75,8 @@ export type Outcome =
       /** PAYMENT-REQUIRED, Cache-Control, PAYMENT-RESPONSE (після невдалого settle). */
       headers: Record<string, string>;
       settlement: SettleResponse | null;
+      /** Денна квота дії (RateLimit-*, `_meta["ncj/quota"]`); null, коли платника ще не видно. */
+      quota: QuotaState | null;
     }
   | { kind: "error"; error: ActionError };
 
@@ -162,41 +176,104 @@ async function paidPath(prepared: PreparedAction, opts: ExecuteOptions): Promise
         const result = await commit(reservation!, out.value);
         return { kind: "ok", result, settlement: out.settlement, replay: false };
       } catch (error) {
-        // Гроші пішли, а облік чи журнал не записались: без відповіді з даними, з id платежу для звірки.
-        console.error("x402: paid action could not be committed", {
-          paymentId: out.payment.paymentId,
-          action: price.action,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return {
-          kind: "error",
-          error: new ActionError("internal", 500, "Payment was received but the result could not be saved. Contact support with the payment id.", {
-            payment_id: out.payment.paymentId,
-            transaction: out.settlement.transaction,
-          }),
-        };
+        // Гроші пішли, а облік чи журнал не записались: без даних, з id платежу; адмін бачить його в /admin/payments.
+        const text = error instanceof Error ? error.message : String(error);
+        console.error("x402: paid action could not be committed", { paymentId: out.payment.paymentId, action: price.action, error: text });
+        await markNoResult(ctx.db, out.payment.paymentId, `commit_failed: ${text}`);
+        await releaseQuietly(reservation!, 500);
+        return { kind: "error", error: fromGate(paidWithoutResultError(out.payment.paymentId, out.settlement.transaction)) };
       }
     }
     case "replay": {
       const stored = await storedResult(prepared, out.payment);
-      if (!stored) {
+      if (stored) {
+        const quota = await currentQuota(prepared, out.payment.payer);
+        return {
+          kind: "ok",
+          result: { ...stored, quota, headers: quota ? rateLimitHeaders(quota) : {} },
+          settlement: out.settlement,
+          replay: true,
+        };
+      }
+      const settledAt = out.payment.settledAt ? fromSqlTime(out.payment.settledAt).getTime() : ctx.now.getTime();
+      if (ctx.now.getTime() - settledAt < IN_FLIGHT_MS) {
+        // Перший запит розрахувався, а результат ще пишеться: той самий 409, що для броні 'verified'.
         return {
           kind: "error",
-          error: new ActionError("internal", 500, "This payment was received, but its result is not available. Contact support with the payment id.", {
+          error: new ActionError("payment_reused", 409, "This payment is still being processed. Retry in a few seconds.", {
             payment_id: out.payment.id,
           }),
         };
       }
-      return { kind: "ok", result: stored, settlement: out.settlement, replay: true };
+      // Розраховано давно, а результату так і немає (процес упав між settle і записом).
+      await markNoResult(ctx.db, out.payment.id, "no_result_after_settle: found on replay");
+      return { kind: "error", error: fromGate(paidWithoutResultError(out.payment.id, out.payment.tx)) };
     }
-    case "payment_required":
+    case "payment_required": {
       if (reservation) await release(reservation, 402);
-      return { kind: "payment_required", body: out.response.body, headers: out.response.headers, settlement: out.settlement ?? null };
+      const quota = await currentQuota(prepared, out.settlement?.payer ?? null);
+      return {
+        kind: "payment_required",
+        body: out.response.body,
+        headers: out.response.headers,
+        settlement: out.settlement ?? null,
+        quota,
+      };
+    }
     case "rejected":
       return { kind: "error", error: out.error };
     case "error":
       if (reservation) await release(reservation, out.error.status);
       return { kind: "error", error: fromGate(out.error) };
+  }
+}
+
+/** Скільки після settle повтор ще чекає на результат першого запиту (далі це «Paid without result»). */
+const IN_FLIGHT_MS = 5 * 60 * 1000;
+
+/**
+ * Оплачено без результату: позначка в x402_payments (адмінка /admin/payments) і бронь квоти
+ * цього платежу, якщо вона лишилась успішною, перестає рахуватись.
+ */
+async function markNoResult(db: D1Database, paymentId: string, reason: string): Promise<void> {
+  await markPaidWithoutResult(db, paymentId, reason);
+  try {
+    await db
+      .prepare("UPDATE usage_events SET status = 500 WHERE x402_payment_id = ? AND status BETWEEN 200 AND 299")
+      .bind(paymentId)
+      .run();
+  } catch (error) {
+    console.error("x402: usage of a paid-without-result payment not released", {
+      paymentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function releaseQuietly(reservation: Reservation, status: number): Promise<void> {
+  try {
+    await release(reservation, status);
+  } catch (error) {
+    console.error("crm: reservation not released", { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+/**
+ * Денна квота дії без запису, для RateLimit-* на 402 і на повторі. Гість без платежу
+ * ще не має адреси платника, тож для нього null.
+ */
+async function currentQuota(prepared: PreparedAction, payer: string | null): Promise<QuotaState | null> {
+  const { def, ctx } = prepared;
+  const name = def.quota?.[0];
+  const plan = quotaPlan(ctx.actor, ctx.company);
+  if (!name || !plan) return null;
+  const subject = ctx.company ? { companyId: ctx.company.id } : payer ? { payer } : null;
+  if (!subject) return null;
+  try {
+    return await quotaStateOf(ctx.db, subject, plan, name, ctx.company?.subscription ?? null, ctx.now);
+  } catch (error) {
+    console.error("crm: quota state not read", { error: error instanceof Error ? error.message : String(error) });
+    return null;
   }
 }
 

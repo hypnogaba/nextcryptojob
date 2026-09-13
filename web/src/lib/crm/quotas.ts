@@ -1,3 +1,4 @@
+import { sha256Hex } from "@/lib/auth/hash";
 import { fromSqlTime, isoTime, sqlTime, startOfUtcDay, startOfUtcMonth } from "@/lib/time";
 import type { Actor, Channel, CompanyInfo, CrmEnv, Plan, SubscriptionInfo } from "./context";
 import { ActionError } from "./types";
@@ -141,6 +142,23 @@ export async function quotaStates(
   return QUOTA_NAMES.map((name, i) =>
     state(name, quotaLimit(plan, name), counts[i].results[0]?.used ?? 0, windows[i], now),
   );
+}
+
+/**
+ * Стан однієї квоти без запису (для RateLimit-* на відповідях, що нічого не бронюють:
+ * 402 і ідемпотентний повтор).
+ */
+export async function quotaStateOf(
+  db: D1Database,
+  subject: QuotaSubject,
+  plan: QuotaPlan,
+  name: QuotaName,
+  subscription: SubscriptionInfo | null,
+  now: Date,
+): Promise<QuotaState> {
+  const window = QUOTA_DEFS[name].window === "day" ? dayWindow(now) : monthWindow(now, subscription);
+  const row = await countStatement(db, subject, QUOTA_DEFS[name].action, window.start).first<{ used: number }>();
+  return state(name, quotaLimit(plan, name), row?.used ?? 0, window, now);
 }
 
 /** Account.quotas: { limit, remaining, resets_at } на кожну квоту. */
@@ -325,9 +343,19 @@ export async function checkBurst(env: CrmEnv, actor: Actor, ip: string): Promise
   await limitOrThrow(binding, key);
 }
 
-/** Публічний search_jobs: 30/хв на IP (RL_PUBLIC, розділ 9). Без прив'язки пропускає. */
-export async function checkPublicBurst(env: CrmEnv, ip: string): Promise<void> {
-  await limitOrThrow(env.RL_PUBLIC, `ip:${ip}`);
+/**
+ * Ліміт сплесків REST і MCP ДО будь-якого читання D1 і тіла запиту: ключ API рахується за
+ * SHA-256 самого ключа (той самий ключ = той самий лічильник, і перебір хибних ключів теж
+ * упирається в межу), без ключа за IP: гість x402 у RL_IP, публічні запити в RL_PUBLIC.
+ */
+export async function checkRequestBurst(
+  env: CrmEnv,
+  request: { authorization: string | null | undefined; ip: string; scope: "guest" | "public" },
+): Promise<void> {
+  const token = /^Bearer\s+(\S+)$/i.exec(request.authorization?.trim() ?? "")?.[1];
+  if (token) return limitOrThrow(env.RL_API, `key:${(await sha256Hex(token)).slice(0, 32)}`);
+  if (request.scope === "public") return limitOrThrow(env.RL_PUBLIC, `ip:${request.ip}`);
+  return limitOrThrow(env.RL_IP, `ip:${request.ip}`);
 }
 
 async function limitOrThrow(binding: RateLimit | undefined, key: string): Promise<void> {

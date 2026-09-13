@@ -3,7 +3,7 @@ import { ACTIONS, type ActionDef } from "@/lib/crm/actions";
 import { crmBase, resolveActor, type ActionContext, type ContextBase } from "@/lib/crm/context";
 import { executeAction } from "@/lib/crm/execute";
 import { can } from "@/lib/crm/permissions";
-import { checkBurst, checkPublicBurst } from "@/lib/crm/quotas";
+import { checkRequestBurst } from "@/lib/crm/quotas";
 import { ActionError } from "@/lib/crm/types";
 import { errorResponse, readPaymentSignature, restResponse } from "@/lib/x402/http";
 
@@ -15,8 +15,9 @@ import { errorResponse, readPaymentSignature, restResponse } from "@/lib/x402/ht
  * мають одні й ті самі дії, а нова дія реєстру відразу має свій маршрут.
  *
  * Запит → вхід дії: параметри шляху + параметри запиту + поля тіла JSON, злиті в
- * один об'єкт (як вхід інструмента MCP). Далі актор (ключ API; без ключа гість x402
- * там, де гостю можна; публічний search_jobs без входу), ліміт сплесків і executeAction.
+ * один об'єкт (як вхід інструмента MCP). Ліміт сплесків іде першим, до тіла й до D1;
+ * далі актор (ключ API; без ключа гість x402 там, де гостю можна; публічний search_jobs
+ * без входу) і executeAction.
  */
 
 export const API_PREFIX = "/api/v1";
@@ -68,11 +69,39 @@ function coerce(value: string, type: string | undefined): unknown {
 const invalidBody = (message: string) =>
   new ActionError("validation_failed", 422, "Some fields are not valid.", { fields: { "(body)": message } });
 
+/** Тіло не більше MAX_BODY_BYTES байтів: Content-Length одразу, потік читаємо лише до межі. */
+async function readText(request: Request): Promise<string> {
+  const tooLarge = () => invalidBody("The request body is too large.");
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) throw tooLarge();
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw invalidBody("The request body is not valid UTF-8.");
+  }
+}
+
 async function readBody(request: Request): Promise<Record<string, unknown>> {
-  const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_BODY_BYTES) throw invalidBody("The request body is too large.");
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw invalidBody("The request body is too large.");
+  const text = await readText(request);
   if (!text.trim()) return {};
   let body: unknown;
   try {
@@ -133,6 +162,12 @@ async function dispatch(request: Request, requestId: string): Promise<Response> 
   }
   const { def } = hit.route;
 
+  // Сплески ДО тіла й ключа: зайвий запит не читає ні тіла, ні D1.
+  const base = crmBase(requestId);
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const authorization = request.headers.get("authorization");
+  await checkRequestBurst(base.env, { authorization, ip, scope: def.permission === "public" ? "public" : "guest" });
+
   const query: Record<string, unknown> = {};
   const types = typesOf(def);
   for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = coerce(value, types.get(key));
@@ -146,22 +181,16 @@ async function dispatch(request: Request, requestId: string): Promise<Response> 
   }
   const input = { ...query, ...body, ...hit.params };
 
-  const base = crmBase(requestId);
-  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const payment = readPaymentSignature(request);
-  let ctx: ActionContext;
-  if (def.permission === "public") {
-    ctx = publicContext(base, requestId);
-    await checkPublicBurst(base.env, ip);
-  } else {
-    ctx = await resolveActor(base, {
-      channel: "rest",
-      authorization: request.headers.get("authorization"),
-      // Без ключа гість x402 лише там, де гостю можна (пошук): так він дізнається ціну з 402.
-      hasPayment: payment !== undefined || can("x402_guest", def.permission),
-    });
-    await checkBurst(base.env, ctx.actor, ip);
-  }
+  const ctx: ActionContext =
+    def.permission === "public"
+      ? publicContext(base, requestId)
+      : await resolveActor(base, {
+          channel: "rest",
+          authorization,
+          // Без ключа гість x402 лише там, де гостю можна (пошук): так він дізнається ціну з 402.
+          hasPayment: payment !== undefined || can("x402_guest", def.permission),
+        });
 
   const outcome = await executeAction(def.name, input, ctx, { payment, resourceUrl: `${url.origin}${url.pathname}` });
   return restResponse(outcome, requestId);

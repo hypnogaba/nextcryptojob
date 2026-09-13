@@ -93,6 +93,39 @@ describe("tools per actor", () => {
     expect(unknown.body.error.code).toBe("invalid_api_key");
   });
 
+  it("a key error names only a Bearer realm: no resource_metadata that would point at an OAuth server", async () => {
+    const res = await mcp(POST, "tools/list", {}, { key: `ncj_live_${"z".repeat(43)}` });
+    const header = res.headers.get("WWW-Authenticate")!;
+    expect(header).toMatch(/^Bearer realm="nextcryptojob", error="invalid_token"/);
+    expect(header).not.toContain("resource_metadata");
+  });
+
+  it("a D1 failure while checking the key is a JSON error body, not an HTML page", async () => {
+    const { key } = await company();
+    vi.spyOn(db.d1, "prepare").mockImplementation(() => {
+      throw new Error("D1_ERROR: Network connection lost.");
+    });
+    const res = await mcp(POST, "tools/list", {}, { key });
+    expect(res.status).toBe(500);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(res.body.error).toMatchObject({ code: "internal", request_id: res.headers.get("X-Request-Id") });
+  });
+
+  it("every MCP request, initialize and tools/list too, counts against the burst limit, per IP without a key", async () => {
+    const seen: string[] = [];
+    ({ db, net } = setupApi({
+      RL_PUBLIC: { limit: async ({ key }: { key: string }) => (seen.push(key), { success: seen.length <= 2 }) } as never,
+    }));
+    const headers = { "cf-connecting-ip": "198.51.100.4" };
+    const init = { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } };
+    expect((await mcp(POST, "initialize", init, { headers })).status).toBe(200);
+    expect((await mcp(POST, "tools/list", {}, { headers })).status).toBe(200);
+    const third = await mcp(POST, "tools/list", {}, { headers });
+    expect(third.status).toBe(429);
+    expect(third.body.error.code).toBe("rate_limited");
+    expect(seen).toEqual(["ip:198.51.100.4", "ip:198.51.100.4", "ip:198.51.100.4"]);
+  });
+
   it("refuses a Host it does not serve (DNS rebinding)", async () => {
     const res = await mcp(POST, "tools/list", {}, { headers: { host: "evil.example" } });
     expect(res.status).toBe(403);
