@@ -105,9 +105,9 @@ export default async function HomePage() {
   return (
     <>
       <section
-        className={`${WRAP} grid items-start gap-10 pt-10 pb-16 sm:pt-16 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 lg:pb-24`}
+        className={`${WRAP} grid items-start gap-10 pt-10 pb-16 sm:pt-16 lg:items-center lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 lg:pb-24`}
       >
-        <div className="lg:pt-6">
+        <div>
           <h1 className="display text-[clamp(3rem,1.5rem+5.4vw,6rem)] leading-[0.88]">Crypto jobs that fit you.</h1>
           <p className="mt-6 max-w-[36ch] text-xl text-ink-muted">
             Answer a short brief and get a few matching crypto jobs right away, then every day by Telegram or email.

@@ -16,8 +16,8 @@ export const metadata: Metadata = { title: "Your jobs", robots: { index: false }
 
 // Текст із чужих дощок буває одним довгим словом: переносимо будь-де, щоб 390 px не роз'їхались.
 const WRAP = "min-w-0 wrap-anywhere";
-const LINK =
-  "-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
+const TEXT_LINK =
+  "inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
 const H2 = "display text-[1.75rem] leading-none";
 const PANEL = "grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5";
 
@@ -148,7 +148,7 @@ function StandOut({ step }: { step: SavedStep }) {
         <Button asChild size="lg" variant="outline" className="w-full sm:w-fit">
           <Link href="/welcome">Stand out</Link>
         </Button>
-        <Link href="/scoring" className={`${LINK} mr-0`}>
+        <Link href="/scoring" className={`${TEXT_LINK} -ml-2`}>
           How scoring works
         </Link>
       </div>
@@ -175,11 +175,11 @@ export default async function JobsPage() {
     <div className="mx-auto grid max-w-3xl gap-10 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="display text-title">Your jobs</h1>
-        <div className="flex flex-wrap gap-x-4">
-          <Link href="/welcome?step=target" className={LINK}>
+        <div className="-mx-2 flex flex-wrap gap-x-2">
+          <Link href="/welcome?step=target" className={TEXT_LINK}>
             Edit your brief
           </Link>
-          <Link href="/settings" className={LINK}>
+          <Link href="/settings" className={TEXT_LINK}>
             Daily jobs settings
           </Link>
         </div>
@@ -220,7 +220,7 @@ export default async function JobsPage() {
                 <p className="font-medium text-ink">{empty.title}</p>
                 <p className={HINT}>{empty.body}</p>
               </div>
-              <Link href={empty.href} className={`${LINK} -ml-2 w-fit`}>
+              <Link href={empty.href} className={`${TEXT_LINK} -ml-2 w-fit`}>
                 {empty.cta}
               </Link>
             </div>
