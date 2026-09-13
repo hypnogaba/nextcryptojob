@@ -101,7 +101,7 @@ describe("aggregateWallets", () => {
     expect(w.tradeGap).toBe(true);
   });
 
-  it("held у релізі 1 не збираємо: null, а не 0", () => {
-    expect(aggregateWallets({ evm: { "0xa": { ethereum: chain({ sent: 1 }) } } }, NOW)!.held).toBeNull();
+  it("v6: held у зведенні немає (поле не збираємо, і воно не має тихо міняти знаменник)", () => {
+    expect(aggregateWallets({ evm: { "0xa": { ethereum: chain({ sent: 1 }) } } }, NOW)!).not.toHaveProperty("held");
   });
 });

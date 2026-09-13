@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "./cli.js";
+import { FORMULA_VERSION } from "./formula/score.js";
 import { runWorker, type WorkerOptions } from "./main.js";
 import { fakeRegistry, hangUntilAborted, sampleGithub } from "./pipeline/fake-registry.js";
 import type { CollectorRegistry } from "./pipeline/registry.js";
@@ -130,7 +131,7 @@ describe("cli", () => {
     const id = addPerson(1);
     const r = await cli(["score-user", id]);
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.out)).toMatchObject({ userId: id, formula: "v5", gaps: [] });
+    expect(JSON.parse(r.out)).toMatchObject({ userId: id, formula: FORMULA_VERSION, gaps: [] });
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM scores WHERE user_id = ?", id)!.n).toBe(15);
   });
 

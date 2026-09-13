@@ -180,6 +180,31 @@ describe("аудитор безпеки: сильніший з двох шлях
   });
 });
 
+describe("трейдер (v6: розмір замість широти)", () => {
+  const oldTs = Math.round(NOW / 1000) - 6 * 365 * 86400;
+  /** Старий гаманець з великою кількістю tx на 4 мережах і `swaps` обмінами на кожній. */
+  const spread = (swaps: number): PersonFacts => ({ evm: { "0xa": Object.fromEntries(["ethereum", "base", "arbitrum", "optimism"]
+    .map((c) => [c, chain({ sent: 3000, swaps, firstTs: oldTs })])) } });
+
+  it("20 угод на 4 мережах лишаються в смузі D навіть із сильним onchain", () => {
+    const r = scorePerson(spread(5), NOW);
+    expect(r.sources.onchain!).toBeGreaterThan(80);
+    expect(r.roles.trader.score!).toBeLessThan(40);
+  });
+
+  it("бал росте з кількістю угод за тих самих мереж", () => {
+    const at = (swaps: number) => scorePerson(spread(swaps), NOW).roles.trader.score!;
+    expect(at(10)).toBeLessThan(at(100));
+    expect(at(100)).toBeLessThan(at(1000));
+  });
+
+  it("breakdown пише formula v6 і ядро trading 90, onchain 10", () => {
+    const b = scorePerson(spread(50), NOW).roles.trader.breakdown;
+    expect(b.formula).toBe("v6");
+    expect(Object.fromEntries(Object.entries(b.core).map(([k, e]) => [k, e.weight]))).toEqual({ trading: 90, onchain: 10 });
+  });
+});
+
 describe("дані й дослідження", () => {
   it("без output: ядро = 0.8·x, причина x_only", () => {
     const r = scorePerson({ x: x() }, NOW).roles.data_research;

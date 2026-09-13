@@ -1,4 +1,4 @@
-// Таблиця ролей формули v5 (docs/contracts.md §1, §4).
+// Таблиця ролей формули v6 (docs/contracts.md §1, §4).
 import type { RoleKey } from "../types.js";
 import type { ScoreSource } from "./sources.js";
 
@@ -39,7 +39,7 @@ export const SCORED_ROLES: Record<ScoredRoleKey, ScoredRole> = {
   marketing_content: { paths: one({ media: 100 }), bonus: { site: 7, onchain: 3 }, anchors: ["media"] },
   creator_kol: { paths: one({ media: 100 }), bonus: { onchain: 5, site: 5 }, anchors: ["media"] },
   community: { paths: one({ x: 100 }), bonus: { onchain: 7, site: 3 }, anchors: ["x"] },
-  trader: { paths: one({ trading: 80, onchain: 20 }), bonus: { x: 5, site: 5 }, anchors: ["trading"] },
+  trader: { paths: one({ trading: 90, onchain: 10 }), bonus: { x: 5, site: 5 }, anchors: ["trading"] },
 };
 
 /** Ролі, яких публічні джерела не доводять: реліз 1 просить CV або портфоліо. */

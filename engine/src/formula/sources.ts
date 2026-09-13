@@ -1,4 +1,4 @@
-// Бали джерел 0–100 (docs/contracts.md §4, формула v5). Джерело без фактів = null, ніколи 0.
+// Бали джерел 0–100 (docs/contracts.md §4, формула v6). Джерело без фактів = null, ніколи 0.
 import type { AuditsFacts, DuneFacts, GithubFacts, PersonFacts, SiteFacts, XFacts, YoutubeFacts } from "../types.js";
 import { combine, lin, logn, maxOf } from "./math.js";
 import { aggregateWallets, type WalletSummary } from "./wallets.js";
@@ -40,11 +40,14 @@ export function srcOnchain(w: WalletSummary | null): number | null {
   return combine([[35, lin(w.ageYears, 6)], [35, logn(w.tx, 10_000)], [30, lin(w.chains.length, 6)]]);
 }
 
+/**
+ * v6: розмір замість широти. Угоди до 10 000 (стеля збирачів), обсяг Hyperliquid до $1 млрд (рівень топів),
+ * мережі угод до 6 (усі мережі збирача). `held` прибрано: null у combine ділив решту на 85 замість 100.
+ */
 export function srcTrading(w: WalletSummary | null): number | null {
   if (!w) return null;
   if (w.trades === 0) return w.tradeGap ? null : 0;
-  return combine([[45, logn(w.trades, 3000)], [20, lin(w.tradeChains.length, 4)], [20, logn(w.hlVolume, 5_000_000)],
-    [15, logn(w.held, 20)]]);
+  return combine([[60, logn(w.trades, 10_000)], [10, lin(w.tradeChains.length, 6)], [30, logn(w.hlVolume, 1_000_000_000)]]);
 }
 
 /**

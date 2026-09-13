@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../cli.js";
-import { type PersonScore, scorePerson } from "../formula/score.js";
+import { FORMULA_VERSION, type PersonScore, scorePerson } from "../formula/score.js";
 import { SqliteD1 } from "../testing/sqlite-d1.js";
 import type { RoleKey, XFacts } from "../types.js";
 import { fakeRegistry, neverResolves, sampleX } from "./fake-registry.js";
@@ -12,7 +12,7 @@ import { band, evaluateGate, parseReferencePeople, type ReferencePerson, runQual
 /** Мінімальний бал людини для чистої звірки: лише одна роль. */
 const fakeScore = (role: RoleKey, score: number | null, gaps: Record<string, string> = {}, reason: string | null = null) => ({
   score: { roles: { [role]: { score, core: score, cover: 100, level: null,
-    breakdown: { formula: "v5", sources: {}, core: {}, bonus: {}, cover: 100, level: null, reason, gaps } } } } as unknown as PersonScore,
+    breakdown: { formula: FORMULA_VERSION, sources: {}, core: {}, bonus: {}, cover: 100, level: null, reason, gaps } } } } as unknown as PersonScore,
   ms: 1,
 });
 const person = (id: string, expected_role: string, expected_band: ReferencePerson["expected_band"]): ReferencePerson =>
@@ -134,7 +134,7 @@ describe("quality-gate: прогін", () => {
     expect(out).toMatch(/quality gate: PASSED/);
     expect(out).not.toMatch(/Synthetic|synthetic_/);
     const [row] = runs();
-    expect(row).toMatchObject({ people: 3, exact_pct: 100, near_pct: 100, unscored: 0, passed: 1, formula_version: "v5" });
+    expect(row).toMatchObject({ people: 3, exact_pct: 100, near_pct: 100, unscored: 0, passed: 1, formula_version: FORMULA_VERSION });
     expect(row!.report_json).not.toMatch(/Synthetic|synthetic_/);
     expect(Object.keys(JSON.parse(row!.report_json).results).sort()).toEqual(["r1", "r2", "r3"].concat("r4").sort());
   });
