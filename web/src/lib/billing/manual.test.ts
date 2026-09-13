@@ -20,7 +20,7 @@ function grant(o: Partial<Parameters<typeof grantManualAccess>[1]> = {}) {
     companyId: company,
     status: "active",
     periodEnd: days(30),
-    note: "Hackathon jury",
+    note: "Partner access",
     adminUserId: admin,
     ...o,
   });
@@ -34,9 +34,9 @@ describe("manual access", () => {
     expect(await hasAccess(db.d1, company)).toBe(true);
 
     const [row] = all(db.raw, "SELECT provider, status, granted_by, note, trial_end FROM subscriptions");
-    expect(row).toEqual({ provider: "manual", status: "active", granted_by: admin, note: "Hackathon jury", trial_end: null });
+    expect(row).toEqual({ provider: "manual", status: "active", granted_by: admin, note: "Partner access", trial_end: null });
     const state = await loadBillingState(db.d1, company);
-    expect(state?.current).toMatchObject({ provider: "manual", status: "active", note: "Hackathon jury" });
+    expect(state?.current).toMatchObject({ provider: "manual", status: "active", note: "Partner access" });
   });
 
   it("a manual trial counts as the trial of the company", async () => {
@@ -52,7 +52,7 @@ describe("manual access", () => {
     expect(res).toMatchObject({ ok: true, closed: 1 });
     const rows = all<{ status: string; note: string }>(db.raw, "SELECT status, note FROM subscriptions ORDER BY rowid");
     expect(rows).toEqual([
-      { status: "canceled", note: "Hackathon jury" },
+      { status: "canceled", note: "Partner access" },
       { status: "active", note: "Extended for partner" },
     ]);
   });
@@ -89,7 +89,7 @@ describe("manual access", () => {
       [`admin:${admin}`, "access.revoke"],
     ]);
     expect(JSON.parse(log[0].meta_json)).toMatchObject({ company_id: company, status: "active" });
-    expect(log[0].meta_json).not.toContain("Hackathon");
+    expect(log[0].meta_json).not.toContain("Partner access");
   });
 
   it("refuses a past end, an end over a year away, an empty note, an unknown company", async () => {

@@ -6,7 +6,7 @@
 Договір із web (типи, формула, черга, змінні оточення): `../docs/contracts.md`.
 
 `src/http.ts` (безпечний fetch) і `src/d1.ts` (D1 через REST API)
-перенесено з NextRole, написано до запуску 14.09.2026. `src/limits.ts` дає бюджет
+перенесено з NextRole. `src/limits.ts` дає бюджет
 запитів на провайдера (єдиний дросель для http і d1), `src/types.ts` типи фактів.
 `src/formula/` формула v5 чистими функціями: `scorePerson(facts)` дає бали джерел і ролей
 з `breakdown_json`. `npm run parity` звіряє її з Python-еталоном `research/harness/score_v5.py`,

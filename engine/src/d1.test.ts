@@ -1,4 +1,4 @@
-// Перенесено з NextRole (написано до запуску 14.09.2026).
+// Перенесено з NextRole.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { D1Client, D1HttpError, D1ThrottledError } from "./d1.js";
 import { __resetLimiters } from "./limits.js";

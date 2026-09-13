@@ -1,4 +1,4 @@
-// Перенесено з NextRole (написано до запуску 14.09.2026).
+// Перенесено з NextRole.
 import type { LookupAddress } from "node:dns";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP, type LookupFunction } from "node:net";

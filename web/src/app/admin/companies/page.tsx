@@ -75,7 +75,7 @@ function GrantForm({ row, now }: { row: AdminCompanyRow; now: Date }) {
             name="note"
             required
             maxLength={MAX_NOTE_LENGTH}
-            placeholder="Hackathon jury, partner, card payments not live yet"
+            placeholder="Partner, reviewer, card payments not live yet"
             className="h-10 rounded-md border border-line-strong bg-surface px-2"
           />
         </label>

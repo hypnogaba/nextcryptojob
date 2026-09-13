@@ -61,12 +61,11 @@ sanity check, not an accuracy claim.
 Payments: Stripe for subscriptions, x402 (Coinbase facilitator) for agents. Sign-in: email codes via
 Cloudflare Email Service and Telegram OpenID Connect.
 
-## Prior work (disclosure)
+## Job data
 
-- Development of this repository started on 2026-09-11, before the hackathon start. The git history
-  shows what was built before and after 2026-09-14.
-- The job listings come from NextRole, an earlier project by the same author. NextCryptoJob reads its
-  jobs database read-only; the scanner itself is not part of this repository.
+The job listings come from NextRole, an earlier project by the same author. NextCryptoJob reads its
+jobs database read-only; the scanner itself is not part of this repository. A few small modules (D1 and
+HTTP clients) were carried over from NextRole and are marked in their headers.
 
 ## Docs
 
