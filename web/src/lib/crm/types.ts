@@ -566,6 +566,7 @@ export const Webhook = z.object({
   failing_since: IsoDateTime.nullable(),
   secret: z.string().nullable(),
 });
+export type Webhook = z.infer<typeof Webhook>;
 
 export const WebhookUpdate = z.strictObject({
   url: z.url().max(500).optional(),

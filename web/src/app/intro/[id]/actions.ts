@@ -14,6 +14,7 @@ import {
 import { ANSWER_TEXT, notifierFromEnv, type NotifyEnv } from "@/lib/crm/notify";
 import { appEnv, db } from "@/lib/db";
 import { isId } from "@/lib/ids";
+import { deliverWebhookSoon } from "@/lib/crm/webhook-kick";
 
 /**
  * Відповідь кандидата зі сторінки /intro/[id] (специфікація CRM, 5.5). Лише POST:
@@ -61,6 +62,8 @@ export async function answerIntroAction(_prev: IntroAnswerState, form: FormData)
   if (!auth) return { done: true, tone: "error", text: ANSWER_TEXT.invalid };
 
   const outcome = await respondToIntro(d, { introId, userId: row.user_id, decision, via: "web", now, notifier });
+  // Вебхук компанії: перша спроба одразу (після відповіді), решту зробить cron.
+  if (outcome.kind === "accepted" || outcome.kind === "declined") deliverWebhookSoon(introId);
   const text = answerText(outcome);
   if (outcome.kind === "accepted" || outcome.kind === "declined") return { done: true, tone: "success", text };
   if (outcome.kind === "no_contact" || outcome.kind === "company_inactive") return { tone: "error", text };

@@ -35,6 +35,7 @@ export type CrmPage =
   | "saved-searches"
   | "team"
   | "billing"
+  | "developers"
   | "settings"
   | "apply";
 

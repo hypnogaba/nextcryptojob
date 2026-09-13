@@ -357,8 +357,13 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
       "GET /usage": 200,
       // Місяць USDC платний навіть з підпискою: без платежу 402 з вимогою.
       "POST /billing/usdc-month": 402,
+      // Вебхук (T11): читання працює; без WEBHOOK_SIGNING_KEY зміна каже, чого бракує (503),
+      // а тест без адреси відповідає 409 webhook_not_set.
+      "GET /webhook": 200,
+      "PUT /webhook": 503,
+      "POST /webhook/test": 409,
     });
-    // Ще не запущені дії (T11, T12): 501 до будь-якої оплати.
+    // Ще не запущені дії (T12): 501 до будь-якої оплати.
     const pending = results.filter((r) => r.status === 501).map((r) => r.op);
     expect(pending.sort()).toEqual(
       [
@@ -367,9 +372,6 @@ describe("every one of the 28 operations answers with the schema of openapi.yaml
         "GET /jobs/{job_id}",
         "PATCH /jobs/{job_id}",
         "POST /jobs/{job_id}/close",
-        "GET /webhook",
-        "PUT /webhook",
-        "POST /webhook/test",
         "GET /public/jobs",
       ].sort(),
     );

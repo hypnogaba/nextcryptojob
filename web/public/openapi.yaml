@@ -1,0 +1,1737 @@
+openapi: 3.1.0
+info:
+  title: NextCryptoJob Company API
+  version: "1.0.0"
+  summary: Search visible crypto candidates, run a hiring pipeline and request intros. Same actions as the web CRM.
+  description: |
+    Design contract for release 1. Spec: docs/specs/2026-09-12-crm-agents-design.md.
+    MCP tools with the same inputs and outputs: docs/api/mcp-tools.md (endpoint /mcp).
+
+    Authentication
+    - API key: `Authorization: Bearer ncj_live_...`. One key belongs to one company. Only the company owner creates keys.
+    - x402: USDC on Base (eip155:8453) or Solana (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp), protocol v2.
+      The server answers 402 with a `PAYMENT-REQUIRED` header (base64 JSON). The client retries with a
+      `PAYMENT-SIGNATURE` header. On success the response carries `PAYMENT-RESPONSE`.
+      Spec: https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/http.md
+    - x402 is a way to pay, not an identity. Without a key, only `searchCandidates` works (anonymous results).
+      Intros always need a key, so the candidate always knows which company asks.
+
+    Who pays what
+    | Caller | searchCandidates | requestIntro | other endpoints |
+    |---|---|---|---|
+    | Key, company with subscription or trial | included (daily quota) | included (quota) | included |
+    | Key, company without subscription | x402 $0.50 | x402 $5.00 | free |
+    | No key (x402 guest) | x402 $0.50 | not allowed (401) | not allowed (401) |
+
+    Privacy rules enforced by every endpoint
+    - Only candidates with `visible_to_companies = 1` and an active `visibility` consent appear.
+    - Never returned: wallet addresses, source handles, raw source facts, email (except as a shared contact after an intro).
+    - No filters on age, gender, nationality or other protected traits. We do not collect them.
+    - Every action on a candidate is written to the audit log.
+
+    Conventions
+    - Times are ISO 8601 UTC with `Z`.
+    - Lists use an opaque `cursor`. Candidate search stops after 10 pages (200 results) per query: no bulk export.
+    - Errors: `{ "error": { "code", "message", "request_id" } }`, except 402 (x402 PaymentRequired object).
+    - An operation that is not live yet answers 501 `not_implemented`, always before any 402: nothing is charged for it.
+    - Every response has `X-Request-Id`. Metered responses have `RateLimit-*` headers for the daily quota of that action.
+  contact:
+    name: NextCryptoJob
+    url: https://nextcryptojob.xyz/developers
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://nextcryptojob.xyz/api/v1
+    description: Production
+  - url: http://localhost:3000/api/v1
+    description: Local development (x402 on Base Sepolia and Solana devnet)
+
+tags:
+  - name: Account
+    description: The company behind the key, access mode, quotas and usage.
+  - name: Candidates
+    description: Anonymous search and profiles of visible candidates.
+  - name: Pipeline
+    description: Kanban cards, stages, tags, notes and history.
+  - name: Intros
+    description: Intro requests and the contact they unlock.
+  - name: Jobs
+    description: Company jobs shown in candidate digests.
+  - name: Saved searches
+    description: Saved filters with daily alerts about new matches.
+  - name: Webhook
+    description: One signed endpoint per company for intro events.
+  - name: Billing
+    description: USDC subscription payment by x402. Card payments run through Stripe Checkout in the web app.
+  - name: Public
+    description: Free endpoints for candidates and their agents. Jobs only, never people.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /me:
+    get:
+      tags: [Account]
+      operationId: getAccount
+      summary: Company, access, quotas left today and this key
+      x-mcp-tool: get_account
+      responses:
+        "200":
+          description: Account
+          headers:
+            X-Request-Id: { $ref: "#/components/headers/X-Request-Id" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /candidates/search:
+    post:
+      tags: [Candidates]
+      operationId: searchCandidates
+      summary: Search visible candidates (one page, up to 20)
+      description: |
+        Returns anonymous summaries. Paid by x402 ($0.50 per page) for guests and for companies
+        without a subscription; included for companies with a subscription or trial.
+        Each page is one billable search. Page 11 and later return `page_cap_reached`.
+      x-mcp-tool: search_candidates
+      x-ncj-action: search_candidates
+      x-x402-price-usd: "0.50"
+      security:
+        - bearerAuth: []
+        - x402: []
+        - bearerAuth: []
+          x402: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SearchRequest" }
+            examples:
+              solidity:
+                value:
+                  filters: { role: engineer, min_score: 60, chains: [base, ethereum], work_mode: remote, wallet_verified: true }
+                  sort: score
+                  limit: 20
+      responses:
+        "200":
+          description: One page of results
+          headers:
+            X-Request-Id: { $ref: "#/components/headers/X-Request-Id" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+            PAYMENT-RESPONSE: { $ref: "#/components/headers/PAYMENT-RESPONSE" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /candidates/{candidate_id}:
+    get:
+      tags: [Candidates]
+      operationId: getCandidate
+      summary: Anonymous candidate profile with score breakdown
+      description: |
+        Free with a key; counts toward the daily profile-view quota. Returns `visibility: hidden`
+        (no profile data) when the candidate is in your pipeline but turned visibility off or is otherwise
+        unavailable to you. Returns 404 when the candidate is not visible and not in your pipeline.
+        `contact` is present only after an accepted intro or a direct-mode reveal.
+      x-mcp-tool: get_candidate
+      x-ncj-action: get_candidate
+      parameters:
+        - $ref: "#/components/parameters/CandidateId"
+      responses:
+        "200":
+          description: Profile
+          headers:
+            X-Request-Id: { $ref: "#/components/headers/X-Request-Id" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/CandidateProfile"
+                  - $ref: "#/components/schemas/HiddenCandidate"
+                discriminator:
+                  propertyName: visibility
+                  mapping:
+                    visible: "#/components/schemas/CandidateProfile"
+                    hidden: "#/components/schemas/HiddenCandidate"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /pipeline:
+    get:
+      tags: [Pipeline]
+      operationId: listPipeline
+      summary: Pipeline cards, newest activity first
+      x-mcp-tool: list_pipeline
+      parameters:
+        - name: stage
+          in: query
+          schema: { $ref: "#/components/schemas/Stage" }
+        - name: tag
+          in: query
+          schema: { type: string, maxLength: 32 }
+        - name: job_id
+          in: query
+          schema: { type: string, pattern: "^job_[A-Za-z0-9]{20}$" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit50"
+      responses:
+        "200":
+          description: Cards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /pipeline/{candidate_id}:
+    put:
+      tags: [Pipeline]
+      operationId: addToPipeline
+      summary: Add a candidate to the pipeline (stage Found). Idempotent.
+      description: Returns 200 with the existing card if it already exists, 201 if created.
+      x-mcp-tool: add_to_pipeline
+      x-ncj-action: add_to_pipeline
+      parameters:
+        - $ref: "#/components/parameters/CandidateId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PipelineAdd" }
+      responses:
+        "200":
+          description: Card already existed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineCard" }
+        "201":
+          description: Card created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineCard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    patch:
+      tags: [Pipeline]
+      operationId: updatePipelineCard
+      summary: Move to another stage and/or change tags or linked job
+      description: |
+        Allowed manual stages: found, interview, hired, declined. `intro_requested` and `contact_shared`
+        are set only by the intro flow. `interview` and `hired` need a shared contact.
+        Moving to `declined` sets `declined_by: company`.
+      x-mcp-tool: update_stage
+      x-ncj-action: update_stage
+      parameters:
+        - $ref: "#/components/parameters/CandidateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PipelineUpdate" }
+      responses:
+        "200":
+          description: Updated card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineCard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      tags: [Pipeline]
+      operationId: removeFromPipeline
+      summary: Remove the card and its notes. A pending intro is canceled first.
+      x-mcp-tool: remove_from_pipeline
+      parameters:
+        - $ref: "#/components/parameters/CandidateId"
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /pipeline/{candidate_id}/events:
+    get:
+      tags: [Pipeline]
+      operationId: listCandidateHistory
+      summary: History of one card (stage changes, notes, tags, intro events), oldest first
+      x-mcp-tool: list_candidate_history
+      parameters:
+        - $ref: "#/components/parameters/CandidateId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit50"
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineEventList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /pipeline/{candidate_id}/notes:
+    post:
+      tags: [Pipeline]
+      operationId: addNote
+      summary: Add a private note to the card (append-only)
+      x-mcp-tool: add_note
+      x-ncj-action: add_note
+      parameters:
+        - $ref: "#/components/parameters/CandidateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NoteCreate" }
+      responses:
+        "201":
+          description: Note event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineEvent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /intros:
+    post:
+      tags: [Intros]
+      operationId: requestIntro
+      summary: Ask a candidate for an intro (or reveal the Telegram handle in direct mode)
+      description: |
+        Approval mode: the candidate gets the request by email or Telegram and has 14 days to accept or decline.
+        Direct mode: the response already has `status: direct` and `contact`.
+        Needs a key. Companies without a subscription pay $5.00 by x402; the payment is settled
+        before the candidate is notified. The card is created or moved to `intro_requested`
+        (or `contact_shared` in direct mode).
+        Limits: one open intro per candidate; none for 90 days after a decline; at most 2 per candidate in 90 days.
+      x-mcp-tool: request_intro
+      x-ncj-action: request_intro
+      x-x402-price-usd: "5.00"
+      security:
+        - bearerAuth: []
+        - bearerAuth: []
+          x402: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntroCreate" }
+      responses:
+        "201":
+          description: Intro created
+          headers:
+            X-Request-Id: { $ref: "#/components/headers/X-Request-Id" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+            PAYMENT-RESPONSE: { $ref: "#/components/headers/PAYMENT-RESPONSE" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Intro" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    get:
+      tags: [Intros]
+      operationId: listIntros
+      summary: List intros; poll with updated_since instead of (or in addition to) the webhook
+      x-mcp-tool: list_intros
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/IntroStatus" }
+        - name: updated_since
+          in: query
+          description: Return intros whose status or webhook state changed after this time.
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit50"
+      responses:
+        "200":
+          description: Intros, most recently updated first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntroList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /intros/{intro_id}:
+    get:
+      tags: [Intros]
+      operationId: getIntro
+      summary: Status of one intro (contact included after acceptance)
+      x-mcp-tool: intro_status
+      parameters:
+        - $ref: "#/components/parameters/IntroId"
+      responses:
+        "200":
+          description: Intro
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Intro" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /intros/{intro_id}/cancel:
+    post:
+      tags: [Intros]
+      operationId: cancelIntro
+      summary: Withdraw a pending intro. No refund of an x402 payment.
+      x-mcp-tool: cancel_intro
+      parameters:
+        - $ref: "#/components/parameters/IntroId"
+      responses:
+        "200":
+          description: Canceled intro
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Intro" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      operationId: listJobs
+      summary: This company's jobs
+      x-mcp-tool: list_jobs
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, open, closed] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit50"
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Jobs]
+      operationId: postJob
+      summary: Create a job (draft or open). Open jobs of subscribed companies appear in candidate digests.
+      description: Needs a subscription or trial (403 subscription_required otherwise). At most 10 open jobs.
+      x-mcp-tool: post_job
+      x-ncj-action: post_job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobCreate" }
+      responses:
+        "201":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /jobs/{job_id}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: One job with digest and click counts
+      x-mcp-tool: get_job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Jobs]
+      operationId: updateJob
+      summary: Edit a job or publish a draft (status open)
+      x-mcp-tool: update_job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobUpdate" }
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /jobs/{job_id}/close:
+    post:
+      tags: [Jobs]
+      operationId: closeJob
+      summary: Close a job. It leaves digests and the X queue at once.
+      x-mcp-tool: close_job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Closed job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /saved-searches:
+    get:
+      tags: [Saved searches]
+      operationId: listSavedSearches
+      summary: Saved searches of this company
+      x-mcp-tool: list_saved_searches
+      responses:
+        "200":
+          description: Saved searches
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SavedSearch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Saved searches]
+      operationId: createSavedSearch
+      summary: Save a search. Current matches are marked as seen; daily alerts report only new ones.
+      x-mcp-tool: create_saved_search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedSearchCreate" }
+      responses:
+        "201":
+          description: Saved search
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedSearch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /saved-searches/{saved_search_id}:
+    patch:
+      tags: [Saved searches]
+      operationId: updateSavedSearch
+      summary: Rename, change filters or switch the daily alert
+      x-mcp-tool: update_saved_search
+      parameters:
+        - $ref: "#/components/parameters/SavedSearchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedSearchUpdate" }
+      responses:
+        "200":
+          description: Saved search
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedSearch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [Saved searches]
+      operationId: deleteSavedSearch
+      summary: Delete a saved search
+      x-mcp-tool: delete_saved_search
+      parameters:
+        - $ref: "#/components/parameters/SavedSearchId"
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /webhook:
+    get:
+      tags: [Webhook]
+      operationId: getWebhook
+      summary: Webhook endpoint settings (the secret is shown only on set or rotate)
+      x-mcp-tool: get_webhook
+      responses:
+        "200":
+          description: Webhook
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [Webhook]
+      operationId: setWebhook
+      summary: Set the URL, enable or disable, or rotate the signing secret
+      x-mcp-tool: set_webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookUpdate" }
+      responses:
+        "200":
+          description: Webhook, with `secret` when it was just created or rotated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /webhook/test:
+    post:
+      tags: [Webhook]
+      operationId: testWebhook
+      summary: Send a signed `ping` event now and return the endpoint's answer
+      x-mcp-tool: test_webhook
+      responses:
+        "200":
+          description: Delivery result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivered, status_code]
+                properties:
+                  delivered: { type: boolean }
+                  status_code: { type: [integer, "null"] }
+                  error: { type: [string, "null"] }
+                  duration_ms: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /usage:
+    get:
+      tags: [Account]
+      operationId: getUsage
+      summary: Calls and x402 spend per day and action
+      x-mcp-tool: get_usage
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Usage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /billing/usdc-month:
+    post:
+      tags: [Billing]
+      operationId: buyUsdcMonth
+      summary: Pay 100 USDC by x402 for 30 days of subscription access
+      description: |
+        Extends access from the later of now and the current USDC period end. Needs a key.
+        This is how companies pay in USDC in release 1 (Stripe stablecoin payments are not available to EU sellers yet).
+      x-mcp-tool: buy_usdc_month
+      x-ncj-action: buy_usdc_month
+      x-x402-price-usd: "100.00"
+      security:
+        - bearerAuth: []
+          x402: []
+      responses:
+        "200":
+          description: Access extended
+          headers:
+            PAYMENT-RESPONSE: { $ref: "#/components/headers/PAYMENT-RESPONSE" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsdcMonthResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /public/jobs:
+    get:
+      tags: [Public]
+      operationId: searchJobs
+      summary: Public crypto job search for candidates and their agents (jobs only, no people)
+      description: Free, no auth. 30 requests per minute per IP. Same data as the MCP tool `search_jobs`.
+      x-mcp-tool: search_jobs
+      security: []
+      parameters:
+        - name: q
+          in: query
+          description: Free text over title, company and tags
+          schema: { type: string, maxLength: 100 }
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/RoleKey" }
+        - name: work_mode
+          in: query
+          schema: { type: string, enum: [remote, city] }
+        - name: city
+          in: query
+          schema: { type: string, maxLength: 80 }
+        - name: salary_min
+          in: query
+          description: Only jobs whose top of range is at or above this (same currency only)
+          schema: { type: integer, minimum: 0 }
+        - name: currency
+          in: query
+          schema: { type: string, pattern: "^[A-Z]{3}$" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit20"
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicJobList" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+webhooks:
+  intro.accepted:
+    post:
+      summary: The candidate accepted. `data.intro.contact` holds the Telegram handle or email.
+      operationId: onIntroAccepted
+      parameters:
+        - $ref: "#/components/parameters/WebhookSignature"
+        - $ref: "#/components/parameters/WebhookEventId"
+        - $ref: "#/components/parameters/WebhookEventType"
+        - $ref: "#/components/parameters/WebhookAttempt"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntroWebhookEvent" }
+            example:
+              id: evt_int_4Q2mZ8yHqR1vB7nK3xLpD_accepted
+              type: intro.accepted
+              created_at: "2026-09-30T10:15:00Z"
+              api_version: "2026-09-12"
+              company_id: co_8fK2mQ9xLp3sV7nB1zRt
+              data:
+                intro:
+                  intro_id: int_4Q2mZ8yHqR1vB7nK3xLpD
+                  candidate_id: 3f9a1c2e-7b4d-4e8a-9c1f-2d6b8e0a5c47
+                  status: accepted
+                  mode: approval
+                  role: engineer
+                  job_id: job_Z1x2C3v4B5n6M7a8S9d0
+                  message: "We are hiring a Solidity engineer for our lending protocol. Open to a 20 minute call?"
+                  created_at: "2026-09-28T09:00:00Z"
+                  expires_at: "2026-10-12T09:00:00Z"
+                  responded_at: "2026-09-30T10:14:58Z"
+                  requested_via: rest
+                  candidate_notified: true
+                  contact: { kind: telegram, value: "@alice_eth", shared_at: "2026-09-30T10:14:58Z", via: intro }
+                  webhook: { state: pending, attempts: 0, last_error: null }
+      responses:
+        "2XX": { description: Delivered. Any other answer or no answer in 10 s is retried. }
+  intro.declined:
+    post:
+      summary: The candidate declined. No contact. The card moves to Declined.
+      operationId: onIntroDeclined
+      parameters:
+        - $ref: "#/components/parameters/WebhookSignature"
+        - $ref: "#/components/parameters/WebhookEventId"
+        - $ref: "#/components/parameters/WebhookEventType"
+        - $ref: "#/components/parameters/WebhookAttempt"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntroWebhookEvent" }
+      responses:
+        "2XX": { description: Delivered }
+  intro.expired:
+    post:
+      summary: No answer in 14 days. The card moves back to Found.
+      operationId: onIntroExpired
+      parameters:
+        - $ref: "#/components/parameters/WebhookSignature"
+        - $ref: "#/components/parameters/WebhookEventId"
+        - $ref: "#/components/parameters/WebhookEventType"
+        - $ref: "#/components/parameters/WebhookAttempt"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntroWebhookEvent" }
+      responses:
+        "2XX": { description: Delivered }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: "ncj_live_ + 43 base62 characters"
+      description: Company API key from Settings > Developers. Stored only as SHA-256 on our side.
+    x402:
+      type: apiKey
+      in: header
+      name: PAYMENT-SIGNATURE
+      description: |
+        x402 v2 payment. Base64 of a PaymentPayload for one of the `accepts` entries from the 402 response.
+        Schemes: `exact` on eip155:8453 (USDC 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) and
+        solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp (USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v).
+        One payment pays for exactly one request. A reused payload returns 409 `payment_reused`.
+        Optional idempotency: the `payment-identifier` extension.
+        https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md
+
+  headers:
+    X-Request-Id:
+      description: Unique id of this request, also in error bodies and the audit log.
+      schema: { type: string }
+    RateLimit-Limit:
+      description: Daily quota for this action (UTC day).
+      schema: { type: integer }
+    RateLimit-Remaining:
+      description: Calls left today for this action.
+      schema: { type: integer }
+    RateLimit-Reset:
+      description: Seconds until the daily quota resets (00:00 UTC).
+      schema: { type: integer }
+    Retry-After:
+      description: Seconds to wait before retrying.
+      schema: { type: integer }
+    PAYMENT-REQUIRED:
+      description: Base64 of the x402 v2 PaymentRequired object (same JSON as the 402 body).
+      schema:
+        type: string
+        contentEncoding: base64
+        contentMediaType: application/json
+        contentSchema: { $ref: "#/components/schemas/PaymentRequired" }
+    PAYMENT-RESPONSE:
+      description: Base64 of the x402 v2 SettlementResponse. Present on paid responses (200/201) and on settlement failures (402).
+      schema:
+        type: string
+        contentEncoding: base64
+        contentMediaType: application/json
+        contentSchema: { $ref: "#/components/schemas/SettlementResponse" }
+
+  parameters:
+    CandidateId:
+      name: candidate_id
+      in: path
+      required: true
+      description: Pseudonymous candidate id from search results.
+      schema: { type: string, format: uuid }
+    IntroId:
+      name: intro_id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^int_[A-Za-z0-9]{20}$" }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^job_[A-Za-z0-9]{20}$" }
+    SavedSearchId:
+      name: saved_search_id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^ss_[A-Za-z0-9]{20}$" }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from `next_cursor`.
+      schema: { type: string, maxLength: 512 }
+    Limit20:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 20, default: 20 }
+    Limit50:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+    WebhookSignature:
+      name: NCJ-Signature
+      in: header
+      required: true
+      description: |
+        `t=<unix seconds>,v1=<hex HMAC-SHA256(secret, t + "." + raw body)>`. Reject if |now - t| > 300 s.
+        Compare in constant time. During a secret rotation, both old and new signatures are sent for 24 h
+        (`v1=<new>,v1=<old>`).
+      schema: { type: string, example: "t=1727691300,v1=5f2b9c...e1" }
+    WebhookEventId:
+      name: NCJ-Event-Id
+      in: header
+      required: true
+      description: Stable per event (`evt_<intro_id>_<status>`). Use it to drop duplicates.
+      schema: { type: string }
+    WebhookEventType:
+      name: NCJ-Event-Type
+      in: header
+      required: true
+      schema: { type: string, enum: [intro.accepted, intro.declined, intro.expired, ping] }
+    WebhookAttempt:
+      name: NCJ-Delivery-Attempt
+      in: header
+      required: true
+      description: 1 for the first try. Retries after 1 min, 5 min, 30 min, 2 h, 12 h (6 tries in total).
+      schema: { type: integer, minimum: 1, maximum: 6 }
+
+  responses:
+    Unauthorized:
+      description: |
+        Missing or invalid key. Codes: `unauthorized`, `invalid_api_key`, `key_revoked`, `key_required`
+        (the action needs a company identity, x402 alone is not enough).
+      headers:
+        X-Request-Id: { $ref: "#/components/headers/X-Request-Id" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Codes: `company_not_active` (pending review, suspended, rejected or closed), `subscription_required`,
+        `trial_limit` (the action is not in the trial), `quota_exceeded` (monthly quota, see `/me`).
+        `forbidden` (the team role cannot do this, for example a member creating API keys) comes only from the
+        web app: an API key acts for the company and has no forbidden action among these operations.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Codes `not_found`, `candidate_not_available` (not visible and not in your pipeline).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: |
+        Codes: `intro_already_open`, `intro_cooldown` (`details.retry_after` date), `intro_not_pending`,
+        `invalid_stage_transition`, `contact_not_shared`, `payment_reused`, `page_cap_reached`,
+        `candidate_not_visible` (new intros and new data need visibility), `webhook_not_set`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationFailed:
+      description: Code `validation_failed`; `details.fields` maps field paths to messages.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Code `rate_limited` (burst limit, per minute) or `daily_quota_exceeded`.
+      headers:
+        Retry-After: { $ref: "#/components/headers/Retry-After" }
+        RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+        RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+        RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotConfigured:
+      description: 'Code `not_configured`; the message names the missing setting, for example "not configured: WEBHOOK_SIGNING_KEY".'
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PaymentRequired:
+      description: |
+        x402 v2. The `PAYMENT-REQUIRED` header is canonical; the body repeats the same object for humans and
+        simple clients. After a failed settlement the response also carries `PAYMENT-RESPONSE`
+        with `success: false` and no data.
+      headers:
+        PAYMENT-REQUIRED: { $ref: "#/components/headers/PAYMENT-REQUIRED" }
+        PAYMENT-RESPONSE: { $ref: "#/components/headers/PAYMENT-RESPONSE" }
+        Cache-Control:
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PaymentRequired" }
+          example:
+            x402Version: 2
+            error: "PAYMENT-SIGNATURE header is required"
+            resource:
+              url: "https://nextcryptojob.xyz/api/v1/candidates/search"
+              description: "NextCryptoJob candidate search, one page of up to 20 results"
+              mimeType: application/json
+              serviceName: NextCryptoJob
+            accepts:
+              - scheme: exact
+                network: "eip155:8453"
+                amount: "500000"
+                asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+                payTo: "0x0000000000000000000000000000000000000000"
+                maxTimeoutSeconds: 60
+                extra: { name: "USD Coin", version: "2" }
+              - scheme: exact
+                network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+                amount: "500000"
+                asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                payTo: "NcjPayToSolanaAddress11111111111111111111111"
+                maxTimeoutSeconds: 60
+                extra: { feePayer: "FacilitatorFeePayerFromSupported1111111111111" }
+            extensions:
+              payment-identifier:
+                info: { required: false }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              enum:
+                - unauthorized
+                - invalid_api_key
+                - key_revoked
+                - key_required
+                - company_not_active
+                - subscription_required
+                - trial_limit
+                - quota_exceeded
+                - daily_quota_exceeded
+                - rate_limited
+                - not_found
+                - candidate_not_available
+                - candidate_not_visible
+                - intro_already_open
+                - intro_cooldown
+                - intro_not_pending
+                - invalid_stage_transition
+                - contact_not_shared
+                - page_cap_reached
+                - payment_reused
+                - webhook_not_set
+                - validation_failed
+                - not_configured
+                - internal
+                - not_implemented
+                - forbidden
+            message: { type: string, description: "English, human readable, never contains an em dash." }
+            request_id: { type: string }
+            details: { type: object, additionalProperties: true }
+
+    PaymentRequired:
+      type: object
+      description: x402 v2 PaymentRequired (spec section 5.1).
+      required: [x402Version, resource, accepts]
+      properties:
+        x402Version: { type: integer, const: 2 }
+        error: { type: string }
+        resource:
+          type: object
+          required: [url]
+          properties:
+            url: { type: string }
+            description: { type: string }
+            mimeType: { type: string }
+            serviceName: { type: string, maxLength: 32 }
+        accepts:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PaymentRequirements" }
+        extensions: { type: object, additionalProperties: true }
+    PaymentRequirements:
+      type: object
+      required: [scheme, network, amount, asset, payTo, maxTimeoutSeconds]
+      properties:
+        scheme: { type: string, const: exact }
+        network: { type: string, enum: ["eip155:8453", "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"] }
+        amount: { type: string, description: "Atomic units. USDC has 6 decimals: $0.50 = 500000, $5 = 5000000, $100 = 100000000." }
+        asset: { type: string }
+        payTo: { type: string }
+        maxTimeoutSeconds: { type: integer }
+        extra:
+          type: object
+          description: "EVM: {name, version} of the USDC EIP-712 domain. Solana: {feePayer}."
+          additionalProperties: true
+    SettlementResponse:
+      type: object
+      description: Decoded `PAYMENT-RESPONSE` header (spec section 5.4).
+      required: [success, transaction, network]
+      properties:
+        success: { type: boolean }
+        transaction: { type: string }
+        network: { type: string }
+        payer: { type: string }
+        amount: { type: string }
+        errorReason: { type: string }
+
+    RoleKey:
+      type: string
+      description: docs/contracts.md section 1. The last five are not scored in release 1.
+      enum: [engineer, security_auditor, devrel, data_research, product_manager, bd, marketing_content,
+             creator_kol, community, trader, designer, operations_support, finance, legal_compliance, hr_recruiting]
+    Chain:
+      type: string
+      enum: [ethereum, base, arbitrum, optimism, solana, hyperliquid]
+    Stage:
+      type: string
+      enum: [found, intro_requested, contact_shared, interview, hired, declined]
+    IntroStatus:
+      type: string
+      enum: [pending, accepted, declined, expired, canceled, direct]
+    SourceKey:
+      type: string
+      description: Score sources of formula v5 (docs/contracts.md section 4). `audits` (Sherlock) and `dune` (Spellbook) came with v5.
+      enum: [gh_eng, gh_builder, x, yt, media, output, onchain, trading, site, audits, dune]
+
+    SearchFilters:
+      type: object
+      additionalProperties: false
+      properties:
+        role:
+          $ref: "#/components/schemas/RoleKey"
+          description: Candidates who chose this role. Without it, each candidate is ranked by their best chosen role.
+        min_score: { type: integer, minimum: 0, maximum: 100, description: Excludes unscored candidates. }
+        min_level: { type: integer, minimum: 1, maximum: 10 }
+        max_level: { type: integer, minimum: 1, maximum: 10 }
+        chains:
+          type: array
+          maxItems: 6
+          uniqueItems: true
+          description: Candidate is active on at least one of these.
+          items: { $ref: "#/components/schemas/Chain" }
+        min_onchain_years: { type: integer, enum: [1, 2, 4, 6] }
+        work_mode: { type: string, enum: [remote, city] }
+        city: { type: string, maxLength: 80, description: Required when work_mode is city. Exact city match. }
+        x_verified: { type: boolean }
+        wallet_verified: { type: boolean, description: At least one wallet verified by signature. }
+        min_coverage: { type: integer, minimum: 0, maximum: 100 }
+        contact_direct: { type: boolean, description: Only candidates whose Telegram handle is shown without approval. }
+        exclude_in_pipeline: { type: boolean, default: false }
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        filters: { $ref: "#/components/schemas/SearchFilters" }
+        sort:
+          type: string
+          enum: [score, level, coverage, newest]
+          default: score
+          description: "Descending. Unscored candidates always come after scored ones. `newest` = most recently became visible."
+        limit: { type: integer, minimum: 1, maximum: 20, default: 20 }
+        cursor: { type: string, maxLength: 512 }
+    SearchResponse:
+      type: object
+      required: [data, next_cursor, page]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/CandidateSummary" }
+        next_cursor: { type: [string, "null"] }
+        page: { type: integer, minimum: 1, maximum: 10 }
+        page_cap_reached: { type: boolean }
+        empty_reason:
+          type: [string, "null"]
+          description: Set only when `data` is empty on page 1. Says why, so zero is never silent.
+          enum: [scores_not_published, no_visible_candidates_for_role, filters_too_narrow, null]
+        role_visible_count:
+          type: [integer, "null"]
+          description: Visible candidates with the requested role, before other filters. Only when `empty_reason` is set.
+
+    RoleScore:
+      type: object
+      required: [role, score, level, coverage, unscored_reason]
+      properties:
+        role: { $ref: "#/components/schemas/RoleKey" }
+        score: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        level: { type: [integer, "null"], minimum: 1, maximum: 10 }
+        coverage: { type: [integer, "null"], minimum: 0, maximum: 100, description: Share of the role's core weight with connected sources. }
+        unscored_reason:
+          type: [string, "null"]
+          enum: [missing_anchor, needs_cv, needs_portfolio, not_published, pending, null]
+    ScoreBreakdown:
+      type: object
+      description: Source scores only (0 to 100). Never raw facts such as follower counts or transaction counts.
+      required: [core, bonus, gaps, formula_version, updated_at]
+      properties:
+        core:
+          type: array
+          items:
+            type: object
+            required: [source, label, weight, value]
+            properties:
+              source: { $ref: "#/components/schemas/SourceKey" }
+              label: { type: string, examples: ["Open-source engineering (GitHub)"] }
+              weight: { type: integer }
+              value: { type: [integer, "null"], description: "null = not connected or a data gap (never shown as 0)" }
+        bonus:
+          type: array
+          items:
+            type: object
+            required: [source, label, max, value]
+            properties:
+              source: { $ref: "#/components/schemas/SourceKey" }
+              label: { type: string }
+              max: { type: integer }
+              value: { type: [integer, "null"] }
+        gaps:
+          type: array
+          items:
+            type: object
+            required: [source, label]
+            properties:
+              source: { type: string }
+              label: { type: string, examples: ["Solana data unavailable right now"] }
+        formula_version: { type: string, examples: [v4] }
+        updated_at: { type: string, format: date-time }
+    RoleScoreDetailed:
+      allOf:
+        - $ref: "#/components/schemas/RoleScore"
+        - type: object
+          required: [breakdown]
+          properties:
+            breakdown:
+              description: null when the role is not scored or its formula has not passed the quality gate yet.
+              oneOf: [{ $ref: "#/components/schemas/ScoreBreakdown" }, { type: "null" }]
+    Badges:
+      type: object
+      required: [x_verified, wallet, github_linked, youtube_linked, site_linked]
+      properties:
+        x_verified: { type: boolean }
+        wallet: { type: string, enum: [signature_verified, not_signature_verified, none] }
+        github_linked: { type: boolean }
+        youtube_linked: { type: boolean }
+        site_linked: { type: boolean }
+    CandidateSummary:
+      type: object
+      required: [candidate_id, visibility, label, headline, roles, work, salary_floor, chains, onchain_years, badges, contact_mode]
+      properties:
+        candidate_id: { type: string, format: uuid }
+        visibility: { type: string, const: visible }
+        label: { type: string, description: "Short display label, e.g. \"#3F9A1C\". Not a name.", examples: ["#3F9A1C"] }
+        headline: { $ref: "#/components/schemas/RoleScore" }
+        roles:
+          type: array
+          description: Only roles the candidate chose.
+          items: { $ref: "#/components/schemas/RoleScore" }
+        work:
+          type: object
+          required: [modes, city]
+          properties:
+            modes:
+              type: array
+              items: { type: string, enum: [remote, city] }
+            city: { type: [string, "null"] }
+        salary_floor:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [amount, currency]
+              properties:
+                amount: { type: integer }
+                currency: { type: string }
+        chains:
+          type: array
+          items: { $ref: "#/components/schemas/Chain" }
+        onchain_years: { type: [integer, "null"], enum: [0, 1, 2, 4, 6, null], description: Bucket floor. }
+        badges: { $ref: "#/components/schemas/Badges" }
+        contact_mode: { type: string, enum: [approval, direct], description: "direct = Telegram handle shown without approval" }
+        pipeline:
+          description: Only for callers with a key. null when not in your pipeline.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [stage, tags]
+              properties:
+                stage: { $ref: "#/components/schemas/Stage" }
+                tags: { type: array, items: { type: string } }
+    CandidateProfile:
+      allOf:
+        - $ref: "#/components/schemas/CandidateSummary"
+        - type: object
+          required: [roles_detailed, intro, contact]
+          properties:
+            roles_detailed:
+              type: array
+              items: { $ref: "#/components/schemas/RoleScoreDetailed" }
+            intro:
+              description: Latest intro from your company, if any.
+              oneOf: [{ $ref: "#/components/schemas/Intro" }, { type: "null" }]
+            contact:
+              oneOf: [{ $ref: "#/components/schemas/Contact" }, { type: "null" }]
+    HiddenCandidate:
+      type: object
+      description: The candidate is in your pipeline but no longer visible to you. Your own notes stay; no new data.
+      required: [candidate_id, visibility, label, notice, pipeline, contact]
+      properties:
+        candidate_id: { type: string, format: uuid }
+        visibility: { type: string, const: hidden }
+        label: { type: string }
+        notice: { type: string, const: "Candidate is no longer visible" }
+        pipeline:
+          type: object
+          required: [stage, tags]
+          properties:
+            stage: { $ref: "#/components/schemas/Stage" }
+            tags: { type: array, items: { type: string } }
+        contact:
+          description: Stays if it was shared before.
+          oneOf: [{ $ref: "#/components/schemas/Contact" }, { type: "null" }]
+    Contact:
+      type: object
+      required: [kind, value, shared_at, via]
+      properties:
+        kind: { type: string, enum: [telegram, email] }
+        value: { type: string, examples: ["@alice_eth"] }
+        shared_at: { type: string, format: date-time }
+        via: { type: string, enum: [intro, direct] }
+
+    PipelineAdd:
+      type: object
+      additionalProperties: false
+      properties:
+        role: { $ref: "#/components/schemas/RoleKey" }
+        job_id: { type: string, pattern: "^job_[A-Za-z0-9]{20}$" }
+        tags:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 32 }
+    PipelineUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        stage: { type: string, enum: [found, interview, hired, declined] }
+        tags:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 32 }
+        job_id: { type: [string, "null"], pattern: "^job_[A-Za-z0-9]{20}$" }
+    PipelineCard:
+      type: object
+      required: [candidate_id, label, visibility, stage, declined_by, tags, note_count, role, job_id, headline, contact, open_intro, created_at, updated_at, stage_changed_at]
+      properties:
+        candidate_id: { type: string, format: uuid }
+        label: { type: string }
+        visibility: { type: string, enum: [visible, hidden] }
+        stage: { $ref: "#/components/schemas/Stage" }
+        declined_by: { type: [string, "null"], enum: [candidate, company, null] }
+        tags: { type: array, items: { type: string } }
+        note_count: { type: integer }
+        role: { oneOf: [{ $ref: "#/components/schemas/RoleKey" }, { type: "null" }] }
+        job_id: { type: [string, "null"] }
+        headline:
+          description: null when hidden.
+          oneOf: [{ $ref: "#/components/schemas/RoleScore" }, { type: "null" }]
+        contact: { oneOf: [{ $ref: "#/components/schemas/Contact" }, { type: "null" }] }
+        open_intro:
+          description: Pending intro, if any.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [intro_id, expires_at]
+              properties:
+                intro_id: { type: string }
+                expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        stage_changed_at: { type: string, format: date-time }
+    PipelineList:
+      type: object
+      required: [data, next_cursor, counts]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineCard" }
+        next_cursor: { type: [string, "null"] }
+        counts:
+          type: object
+          description: Cards per stage for the whole pipeline.
+          additionalProperties: { type: integer }
+    PipelineEvent:
+      type: object
+      required: [id, kind, created_at, actor]
+      properties:
+        id: { type: integer }
+        kind:
+          type: string
+          enum: [added, stage_changed, note, tags_changed, job_linked, intro_requested, intro_accepted, intro_declined,
+                 intro_expired, intro_canceled, contact_shared, visibility_lost, visibility_restored]
+        from_stage: { oneOf: [{ $ref: "#/components/schemas/Stage" }, { type: "null" }] }
+        to_stage: { oneOf: [{ $ref: "#/components/schemas/Stage" }, { type: "null" }] }
+        body: { type: [string, "null"] }
+        meta: { type: [object, "null"], additionalProperties: true }
+        actor:
+          type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [member, agent, candidate, system] }
+            name: { type: [string, "null"], description: "Member display name or API key name. null for candidate and system." }
+        created_at: { type: string, format: date-time }
+    PipelineEventList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineEvent" }
+        next_cursor: { type: [string, "null"] }
+    NoteCreate:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+
+    IntroCreate:
+      type: object
+      additionalProperties: false
+      required: [candidate_id, message]
+      properties:
+        candidate_id: { type: string, format: uuid }
+        message:
+          type: string
+          minLength: 20
+          maxLength: 600
+          description: Plain text shown to the candidate. Links are allowed but not clickable in Telegram previews.
+        role: { $ref: "#/components/schemas/RoleKey" }
+        job_id: { type: string, pattern: "^job_[A-Za-z0-9]{20}$", description: "One of your open jobs, shown to the candidate." }
+        hiring_for:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: 'Required for agencies (422 otherwise): the client you recruit for, or "Confidential client". Shown to the candidate.'
+    Intro:
+      type: object
+      required: [intro_id, candidate_id, status, mode, message, role, job_id, created_at, expires_at, responded_at, requested_via, contact, webhook]
+      properties:
+        intro_id: { type: string }
+        candidate_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/IntroStatus" }
+        mode: { type: string, enum: [approval, direct] }
+        message: { type: string }
+        hiring_for: { type: [string, "null"] }
+        role: { oneOf: [{ $ref: "#/components/schemas/RoleKey" }, { type: "null" }] }
+        job_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        responded_at: { type: [string, "null"], format: date-time }
+        requested_via: { type: string, enum: [web, rest, mcp] }
+        candidate_notified: { type: boolean, description: false while we could not reach the candidate yet. }
+        contact:
+          description: Only when status is accepted or direct.
+          oneOf: [{ $ref: "#/components/schemas/Contact" }, { type: "null" }]
+        webhook:
+          type: object
+          required: [state]
+          properties:
+            state: { type: string, enum: [none, pending, delivered, failed] }
+            attempts: { type: integer }
+            last_error: { type: [string, "null"] }
+    IntroList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Intro" }
+        next_cursor: { type: [string, "null"] }
+    IntroWebhookEvent:
+      type: object
+      required: [id, type, created_at, api_version, company_id, data]
+      properties:
+        id: { type: string, description: "evt_<intro_id>_<status>" }
+        type: { type: string, enum: [intro.accepted, intro.declined, intro.expired] }
+        created_at: { type: string, format: date-time }
+        api_version: { type: string, const: "2026-09-12" }
+        company_id: { type: string }
+        data:
+          type: object
+          required: [intro]
+          properties:
+            intro: { $ref: "#/components/schemas/Intro" }
+
+    JobBase:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        roles:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/RoleKey" }
+        work_mode:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [remote, city] }
+        city: { type: [string, "null"], maxLength: 80 }
+        country: { type: [string, "null"], pattern: "^[A-Z]{2}$" }
+        salary:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [currency, period]
+              properties:
+                min: { type: [integer, "null"], minimum: 0 }
+                max: { type: [integer, "null"], minimum: 0 }
+                currency: { type: string, pattern: "^[A-Z]{3}$" }
+                period: { type: string, enum: [year, month] }
+        apply_url: { type: [string, "null"], format: uri, description: "https:// or mailto:" }
+        tags:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 32 }
+    JobCreate:
+      allOf:
+        - $ref: "#/components/schemas/JobBase"
+        - type: object
+          required: [title, roles, work_mode]
+          properties:
+            status: { type: string, enum: [draft, open], default: draft }
+            post_on_x: { type: boolean, default: false, description: Queue a post for the @nextcryptojob X account (reviewed by NextCryptoJob). }
+    JobUpdate:
+      allOf:
+        - $ref: "#/components/schemas/JobBase"
+        - type: object
+          properties:
+            status: { type: string, enum: [draft, open], description: Use /close to close. }
+            post_on_x: { type: boolean }
+    Job:
+      allOf:
+        - $ref: "#/components/schemas/JobBase"
+        - type: object
+          required: [job_id, status, title, roles, work_mode, created_at, updated_at, published_at, expires_at, closed_at, live, x_post, stats, public_url]
+          properties:
+            job_id: { type: string }
+            status: { type: string, enum: [draft, open, closed] }
+            live: { type: boolean, description: "true when open, not expired, not hidden and the company has a subscription (shown in digests)." }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+            published_at: { type: [string, "null"], format: date-time }
+            expires_at: { type: [string, "null"], format: date-time }
+            closed_at: { type: [string, "null"], format: date-time }
+            public_url: { type: [string, "null"], description: "https://nextcryptojob.xyz/jobs/<job_id> while live" }
+            x_post:
+              type: object
+              required: [state]
+              properties:
+                state: { type: string, enum: [none, queued, posted, skipped] }
+                url: { type: [string, "null"] }
+            stats:
+              type: object
+              required: [digest_shown, apply_clicks]
+              properties:
+                digest_shown: { type: integer, description: Times shown in candidate digests (no names). }
+                apply_clicks: { type: integer }
+    JobList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        next_cursor: { type: [string, "null"] }
+    PublicJob:
+      type: object
+      required: [job_id, source, title, company, work_mode, city, salary, url, posted_at, roles]
+      properties:
+        job_id: { type: string, description: "job_... for company jobs, nr_<id> for jobs from the NextRole crawl" }
+        source: { type: string, enum: [company, crawl] }
+        title: { type: string }
+        company: { type: string }
+        company_domain_verified: { type: boolean }
+        work_mode:
+          type: array
+          items: { type: string, enum: [remote, city] }
+        city: { type: [string, "null"] }
+        salary:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                min: { type: [integer, "null"] }
+                max: { type: [integer, "null"] }
+                currency: { type: [string, "null"] }
+                period: { type: [string, "null"], enum: [year, month, null] }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/RoleKey" }
+        url: { type: string, description: Where to apply (company jobs go through https://nextcryptojob.xyz/jobs/<id>). }
+        posted_at: { type: [string, "null"], format: date-time }
+    PublicJobList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicJob" }
+        next_cursor: { type: [string, "null"] }
+
+    SavedSearch:
+      type: object
+      required: [saved_search_id, name, filters, sort, alert, last_alert_at, last_match_count, created_at]
+      properties:
+        saved_search_id: { type: string }
+        name: { type: string }
+        filters: { $ref: "#/components/schemas/SearchFilters" }
+        sort: { type: string, enum: [score, level, coverage, newest] }
+        alert: { type: string, enum: [off, daily] }
+        last_alert_at: { type: [string, "null"], format: date-time }
+        last_match_count:
+          type: [integer, "null"]
+          description: |
+            How many candidates were new at the last daily alert (not the total of current matches).
+            null until the first alert after the search was created or its filters or sort changed.
+        created_at: { type: string, format: date-time }
+    SavedSearchCreate:
+      type: object
+      additionalProperties: false
+      required: [name, filters]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        filters: { $ref: "#/components/schemas/SearchFilters" }
+        sort: { type: string, enum: [score, level, coverage, newest], default: score }
+        alert: { type: string, enum: [off, daily], default: daily }
+    SavedSearchUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        filters: { $ref: "#/components/schemas/SearchFilters" }
+        sort: { type: string, enum: [score, level, coverage, newest] }
+        alert: { type: string, enum: [off, daily] }
+
+    Webhook:
+      type: object
+      required: [url, enabled, events, failing_since, secret]
+      properties:
+        url: { type: [string, "null"], format: uri }
+        enabled: { type: boolean }
+        events:
+          type: array
+          items: { type: string, enum: [intro.accepted, intro.declined, intro.expired] }
+        failing_since: { type: [string, "null"], format: date-time }
+        secret:
+          type: [string, "null"]
+          description: "whsec_... Returned only by setWebhook when the URL is set the first time or rotate_secret is true."
+    WebhookUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        url: { type: string, format: uri, maxLength: 500, description: "https only, public host (no IP literals, no localhost)." }
+        enabled: { type: boolean }
+        rotate_secret: { type: boolean }
+
+    Account:
+      type: object
+      required: [company, access, quotas, key]
+      properties:
+        company:
+          type: object
+          required: [company_id, name, kind, status, domain_verified]
+          properties:
+            company_id: { type: string }
+            name: { type: string }
+            kind: { type: string, enum: [company, agency] }
+            status: { type: string, enum: [pending_review, active, suspended, rejected, closed] }
+            domain_verified: { type: boolean }
+        access:
+          type: object
+          required: [mode, subscription_status, period_end, trial]
+          properties:
+            mode: { type: string, enum: [subscription, pay_per_request, none] }
+            subscription_status: { type: [string, "null"] }
+            period_end: { type: [string, "null"], format: date-time }
+            trial: { type: boolean }
+        quotas:
+          type: object
+          description: Remaining today (UTC) and this billing month.
+          additionalProperties:
+            type: object
+            required: [limit, remaining, resets_at]
+            properties:
+              limit: { type: [integer, "null"] }
+              remaining: { type: [integer, "null"] }
+              resets_at: { type: string, format: date-time }
+          examples:
+            - search_candidates: { limit: 300, remaining: 287, resets_at: "2026-09-13T00:00:00Z" }
+              get_candidate: { limit: 200, remaining: 200, resets_at: "2026-09-13T00:00:00Z" }
+              request_intro_day: { limit: 10, remaining: 9, resets_at: "2026-09-13T00:00:00Z" }
+              request_intro_month: { limit: 40, remaining: 31, resets_at: "2026-10-01T00:00:00Z" }
+        x402:
+          type: object
+          required: [enabled, networks, prices_usd]
+          properties:
+            enabled: { type: boolean }
+            networks: { type: array, items: { type: string } }
+            prices_usd:
+              type: object
+              additionalProperties: { type: string }
+        key:
+          type: [object, "null"]
+          description: The API key of this request. null in the web app, where a team member acts without a key.
+          required: [key_id, name, prefix]
+          properties:
+            key_id: { type: string }
+            name: { type: string }
+            prefix: { type: string }
+    Usage:
+      type: object
+      required: [from, to, days, totals]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, action, calls, x402_usd]
+            properties:
+              date: { type: string, format: date }
+              action: { type: string }
+              calls: { type: integer }
+              x402_usd: { type: string }
+        totals:
+          type: object
+          required: [calls, x402_usd]
+          properties:
+            calls: { type: integer }
+            x402_usd: { type: string }
+    UsdcMonthResult:
+      type: object
+      required: [subscription_id, period_end, payment_id]
+      properties:
+        subscription_id: { type: string }
+        period_end: { type: string, format: date-time }
+        payment_id: { type: string }

@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "npm run cf-typegen",
-    "prebuild": "npm run cf-typegen && node scripts/legal-content.mjs",
+    "prebuild": "npm run cf-typegen && node scripts/legal-content.mjs && node scripts/api-docs.mjs",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",

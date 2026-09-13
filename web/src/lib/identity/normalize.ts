@@ -83,6 +83,17 @@ export function normalizeYoutube(input: string): Normalized {
 const HOST = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 /**
+ * Публічне доменне ім'я (нижній регістр): хоч одна крапка, зона з літер, без
+ * локальних і зарезервованих зон. IP-літерал сюди не проходить ніколи: у
+ * IPv4 остання частина цифрова, IPv6 має дужки, а URL сам перетворює
+ * 2130706433 чи 0x7f.1 на 127.0.0.1. Той самий захист мають вебхуки компаній
+ * (crm/webhooks.ts): за адресою потім ходить наш сервер.
+ */
+export function isPublicHostname(host: string): boolean {
+  return HOST.test(host) && !/\.(local|localhost|internal|lan|home|arpa|test|invalid|example)$/.test(host);
+}
+
+/**
  * Сайт: `https://` + хост + шлях без кінцевого `/`, хост нижній регістр.
  * Без схеми додаємо https; http не приймаємо. Лише публічне доменне ім'я:
  * за цією адресою потім ходить рушій.
@@ -97,7 +108,7 @@ export function normalizeSite(input: string): Normalized {
   const url = asUrl(raw);
   if (!url || url.username || url.password || url.port) return fail("This does not look like a website address.");
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
-  if (!HOST.test(host) || /\.(local|localhost|internal|lan|home|arpa|test|invalid|example)$/.test(host)) {
+  if (!isPublicHostname(host)) {
     return fail("This does not look like a public website address.");
   }
   const path = url.pathname.replace(/\/+$/, "");

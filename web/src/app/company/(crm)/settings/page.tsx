@@ -64,7 +64,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * Налаштування компанії (специфікація 10.2): профіль (власник змінює, член
- * бачить), стан домену, вебхук (незабаром), журнал дій, закриття компанії.
+ * бачить), стан домену, посилання на Developers (вебхук, ключі), журнал дій, закриття компанії.
  * Відкриті в будь-якому стані компанії, зокрема поки агенція на перевірці.
  */
 export default async function CompanySettingsPage({
@@ -151,21 +151,14 @@ export default async function CompanySettingsPage({
         </dl>
       </Section>
 
-      <Section id="webhook" title="Webhook" intro="Coming soon. Until then your agent can poll list_intros with updated_since.">
-        <fieldset disabled aria-describedby="webhook-soon" className="grid gap-3 opacity-60">
-          <label htmlFor="webhook-url" className="text-sm font-medium text-ink">
-            Endpoint URL
-          </label>
-          <input
-            id="webhook-url"
-            type="url"
-            placeholder="https://acme.io/hooks/nextcryptojob"
-            className="block h-11 w-full rounded-md border border-line-strong bg-wash px-3 text-base text-ink"
-          />
-          <p id="webhook-soon" className={HINT}>
-            Events: intro.accepted, intro.declined, intro.expired. Signed with NCJ-Signature.
-          </p>
-        </fieldset>
+      <Section id="webhook" title="Webhook and API keys">
+        <p className="text-sm text-ink">
+          Set the webhook, create API keys and see recent deliveries on the{" "}
+          <Link href="/company/developers" className={LINK}>
+            Developers
+          </Link>{" "}
+          page.
+        </p>
       </Section>
 
       <Section id="activity" title="Activity log" intro="Who did what in this company. Candidates appear only as a label like #3F9A1C.">
