@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { scorePerson } from "../formula/score.js";
+import { FORMULA_VERSION, scorePerson } from "../formula/score.js";
 import { SqliteD1 } from "../testing/sqlite-d1.js";
 import type { PersonFacts } from "../types.js";
 import {
@@ -67,7 +67,7 @@ describe("scoreUser", () => {
     const s = scores();
     expect(Object.keys(s)).toHaveLength(15);
     for (const [role, rr] of Object.entries(expected.roles)) {
-      expect(s[role]).toMatchObject({ score: rr.score, core: rr.core, cover: rr.cover, formula_version: "v5" });
+      expect(s[role]).toMatchObject({ score: rr.score, core: rr.core, cover: rr.cover, formula_version: FORMULA_VERSION });
       expect(JSON.parse(s[role]!.breakdown_json)).toEqual(rr.breakdown);
     }
     expect(s.engineer!.score).toBeGreaterThan(0);

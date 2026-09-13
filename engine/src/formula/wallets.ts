@@ -12,7 +12,6 @@ export type WalletSummary = {
   trades: number;            // Σ EVM swaps + Σ Solana swaps + Σ Hyperliquid fillsRecent
   tradeChains: string[];
   hlVolume: number;
-  held: number | null;       // у релізі 1 не збираємо
   tradeGap: boolean;         // хоч одна Solana з невідомими обмінами
 };
 
@@ -79,7 +78,6 @@ export function aggregateWallets(f: PersonFacts, nowMs: number): WalletSummary |
   const oldest = firsts.length ? Math.min(...firsts) : null;
   return {
     ageYears: oldest === null ? null : Math.max(0, (nowMs / 1000 - oldest) / YEAR_S),
-    tx, chains: [...chains].sort(), trades, tradeChains: [...tradeChains].sort(), hlVolume,
-    held: null, tradeGap,
+    tx, chains: [...chains].sort(), trades, tradeChains: [...tradeChains].sort(), hlVolume, tradeGap,
   };
 }

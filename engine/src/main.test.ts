@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "./cli.js";
+import { FORMULA_VERSION } from "./formula/score.js";
 import { runWorker, type WorkerOptions } from "./main.js";
 import { fakeRegistry, hangUntilAborted, sampleGithub } from "./pipeline/fake-registry.js";
 import type { CollectorRegistry } from "./pipeline/registry.js";
@@ -130,7 +131,7 @@ describe("cli", () => {
     const id = addPerson(1);
     const r = await cli(["score-user", id]);
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.out)).toMatchObject({ userId: id, formula: "v5", gaps: [] });
+    expect(JSON.parse(r.out)).toMatchObject({ userId: id, formula: FORMULA_VERSION, gaps: [] });
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM scores WHERE user_id = ?", id)!.n).toBe(15);
   });
 
@@ -141,6 +142,30 @@ describe("cli", () => {
     }
     const r = await cli(["enqueue-refresh", "--per-hour", "2"]);
     expect(r).toEqual({ code: 0, out: "enqueue-refresh: 2 queued (hourly budget left 2)" });
+    expect(jobs()).toHaveLength(2);
+  });
+
+  it("enqueue-refresh --stale-formula ставить усіх з балом іншої версії формули, навіть зі свіжими фактами", async () => {
+    const add = (id: string, version: string) => {
+      db.addUser(id);
+      db.exec("INSERT INTO source_facts (user_id, source, facts_json) VALUES (?, 'x', '{}')", id);
+      db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', ?)",
+        id, version);
+    };
+    add("old1", "v5"); add("old2", "v5"); add("cur", FORMULA_VERSION);
+    const r = await cli(["enqueue-refresh", "--stale-formula"]);
+    expect(r).toEqual({ code: 0, out: `enqueue-refresh: 2 queued with scores from a formula other than ${FORMULA_VERSION}` });
+    expect(jobs().map((j) => j.user_id).sort()).toEqual(["old1", "old2"]);
+    // Повтор нікого не дублює: обидва вже в черзі.
+    expect((await cli(["enqueue-refresh", "--stale-formula"])).out).toMatch(/^enqueue-refresh: 0 queued/);
+  });
+
+  it("enqueue-refresh --stale-formula --per-hour N ставить не більше N", async () => {
+    for (const id of ["a1", "a2", "a3"]) {
+      db.addUser(id);
+      db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', 'v5')", id);
+    }
+    expect((await cli(["enqueue-refresh", "--stale-formula", "--per-hour", "2"])).out).toMatch(/^enqueue-refresh: 2 queued/);
     expect(jobs()).toHaveLength(2);
   });
 

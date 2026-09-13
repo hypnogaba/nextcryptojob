@@ -1107,7 +1107,7 @@ components:
       enum: [pending, accepted, declined, expired, canceled, direct]
     SourceKey:
       type: string
-      description: Score sources of formula v5 (docs/contracts.md section 4). `audits` (Sherlock) and `dune` (Spellbook) came with v5.
+      description: Score sources of formula v6 (docs/contracts.md section 4). `audits` (Sherlock) and `dune` (Spellbook) came with v5; v6 changed only how `trading` is computed.
       enum: [gh_eng, gh_builder, x, yt, media, output, onchain, trading, site, audits, dune]
 
     SearchFilters:
@@ -1208,7 +1208,7 @@ components:
             properties:
               source: { type: string }
               label: { type: string, examples: ["Solana data unavailable right now"] }
-        formula_version: { type: string, examples: [v4] }
+        formula_version: { type: string, examples: [v6] }
         updated_at: { type: string, format: date-time }
     RoleScoreDetailed:
       allOf:

@@ -414,13 +414,13 @@ describe("pagination", () => {
     );
     const consent = db.raw.prepare("INSERT INTO consents (user_id, kind, granted, text_version) VALUES (?, 'visibility', 1, 'v1')");
     const score = db.raw.prepare(
-      "INSERT INTO scores (user_id, role, score, cover, breakdown_json, formula_version) VALUES (?, 'engineer', ?, 100, '{}', 'v5')",
+      "INSERT INTO scores (user_id, role, score, cover, breakdown_json, formula_version) VALUES (?, 'engineer', ?, 100, '{}', ?)",
     );
     for (let i = 0; i < 2010; i++) {
       const id = crypto.randomUUID();
       insert.run(id, `${id}@example.com`);
       consent.run(id);
-      score.run(id, 90 - i / 100);
+      score.run(id, 90 - i / 100, FORMULA_VERSION);
     }
     const onBase = candidate(1); // найнижчий бал: знайдеться лише після 2 000 переглянутих
     addFacts(db.raw, onBase, "evm", { "0x5555555555555555555555555555555555555555": { base: { sent: 1, firstTs: null } } });

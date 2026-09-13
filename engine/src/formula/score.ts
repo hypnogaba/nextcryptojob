@@ -1,10 +1,10 @@
-// Бал людини за ролями, формула v5 (docs/contracts.md §4). Чисті функції, без IO.
+// Бал людини за ролями, формула v6 (docs/contracts.md §4). Чисті функції, без IO.
 import type { PersonFacts, RoleKey } from "../types.js";
 import { type CorePath, type ScoredRole, SCORED_ROLES, ROLE_ORDER, UNSCORED_ROLES } from "./roles.js";
 import { computeSources, type ScoreSource, type Sources } from "./sources.js";
 import { SOLANA_MIN_SAMPLE, solanaSwapsKnown } from "./wallets.js";
 
-export const FORMULA_VERSION = "v5" as const;
+export const FORMULA_VERSION = "v6" as const;
 
 export type BreakdownJson = {
   formula: typeof FORMULA_VERSION;

@@ -7,7 +7,7 @@ import { MiniCard } from "@/components/card/mini-card";
 import { SharePreview } from "@/components/landing/share-preview";
 import { Button } from "@/components/ui/button";
 import { builtFrom } from "@/lib/card/back";
-import { EXAMPLE_BACK, exampleFace } from "@/lib/card/example";
+import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, exampleFace } from "@/lib/card/example";
 import { levelRange, tierFor } from "@/lib/card/tiers";
 import { fnv1a } from "@/lib/card/pattern";
 import { ROLES } from "@/lib/card/roles";
@@ -76,7 +76,7 @@ export default function HomePage() {
         <CardFlip
           className="mx-auto w-full max-w-[380px]"
           front={<CardFront face={face} draw />}
-          back={<CardBackFace face={face} back={EXAMPLE_BACK} meta="Formula v5. Example data." />}
+          back={<CardBackFace face={face} back={EXAMPLE_BACK} meta={`Formula ${EXAMPLE_BREAKDOWN.formula}. Example data.`} />}
         />
       </section>
 

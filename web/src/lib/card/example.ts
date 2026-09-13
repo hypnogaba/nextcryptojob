@@ -1,4 +1,4 @@
-// Приклад картки для головної: вигадана людина, справжня формула v5.
+// Приклад картки для головної: вигадана людина, справжня формула v6 (інженер у v6 такий самий, як у v5).
 // Engineer: GitHub 74.2 (вага 80), X 46.3 (вага 20), додаток onchain 91.7 (до 5),
 // сайту немає. Ядро 68.6 + додаток 4.6 = 73.2, на картці 73, рівень 8 (Black).
 // Лише звідси береться kind: "example", тож позначка EXAMPLE не потрапить на справжню картку.
@@ -10,7 +10,7 @@ import { displayScore, levelFor, tierFor } from "./tiers";
 import { summaryOf, type CardFace } from "./view";
 
 export const EXAMPLE_BREAKDOWN: Breakdown = {
-  formula: "v5",
+  formula: "v6",
   core: { gh_eng: { weight: 80, value: 74.2 }, x: { weight: 20, value: 46.3 } },
   bonus: { onchain: { max: 5, value: 91.7 }, site: { max: 5, value: null } },
   cover: 100,

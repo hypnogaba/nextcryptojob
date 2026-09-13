@@ -77,7 +77,7 @@ type AuditsFacts = { earningsUsd: number|null; high: number|null; contests: numb
 type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  // злиті PR у duneanalytics/spellbook (за GitHub людини)
 ```
 
-## 4. Формула v5 (`formula_version = "v5"`; v4 + зміни в кінці розділу)
+## 4. Формула v6 (`formula_version = "v6"`; v4 + зміни v5 і v6 в кінці розділу)
 `logn(x, cap) = min(1, log10(1+max(0,x)) / log10(1+cap))`, `lin(x, cap) = min(1, max(0,x)/cap)`;
 `null` на вході дає `null`. `combine([(w, v)…]) = 100 · Σ w·v / Σ w` лише по не-`null` v;
 якщо всі `null` → `null`.
@@ -97,8 +97,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
   `tradeGap` (хоч одна Solana з swaps = null).
 - `onchain` = combine(35·lin(ageYears,6), 35·logn(tx,10000), 30·lin(|chains|,6)); без гаманців → null
 - `trading` = без гаманців → null; trades = 0 → (tradeGap ? null : 0);
-  інакше combine(45·logn(trades,3000), 20·lin(|tradeChains|,4), 20·logn(hlVolume,5000000), 15·logn(held,20))
-  (`held` у релізі 1 = null)
+  інакше combine(60·logn(trades,10000), 10·lin(|tradeChains|,6), 30·logn(hlVolume,1000000000))
 - `site` = недоступний → null; інакше 30 + 0.7·(combine(40·logn(feedItems,100), 20·lin(items90d,8),
   10·logn(sitemapUrls,150)) ?? 0)
 - `media` = max(x, yt) з не-null; `output` = max(site, gh_eng) з не-null.
@@ -115,7 +114,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | marketing_content | media 100 | site 7, onchain 3 | media |
 | creator_kol | media 100 | onchain 5, site 5 | media |
 | community | x 100 | onchain 7, site 3 | x |
-| trader | trading 80, onchain 20 | x 5, site 5 | trading |
+| trader | trading 90, onchain 10 | x 5, site 5 | trading |
 
 `core = Σ w·(s ?? 0) / Σ w`; `bonus = Σ max·(s ?? 0)/100`; `score = min(100, core + bonus)`;
 `cover = Σ w` по ядру з не-null джерелами. Без головного джерела → `score = null`,
@@ -132,9 +131,23 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
   `dune` (GitHub search: злиті PR автора в duneanalytics/spellbook, усього й за 12 міс.).
   Code4rena, Immunefi, профілі Dune не збираємо: їхні умови забороняють автоматичний збір.
 
+Зміни v6 (дослідження 13.09, research/trader-calibration-2026-09-13.md):
+- `trading`: розмір замість широти. Угоди 60 (шкала до 10 000 = стеля збирачів), обсяг Hyperliquid 30
+  (шкала до $1 млрд = рівень топів), мережі угод 10 (lin до 6 = усі мережі збирача). `held` прибрано:
+  поле не збираємо, а null у combine мовчки ділив решту на 85 замість 100.
+- trader: ядро trading 90, onchain 10 (onchain однаковий у трейдерів і не-трейдерів еталону: 70 проти 69).
+- Прогін воріт дослідження (`research/harness/evaluate2.py`) також друкує, скільки людей без мітки трейдера
+  в еталоні мають трейдера L8+ (v5 на проді: 3, v6: 1): 4 мітки трейдера замало, щоб ворота бачили зміни
+  цієї ролі. Еталон на кеші фактів: v6 21 з 49 точно, 42 з 49 у сусідній смузі, 6 промахів на 2 рівні (ті
+  самі, що у v5, усі поза роллю трейдера).
+
+Історія v5 (до 13.09): `trading` = combine(45·logn(trades,3000), 20·lin(|tradeChains|,4),
+20·logn(hlVolume,5000000), 15·logn(held,20)) з `held` = null; trader: ядро trading 80, onchain 20.
+Бали з `formula_version = "v5"` у базі рахувались саме так.
+
 `breakdown_json`:
 ```json
-{ "formula": "v5", "sources": {"x": 46.3, "gh_eng": 28.9, "...": null},
+{ "formula": "v6", "sources": {"x": 46.3, "gh_eng": 28.9, "...": null},
   "core": {"x": {"weight": 50, "value": 46.3}}, "bonus": {"onchain": {"max": 5, "value": 91.7}},
   "cover": 100, "level": 7, "reason": null, "gaps": {"solana": "sample too small"} }
 ```

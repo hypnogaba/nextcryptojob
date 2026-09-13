@@ -18,7 +18,7 @@ const site = (o: Partial<SiteFacts> = {}): SiteFacts => ({ reachable: true, feed
 const audits = (o: Partial<AuditsFacts> = {}): AuditsFacts => ({ earningsUsd: 50_000, high: 10, contests: 8, providers: {},
   verifiedBy: "github", ...o });
 const wallet = (o: Partial<WalletSummary> = {}): WalletSummary => ({ ageYears: 2, tx: 300, chains: ["ethereum"], trades: 10,
-  tradeChains: ["ethereum"], hlVolume: 0, held: null, tradeGap: false, ...o });
+  tradeChains: ["ethereum"], hlVolume: 0, tradeGap: false, ...o });
 
 describe("x", () => {
   it("без followers джерело не рахується", () => {
@@ -83,9 +83,32 @@ describe("onchain і trading", () => {
     expect(srcTrading(wallet({ trades: 0, tradeGap: true }))).toBeNull();
   });
 
-  it("held = null не тягне торгівлю вниз", () => {
-    const top = wallet({ trades: 3000, tradeChains: ["a", "b", "c", "d"], hlVolume: 5_000_000, held: null });
+  it("v6: 10 000 угод, 6 мереж і $1 млрд обсягу = 100", () => {
+    const top = wallet({ trades: 10_000, tradeChains: ["a", "b", "c", "d", "e", "f"], hlVolume: 1_000_000_000 });
     expect(srcTrading(top)).toBeCloseTo(100, 9);
+  });
+
+  it("v6: вершина v5 (3000 угод, 4 мережі, $5M) уже не максимум", () => {
+    const v5top = wallet({ trades: 3000, tradeChains: ["a", "b", "c", "d"], hlVolume: 5_000_000 });
+    expect(srcTrading(v5top)!).toBeLessThan(90);
+  });
+
+  it("v6: 5 мереж угод не насичують широту, шоста ще додає", () => {
+    const five = srcTrading(wallet({ tradeChains: ["a", "b", "c", "d", "e"] }))!;
+    const six = srcTrading(wallet({ tradeChains: ["a", "b", "c", "d", "e", "f"] }))!;
+    expect(six).toBeGreaterThan(five);
+  });
+
+  it("v6: кількість угод важить більше за широту", () => {
+    const many = srcTrading(wallet({ trades: 1000, tradeChains: ["ethereum"] }))!;
+    const wide = srcTrading(wallet({ trades: 20, tradeChains: ["a", "b", "c", "d", "e", "f"] }))!;
+    expect(many).toBeGreaterThan(wide);
+  });
+
+  it("v6: обсяг Hyperliquid рахується аж до вершини: $100k < $10M < $1B", () => {
+    const at = (hlVolume: number) => srcTrading(wallet({ trades: 500, tradeChains: ["hyperliquid"], hlVolume }))!;
+    expect(at(100_000)).toBeLessThan(at(10_000_000));
+    expect(at(10_000_000)).toBeLessThan(at(1_000_000_000));
   });
 });
 

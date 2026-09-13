@@ -3,7 +3,7 @@ import { builtFrom, cardBack, frontStats, missingReason } from "./back";
 import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, EXAMPLE_SCORE } from "./example";
 
 describe("cardBack", () => {
-  it("itemizes formula v5: weight, value and points per source, core, bonus and cover", () => {
+  it("itemizes the formula: weight, value and points per source, core, bonus and cover", () => {
     const back = cardBack(JSON.stringify(EXAMPLE_BREAKDOWN), new Set(["github", "x", "evm"] as const))!;
     expect(back.lines.map((l) => [l.name, l.kind, l.weight, l.value, l.points])).toEqual([
       ["GitHub", "core", 80, 74.2, 59.4],
@@ -15,6 +15,36 @@ describe("cardBack", () => {
     expect(back.bonus).toBe(4.6);
     expect(back.cover).toBe(100);
     expect(Math.floor(back.core + back.bonus)).toBe(Math.floor(EXAMPLE_SCORE));
+  });
+
+  it("renders a v6 trader breakdown with the weights it was scored with (trading 90, onchain 10)", () => {
+    const back = cardBack({
+      formula: "v6",
+      core: { trading: { weight: 90, value: 60 }, onchain: { weight: 10, value: 80 } },
+      bonus: { x: { max: 5, value: 40 }, site: { max: 5, value: 30 } },
+      cover: 100,
+      reason: null,
+      gaps: {},
+    })!;
+    expect(back.lines.map((l) => [l.name, l.kind, l.weight, l.value, l.points])).toEqual([
+      ["Trading", "core", 90, 60, 54],
+      ["Onchain", "core", 10, 80, 8],
+      ["X", "bonus", 5, 40, 2],
+      ["Website", "bonus", 5, 30, 1.5],
+    ]);
+    expect(back.core).toBe(62);
+    expect(back.bonus).toBe(3.5);
+  });
+
+  it("still renders a v5 trader breakdown as it was scored (trading 80, onchain 20)", () => {
+    const back = cardBack({
+      formula: "v5",
+      core: { trading: { weight: 80, value: 60 }, onchain: { weight: 20, value: 80 } },
+      bonus: {},
+      cover: 100,
+    })!;
+    expect(back.lines.map((l) => [l.key, l.weight, l.points])).toEqual([["trading", 80, 48], ["onchain", 20, 16]]);
+    expect(back.core).toBe(64);
   });
 
   it("prints a missing source as null with a human reason, never as a zero value", () => {

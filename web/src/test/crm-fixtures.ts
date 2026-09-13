@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { sha256Hex } from "@/lib/auth/hash";
 import { resolveActor, type ActionContext, type ActorRequest, type CrmEnv } from "@/lib/crm/context";
 import { generateApiKey } from "@/lib/crm/keys";
+import { FORMULA_VERSION } from "@/lib/crm/types";
 import { newId } from "@/lib/ids";
 import { migratedD1, type TestDb } from "./sqlite-d1";
 
@@ -98,7 +99,7 @@ export interface ScoreOpts {
 }
 
 export function addScore(raw: DatabaseSync, userId: string, role: string, score: number | null, o: ScoreOpts = {}): void {
-  const formula = o.formula ?? "v5";
+  const formula = o.formula ?? FORMULA_VERSION;
   const breakdown = o.breakdown ?? {
     formula,
     sources: { gh_eng: score, x: 40 },
@@ -124,7 +125,7 @@ export function addScore(raw: DatabaseSync, userId: string, role: string, score:
   );
 }
 
-export function publishFormula(raw: DatabaseSync, version = "v5", passed = true): void {
+export function publishFormula(raw: DatabaseSync, version: string = FORMULA_VERSION, passed = true): void {
   run(
     raw,
     `INSERT INTO quality_runs (formula_version, people, exact_pct, near_pct, unscored, report_json, passed)

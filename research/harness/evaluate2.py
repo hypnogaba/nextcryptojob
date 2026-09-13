@@ -41,3 +41,18 @@ for name, role, exp, norm, b, top3, src in rows:
     s = " ".join(f"{k}={v:.0f}" for k, v in src.items() if v is not None and k != "media")
     print(f"{mark} {name[:22]:<22} {role[:18]:<18} очік {exp} → {norm} {b} | {s}")
 print(f"\nточно в рівень: {exact}/{n} ({exact * 100 // max(n, 1)}%), в межах сусіднього: {near}/{n} ({near * 100 // max(n, 1)}%), роль не рахується: {unscored}")
+
+# Промахи на 2 рівні і трейдер L8+ (бал >= 70) у людей без мітки трейдера (головна або друга роль з
+# reference_set.json поруч з people): 4 мітки трейдера замало, щоб ворота бачили зміни цієї ролі (v6).
+two = sum(1 for _, _, exp, _, b, _, _ in rows
+          if exp != "?" and b in ("A", "B", "C", "D") and abs(ORDER.index(b) - ORDER.index(exp)) >= 2)
+_ref_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])), "reference_set.json")
+_ref = {p["id"]: p for p in json.load(open(_ref_path))} if os.path.exists(_ref_path) else {}
+l8 = 0
+for pid, r in raw.items():
+    p = people[pid]
+    if p["expected_band"] == "?" or p["expected_role"] == "trader" or "trader" in (_ref.get(pid, {}).get("secondary_roles") or []):
+        continue
+    t = S.score_person(r)["roles"].get(ROLE["trader"])
+    l8 += bool(t) and t["score"] >= 70
+print(f"промахів на 2 рівні: {two}; трейдер L8+ без мітки трейдера: {l8}")

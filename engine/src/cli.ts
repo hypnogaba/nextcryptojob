@@ -2,7 +2,7 @@
 //
 //   node dist/cli.js worker
 //   node dist/cli.js score-user <user-id>
-//   node dist/cli.js enqueue-refresh [--per-hour N]
+//   node dist/cli.js enqueue-refresh [--per-hour N] [--stale-formula]
 //   node dist/cli.js quality-gate <people.json> [raw-cache-dir] [--no-db] [--deadline-ms N]
 //   node dist/cli.js score-facts --x <h> --github <l> --site <url> --evm <a,...> --solana <a,...> [--sherlock <h>]
 //   node dist/cli.js digest-due [--dry-run [--user <id> | --profile <json>]]
@@ -20,6 +20,7 @@ import { parseReferencePeople, runQualityGate } from "./pipeline/quality-gate.js
 import { JobQueue } from "./pipeline/queue.js";
 import { createRealRegistry } from "./pipeline/realRegistry.js";
 import type { CollectorRegistry, EngineEnv } from "./pipeline/registry.js";
+import { FORMULA_VERSION } from "./formula/score.js";
 import { scoreUser } from "./pipeline/run-person.js";
 import { formatScoreFacts, type ScoreFactsArgs, scoreFacts } from "./pipeline/score-facts.js";
 
@@ -27,6 +28,8 @@ export const USAGE = `usage: nextcryptojob-engine <command>
   worker                                   run the score_jobs worker until SIGTERM
   score-user <user-id>                     collect and score one person now, print the summary
   enqueue-refresh [--per-hour N]           queue weekly refreshes (hourly timer)
+      [--stale-formula]                    instead: queue everyone with a score from another formula
+                                           version, whatever the age of the facts (--per-hour N = at most N)
   quality-gate <people.json> [cache-dir]   run the reference set, write quality_runs, exit 1 if the gate fails
       [--no-db]                            do not write quality_runs
       [--deadline-ms N]                    per-person collection deadline (default ENGINE_DEADLINE_MS or 45000)
@@ -98,7 +101,13 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
       }
       case "enqueue-refresh": {
         const perHour = posInt(flag(args, "--per-hour"), "--per-hour");
+        const staleFormula = has(args, "--stale-formula");
         if (args.length) { err(USAGE); return 2; }
+        if (staleFormula) {
+          const r = await new JobQueue(db()).enqueueFormulaRefresh(FORMULA_VERSION, perHour === undefined ? {} : { limit: perHour });
+          out(`enqueue-refresh: ${r.enqueued} queued with scores from a formula other than ${FORMULA_VERSION}`);
+          return 0;
+        }
         const r = await new JobQueue(db()).enqueueRefresh(perHour === undefined ? {} : { perHour });
         out(`enqueue-refresh: ${r.enqueued} queued (hourly budget left ${r.budget})`);
         return 0;
