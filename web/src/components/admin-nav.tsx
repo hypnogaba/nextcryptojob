@@ -17,7 +17,7 @@ export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];
 export function AdminNav({ current, className = "mb-6" }: { current?: AdminPage; className?: string }) {
   return (
     <nav aria-label="Admin" className={`flex flex-wrap gap-x-4 gap-y-1 text-sm ${className}`}>
-      <span className="font-mono text-xs tracking-widest text-ink-muted uppercase self-center">Admin</span>
+      <span className="self-center text-sm font-semibold text-ink-muted">Admin</span>
       {ADMIN_PAGES.map((p) => (
         <Link
           key={p.href}

@@ -29,8 +29,8 @@ function first(value: string | string[] | undefined): string | null {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto grid max-w-2xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-14">
-      <section className="grid gap-5 rounded-xl border border-line bg-surface p-4 sm:p-6">{children}</section>
+    <div className="mx-auto grid max-w-2xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
+      <section className="grid gap-5 rounded-xl border-2 border-ink bg-surface p-4 sm:p-6">{children}</section>
     </div>
   );
 }
@@ -46,12 +46,12 @@ function Closed({ view }: { view: Exclude<CandidateIntroView, { state: "pending"
           : ANSWER_TEXT.invalid;
   return (
     <Shell>
-      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Intro request</h1>
+      <h1 className="display text-[2rem] leading-none sm:text-[2.5rem]">Intro request</h1>
       <p className="text-base text-ink">{text}</p>
       {view.state === "invalid" ? (
         <p className={HINT}>
           If you have a NextCryptoJob account,{" "}
-          <Link href="/login" className="font-medium text-brand underline underline-offset-4">
+          <Link href="/login" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
             sign in
           </Link>{" "}
           and open this link again.
@@ -84,8 +84,8 @@ export default async function IntroPage({
 
   return (
     <Shell>
-      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{headline.text}</h1>
-      <blockquote className="border-l-2 border-brand pl-4 text-base whitespace-pre-line text-ink">
+      <h1 className="display text-[2rem] leading-none sm:text-[2.5rem]">{headline.text}</h1>
+      <blockquote className="border-y border-line py-4 text-lg whitespace-pre-line text-ink">
         {quote.text}
       </blockquote>
       <ul className="grid gap-1 text-sm text-ink">
@@ -93,7 +93,7 @@ export default async function IntroPage({
           line.link && details.jobId ? (
             <li key={line.text}>
               Job:{" "}
-              <Link href={`/jobs/${details.jobId}`} className="font-medium text-brand underline underline-offset-4">
+              <Link href={`/jobs/${details.jobId}`} className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
                 {details.jobTitle ?? "Open job"}
               </Link>
             </li>
@@ -114,7 +114,7 @@ export default async function IntroPage({
         acceptLabel={contact?.kind === "email" ? "Accept and share my email" : "Accept and share my Telegram"}
         canAccept={contact !== null && view.companyActive}
         preview={
-          <div className="grid gap-2 rounded-md border border-line bg-wash p-4">
+          <div className="grid gap-2 border border-line bg-wash p-4">
             <p className="text-base text-ink">
               {view.companyActive ? contactPreviewText(company, contact) : ANSWER_TEXT.companyInactive}
             </p>

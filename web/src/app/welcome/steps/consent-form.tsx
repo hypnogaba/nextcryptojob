@@ -14,7 +14,7 @@ export function ConsentForm({ granted }: { granted: boolean }) {
   const error = state.errors?.agree;
   return (
     <form action={action} className="grid gap-4">
-      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface p-4">
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-4">
         <input
           type="checkbox"
           name="agree"
@@ -27,7 +27,7 @@ export function ConsentForm({ granted }: { granted: boolean }) {
         />
         <span className="text-sm text-ink">
           {SCORING_CONSENT.text}{" "}
-          <Link href="/privacy" className="font-medium text-brand underline underline-offset-4">
+          <Link href="/privacy" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
             Privacy
           </Link>
         </span>

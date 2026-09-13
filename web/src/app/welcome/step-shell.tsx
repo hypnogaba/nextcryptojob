@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { prevStep, STEP_TITLES, STEPS, stepNumber, type Step } from "@/lib/onboarding/steps";
 
-/** Рамка кроку: номер, смужка поступу, заголовок, пояснення і «Back». */
+/** Рамка кроку: номер, сім поділок поступу (без заповненої доріжки), заголовок, пояснення і «Back». */
 export function StepShell({
   step,
   editing,
@@ -21,44 +21,46 @@ export function StepShell({
   const n = stepNumber(step);
   const back = prevStep(step);
   return (
-    <section className="mx-auto max-w-xl px-4 pt-8 pb-20 sm:px-6 sm:pt-14">
+    <section className="mx-auto max-w-xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex items-center justify-between gap-4">
-        <p className="font-mono text-xs tracking-widest text-brand uppercase">
-          Step {n} of {STEPS.length}
+        <p className="font-display text-lg font-extrabold tracking-[0.04em] text-ink uppercase">
+          Step {n} <span className="text-ink-muted">of {STEPS.length}</span>
         </p>
         {editing ? (
           <Link
             href="/profile"
-            className="-mr-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-ink-muted hover:text-ink"
+            className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
           >
             Back to profile
           </Link>
         ) : null}
       </div>
       <div
-        className="mt-3 h-1 overflow-hidden rounded-full bg-wash"
+        className="mt-3 grid grid-cols-7 gap-1.5"
         role="progressbar"
         aria-label="Setup progress"
         aria-valuemin={1}
         aria-valuemax={STEPS.length}
         aria-valuenow={n}
       >
-        <div className="h-full rounded-full bg-brand" style={{ width: `${(n / STEPS.length) * 100}%` }} />
+        {STEPS.map((s, i) => (
+          <span key={s} className={i + 1 < n ? "h-0.5 bg-ink" : i + 1 === n ? "h-1 bg-brand" : "h-0.5 bg-line-strong/50"} />
+        ))}
       </div>
 
       {notice ? (
-        <p role="status" className="mt-6 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink">
+        <p role="status" className="mt-6 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink">
           {notice}
         </p>
       ) : null}
-      <h1 className="mt-8 text-2xl font-semibold tracking-tight sm:text-3xl">{STEP_TITLES[step]}</h1>
+      <h1 className="display mt-8 text-title">{STEP_TITLES[step]}</h1>
       {lead ? <div className="mt-3 text-ink-muted">{lead}</div> : null}
       <div className="mt-8">{children}</div>
 
       {back ? (
         <Link
           href={`/welcome?step=${back}`}
-          className="mt-6 -ml-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-ink-muted hover:text-ink"
+          className="mt-6 -ml-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink-muted hover:text-ink"
         >
           Back
         </Link>

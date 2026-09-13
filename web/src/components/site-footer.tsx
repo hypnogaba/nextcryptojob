@@ -11,8 +11,8 @@ const LINKS = [
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto">
-      <div className="mx-auto flex max-w-[1240px] flex-wrap items-end justify-between gap-x-10 gap-y-6 border-t-2 border-ink px-[clamp(16px,4vw,56px)] py-12 sm:py-16">
+    <footer className="mx-auto mt-auto w-full max-w-[1240px] px-[clamp(16px,4vw,56px)]">
+      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-t-2 border-ink py-12 sm:py-16">
         <p className="display max-w-[14ch] text-[clamp(2rem,1.2rem+3vw,3.5rem)] leading-[0.9]">Your work is the card.</p>
         <div className="grid gap-3">
           <nav aria-label="Footer">

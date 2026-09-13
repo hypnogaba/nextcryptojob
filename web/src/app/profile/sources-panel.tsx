@@ -45,8 +45,8 @@ function Badge({ identity }: { identity: Identity }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[0.65rem] tracking-wider uppercase",
-        verified ? "bg-brand text-brand-ink" : "bg-wash text-ink-muted",
+        "shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-semibold",
+        verified ? "border-ink text-ink" : "border-line text-ink-muted",
       )}
     >
       {text}
@@ -58,7 +58,7 @@ function Badge({ identity }: { identity: Identity }) {
 export function SourcesPanel({ identities }: { identities: Identity[] }) {
   return (
     <section aria-labelledby="sources-title" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
-      <h2 id="sources-title" className="font-sans text-lg font-semibold text-ink">
+      <h2 id="sources-title" className="display text-[2rem] leading-none">
         Sources
       </h2>
       {GROUPS.map((g) => {
@@ -66,10 +66,10 @@ export function SourcesPanel({ identities }: { identities: Identity[] }) {
         return (
           <div key={g.title} className="grid gap-2 border-t border-line pt-4 first-of-type:border-t-0 first-of-type:pt-0">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="font-mono text-xs tracking-widest text-ink-muted uppercase">{g.title}</h3>
+              <h3 className="font-sans text-sm font-semibold text-ink">{g.title}</h3>
               <Link
                 href={`/welcome?step=${g.step}`}
-                className="-mr-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-brand"
+                className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
               >
                 {items.length > 0 ? "Edit" : "Add"}
               </Link>

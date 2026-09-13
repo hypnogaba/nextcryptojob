@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
 import { ERROR } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
+import { POSITION_CODE } from "@/lib/roles/recipes";
 import { ROLES, type RoleKey } from "@/lib/card/roles";
 import { isScoredRole, MAX_ROLES, ROLE_ORDER, unscoredNote } from "@/lib/roles/catalog";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,8 @@ function RoleOption({
   return (
     <label
       className={cn(
-        "flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border bg-surface px-3 py-3 transition-colors",
-        checked ? "border-brand bg-brand-soft" : "border-line hover:border-line-strong",
+        "flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border bg-surface px-3 py-3 transition-colors",
+        checked ? "border-ink shadow-[inset_0_0_0_1px_var(--ink)]" : "border-line hover:border-line-strong",
         disabled && "cursor-not-allowed opacity-60",
       )}
     >
@@ -42,13 +43,12 @@ function RoleOption({
         className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]"
       />
       <span className="grid gap-0.5">
-        <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold text-ink">
+          <span aria-hidden className="font-display text-lg leading-none font-black">
+            {POSITION_CODE[role]}
+          </span>
           {ROLES[role].name}
-          {suggested ? (
-            <span className="rounded-sm bg-brand px-1.5 py-0.5 font-mono text-[0.65rem] tracking-wider text-brand-ink uppercase">
-              Suggested
-            </span>
-          ) : null}
+          {suggested ? <span className="text-xs font-semibold text-brand">Suggested</span> : null}
         </span>
         {note ? <span className="text-xs text-ink-muted">{note}</span> : null}
       </span>
@@ -88,7 +88,7 @@ export function RolesForm({ initial, suggested }: { initial: RoleKey[]; suggeste
         <div className="grid gap-2 sm:grid-cols-2">{group(ROLE_ORDER.filter((r) => !isScoredRole(r)))}</div>
       </fieldset>
       <div className="grid gap-3">
-        <p className="font-mono text-xs text-ink-muted" aria-live="polite">
+        <p className="text-sm text-ink-muted" aria-live="polite">
           {selected.length} of {MAX_ROLES} chosen
         </p>
         {error ? (

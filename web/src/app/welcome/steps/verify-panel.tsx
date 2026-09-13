@@ -37,7 +37,7 @@ export function VerifyPanel({
   return (
     <div className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <code className="font-mono text-xl tracking-wider text-ink select-all">{code}</code>
+        <code className="font-mono text-xl tracking-[0.12em] text-ink select-all">{code}</code>
         <Button type="button" variant="outline" className="h-11 px-4" onClick={copy}>
           {copied ? "Copied" : "Copy code"}
         </Button>

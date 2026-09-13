@@ -20,7 +20,7 @@ function Section({ id, title, intro, children }: { id: string; title: string; in
   return (
     <section aria-labelledby={`${id}-title`} className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
       <div className="grid gap-1">
-        <h2 id={`${id}-title`} className="text-lg font-semibold tracking-tight">
+        <h2 id={`${id}-title`} className="display text-[1.75rem] leading-none">
           {title}
         </h2>
         {intro ? <p className={HINT}>{intro}</p> : null}
@@ -37,12 +37,12 @@ export default async function SettingsPage() {
   if (!s) redirect("/login");
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-20 sm:px-6 sm:pt-14">
+    <div className="mx-auto grid max-w-3xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
+        <h1 className="display text-title">Settings</h1>
         <Link
           href="/account"
-          className="-mr-2 inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-ink-muted hover:text-ink"
+          className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
         >
           Back to account
         </Link>
@@ -64,7 +64,7 @@ export default async function SettingsPage() {
           zones={timezoneList()}
         />
         <p className={`${HINT} border-t border-line pt-4`}>
-          <Link href="/jobs" className="font-medium text-brand underline underline-offset-4">
+          <Link href="/jobs" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
             See the jobs we sent you
           </Link>{" "}
           in the last 14 days.
@@ -84,25 +84,25 @@ export default async function SettingsPage() {
           <p className={HINT}>
             A JSON file with your account, sources, collected data, scores, cards and consent history.
           </p>
-          <Button asChild variant="outline" className="h-11 w-full px-5 text-base sm:w-fit">
+          <Button asChild size="lg" variant="outline" className="w-full sm:w-fit">
             <a href="/api/me/export" download>
               Download my data
             </a>
           </Button>
         </div>
         <div className="grid gap-3 border-t border-line pt-4">
-          <h3 className="text-base font-semibold">Delete my account</h3>
+          <h3 className="font-sans text-base font-semibold">Delete my account</h3>
           <DeleteAccountForm />
         </div>
       </Section>
 
       <p className={HINT}>
         Read the{" "}
-        <Link href="/privacy" className="font-medium text-brand underline underline-offset-4">
+        <Link href="/privacy" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
           privacy policy
         </Link>{" "}
         and{" "}
-        <Link href="/how-scoring-works" className="font-medium text-brand underline underline-offset-4">
+        <Link href="/how-scoring-works" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
           how scoring works
         </Link>
         .

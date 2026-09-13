@@ -38,7 +38,7 @@ export function VisibilityForm({ visible, canTurnOn }: { visible: boolean; canTu
       {locked ? (
         <p className={HINT}>
           You need a score first.{" "}
-          <Link href="/welcome" className="font-medium text-brand underline underline-offset-4">
+          <Link href="/welcome" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
             Finish setting up
           </Link>
         </p>

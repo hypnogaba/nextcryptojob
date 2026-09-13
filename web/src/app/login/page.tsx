@@ -15,8 +15,8 @@ export default async function LoginPage() {
   const telegram = telegramLoginEnabled(telegramEnv());
 
   return (
-    <section className="mx-auto max-w-sm px-4 py-16 sm:py-24">
-      <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
+    <section className="mx-auto max-w-sm px-[clamp(16px,4vw,56px)] py-16 sm:max-w-md sm:py-24">
+      <h1 className="display text-title">Sign in</h1>
       {telegram ? (
         <>
           <TelegramButton className="mt-8 w-full">Continue with Telegram</TelegramButton>
