@@ -11,3 +11,6 @@
 - Картки: гомогліфи й частини адрес у display name; SITE_URL замість Host; гонка createCard (UNIQUE → зрозуміла помилка); тести маршрутів /c; зайвий індекс idx_cards_user_role.
 - Вхід: Turnstile проти блокування чужої пошти.
 - Налаштування: safeHref не має приймати `/\host`; вивантаження має включати знайомства кандидата (без respond_token_hash), коли T5 злито; аудит без історії при вимкненні видимості, коли згода вже 0.
+
+## CRM (T6)
+- An agency can skip review by choosing Our own team at /company/start; decide after the hackathon whether to detect it.

@@ -256,6 +256,87 @@ describe("callback queries", () => {
   });
 });
 
+describe("intro buttons (CRM 5.5)", () => {
+  const INTRO = "int_ABCDEFGHIJKLMNOPQRST";
+  const CANDIDATE = "aaaaaaaa-1111-4111-8111-111111111111";
+
+  /** Кандидат з Telegram 555 і запит знайомства від Acme Labs, що чекає відповіді. */
+  function seedIntro() {
+    exec(
+      `INSERT INTO users (id, email, telegram_id, telegram_username, channel, roles, visible_to_companies)
+       VALUES (?, 'alice@example.com', '555', 'alice_eth', 'telegram', '["engineer"]', 1)`,
+      CANDIDATE,
+    );
+    exec(
+      `INSERT INTO companies (id, name, terms_version, terms_accepted_at)
+       VALUES ('co_AAAAAAAAAAAAAAAAAAAA', 'Acme Labs', 'v1', datetime('now'))`,
+    );
+    exec(
+      `INSERT INTO pipeline (company_id, user_id, stage, added_via)
+       VALUES ('co_AAAAAAAAAAAAAAAAAAAA', ?, 'intro_requested', 'rest')`,
+      CANDIDATE,
+    );
+    exec(
+      `INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, respond_token_hash, expires_at)
+       VALUES (?, 'co_AAAAAAAAAAAAAAAAAAAA', ?, 'approval', 'pending', 'We would like to talk about a Solidity role.',
+               'rest', 'h', datetime('now', '+14 days'))`,
+      INTRO,
+      CANDIDATE,
+    );
+  }
+
+  const press = (data: string, fromId = 555) => ({
+    update_id: nextUpdateId++,
+    callback_query: {
+      id: "cb-intro",
+      from: { id: fromId },
+      data,
+      message: { message_id: 7, chat: { id: fromId, type: "private" } },
+    },
+  });
+
+  it("Accept from the candidate's Telegram reaches the intro flow, answers the button and writes the result in the chat", async () => {
+    seedIntro();
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    expect((await post(press(`ia:${INTRO}`))).status).toBe(200);
+
+    expect(rows("SELECT status, contact_value FROM intros WHERE id = ?", INTRO)).toEqual([
+      { status: "accepted", contact_value: "@alice_eth" },
+    ]);
+    expect(rows("SELECT stage FROM pipeline WHERE user_id = ?", CANDIDATE)).toEqual([{ stage: "contact_shared" }]);
+    const done = "Done. Acme Labs can now see your Telegram handle.";
+    expect(sent.find((s) => s.method === "answerCallbackQuery")?.body).toEqual({ callback_query_id: "cb-intro", text: done });
+    expect(sent.find((s) => s.method === "sendMessage" && s.body.chat_id === 555)?.body).toMatchObject({ text: done });
+    expect(sent.find((s) => s.method === "editMessageReplyMarkup")?.body).toEqual({
+      chat_id: 555,
+      message_id: 7,
+      reply_markup: { inline_keyboard: [] },
+    });
+  });
+
+  it("a failure inside the intro flow still answers the button", async () => {
+    seedIntro();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    exec("ALTER TABLE intros RENAME TO intros_broken");
+    expect((await post(press(`ia:${INTRO}`))).status).toBe(200);
+    expect(sent).toEqual([
+      {
+        method: "answerCallbackQuery",
+        body: { callback_query_id: "cb-intro", text: "Something went wrong. Try again from the link in the message." },
+      },
+    ]);
+  });
+
+  it("a press from another Telegram account changes nothing and only answers the button", async () => {
+    seedIntro();
+    await post(press(`id:${INTRO}`, 556));
+    expect(rows("SELECT status FROM intros WHERE id = ?", INTRO)).toEqual([{ status: "pending" }]);
+    expect(sent).toEqual([
+      { method: "answerCallbackQuery", body: { callback_query_id: "cb-intro", text: "This request is for another account." } },
+    ]);
+  });
+});
+
 describe("per-chat limit", () => {
   it("stops answering a chat that floods the bot", async () => {
     for (let i = 0; i < BOT_CHAT_LIMITS.maxAttempts + 3; i++) await post(message("/help"));

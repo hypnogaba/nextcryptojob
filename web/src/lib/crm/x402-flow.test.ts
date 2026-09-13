@@ -17,7 +17,6 @@ import {
 import type { TestDb } from "@/test/sqlite-d1";
 import {
   commit,
-  getAction,
   PaymentRequired,
   prepareAction,
   release,
@@ -173,48 +172,32 @@ describe("paid search (settle before response)", () => {
 });
 
 describe("paid intro (settle before effect)", () => {
-  /** request_intro ще без обробника (T5); тут заглушка, щоб перевірити порядок кроків. */
-  function stubIntroHandler() {
-    const def = getAction("request_intro")!;
-    const original = def.handler;
-    const handler = vi.fn(async () => {
-      throw new Error("the handler must not run");
-    });
-    def.handler = handler;
-    return { handler, restore: () => (def.handler = original) };
-  }
-
   it("a company without a subscription over its daily intro quota gets 429 before any settle", async () => {
-    const stub = stubIntroHandler();
-    try {
-      const co = addCompany(db.raw);
-      const { key } = await addApiKey(db.raw, co);
-      addUsage(db.raw, 10, { companyId: co, action: "request_intro", at: "2026-09-12 09:00:00" });
-      const candidate = addUser(db.raw);
-      const ctx: ActionContext = await contextFor(db, { authorization: `Bearer ${key}` }, { now: NOON });
-      const prepared = prepareAction("request_intro", { candidate_id: candidate, message: "We would like to talk about a Solidity role." }, ctx);
-      expect(prepared.payment).toMatchObject({ action: "request_intro", usd: "5.00", settle: "before_effect" });
+    const co = addCompany(db.raw);
+    const { key } = await addApiKey(db.raw, co);
+    addUsage(db.raw, 10, { companyId: co, action: "request_intro", at: "2026-09-12 09:00:00" });
+    const candidate = addUser(db.raw);
+    const ctx: ActionContext = await contextFor(db, { authorization: `Bearer ${key}` }, { now: NOON });
+    const prepared = prepareAction("request_intro", { candidate_id: candidate, message: "We would like to talk about a Solidity role." }, ctx);
+    expect(prepared.payment).toMatchObject({ action: "request_intro", usd: "5.00", settle: "before_effect" });
 
-      const { out } = await paidCall(prepared);
-      expect(out).toMatchObject({ kind: "rejected", error: { code: "daily_quota_exceeded", status: 429 } });
-      expect(facilitator.verify).toBe(1);
-      expect(facilitator.settle).toBe(0);
-      expect(stub.handler).not.toHaveBeenCalled();
-      expect(usage()).toHaveLength(10);
-      // Бронь платежу знято: той самий підписаний платіж можна повторити пізніше.
-      expect(all(db.raw, "SELECT id FROM x402_payments")).toEqual([]);
-    } finally {
-      stub.restore();
-    }
+    const { out } = await paidCall(prepared);
+    expect(out).toMatchObject({ kind: "rejected", error: { code: "daily_quota_exceeded", status: 429 } });
+    expect(facilitator.verify).toBe(1);
+    expect(facilitator.settle).toBe(0);
+    expect(all(db.raw, "SELECT id FROM intros")).toEqual([]);
+    expect(usage()).toHaveLength(10);
+    // Бронь платежу знято: той самий підписаний платіж можна повторити пізніше.
+    expect(all(db.raw, "SELECT id FROM x402_payments")).toEqual([]);
   });
 });
 
 describe("not implemented actions", () => {
   it("answer 501 not_implemented before asking for any payment", async () => {
     const co = addCompany(db.raw);
-    const { key } = await addApiKey(db.raw, co); // без підписки: знайомство було б платним
+    const { key } = await addApiKey(db.raw, co); // без підписки: місяць USDC платний
     const ctx = await contextFor(db, { authorization: `Bearer ${key}` });
-    const call = runAction("request_intro", { candidate_id: crypto.randomUUID(), message: "We would like to talk about a role." }, ctx);
+    const call = runAction("buy_usdc_month", {}, ctx);
     await expect(call).rejects.toMatchObject({ code: "not_implemented", status: 501 });
     await expect(call).rejects.not.toBeInstanceOf(PaymentRequired);
     // Навіть з хибним входом: спершу 501.

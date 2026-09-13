@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { loadBillingState, type BillingState, type SubscriptionView } from "@/lib/billing/access";
@@ -7,6 +9,7 @@ import { TRIAL_DAYS } from "@/lib/billing/checkout";
 import { requestOrigin } from "@/lib/billing/origin";
 import { stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
 import { resolveWebActor, type ActionContext } from "@/lib/crm/context";
+import { CRM_HOME } from "@/lib/crm/company";
 import { can } from "@/lib/crm/permissions";
 import { appEnv, db } from "@/lib/db";
 import { fromSqlTime } from "@/lib/time";
@@ -19,7 +22,9 @@ export const metadata: Metadata = { title: "Billing", robots: { index: false } }
  * Оплата компанії (специфікація CRM, 8, 7.5 і 10.2): стан доступу, Stripe
  * Checkout і портал для власника, інструкція для USDC через x402.
  * Без STRIPE_SECRET_KEY картка показує "Card payments are coming soon".
- * Сторінка мінімальна: оболонку CRM (навігацію, плашки) будують T6/T7.
+ * Оболонку CRM (перемикач, плашки, навігацію) дає layout групи (crm) (T6).
+ * `?welcome=1` після реєстрації (6.1): три шляхи: пробний, USDC, оплата за запит.
+ * Агенція на перевірці або відхилена сюди не потрапляє: для неї лише заявка й налаштування.
  */
 
 const ERRORS: Record<BillingError, string> = {
@@ -207,6 +212,38 @@ function CardSection({ state, cardsEnabled, isOwner }: { state: BillingState; ca
   );
 }
 
+/** Три шляхи після реєстрації компанії (6.1). */
+function Welcome({ cardsEnabled, trial }: { cardsEnabled: boolean; trial: boolean }) {
+  const LINK = "font-medium text-brand underline underline-offset-4";
+  return (
+    <section aria-labelledby="welcome-heading" className="mt-6 grid gap-3 rounded-lg border border-line bg-brand-soft p-5 sm:p-6">
+      <h2 id="welcome-heading" className="text-lg font-semibold">
+        Your company is ready. Choose how to start.
+      </h2>
+      <ol className="grid gap-2 text-sm text-ink">
+        <li>
+          <a href="#card-heading" className={LINK}>
+            {trial ? `Start ${TRIAL_DAYS}-day trial` : "Subscribe"}
+          </a>
+          {cardsEnabled ? " with a card: full CRM for your team." : ". Card payments are coming soon."}
+        </li>
+        <li>
+          <a href="#usdc-heading" className={LINK}>
+            Pay 100 USDC for 30 days
+          </a>{" "}
+          with your agent or any x402 client.
+        </li>
+        <li>
+          <Link href={CRM_HOME} className={LINK}>
+            Continue with pay per request (API only)
+          </Link>
+          : search and intros through the API, paid per request with x402.
+        </li>
+      </ol>
+    </section>
+  );
+}
+
 function UsdcSection({ origin, enabled }: { origin: string; enabled: boolean }) {
   const endpoint = `${origin}/api/v1/billing/usdc-month`;
   const curl = [
@@ -266,6 +303,7 @@ export default async function BillingPage({
   if (!ctx || ctx.actor.kind !== "member" || !state) {
     return shell(<p className="mt-4 text-ink-muted">Your account is not part of a company yet.</p>);
   }
+  if (ctx.company?.status === "pending_review" || ctx.company?.status === "rejected") redirect("/company/apply");
 
   const env = appEnv();
   const cardsEnabled = stripeSettings(env as unknown as StripeEnv).enabled;
@@ -285,12 +323,13 @@ export default async function BillingPage({
         error={first(params.error)}
         canManage={isOwner && cardsEnabled}
       />
+      {first(params.welcome) === "1" && isOwner ? <Welcome cardsEnabled={cardsEnabled} trial={state.trialAvailable} /> : null}
       <dl className="mt-8 grid gap-1">
         <dt className="font-mono text-xs tracking-widest text-ink-muted uppercase">Current plan</dt>
         <dd className="text-lg font-semibold text-ink">{status.label}</dd>
         <dd className="text-ink-muted">{status.detail}</dd>
       </dl>
-      <div className="mt-8 grid gap-6">
+      <div className="mt-8 grid grid-cols-1 gap-6">
         <CardSection state={state} cardsEnabled={cardsEnabled} isOwner={isOwner} />
         <UsdcSection origin={origin} enabled={usdcEnabled} />
       </div>
