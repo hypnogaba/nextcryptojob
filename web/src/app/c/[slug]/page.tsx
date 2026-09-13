@@ -76,8 +76,8 @@ export default async function CardPage({ params }: Props) {
             {view.roleName}, rated {view.score}
           </h1>
           <p className="text-lg text-ink">
-            {view.displayName}. Level {view.level} of 10, {view.tier.finishName.toLowerCase()} finish: a{" "}
-            {view.roleName} score from {view.levelRange}.
+            {view.displayName}. Level {view.level} of 10, {view.tier.finishName.toLowerCase()} finish:{" "}
+            {/^[aeiou]/i.test(view.roleName) ? "an" : "a"} {view.roleName} score from {view.levelRange}.
           </p>
           <p className="text-ink-muted">
             NextCryptoJob turns a public track record on X, GitHub and wallets into a score for a crypto role. Flip
