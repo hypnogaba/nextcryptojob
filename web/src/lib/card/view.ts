@@ -123,7 +123,7 @@ export function cardView(card: PublicCard, evidence?: CardEvidence | null): Card
     backMissing: back
       ? null
       : evidence
-        ? `The holder's score changed after this card was issued on ${issuedOn}. The card keeps the score it was issued with.`
+        ? `This person's score changed after the card was issued on ${issuedOn}. The card keeps the score it was issued with.`
         : null,
   };
 }

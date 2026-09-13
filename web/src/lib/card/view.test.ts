@@ -91,7 +91,7 @@ describe("cardView", () => {
     const view = cardView(FIXTURE, { ...EVIDENCE, score: 75.1 });
     expect(view.back).toBeNull();
     expect(view.stats).toEqual([]);
-    expect(view.backMissing).toMatch(/changed after this card was issued on 12 Sep 2026/);
+    expect(view.backMissing).toMatch(/changed after the card was issued on 12 Sep 2026/);
   });
 
   it("never shows a wallet, a link or an account id", () => {

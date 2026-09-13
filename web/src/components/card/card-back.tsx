@@ -15,6 +15,7 @@ export function CardBackFace({
   back,
   meta,
   missing,
+  recipe,
   className,
 }: {
   face: CardFace;
@@ -23,6 +24,8 @@ export function CardBackFace({
   meta: string;
   /** Чому розкладу немає. */
   missing?: string | null;
+  /** Рецепт ролі словами: показуємо, коли розкладу немає. */
+  recipe?: string | null;
   className?: string;
 }) {
   return (
@@ -92,7 +95,10 @@ export function CardBackFace({
           </tbody>
         </table>
       ) : (
-        <p>{missing ?? "The breakdown for this card is not available."}</p>
+        <div className="grid content-start gap-2">
+          <p>{missing ?? "The breakdown for this card is not available."}</p>
+          {recipe ? <p className="ncj-legend">{recipe}</p> : null}
+        </div>
       )}
       {back?.note ? <p>{back.note}</p> : null}
       {back ? (

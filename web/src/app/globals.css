@@ -475,6 +475,7 @@
     box-shadow: var(--elev-lift);
   }
   .ncj-share-wide { aspect-ratio: 1200 / 675; }
+  .ncj-share { box-shadow: var(--elev-lift), 0 0 0 1px var(--line); }
   .ncj-share-tall { aspect-ratio: 1080 / 1350; }
   .ncj-share-rosette { position: absolute; opacity: 0.1; }
   .ncj-share-wide .ncj-share-rosette { width: 64cqw; height: 64cqw; right: -14cqw; top: -4cqw; }

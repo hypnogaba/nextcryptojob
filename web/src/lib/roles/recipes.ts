@@ -84,6 +84,10 @@ export const RECIPES = {
 export type ScoredRoleKey = keyof typeof RECIPES;
 export const SCORED_ROLE_KEYS = Object.keys(RECIPES) as ScoredRoleKey[];
 
+export function isScoredRoleKey(role: string): role is ScoredRoleKey {
+  return Object.hasOwn(RECIPES, role);
+}
+
 const list = (w: Weights) => w.map(([k, n]) => `${SOURCE_NAME[k]} ${n}`).join(", ");
 
 /** «GitHub 80, X 20» або «Audit contests 60, GitHub 25, X 15, or GitHub 70, X 30». */

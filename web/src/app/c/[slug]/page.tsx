@@ -7,6 +7,7 @@ import { CardFront } from "@/components/card/card-front";
 import { Button } from "@/components/ui/button";
 import { ROLES } from "@/lib/card/roles";
 import { cardPath, xShareUrl } from "@/lib/card/share";
+import { isScoredRoleKey, recipeBonus, recipeCore } from "@/lib/roles/recipes";
 import { loadCardView, loadIsOwner, requestOrigin } from "./card-data";
 
 // Публічна сторінка картки: єдине, що видно без входу. Бал, роль, рівень, ім'я
@@ -57,13 +58,16 @@ export default async function CardPage({ params }: Props) {
   const owner = await loadIsOwner(slug);
   const shareUrl = owner ? xShareUrl(view, await requestOrigin()) : null;
   const meta = `Formula ${view.formulaVersion}, issued ${view.issuedOn}.`;
+  const recipe = isScoredRoleKey(view.role)
+    ? `How ${view.roleName} is scored: ${recipeCore(view.role)}. Bonus: ${recipeBonus(view.role)}.`
+    : null;
 
   return (
     <section className="mx-auto grid max-w-[1240px] items-start gap-12 px-[clamp(16px,4vw,56px)] pt-10 pb-24 sm:pt-16 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:gap-20">
       <CardFlip
         className="mx-auto w-full max-w-[380px]"
         front={<CardFront face={view} draw />}
-        back={<CardBackFace face={view} back={view.back} meta={meta} missing={view.backMissing} />}
+        back={<CardBackFace face={view} back={view.back} meta={meta} missing={view.backMissing} recipe={recipe} />}
       />
 
       <div className="grid max-w-[60ch] gap-6 lg:pt-4">
