@@ -177,6 +177,102 @@ journalctl -u nextcryptojob-digest -n 20   # рядок digest-due: eligible, du
 один запит пулу: близько 57 тис. `rows_read` (повний прохід `jobs_cache`, індексу на `fetched_at` там
 немає навмисно), що за ціною D1 для читань копійки.
 
+## 7. Перехід на формулу v6 (план, 13.09; не викачено)
+
+Що міняється: лише роль «Трейдер» і джерело `trading` (`docs/contracts.md` §4, звіт
+`research/trader-calibration-2026-09-13.md`). Решта ролей дає ті самі бали, що v5.
+
+### Як сайт вирішує, чи показувати бал
+
+- Компаніям (пошук CRM, картка кандидата в CRM, воронка, API, MCP) бал показується, лише якщо в
+  `quality_runs` є рядок з `formula_version` = версія **цього рядка `scores`** і `passed = 1`
+  (`publishedSql()` у `web/src/lib/crm/visibility.ts`, `PUBLISHED` у `search.ts`, `project.ts`, `pipeline.ts`).
+  Ворота йдуть по рядку: бал v5 потребує пройденого прогону v5, бал v6 пройденого прогону v6.
+- `FORMULA_VERSION` у `web/src/lib/crm/types.ts` потрібна лише для причини порожнього пошуку:
+  `scores_not_published`, якщо для чинної версії немає пройденого прогону. На показ балів вона не впливає.
+- Людині (свій профіль, `/c/<slug>`, пояснення балу) бал показується без перевірки воріт. Зворот картки
+  бере ваги з `breakdown_json`, тож v5 і v6 показуються кожна зі своїми вагами.
+- Стан на 13.09 (читання D1 `nextcryptojob`): `quality_runs` порожня. **v5 ворота не пройшла ніколи**, тож
+  компанії зараз не бачать жодного балу; пошук з фільтром балу каже `scores_not_published`.
+  Прогони 12.09 з VPS були з `--no-db` і не пройшли (таблиця в §5).
+
+### Порядок
+
+Деплоїти лише зі свіжого main після злиття `track/formula-v6` (інакше деплой відкотить інші доріжки).
+
+1. Рушій, локально в `engine/`:
+
+```sh
+npm ci && npm test && npm run typecheck && npm run parity   # parity: 0.000 проти score_v6.py
+rm -rf dist && npm run build
+rsync -rlt --delete dist package.json package-lock.json tradebot-vps:/opt/nextcryptojob-engine/
+```
+
+2. На VPS: власник, залежності, перезапуск (поточні люди дораховуються за старою формулою):
+
+```sh
+cd /opt/nextcryptojob-engine
+chown -R root:root . && chmod -R u=rwX,go=rX .
+PATH=/usr/local/bin:$PATH npm ci --omit=dev --no-audit --no-fund
+grep -o 'FORMULA_VERSION = "v[0-9]*"' dist/formula/score.js     # має бути v6
+systemctl restart nextcryptojob-engine && journalctl -u nextcryptojob-engine -n 20
+```
+
+3. Ворота v6 з VPS, спершу без запису. Еталон складається локально з `people_all.json` і ніків Sherlock
+   з `extra_handles.json` (як 12.09), лежить на VPS лише на час прогону:
+
+```sh
+# локально, у research/data (у git не йде)
+umask 077; python3 -c 'import json; p=json.load(open("people_all.json")); e=json.load(open("extra_handles.json")); [x.update(sherlock=e[x["id"]]["sherlock"]) for x in p if e.get(x["id"], {}).get("sherlock")]; json.dump(p, open("/tmp/ncj-people.json", "w"))'
+scp /tmp/ncj-people.json tradebot-vps:/var/lib/nextcryptojob-engine/people.json && rm /tmp/ncj-people.json
+# на VPS
+cd /opt/nextcryptojob-engine && set -a; . /etc/nextcryptojob-engine.env; set +a
+chown nextcryptojob:nextcryptojob /var/lib/nextcryptojob-engine/people.json && chmod 600 /var/lib/nextcryptojob-engine/people.json
+ENGINE_CONCURRENCY=1 runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js quality-gate /var/lib/nextcryptojob-engine/people.json --no-db
+```
+
+4. Той самий прогін із записом у D1 (рядок пишеться завжди, `passed` = чесний результат; сайт бере лише `passed = 1`):
+
+```sh
+ENGINE_CONCURRENCY=1 runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js quality-gate /var/lib/nextcryptojob-engine/people.json
+rm /var/lib/nextcryptojob-engine/people.json
+```
+
+5. Перерахувати всіх, чий бал з іншої версії. Звичайний `enqueue-refresh` бере лише людей з фактами,
+   старшими за 7 днів, тому для зміни формули є `--stale-formula` (усі з балом не v6, незалежно від віку
+   фактів; `--per-hour N` = не більше N за раз). Worker збирає факти заново й пише бали v6:
+
+```sh
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js enqueue-refresh --stale-formula
+journalctl -u nextcryptojob-engine -f      # рядок на людину; черга порожня = усі на v6
+```
+
+6. Сайт з `FORMULA_VERSION = "v6"` (рецепт трейдера 90/10 на головній і картках): звичайний деплой web з
+   main. Раніше за рушій не варто: рецепт казав би 90/10, поки зворот картки ще показує бал v5 з 80/20.
+
+### Ворота v6: чесний шлях
+
+Прогін правила рушія (`evaluateGate`) на кеші фактів дослідження (13.09, без мережі, без запису):
+
+| Формула | exact | within-one | unscored | промахи на 2 рівні | з них з прогалиною | ворота |
+|---|---|---|---|---|---|---|
+| v5 (як на проді) | 40,8% | 85,7% | 1 | 6 | 1 | не пройдено |
+| v6 | 42,9% | 85,7% | 1 | 6 | 1 | не пройдено |
+
+Перша умова (≥ 85% у межах сусіднього) виконана, друга («жодного промаху на 2 рівні без прогалини в
+даних») ні: 5 промахів без прогалини (1 аудитор безпеки, 2 продакти, 1 інженер, 1 креатор; шостий, другий
+аудитор, має прогалину `audits`). Усі поза роллю трейдера, у v5 і v6 ті самі. На VPS без ключів результат гірший (81,6% для v5).
+
+Тому записати результат дослідження як пройдений прогін v6 не можна: за правилом рушія він не пройдений,
+так само як v5. Що можна чесно:
+- записати прогін v6 з VPS (крок 4) з `passed = 0`: історія є, на сайт не впливає;
+- додати на VPS `GITHUB_TOKEN`, `HELIUS_KEY`, `YOUTUBE_KEY`, `BLOCKSCOUT_KEY` і повторити крок 4: це закриє
+  прогалини VPS, але 5 промахів формули лишаться;
+- розібрати 5 промахів (звіт §8): для кожного або виправлення формули тієї ролі з прогоном воріт, або
+  справжня причина-прогалина від збирача. Змінити саме правило воріт може лише власник (запис у
+  `docs/DECISIONS.md`), не рушій і не сайт.
+Доки пройденого прогону немає, компанії балів не бачать ні з v5, ні з v6; людям їхні бали видно.
+
 ## Оновлення
 
 `rsync` нового `dist` (§2), за потреби `npm ci --omit=dev`, далі `systemctl restart nextcryptojob-engine`.

@@ -145,6 +145,30 @@ describe("cli", () => {
     expect(jobs()).toHaveLength(2);
   });
 
+  it("enqueue-refresh --stale-formula ставить усіх з балом іншої версії формули, навіть зі свіжими фактами", async () => {
+    const add = (id: string, version: string) => {
+      db.addUser(id);
+      db.exec("INSERT INTO source_facts (user_id, source, facts_json) VALUES (?, 'x', '{}')", id);
+      db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', ?)",
+        id, version);
+    };
+    add("old1", "v5"); add("old2", "v5"); add("cur", FORMULA_VERSION);
+    const r = await cli(["enqueue-refresh", "--stale-formula"]);
+    expect(r).toEqual({ code: 0, out: `enqueue-refresh: 2 queued with scores from a formula other than ${FORMULA_VERSION}` });
+    expect(jobs().map((j) => j.user_id).sort()).toEqual(["old1", "old2"]);
+    // Повтор нікого не дублює: обидва вже в черзі.
+    expect((await cli(["enqueue-refresh", "--stale-formula"])).out).toMatch(/^enqueue-refresh: 0 queued/);
+  });
+
+  it("enqueue-refresh --stale-formula --per-hour N ставить не більше N", async () => {
+    for (const id of ["a1", "a2", "a3"]) {
+      db.addUser(id);
+      db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', 'v5')", id);
+    }
+    expect((await cli(["enqueue-refresh", "--stale-formula", "--per-hour", "2"])).out).toMatch(/^enqueue-refresh: 2 queued/);
+    expect(jobs()).toHaveLength(2);
+  });
+
   it("score-facts: збирачі й формула без D1, друк часу, прогалин і балів; ключі лише «set/missing»", async () => {
     const out: string[] = [];
     const registry = fakeRegistry({ collectSolana: async () => ({ ok: true, facts: { S: { sigs: 3, sigsOk: 3, sigsCapped: false,
