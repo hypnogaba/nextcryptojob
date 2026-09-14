@@ -9,9 +9,12 @@ import { companyKey } from "../digest/clean.js";
  * - вакансія, яку прибрав jobs-prune, а скан потім побачив знову, повертається з тим самим id,
  *   і `sent.job_ref` (nr:<id>) не дасть надіслати її людині вдруге.
  * 96 біт: на сотні тисяч адрес ймовірність збігу нехтовна.
+ *
+ * Джерело, чия адреса несе його мітки (web3.career: apply_url, який не можна правити), дає замість
+ * адреси стійкий ключ (RawJob.idKey, «web3career:<номер>»): id той самий, хоч би мітки змінились.
  */
-export function jobId(url: string): string {
-  return `j${createHash("sha256").update(url.trim()).digest("hex").slice(0, 24)}`;
+export function jobId(urlOrKey: string): string {
+  return `j${createHash("sha256").update(urlOrKey.trim()).digest("hex").slice(0, 24)}`;
 }
 
 /** Шум, який відрізняє публікації тієї самої ролі в різних країнах. */

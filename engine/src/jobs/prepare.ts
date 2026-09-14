@@ -17,7 +17,7 @@ export const WINDOW_DAYS = 30;
 const collapse = (v: string): string => v.replace(/\s+/g, " ").trim();
 
 export function isFresh(postedAt: string | null, days: number, now: Date): boolean {
-  if (!postedAt) return true; // частина джерел дати не публікує (Rippling, BambooHR, web3.career у списку)
+  if (!postedAt) return true; // частина джерел дати не публікує (Rippling, BambooHR)
   const t = new Date(postedAt).getTime();
   if (Number.isNaN(t)) return true;
   return (now.getTime() - t) / 86_400_000 <= days;
@@ -91,7 +91,8 @@ export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date):
     const key = companyKey(company);
     if (isNonCryptoCompany(key, company)) { dropped.company++; nonCrypto[company] = (nonCrypto[company] ?? 0) + 1; continue; }
     if (!isFresh(j.postedAt, windowDays, now)) { dropped.old++; continue; }
-    const id = jobId(url);
+    // Адреса йде в базу як є (web3.career: apply_url без жодної правки); id зі стійкого ключа, якщо він є.
+    const id = jobId(j.idKey?.trim() || url);
     const dk = dedupeKey(company, title);
     if (seenKey.has(dk) || seenId.has(id)) { dropped.duplicate++; continue; }
     seenKey.add(dk);
@@ -110,7 +111,7 @@ export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date):
       salaryMax: hasPay ? int(j.salaryMax) : parsed?.max ?? null,
       salaryCurrency: hasPay ? (j.salaryCurrency?.trim().toUpperCase() || null) : parsed?.currency ?? null,
       source: j.source,
-      tags: jobTags(title, remote),
+      tags: jobTags(title, remote, j.boardTags),
       dedupeKey: dk,
       postedAt: j.postedAt,
       fetchedAt,

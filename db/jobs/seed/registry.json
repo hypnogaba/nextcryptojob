@@ -3317,8 +3317,8 @@
    "site_url": "https://web3.career",
    "crypto_only": 1,
    "enabled": 1,
-   "terms_note": "terms page behind Cloudflare, not verified; robots.txt allows; official free Web3 Jobs API exists (token), switch to it when available",
-   "feed_url": "https://web3.career/"
+   "terms_note": "official Web3 Jobs API with our token (WEB3CAREER_TOKEN, since 2026-09-14), read by src/jobs/sources/web3career.ts whatever the kind; terms: link to apply_url unchanged with a follow link (no nofollow, no added params), name web3.career as the source, token private",
+   "feed_url": "https://web3.career/api/v1"
   }
  ],
  "getro_collections": [

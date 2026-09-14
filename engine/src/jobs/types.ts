@@ -24,6 +24,14 @@ export interface RawJob {
    * (salary-text.ts), якщо джерело не дало її окремим полем.
    */
   description?: string | null;
+  /**
+   * Стійкий ключ вакансії для id рядка, коли адреса може мінятись або несе мітки джерела
+   * (web3.career: номер вакансії, а `url` це їхній apply_url, який не можна правити). Без нього id
+   * з адреси (ids.ts). В базу окремо не пишеться.
+   */
+  idKey?: string | null;
+  /** Теги самої дошки (web3.career): з них лише сфери для підказки ролі (tags.ts boardSpheres). */
+  boardTags?: readonly string[];
 }
 
 /** Рядок jobs_cache, готовий до запису. */

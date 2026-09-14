@@ -1,6 +1,10 @@
 // Перенесено з NextRole (crypto-jobs-agent, scanner): src/sources/boards.ts, лише три формати, якими
-// читаються крипто-дошки: розмітка JobPosting (web3.career), потік Next.js (JobStash), RSS (remote3).
+// читаються крипто-дошки: розмітка JobPosting, потік Next.js (JobStash), RSS (remote3).
 // Національних дошок і розбору їхніх заголовків тут немає.
+//
+// web3.career тут НЕ читається: з 14.09.2026 лише їхній офіційний API з токеном (web3career.ts), а
+// fetchBoard відмовляє будь-якій адресі web3.career, щоб сторінки не збирались удруге. Розбір
+// розмітки JobPosting лишився для інших дошок; знімок web3career-list.html лише зразок розмітки.
 import { fetchXml, type FetchOptions } from "../../http.js";
 import { extractSalary } from "../salary-text.js";
 import { mapLimit } from "../run.js";
@@ -76,7 +80,15 @@ export function splitBoardTitle(raw: string): { company: string; title: string }
   return null;
 }
 
+/** Хост web3.career: вакансії з нього лише через офіційний API (web3career.ts). */
+export function isWeb3CareerHost(url: string): boolean {
+  try { return /(^|\.)web3\.career$/i.test(new URL(url).hostname); } catch { return false; }
+}
+
 export async function fetchBoard(board: BoardSource, windowDays: number, o: FetchOptions = {}, now: Date = new Date()): Promise<RawJob[]> {
+  if (isWeb3CareerHost(board.feedUrl)) {
+    throw new Error(`${board.name}: web3.career читається лише через офіційний API (web3career.ts), не сторінками`);
+  }
   if (board.kind === "jsonld") return fetchJsonLd(board, o, windowDays, now);
   if (board.kind === "nextjs") return fetchNextBoard(board, o, windowDays, now);
   if (board.kind === "rss") return fetchRss(board, o);
@@ -123,7 +135,7 @@ async function fetchRss(board: BoardSource, o: FetchOptions): Promise<RawJob[]> 
   return parseRssBoard(await fetchXml(board.feedUrl, {}, o), board);
 }
 
-// ── JSON-LD (web3.career) ─────────────────────────────────────
+// ── JSON-LD ───────────────────────────────────────────────────
 /**
  * Дошка, яка віддає вакансії розміткою JobPosting (стандарт schema.org, його ставлять для Google
  * Jobs): назва, компанія, місто й дата в однакових полях у всіх, надійніше за розбір верстки.
@@ -160,7 +172,7 @@ export function parseJobPostings(html: string, board: BoardSource, pageUrl?: str
 }
 
 /**
- * `jobLocationType: TELECOMMUTE` самого по собі мало: web3.career ставить його всім, включно з
+ * `jobLocationType: TELECOMMUTE` самого по собі мало: web3.career ставив його всім, включно з
  * «Office Manager» за адресою в Нью-Йорку. Конкретне місто важить більше за прапорець.
  */
 function isRemote(node: Record<string, unknown>, loc: string | null): boolean {
@@ -274,7 +286,7 @@ async function fetchJsonLd(board: BoardSource, o: FetchOptions, windowDays: numb
 }
 
 /**
- * Вакансії з однієї сторінки списку. У списку web3.career розмітка є, але БЕЗ адрес; адреса
+ * Вакансії з однієї сторінки списку. У списку (так було на web3.career) розмітка є, але БЕЗ адрес; адреса
  * вакансії складається з її назви й компанії, тож розмітку можна зшити з посиланнями за слагом
  * без жодного додаткового запиту. Не вдалось: сторінки вакансій поодинці.
  */

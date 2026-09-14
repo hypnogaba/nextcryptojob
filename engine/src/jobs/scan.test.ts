@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadCrawlPool } from "../digest/jobs.js";
 import { readOnlyJobsDb } from "../digest/jobs-db.js";
-import { __resetLimiters } from "../limits.js";
+import { __resetLimiters, __setLimiter } from "../limits.js";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
 import { cryptoLinks, newCompanies, runJobsDiscover } from "./discover.js";
 import { jobsDatabaseId } from "./env.js";
@@ -38,6 +38,7 @@ const REGISTRY: SeedRegistry = {
 let db: FakeJobsDb;
 let urls: string[];
 let deadAnswers: 404 | 200;
+let web3careerStatus: 200 | 401;
 
 /** Підставна мережа: адреса → файл знімка; дошка deadco відповідає 404 (або порожнім списком). */
 const fetchImpl = (async (input: string) => {
@@ -54,6 +55,9 @@ const fetchImpl = (async (input: string) => {
   if (url.includes("/companies/anchorage")) return json("speedrun-company-anchorage.json");
   if (url.includes("/companies/")) return new Response(JSON.stringify({ company: { jobs: [] } }), { status: 200 });
   if (url.includes("api.getro.com")) return json("getro-1625-page.json");
+  if (url.startsWith("https://web3.career/api/v1?")) {
+    return web3careerStatus === 200 ? json("web3career-api.json") : new Response("invalid token", { status: 401 });
+  }
   return new Response("unexpected", { status: 500 });
 }) as unknown as typeof fetch;
 
@@ -67,7 +71,9 @@ beforeEach(() => {
   db.sqlite.exec(seedSql(REGISTRY));
   urls = [];
   deadAnswers = 404;
+  web3careerStatus = 200;
   db.seen.length = 0;
+  __setLimiter("web3.career", { concurrency: 1, minIntervalMs: 0 });
 });
 afterEach(() => db.close());
 
@@ -145,6 +151,43 @@ describe("jobs-scan", () => {
     expect(stats.fetched).toBe(r.kept);
     expect(jobs.length).toBe(r.pool.pool);
     expect(jobs.every((j) => j.ref.startsWith("nr:j") && j.source === "nextrole")).toBe(true);
+  });
+});
+
+describe("jobs-scan: web3.career лише через офіційний API", () => {
+  const TOKEN = "w3c_SECRET_token";
+  // Рядок sources лишився з часів сторінок (kind 'jsonld', feed_url головна): скан однаково йде в API.
+  const addBoard = () => db.exec(`INSERT INTO sources (name, label, kind, feed_url, site_url, crypto_only, enabled)
+    VALUES ('board:web3career', 'Web3.career', 'jsonld', 'https://web3.career/', 'https://web3.career', 1, 1)`);
+  const api = JSON.parse(fixture("web3career-api.json"))[2] as Array<{ id: number; apply_url: string; date_epoch: number }>;
+
+  it("apply_url у базі байт у байт, id з номера вакансії, сторінок сайту не читаємо", async () => {
+    addBoard();
+    const r = await scan(new JobsStore(db, false), NOW, { WEB3CAREER_TOKEN: TOKEN });
+    expect(urls.filter((u) => u.includes("web3.career")).every((u) => u.startsWith("https://web3.career/api/v1?"))).toBe(true);
+    expect(r.bySource.find((s) => s.source === "board:web3career")!.error).toBeUndefined();
+    const rows = db.all<{ id: string; url: string }>("SELECT id, url FROM jobs_cache WHERE source = 'board:web3career'");
+    const fresh = api.filter((j) => NOW.getTime() - j.date_epoch * 1000 <= 30 * DAY);
+    expect(rows.map((x) => x.url).sort()).toEqual(fresh.map((j) => j.apply_url).sort());
+    for (const x of rows) expect(x.id).toBe(jobId(`web3career:${api.find((j) => j.apply_url === x.url)!.id}`));
+  });
+
+  it("без WEB3CAREER_TOKEN джерело падає з ясною причиною і нікуди не ходить", async () => {
+    addBoard();
+    const r = await scan(new JobsStore(db, false));
+    expect(urls.some((u) => u.includes("web3.career"))).toBe(false);
+    expect(r.bySource.find((s) => s.source === "board:web3career")!.error).toMatch(/WEB3CAREER_TOKEN/);
+  });
+
+  it("токен не потрапляє ні в source_state, ні в scan_runs, ні в журнал", async () => {
+    addBoard();
+    web3careerStatus = 401;
+    const lines: string[] = [];
+    await runJobsScan({ store: new JobsStore(db, false), env: { WEB3CAREER_TOKEN: TOKEN }, now: NOW, log: (l) => lines.push(l), fetch: o() });
+    const state = db.get<{ last_error: string }>("SELECT last_error FROM source_state WHERE source = 'board:web3career'");
+    expect(state!.last_error).toMatch(/401/);
+    const notes = db.all<{ notes: string }>("SELECT notes FROM scan_runs").map((x) => x.notes).join("\n");
+    for (const text of [state!.last_error, notes, lines.join("\n")]) expect(text).not.toContain(TOKEN);
   });
 });
 

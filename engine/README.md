@@ -40,7 +40,8 @@ Telegram або листом через сайт (`deliver.ts`), розклад 
 пише лише в базу вакансій D1 `nextcryptojob-jobs` (`../db/jobs`, змінна `CF_JOBS_D1_DATABASE_ID`):
 реєстр крипто-роботодавців з публічним ATS (`sources/ats.ts`: Greenhouse, Lever і Lever EU, Ashby,
 Workable, SmartRecruiters, Recruitee, Teamtailor, Breezy, BambooHR, Rippling, Personio), крипто-дошки
-(`sources/boards.ts`: web3.career, JobStash, remote3), крипто-компанії a16z speedrun, за бажанням
+(web3.career лише через їхній офіційний API з токеном, `sources/web3career.ts`; `sources/boards.ts`:
+JobStash, remote3), крипто-компанії a16z speedrun, за бажанням
 Superteam Earn; вилка в річну (`pay.ts`, `salary-text.ts`), вікно 30 днів і дедуп (`prepare.ts`).
 `--dry` не пише нічого й друкує, скільки рядків D1 записав би прогін. Частину коду перенесено зі сканера
 NextRole (позначено в заголовках файлів); у роботі від NextRole нічого не залежить. Засів реєстру:

@@ -204,8 +204,10 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   bamboohr: { concurrency: 2, minIntervalMs: 300 },
   personio: { concurrency: 2, minIntervalMs: 300 },
   teamtailor: { concurrency: 1, minIntervalMs: 500 },
+  // Офіційний Web3 Jobs API (src/jobs/sources/web3career.ts): ліміт не названо, лише 429 при надмірі.
+  // 51 запит раз на добу, по одному, з паузою 1,5 с: близько 80 с на скан.
+  web3career: { concurrency: 1, minIntervalMs: 1_500 },
   // Дошки гортаються сторінками: по одній і з паузою, як людина, що гортає список.
-  web3career: { concurrency: 1, minIntervalMs: 1_000 },
   "jobstash.xyz": { concurrency: 1, minIntervalMs: 500 },
   remote3: { concurrency: 1, minIntervalMs: 1_000 },
   "speedrun-talent-network.com": { concurrency: 2, minIntervalMs: 250 },
@@ -280,4 +282,9 @@ export function backoffFor(urlOrHost: string | URL, ms: number): void {
 /** Лише для тестів: забути всі обмежувачі. */
 export function __resetLimiters(): void {
   registry.clear();
+}
+
+/** Лише для тестів: інші межі бюджету до наступного __resetLimiters (напр. без паузи між запитами). */
+export function __setLimiter(hostOrBudget: string, options: LimiterOptions): void {
+  registry.set(budgetKey(hostOrBudget), makeLimiter(options));
 }

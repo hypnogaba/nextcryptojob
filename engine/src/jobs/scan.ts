@@ -1,5 +1,5 @@
 // Щоденний скан вакансій NextCryptoJob (`jobs-scan [--dry]`): крипто-роботодавці з реєстру через
-// публічні API їхніх ATS, крипто-дошки (web3.career, JobStash, remote3), крипто-компанії speedrun,
+// публічні API їхніх ATS, крипто-дошки (web3.career через їхній офіційний API, JobStash, remote3), крипто-компанії speedrun,
 // за бажанням Superteam Earn. Пише лише в базу вакансій NextCryptoJob (db/jobs); насухо не пише нічого.
 //
 // Ідея прогону перенесена з NextRole (crypto-jobs-agent, scanner: scan-core.ts, dry-scan.ts), але
@@ -18,6 +18,7 @@ import { ATS, atsSourceKey } from "./sources/ats.js";
 import { fetchBoard } from "./sources/boards.js";
 import { fetchSpeedrunCrypto } from "./sources/speedrun.js";
 import { fetchSuperteam, SUPERTEAM_SOURCE } from "./sources/superteam.js";
+import { fetchWeb3Career, WEB3CAREER_SOURCE, WEB3CAREER_TOKEN_ENV } from "./sources/web3career.js";
 import type { JobsStore, Registry, SourceChange } from "./store.js";
 import type { JobRow, SourceResult, SourceState } from "./types.js";
 
@@ -151,7 +152,11 @@ function tasks(reg: Registry, env: EngineEnv, windowDays: number, now: Date, o: 
     out.push({ source, run: () => runSource(source, fn) });
   };
   for (const b of reg.boards) {
-    if (b.kind === "speedrun") {
+    if (b.name === WEB3CAREER_SOURCE) {
+      // Лише офіційний API з токеном, незалежно від `kind` рядка в sources (там лишився 'jsonld'
+      // з часів читання сторінок): сторінки web3.career скан більше не читає (fetchBoard відмовить).
+      add(b.name, () => fetchWeb3Career(env[WEB3CAREER_TOKEN_ENV], b, o));
+    } else if (b.kind === "speedrun") {
       if (envFlag(env, "JOBS_SPEEDRUN", true)) add(b.name, () => fetchSpeedrunCrypto(windowDays, o, now));
     } else {
       add(b.name, () => fetchBoard(b, windowDays, o, now));

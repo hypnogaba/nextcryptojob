@@ -24,10 +24,33 @@ const SPHERE_RULES: Array<[string, RegExp]> = [
   ["finance-legal",/\b(finance|accountant|controller|legal|counsel|compliance officer|tax)\b/i],
 ];
 
-/** Теги рядка: `web3` першим, далі сфери з назви, `remote` для віддалених. */
-export function jobTags(title: string, remote: boolean): string[] {
+/**
+ * Сфери з тегів самої дошки (web3.career): лише теги ролі, і лише в ті сфери, які добірка знає
+ * (engine/src/digest/roles.ts TAG_ROLES). Сфера лише підштовхує роль, що вже є в назві (+1), тож
+ * шумний тег дошки («react» у менеджера спільноти) ролі не створює. Мови й екосистеми не беремо.
+ */
+const BOARD_SPHERES: Record<string, string> = {
+  backend: "engineering", "front-end": "engineering", "full-stack": "engineering", "smart-contract": "engineering",
+  devops: "engineering", mobile: "engineering",
+  security: "security", "data-science": "data-ai", design: "design", "product-manager": "product",
+  "developer-relations": "devrel", "community-manager": "community", moderator: "community",
+  marketing: "marketing", sales: "sales", "business-development": "partnerships", "customer-support": "support",
+};
+
+export function boardSpheres(tags: readonly string[] | undefined): string[] {
+  const out: string[] = [];
+  for (const t of tags ?? []) {
+    const s = BOARD_SPHERES[t.toLowerCase()];
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+/** Теги рядка: `web3` першим, далі сфери з назви і з тегів дошки, `remote` для віддалених. */
+export function jobTags(title: string, remote: boolean, boardTags?: readonly string[]): string[] {
   const tags = ["web3"];
   for (const [tag, rx] of SPHERE_RULES) if (rx.test(title)) tags.push(tag);
+  for (const s of boardSpheres(boardTags)) if (!tags.includes(s)) tags.push(s);
   if (remote) tags.push("remote");
   return tags;
 }

@@ -324,7 +324,7 @@ quality gate: PASSED (within-one >= 85%)
 | Джерело | Як | Вимикач | Умови |
 |---|---|---|---|
 | Роботодавці з реєстру (`companies`, 320 увімкнених з 364) | публічні API ATS: Greenhouse (з `pay_transparency`), Lever і Lever EU, Ashby (з `includeCompensation`), Workable, SmartRecruiters, Recruitee, Teamtailor (RSS), Breezy, BambooHR, Rippling, Personio | `companies.enabled` | API існують, щоб вакансії читали й показували |
-| web3.career (`board:web3career`) | розмітка JobPosting на сторінках списку | `sources.enabled` | сторінку умов не прочитати (Cloudflare), robots дозволяє; є офіційний безкоштовний API з токеном, перейти на нього, коли буде токен |
+| web3.career (`board:web3career`) | лише офіційний Web3 Jobs API з токеном `WEB3CAREER_TOKEN` (`src/jobs/sources/web3career.ts`), з 14.09 | `sources.enabled` | умови API обов'язкові, див. «web3.career: офіційний API» нижче. Сторінки сайту скан не читає (`fetchBoard` відмовляє будь-якій адресі web3.career) |
 | JobStash (`board:jobstash`) | потік Next.js головної; лише вакансії, які дошка сама позначила крипто | `sources.enabled` | умов немає, robots `Allow: /`. 14.09 їхній бекенд відповідав 503, і головна віддавала каркас: 0 вакансій, скан це переживає |
 | Remote3 (`board:remote3`) | їхній RSS `/api/rss` | `sources.enabled` | умови забороняють автоматичні запити до сайту, тому лише їхня стрічка |
 | a16z speedrun (`aggregator:speedrun`) | відкритий API, лише крипто-компанії мережі | `JOBS_SPEEDRUN=0` | `/developers`: «reads are open and unauthenticated»; передаємо `?source=nextcryptojob` |
@@ -332,13 +332,75 @@ quality gate: PASSED (within-one >= 85%)
 | Колекції Getro (`getro_collections`, 22) | лише щотижнева розвідка посилань на ATS, вакансій з Getro в базі немає | **вимкнено**, `JOBS_GETRO_DISCOVERY=1` вмикає | **ризик**: умови Getro (getro.com/terms, v3.1) забороняють «crawl, scrape or spider» будь-яку частину сервісу, `api.getro.com/robots.txt` `Disallow: /`. Навіть розвідка раз на тиждень читає колекції. Вмикати лише рішенням власника |
 
 Не беремо: cryptocurrencyjobs.co (умови забороняють scrape, crawl і масовий передрук), crypto-careers.com
-(забороняє автоматичний збір), cryptojobslist.com (те саме), сторінки ролей web3.career (умови не
-підтверджені, той самий вміст дає їхній API).
+(забороняє автоматичний збір), cryptojobslist.com (те саме), сторінки web3.career (лише їхній API).
 
 Правила скану: лише крипто (джерело каже, що крипто, і компанії немає в `engine/src/digest/clean.ts`);
 вікно 30 днів від публікації (`JOBS_WINDOW_DAYS`); дедуп за адресою й за ключем «компанія + назва» (лишається
 запис із зарплатою); вилка лише річна (`src/jobs/pay.ts`, погодинна й місячна переводяться, незрозуміла не
 пишеться). Джерело, що падає 7 днів поспіль, стає `dead` і читається раз на тиждень (`source_state`).
+
+### web3.career: офіційний API
+
+Документація: https://docs.bondex.app/api-reference (Web3.Career Jobs API). Токен власника лежить у
+`/etc/nextcryptojob-engine.env` як `WEB3CAREER_TOKEN` (root, 600) і в Keychain Mac
+(`security find-generic-password -s nextcryptojob-web3career-token -w`). Без токена джерело падає з
+причиною «немає WEB3CAREER_TOKEN» (видно в `source_state` і в адмінці), сторінок сайту скан однаково не читає.
+
+Умови (лист web3.career власнику 14.09 і рядок умов у кожній відповіді API), порушення = доступ знімуть:
+
+1. Вести людину на `apply_url` посиланням follow: у `rel` немає `nofollow` (ні `ugc`, ні `sponsored`).
+2. `apply_url` не міняти: не додавати `utm_source`, `utm_medium`, `ref` чи будь-що, мітки вже всередині.
+3. Токен лише наш і лише для нашого сайту: не друкувати, не комітити, лише через env.
+4. Називати web3.career джерелом (рядок відповіді API: «mention web3.career as a source»).
+
+Як це виконано:
+
+- Сканер пише в `jobs_cache.url` рядок `apply_url` байт у байт (без `cleanUrl`, без `new URL().toString()`).
+  Id рядка з номера вакансії (`web3career:<id>`, `RawJob.idKey`), а не з адреси: мітки в адресі не
+  множать рядки. Дедуп за ключем «компанія + назва» як і для решти.
+- Сайт: одне місце, що вирішує `rel`, `web/src/lib/jobs/link.ts` (`externalJobLink`): для web3.career
+  `rel="noopener"` (без `noreferrer`, щоб вони бачили перехід від нас) і `target="_blank"`, для решти
+  дошок як було, `noopener noreferrer nofollow`. `safeUrl` лише перевіряє адресу, не нормалізує.
+  Підпис «via web3.career» на `/jobs`, у стрічці головної, у листі й у Telegram (`engine/src/digest/deliver.ts`
+  `jobVia`). `search_jobs` (REST і MCP) віддає `url` без змін і поле `via: "web3.career"`; опис інструмента
+  й `docs/api/openapi.yaml` кажуть агентам не міняти адресу й не ставити nofollow.
+- Тести: `engine/src/jobs/sources/web3career.test.ts`, `engine/src/jobs/scan.test.ts` (адреса в базі
+  байт у байт, токен не потрапляє ні в `source_state`, ні в `scan_runs`, ні в журнал),
+  `web/src/lib/jobs/link.test.ts` (помічник і сторож: файли, що показують вакансії, не пишуть `rel` самі,
+  у коді сайту немає `utm_` чи `ref=`), тести `/jobs`, стрічки, листа, Telegram і `/public/jobs`.
+
+Запити: API без сторінок (кожен запит дає до 100 найсвіжіших за фільтром, тег один на запит, невідомий
+тег мовчки дає порожньо). 30 днів покриваються зрізами (`WEB3CAREER_QUERIES`): найсвіжіші, усі віддалені,
+США за сімома тегами, 13 інших країн, три широкі теги й теги ролей, яких бракує (developer-relations,
+community-manager, moderator, discord, social-media, ambassador, kol, marketing, growth, trader, security,
+smart-contract), плюс решта ролей добірки. Разом 51 запит на скан, скан раз на добу: 51 запит і близько
+40 МБ на день. Ліміт запитів API не називає (лише 429 при надмірі): запити по одному з паузою 1,5 с
+(бюджет `web3career` у `src/limits.ts`), скан триває близько 80 с; 429 перечікуємо паузою 2, 4, 8 с (стеля
+10 с) і зупиняємось, беручи зібране; 401 і 403 не повторюємо. Токен у рядку запиту маскує `redact`
+(`src/http.ts`, параметр `token`), помилки ще й чистить `hideToken`.
+
+Сухий прогін 14.09.2026 з Mac, лише це джерело (`jobs-scan --dry --registry <лише board:web3career>`, токен
+з Keychain через env, у базу нічого): 51 запит, 3 176 різних вакансій, у вікні 30 днів 364 (відкинуто
+не-крипто компаній 10, дублікатів 2), пул добірки 336, з вилкою 121 (36%), віддалених 51, 128 компаній.
+За ролями (з вилкою): Engineer 113 (50), Security auditor 18 (9), DevRel 0, Data & research 22 (6),
+PM 32 (14), BD 27 (5), Marketing 28 (5), Creator/KOL 4 (0), Community 6 (1), Trader 7 (1), Designer 6 (2),
+Operations 30 (9), Finance 30 (10), Legal 41 (13), HR 8 (6). Тег developer-relations за 30 днів не має
+жодної вакансії (найсвіжіша понад рік тому).
+
+Проти бази того ж дня (живий пул 1 439, з них web3.career 577, лише SELECT): з 336 вакансій API 320 уже
+є в пулі як ті самі вакансії web3.career, 14 є під іншою адресою (той самий ключ «компанія + назва»),
+нових 2. 274 з 620 вакансій, що сканер брав зі сторінок, API не віддає жодним зі 147 перевірених зрізів
+(Bitpanda 38, Alpaca 32, DV Trading 19, Binance 17, BitGo 15, OKX 13 …). Вилка: зі сторінок web3.career
+ми брали їхню оцінку зарплати як вилку (215 з 217 вакансій, де роботодавець вилки не дав, збіглися з
+`estimated_*` API); API віддає оцінку окремо, і скан її не пише. Тому після переходу пул близько 1 186
+(-18%), вилок 345 замість 779; Trader 60 → 35, Engineer 540 → 435. Показувати оцінку web3.career окремо,
+з позначкою «estimate», вирішує власник.
+
+Перехід: старі рядки web3.career (адреси сторінок) скан більше не оновлює, за 3 доби вони випадуть з
+пулу, `jobs-prune` прибере їх за 30 днів; до того дубль відсікає ключ «компанія + назва». Рядок
+`sources` у базі лишається (`kind` 'jsonld', бо так велить CHECK; скан бере цю дошку за назвою).
+Засів (`db/jobs/seed`) оновлено; у живій базі примітку можна поправити руками:
+`UPDATE sources SET feed_url = 'https://web3.career/api/v1', terms_note = '<з registry.json>' WHERE name = 'board:web3career'`.
 
 ### Скільки це коштує в D1
 
@@ -385,6 +447,7 @@ npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
 | `JOBS_SPEEDRUN` | ні (1) | `0` вимикає speedrun у скані й розвідці |
 | `JOBS_SUPERTEAM` | ні (0) | `1` вмикає Superteam Earn |
 | `JOBS_GETRO_DISCOVERY` | ні (0) | `1` вмикає розвідку посилань з колекцій Getro (ризик умов, вище) |
+| `WEB3CAREER_TOKEN` | так, для web3.career | токен Web3 Jobs API (вище «web3.career: офіційний API»). Лише тут, root 600; ніде не друкувати й не комітити. Без нього `board:web3career` падає з причиною |
 
    Стара змінна `JOBS_D1_DATABASE_ID` (якщо була) більше не читається: прибрати рядок.
 

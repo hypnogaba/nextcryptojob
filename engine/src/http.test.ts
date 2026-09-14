@@ -46,6 +46,11 @@ describe("redact: ключі не потрапляють у тексти пом�
     expect(out).not.toContain("frag");
   });
 
+  it("токен Web3 Jobs API (web3.career, ?token=) маскується, фільтри лишаються", () => {
+    const out = redact("https://web3.career/api/v1?token=W3C-SECRET%2F9&limit=100&tag=moderator");
+    expect(out).toBe("https://web3.career/api/v1?token=***&limit=100&tag=moderator");
+  });
+
   it("незрозумілий рядок віддає без запиту", () => {
     expect(redact("not a url?token=SECRET")).not.toMatch(/SECRET/);
   });

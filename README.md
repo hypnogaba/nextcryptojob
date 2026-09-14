@@ -66,7 +66,7 @@ Cloudflare Email Service and Telegram OpenID Connect.
 NextCryptoJob runs its own crypto-only job scanner (`engine/src/jobs`) with its own jobs database
 (`db/jobs`, Cloudflare D1 `nextcryptojob-jobs`). Every day it reads the public job-board APIs of about
 320 crypto employers (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee, Teamtailor and
-others), the crypto boards web3.career, JobStash and Remote3, and the crypto companies of the a16z
+others), the crypto boards web3.career (through its official Web3 Jobs API), JobStash and Remote3, and the crypto companies of the a16z
 speedrun network. It keeps jobs posted in the last 30 days, turns every salary into a yearly range and
 drops duplicates. The site and the daily digest only read that database. Sources and their terms:
 `engine/deploy/README.md` §8.

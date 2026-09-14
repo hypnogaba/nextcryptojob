@@ -119,6 +119,17 @@ describe("Telegram", () => {
     expect(text).toContain("Apply: jobs@beta.example");
   });
 
+  it("web3.career: href рівно apply_url, без жодного доданого параметра, і рядок «via web3.career»", () => {
+    const apply = "https://web3.career/r/=cTMxEDN__U4HFyv?ref=U4HFyv&utm_source=w3c";
+    const w3 = { ...MESSAGE, jobs: [{ ...MESSAGE.jobs[0]!, url: apply }, MESSAGE.jobs[1]!] };
+    const text = telegramText(w3, "https://nextcryptojob.xyz");
+    const hrefs = [...text.matchAll(/href="([^"]*)"/g)].map((m) => m[1]!.replace(/&amp;/g, "&"));
+    expect(hrefs[0]).toBe(apply);
+    expect(text.match(/via web3\.career/g)).toHaveLength(1);
+    // Інші вакансії без рядка про джерело.
+    expect(telegramText(MESSAGE, "https://nextcryptojob.xyz")).not.toContain("via ");
+  });
+
   it("надто довге повідомлення обрізається до 4096 символів цілими вакансіями", () => {
     const long = { ...MESSAGE, jobs: Array.from({ length: 5 }, (_, i) => ({ ...MESSAGE.jobs[0]!, position: i + 1, why: "x".repeat(1500) })) };
     const text = telegramText(long, "https://nextcryptojob.xyz");

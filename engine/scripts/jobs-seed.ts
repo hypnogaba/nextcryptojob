@@ -108,9 +108,11 @@ export const CURATED: readonly SeedCompany[] = [
  * NextRole §11 і звіт 13.09). Ключ = назва дошки в експорті.
  */
 const BOARD_DECISIONS: Record<string, Omit<SeedSource, "feed_url"> & { feed?: string } | { skip: string }> = {
+  // kind лишився 'jsonld' (CHECK у db/jobs/0001_schema.sql); скан читає цю дошку лише через API за назвою.
   "board:global-web3career": {
     name: "board:web3career", label: "Web3.career", kind: "jsonld", site_url: "https://web3.career", crypto_only: 1, enabled: 1,
-    terms_note: "terms page behind Cloudflare, not verified; robots.txt allows; official free Web3 Jobs API exists (token), switch to it when available",
+    feed: "https://web3.career/api/v1",
+    terms_note: "official Web3 Jobs API with our token (WEB3CAREER_TOKEN, since 2026-09-14), read by src/jobs/sources/web3career.ts whatever the kind; terms: link to apply_url unchanged with a follow link (no nofollow, no added params), name web3.career as the source, token private",
   },
   "board:global-jobstash": {
     name: "board:jobstash", label: "JobStash", kind: "nextjs", site_url: "https://jobstash.xyz", crypto_only: 0, enabled: 1,

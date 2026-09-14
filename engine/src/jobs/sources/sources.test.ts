@@ -138,24 +138,33 @@ describe("ATS: форми відповідей, зняті 14.09", () => {
 });
 
 const W3: BoardSource = { name: "board:web3career", label: "Web3.career", kind: "jsonld", feedUrl: "https://web3.career/", cryptoOnly: true };
+/** Дошка з розміткою JobPosting. Знімок сторінки web3.career тут лише зразок розмітки: сам web3.career читається через API. */
+const LD: BoardSource = { name: "board:ld-example", label: "LD", kind: "jsonld", feedUrl: "https://jobs.example/", cryptoOnly: true };
 const JS: BoardSource = { name: "board:jobstash", label: "JobStash", kind: "nextjs", feedUrl: "https://jobstash.xyz/", cryptoOnly: false };
 const R3: BoardSource = { name: "board:remote3", label: "Remote3", kind: "rss", feedUrl: "https://www.remote3.co/api/rss", cryptoOnly: true };
 
 describe("дошки", () => {
-  it("web3.career: у списку розмітка без адрес, зшивається з посиланнями за слагом", async () => {
-    const html = fixture("web3career-list.html");
-    expect(parseJobPostings(html, W3)).toHaveLength(0); // адрес у розмітці списку немає
+  it("web3.career сторінками не читається: лише офіційний API, жодного запиту до сайту", async () => {
     const { urls, o } = serve("web3career-list.html");
-    const jobs = await fetchBoard(W3, 30, o);
+    await expect(fetchBoard(W3, 30, o)).rejects.toThrow(/офіційний API/);
+    await expect(fetchBoard({ ...LD, feedUrl: "https://www.web3.career/remote-jobs" }, 30, o)).rejects.toThrow(/офіційний API/);
+    expect(urls).toHaveLength(0);
+  });
+
+  it("розмітка JobPosting: у списку без адрес, зшивається з посиланнями за слагом", async () => {
+    const html = fixture("web3career-list.html");
+    expect(parseJobPostings(html, LD)).toHaveLength(0); // адрес у розмітці списку немає
+    const { urls, o } = serve("web3career-list.html");
+    const jobs = await fetchBoard(LD, 30, o);
     // Друга сторінка (та сама відповідь) нічого нового не дала: гортання спинилось.
-    expect(urls).toEqual(["https://web3.career/", "https://web3.career/?page=2"]);
+    expect(urls).toEqual(["https://jobs.example/", "https://jobs.example/?page=2"]);
     expect(jobs.length).toBeGreaterThanOrEqual(4);
     expect(jobs[0]).toMatchObject({
-      url: "https://web3.career/senior-principal-investigator-crypto-asset-investigations-tokenized-securities-markets-finra/154107",
+      url: "https://jobs.example/senior-principal-investigator-crypto-asset-investigations-tokenized-securities-markets-finra/154107",
       company: "FINRA", location: "Philadelphia, United States", remote: false, salaryMin: 150_000, salaryMax: 300_000,
-      salaryCurrency: "USD", source: "board:web3career", crypto: true,
+      salaryCurrency: "USD", source: "board:ld-example", crypto: true,
     });
-    expect(jobs.every((j) => j.url.startsWith("https://web3.career/") && !j.url.includes("invalid"))).toBe(true);
+    expect(jobs.every((j) => j.url.startsWith("https://jobs.example/") && !j.url.includes("invalid"))).toBe(true);
   });
 
   it("remote3: «Роль at Компанія», компанія двічі, місце й вилка з опису", () => {

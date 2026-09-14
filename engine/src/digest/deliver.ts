@@ -119,6 +119,16 @@ export function shortDate(localDate: string): string {
   return Number.isNaN(d.getTime()) ? localDate : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+/**
+ * Дошка, яку треба назвати джерелом вакансії, за адресою: web3.career (умови їхнього API: посилання
+ * на apply_url як є, follow, і web3.career названо джерелом). Адреса при цьому не міняється ніде:
+ * у Telegram вона йде в href рядком, як лежить у базі. null для решти.
+ */
+export function jobVia(url: string): string | null {
+  const host = /^https?:\/\/([^/?#:]+)/i.exec(url.trim())?.[1]?.toLowerCase();
+  return host === "web3.career" || host?.endsWith(".web3.career") ? "web3.career" : null;
+}
+
 export function telegramText(m: DigestMessage, siteUrl: string): string {
   const head = `<b>Your crypto jobs for ${escapeHtml(shortDate(m.localDate))}</b>`;
   const blocks = m.jobs.map((j) => {
@@ -134,6 +144,8 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
     ];
     if (!linked && /^mailto:/i.test(j.url)) lines.push(`Apply: ${escapeHtml(j.url.replace(/^mailto:/i, "").split("?")[0]!)}`);
     if (j.postedBy) lines.push(`Posted by ${escapeHtml(cleanText(j.postedBy, 60))} on NextCryptoJob`);
+    const via = jobVia(j.url);
+    if (via) lines.push(`via ${via}`);
     return lines.join("\n");
   });
   const foot = `Change the time or pause the digest: <a href="${escapeHtml(siteUrl)}/account">your account</a>.`;
