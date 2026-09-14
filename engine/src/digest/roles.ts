@@ -1,4 +1,4 @@
-// Роль вакансії з її назви (і тегів NextRole). Детерміновано, без моделі.
+// Роль вакансії з її назви (і тегів рядка). Детерміновано, без моделі.
 //
 // Словник TERMS перенесено дослівно з web/src/lib/roles/suggest.ts: слова людини
 // («що шукаю») і назви вакансій мають мірятись однією лінійкою, інакше людина,
@@ -246,7 +246,7 @@ const MIN_SCORE = 3;
 const SECOND_ROLE_RATIO = 0.6;
 const MAX_JOB_ROLES = 3;
 
-/** Теги NextRole (jobs_cache.tags), що підштовхують роль, яка вже є в назві (+1). */
+/** Теги сфери (jobs_cache.tags, src/jobs/tags.ts), що підштовхують роль, яка вже є в назві (+1). */
 const TAG_ROLES: Record<string, RoleKey[]> = {
   engineering: ["engineer"],
   security: ["security_auditor"],

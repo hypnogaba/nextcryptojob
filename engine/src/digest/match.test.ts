@@ -24,8 +24,8 @@ const profile = (p: Partial<DigestProfile> = {}): DigestProfile => ({
   roles: ["engineer"], remoteMode: "remote", city: null, salaryMin: null, salaryCurrency: null, ...p,
 });
 
-const pick = (nextrole: DigestJob[], prof: DigestProfile, company: DigestJob[] = [], exclude: string[] = []) =>
-  selectJobs({ nextrole, company }, prof, { now: NOW, exclude: new Set(exclude) });
+const pick = (crawl: DigestJob[], prof: DigestProfile, company: DigestJob[] = [], exclude: string[] = []) =>
+  selectJobs({ crawl, company }, prof, { now: NOW, exclude: new Set(exclude) });
 
 describe("selectJobs: роль", () => {
   it("лише вакансії з роллю людини, не більше п'яти", () => {
@@ -80,7 +80,7 @@ describe("selectJobs: місце", () => {
     expect(isRemoteLocation(true, "Remote / Hybrid - London")).toBe(true);
   });
 
-  it("вакансія національної дошки NextRole (country) не йде у «віддалено»", () => {
+  it("вакансія національної дошки (country) не йде у «віддалено»", () => {
     const dou = job({ location: "Remote", country: "UA" });
     expect(pick([dou], profile())).toEqual([]);
   });

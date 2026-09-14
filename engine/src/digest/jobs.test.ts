@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
 import { D1Client } from "../d1.js";
 import { __resetLimiters } from "../limits.js";
-import { companyJob, loadNextrolePool, parseDbTime } from "./jobs.js";
+import { companyJob, loadCrawlPool, parseDbTime } from "./jobs.js";
 import { assertReadOnlySql, readOnlyJobsDb, ReadOnlySqlError } from "./jobs-db.js";
 
 const NOW = new Date("2026-09-12T10:00:00Z");
@@ -58,7 +58,7 @@ describe("база вакансій лише для читання", () => {
   });
 });
 
-describe("loadNextrolePool", () => {
+describe("loadCrawlPool", () => {
   it("бере лише живі (бачені за 3 доби) з тегом web3 і опубліковані за 30 днів", async () => {
     const iso = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
     fake.add({ id: "live", title: "Solidity Engineer" });
@@ -67,7 +67,7 @@ describe("loadNextrolePool", () => {
     fake.add({ id: "upper", title: "Backend Engineer", tags: ["WEB3"] });
     fake.add({ id: "old", title: "Go Engineer", postedAt: iso(40) });
     fake.add({ id: "undated", title: "Frontend Engineer", postedAt: null });
-    const { jobs, stats } = await loadNextrolePool(readOnlyJobsDb(fake), NOW);
+    const { jobs, stats } = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
     expect(jobs.map((j) => j.id).sort()).toEqual(["live", "undated"]);
     expect(stats.dropped.tag).toBe(1); // LIKE без регістру пропустив "WEB3", точна перевірка ні
   });
@@ -78,14 +78,14 @@ describe("loadNextrolePool", () => {
     fake.add({ id: "c", title: "Robata Chef", company: "Katana" });
     fake.add({ id: "d", title: "Associate", company: "Katana" });
     fake.add({ id: "e", title: "Senior Protocol Engineer", company: "Katana" });
-    const { jobs, stats } = await loadNextrolePool(readOnlyJobsDb(fake), NOW);
+    const { jobs, stats } = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
     expect(jobs.map((j) => j.id)).toEqual(["e"]);
     expect(stats).toMatchObject({ fetched: 5, kept: 1, dropped: { tag: 0, company: 2, title: 2 } });
   });
 
   it("гібрид з прапорцем remote стає не віддаленим, дати з ISO розбираються", async () => {
     fake.add({ id: "h", title: "Solidity Engineer", location: "New York - Hybrid", remote: true });
-    const { jobs } = await loadNextrolePool(readOnlyJobsDb(fake), NOW);
+    const { jobs } = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
     expect(jobs[0]!.remote).toBe(false);
     expect(jobs[0]!.postedAt).toBe(NOW.getTime() - 2 * 86_400_000);
   });

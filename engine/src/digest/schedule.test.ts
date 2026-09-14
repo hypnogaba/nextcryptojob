@@ -279,7 +279,7 @@ describe("runDigestDue", () => {
     expect(next.already).toBe(1);
   });
 
-  it("нікому не пора: база вакансій NextRole не читається зовсім", async () => {
+  it("нікому не пора: база вакансій не читається зовсім", async () => {
     addUser("u1", { hour: 20 });
     addJobs(3);
     const s = await runDigestDue(deps());
@@ -318,6 +318,9 @@ describe("runDigestDue", () => {
 
 describe("CLI digest-due", () => {
   it("--dry-run --profile друкує вибір, базу не чіпає", async () => {
+    // CLI бере справжній годинник, тож і вакансії свіжі відносно нього (з NOW тест старів за три доби).
+    jobs.close();
+    jobs = new FakeJobsDb(new Date());
     addJobs(3);
     const out: string[] = [];
     const code = await runCli(["digest-due", "--dry-run", "--profile", '{"roles":["engineer"],"remote_mode":"remote"}'], {

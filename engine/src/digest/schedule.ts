@@ -17,7 +17,7 @@ import {
   type ChannelPlan, DEFAULT_SITE_URL, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
   type DigestMessage, planChannel, siteUrlOf,
 } from "./deliver.js";
-import { loadCompanyPool, loadNextrolePool, type PoolStats } from "./jobs.js";
+import { loadCompanyPool, loadCrawlPool, type PoolStats } from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
 import { type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
 import { parseRoles } from "./roles.js";
@@ -255,14 +255,14 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   }
 
   // 2. Пул: один раз на прогін.
-  const nr = await loadNextrolePool(deps.jobs, now);
-  summary.pool = nr.stats;
+  const crawl = await loadCrawlPool(deps.jobs, now);
+  summary.pool = crawl.stats;
   const company = db ? await loadCompanyPool(db, log, siteUrlOf(deps.env) ?? DEFAULT_SITE_URL) : [];
   summary.companyJobs = company.length;
-  const pool = { nextrole: nr.jobs, company };
-  log(`digest: pool ${nr.stats.kept} jobs (fetched ${nr.stats.fetched}, dropped tag ${nr.stats.dropped.tag} ` +
-    `company ${nr.stats.dropped.company} title ${nr.stats.dropped.title}; rows_read ${nr.stats.rowsRead ?? "n/a"}, ` +
-    `D1 ${nr.stats.d1Ms === null ? "n/a" : `${Math.round(nr.stats.d1Ms)} ms`}, wall ${nr.stats.wallMs} ms); company jobs ${company.length}`);
+  const pool = { crawl: crawl.jobs, company };
+  log(`digest: pool ${crawl.stats.kept} jobs (fetched ${crawl.stats.fetched}, dropped tag ${crawl.stats.dropped.tag} ` +
+    `company ${crawl.stats.dropped.company} title ${crawl.stats.dropped.title}; rows_read ${crawl.stats.rowsRead ?? "n/a"}, ` +
+    `D1 ${crawl.stats.d1Ms === null ? "n/a" : `${Math.round(crawl.stats.d1Ms)} ms`}, wall ${crawl.stats.wallMs} ms); company jobs ${company.length}`);
 
   // 3. Кожна людина окремо: збій однієї не зупиняє інших.
   for (const p of planned) {

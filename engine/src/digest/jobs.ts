@@ -1,5 +1,10 @@
-// Пул вакансій для добірки: кеш NextRole (лише читання) і живі вакансії компаній у нашій базі.
-// Пул читається один раз на прогін для всіх людей, чия година настала, і лише якщо такі є.
+// Пул вакансій для добірки: база вакансій NextCryptoJob (лише читання; пише її сканер engine,
+// src/jobs) і живі вакансії компаній у нашій основній базі. Пул читається один раз на прогін для
+// всіх людей, чия година настала, і лише якщо такі є.
+//
+// Мітки 'nextrole' (DigestJob.source, sent.source) і 'nr:' (sent.job_ref) означають «вакансія
+// зі сканування», а не компанії: це збережені значення (CHECK у db/migrations/0006_digest.sql і
+// контракт листа), тож лишаються з часів, коли вакансії читались з бази NextRole (до 14.09.2026).
 import type { Db } from "../pipeline/db.js";
 import { companyKey, isNonCryptoCompany } from "./clean.js";
 import type { JobsDb } from "./jobs-db.js";
@@ -7,9 +12,9 @@ import { type DigestJob, isRemoteLocation, type JobSalary } from "./match.js";
 import { parseRoles, titleRoles } from "./roles.js";
 
 /**
- * Скільки днів тому NextRole мав бачити вакансію на дошці. Кеш нічого не видаляє,
- * а скан щодня оновлює fetched_at у кожної побаченої; хто випав з вікна, той знятий
- * з дошки. Три доби, як у самого NextRole (scanner/src/digest.ts): запас на день без скану.
+ * Скільки днів тому скан мав бачити вакансію на дошці. Скан щодня (і у вихідні) оновлює
+ * fetched_at у кожної побаченої; хто випав з вікна, той знятий з дошки. Три доби: запас на
+ * два пропущені скани. Старіше за 30 днів прибирає jobs-prune.
  */
 export const LIVE_WINDOW_DAYS = 3;
 /** Свіжість за датою публікації (match.ts FRESH_DAYS); тут лише щоб не тягнути старе з бази. */
@@ -17,18 +22,19 @@ export const POSTED_WINDOW_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 /**
- * Один запит на прогін. Індексу на fetched_at у jobs_cache немає навмисно (NextRole
- * зняв його 04.09: кожне оновлення fetched_at сканом множило записи, а записи D1
- * в тисячу разів дорожчі за читання), тож це повний прохід по таблиці: близько
- * 57 тис. rows_read на прогін, і лише в години, коли комусь пора добірка.
- * Час у jobs_cache пише NextRole як ISO з 'T' і 'Z', тому межі теж ISO.
+ * Один запит на прогін. Індексу на fetched_at у jobs_cache немає навмисно (db/jobs/0001_schema.sql:
+ * скан щодня переписує fetched_at у кожного рядка, і індекс з ним подвоював би записи, а записи D1
+ * в тисячу разів дорожчі за читання), тож це повний прохід по таблиці: база лише крипто, тисячі
+ * рядків, і читається лише в години, коли комусь пора добірка. Тег web3 сканер ставить кожному
+ * рядку; умова лишається запобіжником. Час сканер пише як ISO з 'T' і 'Z', тому межі теж ISO.
  */
-export const NEXTROLE_POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
+export const POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
        salary_currency, tags, posted_at, fetched_at, country, dedupe_key
   FROM jobs_cache
  WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
 
-type NrRow = {
+/** Рядок POOL_SQL. */
+export type PoolRow = {
   id: string; url: string; company: string; company_key: string; title: string; location: string | null;
   remote: number; salary_min: number | null; salary_max: number | null; salary_currency: string | null;
   tags: string; posted_at: string | null; fetched_at: string; country: string | null; dedupe_key: string | null;
@@ -71,8 +77,8 @@ export type PoolStats = {
   wallMs: number;
 };
 
-/** Рядок кешу NextRole → вакансія пулу; null, якщо це не крипто або не наша роль. */
-export function nextroleJob(r: NrRow): { job: DigestJob } | { drop: "tag" | "company" | "title" } {
+/** Рядок бази вакансій → вакансія пулу; drop, якщо це не крипто або не наша роль. */
+export function crawlJob(r: PoolRow): { job: DigestJob } | { drop: "tag" | "company" | "title" } {
   const tags = tagsOf(r.tags);
   // Тег web3 перевіряє вже SQL (LIKE); тут ще раз точно, бо LIKE бачить і підрядок.
   if (!tags.includes("web3")) return { drop: "tag" };
@@ -90,14 +96,14 @@ export function nextroleJob(r: NrRow): { job: DigestJob } | { drop: "tag" | "com
   };
 }
 
-export async function loadNextrolePool(jobs: JobsDb, now: Date): Promise<{ jobs: DigestJob[]; stats: PoolStats }> {
+export async function loadCrawlPool(jobs: JobsDb, now: Date): Promise<{ jobs: DigestJob[]; stats: PoolStats }> {
   const live = new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString();
   const posted = new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString();
-  const res = await jobs.select<NrRow>(NEXTROLE_POOL_SQL, [live, posted]);
+  const res = await jobs.select<PoolRow>(POOL_SQL, [live, posted]);
   const out: DigestJob[] = [];
   const dropped = { tag: 0, company: 0, title: 0 };
   for (const r of res.rows) {
-    const x = nextroleJob(r);
+    const x = crawlJob(r);
     if ("job" in x) out.push(x.job); else dropped[x.drop]++;
   }
   return {

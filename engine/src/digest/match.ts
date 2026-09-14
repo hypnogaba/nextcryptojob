@@ -16,6 +16,11 @@ export const MAX_COMPANY_JOBS = 1;
 export const FRESH_DAYS = 30;
 const DAY_MS = 86_400_000;
 
+/**
+ * 'nextrole' = вакансія зі сканування (база вакансій NextCryptoJob), 'company' = вакансія компанії.
+ * Назва першої мітки з часів, коли вакансії читались з бази NextRole: вона збережена в sent.source
+ * (CHECK у db/migrations/0006_digest.sql) і в контракті листа, тож не міняється.
+ */
 export type JobSource = "nextrole" | "company";
 
 export interface JobSalary {
@@ -39,17 +44,17 @@ export interface DigestJob {
   url: string;
   /** Локація як її показати людині. */
   location: string | null;
-  /** Текст, у якому шукати місто (локація NextRole або місто вакансії компанії). */
+  /** Текст, у якому шукати місто (локація зі сканування або місто вакансії компанії). */
   placeText: string | null;
   remote: boolean;
-  /** Країна національної дошки NextRole (jobs_cache.country); такі не йдуть у «віддалено». */
+  /** Країна національної дошки (jobs_cache.country); такі не йдуть у «віддалено». Крипто-джерела лишають NULL. */
   country: string | null;
   salary: JobSalary | null;
   /** Мс від епохи; null, якщо джерело дату не дало. */
   postedAt: number | null;
   /** Коли джерело бачило вакансію востаннє (мс); запасна дата свіжості. */
   seenAt: number | null;
-  /** Ключ змісту NextRole (компанія + роль): та сама вакансія під новою адресою. */
+  /** Ключ змісту зі сканування (компанія + роль): та сама вакансія під новою адресою. */
   dedupeKey: string | null;
   roles: RoleKey[];
 }
@@ -135,7 +140,7 @@ const REMOTE_WORDS = /\b(remote|anywhere|worldwide|work from home|wfh|distribute
 const OFFICE_WORDS = /\b(hybrid|on-?site|in-?office|office based|office-based)\b/i;
 
 /**
- * Віддалена вакансія NextRole: прапорець джерела або слова в локації. «Hybrid» чи
+ * Віддалена вакансія зі сканування: прапорець джерела або слова в локації. «Hybrid» чи
  * «On-site» без слова «remote» перемагають прапорець: 12.09 у кеші був
  * remote = 1 з локацією «New York - Hybrid».
  */
@@ -158,7 +163,7 @@ export function placeMatch(job: DigestJob, modes: ReadonlyArray<"remote" | "city
 /** Грубо в долари: лише три валюти анкети (web/src/lib/onboarding/place.ts). Решта = невідомо. */
 const USD_RATE: Record<string, number> = { USD: 1, EUR: 1.08, GBP: 1.27 };
 
-/** Річна сума лише в правдоподібних межах: 1 000 у кеші NextRole це заглушка, а не зарплата. */
+/** Річна сума лише в правдоподібних межах: 1 000 у вилці це заглушка, а не зарплата. */
 const MIN_ANNUAL = 10_000;
 const MAX_ANNUAL = 5_000_000;
 
@@ -272,7 +277,7 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
     if (!role) continue;
     const place = placeMatch(job, effectiveModes, profile.city);
     if (!place) continue;
-    // Вакансії компаній живуть, поки відкриті й оплачені (company_jobs_live); 30 днів лише для кешу NextRole.
+    // Вакансії компаній живуть, поки відкриті й оплачені (company_jobs_live); 30 днів лише для вакансій зі сканування.
     if (job.source === "nextrole" && !isFresh(job, o.now)) continue;
     const meets = meetsFloor(job, profile.salaryMin, profile.salaryCurrency);
     out.push({ job, role, place, meetsSalary: meets, key: rankKey(place, meets, job, both) });
@@ -286,7 +291,7 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
  * щоб друга роль не зникала за першою; показ у порядку ключа ранжування.
  */
 export function selectJobs(
-  pool: { nextrole: readonly DigestJob[]; company: readonly DigestJob[] },
+  pool: { crawl: readonly DigestJob[]; company: readonly DigestJob[] },
   profile: DigestProfile,
   o: SelectOptions,
 ): DigestPick[] {
@@ -295,7 +300,7 @@ export function selectJobs(
 
   // Та сама вакансія під новою адресою: ключ змісту вже надісланої, якщо вона ще в пулі.
   const excludedDedupe = new Set(
-    pool.nextrole.filter((j) => o.exclude.has(j.ref) && j.dedupeKey).map((j) => j.dedupeKey!),
+    pool.crawl.filter((j) => o.exclude.has(j.ref) && j.dedupeKey).map((j) => j.dedupeKey!),
   );
 
   const usedCompanies = new Set<string>();
@@ -318,8 +323,8 @@ export function selectJobs(
   }
   const companyPicks = [...chosen];
 
-  const nr = candidatesFor(pool.nextrole, profile, o, excludedDedupe).filter((c) => c.job.source === "nextrole");
-  const queues = profile.roles.map((r) => nr.filter((c) => c.role === r));
+  const crawl = candidatesFor(pool.crawl, profile, o, excludedDedupe).filter((c) => c.job.source === "nextrole");
+  const queues = profile.roles.map((r) => crawl.filter((c) => c.role === r));
   const cursor = queues.map(() => 0);
   while (chosen.length < limit) {
     let progressed = false;

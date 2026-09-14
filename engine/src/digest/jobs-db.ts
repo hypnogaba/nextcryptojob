@@ -1,14 +1,11 @@
-// База вакансій NextRole (D1 `crypto-jobs-agent`), лише читання.
+// База вакансій NextCryptoJob (D1 `nextcryptojob-jobs`, db/jobs) для добірки, лише читання.
 //
-// База спільна з живим NextRole: запис звідси зламав би чужий продукт. Токен
-// Cloudflare уміє писати, тож межу тримає код: цей модуль віддає назовні лише
-// select, і кожен запит мусить бути рівно однією інструкцією SELECT або WITH.
-// Перевірку перенесено з web/src/lib/jobs-db.ts (там та сама межа для Worker).
-import { D1Client, type D1Meta } from "../d1.js";
+// Пише в цю базу тільки сканер (src/jobs). Токен Cloudflare уміє писати, тож межу для добірки
+// тримає код: цей модуль віддає назовні лише select, і кожен запит мусить бути рівно однією
+// інструкцією SELECT або WITH. Та сама межа для Worker сайту: web/src/lib/jobs-db.ts.
+import type { D1Meta } from "../d1.js";
+import { jobsD1FromEnv } from "../jobs/env.js";
 import type { EngineEnv } from "../pipeline/registry.js";
-
-/** D1 `crypto-jobs-agent` (NextRole). Той самий акаунт і токен, що й наша база. */
-export const NEXTROLE_JOBS_DB_ID = "0bf4b998-cbdc-474b-b739-eb6e6e7d5a9d";
 
 export class ReadOnlySqlError extends Error {
   constructor(reason: string) {
@@ -104,15 +101,9 @@ export function readOnlyJobsDb(backend: SelectBackend): JobsDb {
 }
 
 /**
- * База вакансій з оточення engine: CF_ACCOUNT_ID і CF_API_TOKEN ті самі, що для нашої
- * бази; JOBS_D1_DATABASE_ID необов'язковий (типово crypto-jobs-agent NextRole).
+ * База вакансій з оточення engine: CF_ACCOUNT_ID і CF_API_TOKEN ті самі, що для основної бази;
+ * CF_JOBS_D1_DATABASE_ID обов'язковий (типового значення немає, src/jobs/env.ts).
  */
 export function jobsDbFromEnv(env: EngineEnv): JobsDb {
-  const missing = ["CF_ACCOUNT_ID", "CF_API_TOKEN"].filter((k) => !env[k]);
-  if (missing.length) {
-    throw new Error(`немає змінних оточення для бази вакансій: ${missing.join(", ")} (див. /etc/nextcryptojob-engine.env)`);
-  }
-  return readOnlyJobsDb(new D1Client({
-    accountId: env.CF_ACCOUNT_ID!, databaseId: env.JOBS_D1_DATABASE_ID || NEXTROLE_JOBS_DB_ID, token: env.CF_API_TOKEN!,
-  }));
+  return readOnlyJobsDb(jobsD1FromEnv(env));
 }
