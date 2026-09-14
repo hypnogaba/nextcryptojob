@@ -1,10 +1,11 @@
 # Встановлення engine на VPS
 
-Worker черги `score_jobs` (systemd, `Restart=always`), щогодинний таймер `enqueue-refresh` і щогодинний
-таймер добірки `digest-due` (§6).
+Worker черги `score_jobs` (systemd, `Restart=always`), щогодинний таймер `enqueue-refresh`, щогодинний
+таймер добірки `digest-due` (§6) і сканер вакансій з власною базою `nextcryptojob-jobs` (§8).
 Перше встановлення: 12.09.2026 на VPS tradebot (`ssh tradebot-vps`, Ubuntu 22.04, root). На тій самій
 машині живуть бойовий торговий бот, сканер NextRole та інші служби: їхніх юнітів, користувачів,
-файлів і env не чіпаємо (з `/etc/nextrole-scanner.env` лише читаємо три значення, див. §3).
+файлів і env не чіпаємо. 12.09 з `/etc/nextrole-scanner.env` один раз прочитано три значення (§3); з
+14.09 NextCryptoJob не залежить від NextRole ні кодом, ні базою, ні службою (§8).
 
 ## 1. Користувач і каталоги (один раз)
 
@@ -156,8 +157,8 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js score-facts --x <н�
    - `INTERNAL_API_SECRET`: той самий секрет, що в сайту для `/api/internal/digest-email`. Поки
      ендпойнта немає (W7) або пошта на сайті не налаштована, добірки поштою стають `failed`
      з `email not configured`.
-   `CF_API_TOKEN` має читати й D1 `crypto-jobs-agent` (NextRole): нинішній токен зі сканера NextRole
-   це вміє (перевірено 12.09 сухим прогоном).
+   `CF_JOBS_D1_DATABASE_ID`: база вакансій `nextcryptojob-jobs` (§8). До 14.09 добірка читала базу
+   NextRole; тепер лише власну, і id бази NextRole engine відкидає з поясненням.
 3. Сухий прогін з VPS, нічого не пише й не шле:
 
 ```sh
@@ -177,9 +178,9 @@ systemctl list-timers nextcryptojob-digest.timer
 journalctl -u nextcryptojob-digest -n 20   # рядок digest-due: eligible, due, sent, failed, empty, skipped, already
 ```
 
-Годину, коли нікому не пора, прогін закінчує без жодного читання бази NextRole. Коли пора хоч комусь,
-один запит пулу: близько 57 тис. `rows_read` (повний прохід `jobs_cache`, індексу на `fetched_at` там
-немає навмисно), що за ціною D1 для читань копійки.
+Годину, коли нікому не пора, прогін закінчує без жодного читання бази вакансій. Коли пора хоч комусь,
+один запит пулу: повний прохід `jobs_cache` (індексу на `fetched_at` там немає навмисно, §8), тобто
+кілька тисяч `rows_read`, що за ціною D1 для читань копійки.
 
 ## 7. Перехід на формулу v6 (план, 13.09; не викачено)
 
@@ -309,6 +310,153 @@ quality gate: PASSED (within-one >= 85%)
 Відтоді компанії бачать бали v6. Якщо `facts` показує `collected` > 0 або прогін каже `cache-only: …`,
 кеш не збігся з еталоном: нічого не записано (для `--cache-only` падіння до збору), перезібрати кеш тим
 самим скриптом. Живий прогін з ключами (крок 4 порядку) лишається наступною перевіркою.
+
+## 8. База вакансій і сканер (`jobs-scan`, 14.09.2026)
+
+Рішення власника 14.09: NextCryptoJob і NextRole розділено повністю. У NextCryptoJob свій сканер
+(`src/jobs`, лише крипто) і своя база вакансій D1 `nextcryptojob-jobs` (`db/jobs`). Сайт (binding
+`JOBS_DB`) і добірка (`CF_JOBS_D1_DATABASE_ID`) читають лише її. Жодного коду, бази чи служби NextRole
+у роботі не лишається. Засів реєстру (`db/jobs/seed`) один раз зроблено з публічних даних бази NextRole
+(`scripts/jobs-seed.ts`, лише SELECT); далі реєстр живе сам.
+
+### Що читає сканер
+
+| Джерело | Як | Вимикач | Умови |
+|---|---|---|---|
+| Роботодавці з реєстру (`companies`, 320 увімкнених з 364) | публічні API ATS: Greenhouse (з `pay_transparency`), Lever і Lever EU, Ashby (з `includeCompensation`), Workable, SmartRecruiters, Recruitee, Teamtailor (RSS), Breezy, BambooHR, Rippling, Personio | `companies.enabled` | API існують, щоб вакансії читали й показували |
+| web3.career (`board:web3career`) | розмітка JobPosting на сторінках списку | `sources.enabled` | сторінку умов не прочитати (Cloudflare), robots дозволяє; є офіційний безкоштовний API з токеном, перейти на нього, коли буде токен |
+| JobStash (`board:jobstash`) | потік Next.js головної; лише вакансії, які дошка сама позначила крипто | `sources.enabled` | умов немає, robots `Allow: /`. 14.09 їхній бекенд відповідав 503, і головна віддавала каркас: 0 вакансій, скан це переживає |
+| Remote3 (`board:remote3`) | їхній RSS `/api/rss` | `sources.enabled` | умови забороняють автоматичні запити до сайту, тому лише їхня стрічка |
+| a16z speedrun (`aggregator:speedrun`) | відкритий API, лише крипто-компанії мережі | `JOBS_SPEEDRUN=0` | `/developers`: «reads are open and unauthenticated»; передаємо `?source=nextcryptojob` |
+| Superteam Earn (`aggregator:superteam`) | публічний JSON `superteam.fun/api/listings` | **вимкнено**, `JOBS_SUPERTEAM=1` вмикає | баунті, а не вакансії (без зарплати, короткий строк); сторінка умов не прочиталась |
+| Колекції Getro (`getro_collections`, 22) | лише щотижнева розвідка посилань на ATS, вакансій з Getro в базі немає | **вимкнено**, `JOBS_GETRO_DISCOVERY=1` вмикає | **ризик**: умови Getro (getro.com/terms, v3.1) забороняють «crawl, scrape or spider» будь-яку частину сервісу, `api.getro.com/robots.txt` `Disallow: /`. Навіть розвідка раз на тиждень читає колекції. Вмикати лише рішенням власника |
+
+Не беремо: cryptocurrencyjobs.co (умови забороняють scrape, crawl і масовий передрук), crypto-careers.com
+(забороняє автоматичний збір), cryptojobslist.com (те саме), сторінки ролей web3.career (умови не
+підтверджені, той самий вміст дає їхній API).
+
+Правила скану: лише крипто (джерело каже, що крипто, і компанії немає в `engine/src/digest/clean.ts`);
+вікно 30 днів від публікації (`JOBS_WINDOW_DAYS`); дедуп за адресою й за ключем «компанія + назва» (лишається
+запис із зарплатою); вилка лише річна (`src/jobs/pay.ts`, погодинна й місячна переводяться, незрозуміла не
+пишеться). Джерело, що падає 7 днів поспіль, стає `dead` і читається раз на тиждень (`source_state`).
+
+### Скільки це коштує в D1
+
+`jobs_cache` WITHOUT ROWID без вторинних індексів: 1 записаний рядок на вакансію за скан (і нову, і
+оновлену), плюс 3 на `scan_runs` і по 1 на зміну стану джерела. Скан насухо 14.09 з Mac: див. таблицю
+в кінці розділу. Живий прогін пише справжнє число з `meta.rows_written` у `scan_runs.rows_written`.
+Читання: пул сайту раз на 10 хв на ізолят і пул добірки раз на годину, коли комусь пора, це повні
+проходи по кількох тисячах рядків.
+
+### Порядок переходу (робить controller; сканер нічого не деплоїть сам)
+
+Добірка після нового `dist` вимагає `CF_JOBS_D1_DATABASE_ID`, а порожня база дала б людям порожню
+добірку того дня (`digest_runs` один раз на дату). Тому таймер добірки на час переходу зупиняємо.
+
+1. База й схема (локально, у `web/`, де є вхід wrangler):
+
+```sh
+npx wrangler d1 create nextcryptojob-jobs                       # записати database_id
+npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0001_schema.sql
+npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/seed/seed.sql
+npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
+  (SELECT COUNT(*) FROM companies) AS companies, (SELECT COUNT(*) FROM companies WHERE enabled = 1) AS enabled,
+  (SELECT COUNT(*) FROM sources) AS sources, (SELECT COUNT(*) FROM getro_collections) AS getro,
+  (SELECT group_concat(name) FROM schema_migrations) AS migrations"
+# очікуємо: 364, 320, 4, 22, 0001_schema,seed_registry
+```
+
+2. Токен. `CF_API_TOKEN` у `/etc/nextcryptojob-engine.env` має право D1 Edit на `nextcryptojob-jobs`.
+   Нинішній токен 12.09 узято з env сканера NextRole (§3): це спільний обліковий запис акаунта, не
+   залежність від служби, але ротація токена NextRole зупинила б і NextCryptoJob. Краще окремий токен
+   NextCryptoJob (dash.cloudflare.com, My Profile, API Tokens, Custom Token: D1 Edit на обидві бази
+   `nextcryptojob` і `nextcryptojob-jobs`), покладений так само, як у §3 (без друку значення).
+
+3. Код (§2): `npm ci && npm test && npm run typecheck && rm -rf dist && npm run build`, `rsync` на VPS,
+   `npm ci --omit=dev`. На VPS спершу `systemctl stop nextcryptojob-digest.timer`.
+
+4. Змінні в `/etc/nextcryptojob-engine.env` (одинарні лапки, як у §3):
+
+| Змінна | Потрібна | Що робить |
+|---|---|---|
+| `CF_JOBS_D1_DATABASE_ID` | так | id бази `nextcryptojob-jobs` з кроку 1. Той самий `CF_ACCOUNT_ID` і `CF_API_TOKEN`. Id бази NextRole і id основної бази engine відкидає |
+| `JOBS_WINDOW_DAYS` | ні (30) | вікно від публікації |
+| `JOBS_PRUNE_DAYS` | ні (30) | `jobs-prune`: скільки днів скан мав не бачити вакансію |
+| `JOBS_SPEEDRUN` | ні (1) | `0` вимикає speedrun у скані й розвідці |
+| `JOBS_SUPERTEAM` | ні (0) | `1` вмикає Superteam Earn |
+| `JOBS_GETRO_DISCOVERY` | ні (0) | `1` вмикає розвідку посилань з колекцій Getro (ризик умов, вище) |
+
+   Стара змінна `JOBS_D1_DATABASE_ID` (якщо була) більше не читається: прибрати рядок.
+
+5. Сухий прогін з VPS на порожній базі (реєстр з бази, нічого не пише, друкує очікувані записи):
+
+```sh
+cd /opt/nextcryptojob-engine && set -a; . /etc/nextcryptojob-engine.env; set +a
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js jobs-scan --dry
+```
+
+6. Перший справжній скан і перевірка:
+
+```sh
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js jobs-scan
+# локально, у web/:
+npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT kind, status, sources_ok, sources_failed,
+  jobs_found, jobs_new, rows_written, started_at, finished_at FROM scan_runs ORDER BY started_at DESC LIMIT 3"
+npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT COUNT(*) AS jobs,
+  SUM(fetched_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-3 days')) AS live,
+  SUM(salary_min IS NOT NULL OR salary_max IS NOT NULL) AS with_salary, COUNT(DISTINCT source) AS sources FROM jobs_cache"
+npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT source, status, fail_days, last_error FROM source_state ORDER BY fail_days DESC LIMIT 20"
+# добірка читає нову базу (нічого не пише й не шле):
+runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js digest-due --dry-run --profile '{"roles":["engineer"],"remote_mode":"remote"}'
+```
+
+7. Юніти й таймери, потім знову таймер добірки:
+
+```sh
+scp deploy/nextcryptojob-jobs-*.service deploy/nextcryptojob-jobs-*.timer tradebot-vps:/etc/systemd/system/
+systemd-analyze verify nextcryptojob-jobs-scan.service nextcryptojob-jobs-scan.timer \
+  nextcryptojob-jobs-discover.service nextcryptojob-jobs-discover.timer nextcryptojob-jobs-prune.service nextcryptojob-jobs-prune.timer
+systemctl daemon-reload
+systemctl enable --now nextcryptojob-jobs-scan.timer nextcryptojob-jobs-discover.timer nextcryptojob-jobs-prune.timer
+systemctl start nextcryptojob-digest.timer
+systemctl list-timers 'nextcryptojob-*'
+journalctl -u nextcryptojob-jobs-scan -n 20
+```
+
+   Розклад: скан щодня о 04:30 UTC (і у вихідні: живий пул не худне), розвідка в неділю о 05:30 UTC,
+   прибирання в неділю о 06:30 UTC. Час скану збігається з `SCAN_TIME_UTC` у
+   `web/src/lib/admin/job-sources.ts` (адмінка рахує пропущені скани від нього).
+
+8. Сайт: у `web/wrangler.jsonc` замість `REPLACE_WITH_NEW_DB_ID` вписати id з кроку 1 (окремий коміт),
+   деплой web лише зі свіжого main (`npm run cf:deploy`). Перевірити `/admin/sources` (джерела й
+   «Newest scan»), табло головної і `/jobs` («Jobs for you now»).
+
+Відкат: попередній `dist` engine разом зі старим рядком env і попередній деплой web. Посилання з
+добірок до переходу (`sent.job_ref = nr:<id старої бази>`) у новій базі не знаходяться: історія на
+`/jobs` покаже їх як «gone», а та сама вакансія під новим id може прийти людині ще раз, один раз.
+
+### Скан насухо 14.09.2026 (з Mac, реєстр засіву, без бази)
+
+`env -u CF_JOBS_D1_DATABASE_ID npx tsx src/cli.ts jobs-scan --dry --out dry.json` у `engine/`, типові
+налаштування (без Superteam і Getro). Міряно з ноутбука, а не з VPS: відповіді джерел з сервера варто
+звірити кроком 5.
+
+| Що | Число |
+|---|---|
+| Джерела | 324 прочитано (320 роботодавців, web3.career, JobStash, Remote3, speedrun), 0 збоїв |
+| Вакансій прочитано | 5 397 |
+| Відкинуто | старші за 30 днів 3 346, дублікати 352, не-крипто компанії 100 (Zscaler, Inmobi, Zinnia з web3.career) |
+| Записано б у `jobs_cache` | 1 599 (з них 620 web3.career, 959 з ATS 153 роботодавців, 8 Remote3, 12 speedrun) |
+| Живий пул (сито добірки) | 1 440 вакансій, 274 компанії, 699 віддалених |
+| З вилкою | 780 (54%): web3.career 594, Ashby 127, Greenhouse 105 |
+| За ролями (з вилкою) | Engineer 540 (298), Security auditor 69 (35), DevRel 0, Data & research 102 (57), PM 105 (61), BD 133 (63), Marketing 102 (60), Creator/KOL 11 (6), Community 10 (5), Trader 60 (34); поза десятьма: Operations 163, Finance 131, Legal 122, HR 42, Designer 32 |
+| Записів D1 за скан | ≈ 1 602 (1 на рядок вакансії + 3 на прогін); ≈ 48 тис. на місяць, близько $0,05 |
+| З `JOBS_SUPERTEAM=1` | +22 рядки, пул 1 446 (Creator/KOL 13) |
+
+JobStash того дня віддавав 0 (їхній бекенд відповідав 503, головна лише каркас). Коли він оживе, пул
+зросте (у кеші NextRole 13.09 JobStash давав 383 до 601 вакансії пулу, але без жодної зарплати).
+Для порівняння: пул з бази NextRole 13.09 був 1 588 (неділя) до 2 089 (п'ятниця) з 22% вилок, і
+чверть його давали колекції Getro, умови яких забороняють збір.
 
 ## Оновлення
 

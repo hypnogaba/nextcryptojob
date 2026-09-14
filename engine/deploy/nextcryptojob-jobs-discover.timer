@@ -1,0 +1,12 @@
+[Unit]
+Description=NextCryptoJob engine: weekly jobs-discover, Sunday 05:30 UTC
+
+[Timer]
+# Після недільного скану: нові компанії щоденний скан читає з понеділка.
+OnCalendar=Sun *-*-* 05:30:00 UTC
+RandomizedDelaySec=600
+Persistent=true
+Unit=nextcryptojob-jobs-discover.service
+
+[Install]
+WantedBy=timers.target

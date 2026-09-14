@@ -1,0 +1,15 @@
+[Unit]
+Description=NextCryptoJob engine: daily jobs-scan at 04:30 UTC, weekends included
+
+[Timer]
+# Щодня, і в суботу й неділю теж: інакше живий пул (вакансії, які скан бачив за 3 доби) худне
+# на вихідних. 04:30 UTC, а не 03:00: о 03:00 на тій самій машині ходить інший сканер, і ті самі
+# публічні API ATS бачили б дві хвилі з однієї адреси. Час збігається з SCAN_TIME_UTC у
+# web/src/lib/admin/job-sources.ts (адмінка рахує пропущені скани від нього): міняти разом.
+OnCalendar=*-*-* 04:30:00 UTC
+AccuracySec=1min
+Persistent=true
+Unit=nextcryptojob-jobs-scan.service
+
+[Install]
+WantedBy=timers.target

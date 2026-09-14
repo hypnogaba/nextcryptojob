@@ -1,5 +1,5 @@
 [Unit]
-Description=NextCryptoJob engine: daily job digests for people whose hour it is (digest-due)
+Description=NextCryptoJob engine: weekly prune of jobs the scan has not seen for 30 days (jobs-prune)
 After=network-online.target
 Wants=network-online.target
 
@@ -11,9 +11,9 @@ WorkingDirectory=/opt/nextcryptojob-engine
 EnvironmentFile=/etc/nextcryptojob-engine.env
 Environment=NODE_ENV=production
 # Node 24 (engines >=24): на VPS /usr/bin/node це Node 22, Node 24 стоїть у /usr/local/bin.
-ExecStart=/usr/local/bin/node dist/cli.js digest-due
-# Пул з бази вакансій (~1 с) і по людині: запис, Telegram (429 чекає до 60 с), статуси.
-TimeoutStartSec=900
+ExecStart=/usr/local/bin/node dist/cli.js jobs-prune
+# Два DELETE за умовою.
+TimeoutStartSec=300
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

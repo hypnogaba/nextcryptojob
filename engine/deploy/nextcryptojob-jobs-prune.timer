@@ -1,0 +1,11 @@
+[Unit]
+Description=NextCryptoJob engine: weekly jobs-prune, Sunday 06:30 UTC
+
+[Timer]
+OnCalendar=Sun *-*-* 06:30:00 UTC
+RandomizedDelaySec=600
+Persistent=true
+Unit=nextcryptojob-jobs-prune.service
+
+[Install]
+WantedBy=timers.target
