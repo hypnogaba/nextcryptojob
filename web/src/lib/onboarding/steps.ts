@@ -86,6 +86,9 @@ export function prevStep(step: Step): Step | null {
 
 const rank = (s: SavedStep) => (s === "done" ? STEPS.length : STEPS.indexOf(s));
 
+/** Наскільки далеко людина пройшла анкету й кроки балу: більше = далі («done» найдалі). */
+export const savedStepRank = rank;
+
 /** Куди можна зайти: будь-який уже пройдений крок, після завершення будь-який. */
 export function canVisit(step: Step, saved: SavedStep): boolean {
   return rank(step) <= rank(saved);
