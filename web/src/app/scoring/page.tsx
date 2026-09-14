@@ -66,7 +66,7 @@ export default function ScoringPage() {
         </div>
         <CardFlip
           className="mx-auto w-full max-w-[380px]"
-          front={<CardFront face={face} draw />}
+          front={<CardFront face={face} draw spin />}
           back={<CardBackFace face={face} back={EXAMPLE_BACK} meta={`Formula ${EXAMPLE_BREAKDOWN.formula}. Example data.`} />}
         />
       </section>
