@@ -18,6 +18,7 @@ import {
 import { currentAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { jobsDb } from "@/lib/jobs-db";
+import { externalRel } from "@/lib/jobs/link";
 
 export const metadata: Metadata = { title: "Job sources", robots: { index: false } };
 
@@ -51,7 +52,7 @@ function SourceName({ source }: { source: JobSource }) {
   return (
     <>
       {source.url ? (
-        <a href={source.url} target="_blank" rel="noreferrer noopener" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+        <a href={source.url} target="_blank" rel={externalRel(source.url)} className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
           {source.name}
         </a>
       ) : (

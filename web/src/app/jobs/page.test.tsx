@@ -67,6 +67,27 @@ describe("/jobs", () => {
     expect(html).not.toContain("Other Labs");
   });
 
+  it("a web3.career job links to their apply_url as is, followed, with the referrer, and names web3.career", async () => {
+    const apply = "https://web3.career/r/wczNxUTM__U4HFyv?ref=U4HFyv&utm_source=w3c";
+    const nr = migratedD1([]);
+    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT)");
+    nr.raw.prepare("INSERT INTO jobs_cache VALUES ('w3', ?, 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL), ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, NULL, NULL, NULL)").run(apply);
+    jobsHolder.db = readOnlyJobsDb(nr.d1);
+    run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_a', 'ada', '2026-09-12', 'sent', 2, 'email')");
+    run(harness.raw, `INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES
+      ('ada', 'nr:w3', 'nextrole', 'dg_a', 1, 'sent', 'email', 'Matches your Community role.'),
+      ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
+    await signIn("ada");
+    const html = await render();
+    const w3 = new RegExp(`<a [^>]*href="${apply.replace(/[?]/g, "\\?").replace(/&/g, "&amp;")}"[^>]*>`).exec(html)![0];
+    expect(w3).toContain('rel="noopener"');
+    expect(w3).toContain('target="_blank"');
+    expect(w3).not.toMatch(/nofollow|noreferrer|ugc|sponsored/);
+    expect(html).toContain("via web3.career");
+    expect(html.match(/via web3\.career/g)).toHaveLength(1);
+    expect(html).toContain('href="https://jobs.example.com/gh" target="_blank" rel="noopener noreferrer nofollow"');
+  });
+
   it("a company job links to its page on the site in the same tab, not to the company's address", async () => {
     run(harness.raw, "INSERT INTO companies (id, name, kind, status, terms_version, terms_accepted_at) VALUES ('co_x', 'Acme Labs', 'company', 'active', 'v1', datetime('now'))");
     run(

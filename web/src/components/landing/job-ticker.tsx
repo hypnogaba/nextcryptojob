@@ -6,7 +6,7 @@ import { TICKER_MIN_TO_SCROLL, type TickerJob } from "@/lib/jobs/home-board";
 const SECONDS_PER_JOB = 8;
 
 function Item({ job, copy }: { job: TickerJob; copy: boolean }) {
-  const label = [job.title, job.company, job.place, job.salary].filter(Boolean).join(", ");
+  const label = [job.title, job.company, job.place, job.salary, job.via ? `via ${job.via}` : null].filter(Boolean).join(", ");
   const body = (
     <>
       <span className="ncj-ticker-title">{job.title}</span>
@@ -18,14 +18,21 @@ function Item({ job, copy }: { job: TickerJob; copy: boolean }) {
             {job.place}
           </>
         ) : null}
+        {job.via ? (
+          <>
+            <span className="ncj-ticker-dot" aria-hidden="true" />
+            via {job.via}
+          </>
+        ) : null}
       </span>
       <span className="ncj-ticker-pay">{job.salary}</span>
     </>
   );
   // Копія доріжки лише для безшовного кола: з клавіатури й для читачів екрана її немає.
   const tab = copy ? -1 : undefined;
+  // Зовнішня: адреса й rel з lib/jobs/link.ts (web3.career лише "noopener", follow).
   return job.external ? (
-    <a href={job.href} target="_blank" rel="noopener noreferrer nofollow" aria-label={label} tabIndex={tab} className="ncj-ticker-item">
+    <a href={job.href} target="_blank" rel={job.rel ?? undefined} aria-label={label} tabIndex={tab} className="ncj-ticker-item">
       {body}
     </a>
   ) : (

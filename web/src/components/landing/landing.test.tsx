@@ -28,6 +28,8 @@ const job = (i: number, over: Partial<TickerJob> = {}): TickerJob => ({
   salary: "$100k to $120k",
   href: `https://boards.example.com/${i}`,
   external: true,
+  rel: "noopener noreferrer nofollow",
+  via: null,
   ...over,
 });
 
@@ -49,5 +51,18 @@ describe("JobTicker", () => {
     );
     expect(html).toMatch(/<a[^>]*href="\/jobs\/job_a"(?![^>]*target)[^>]*>/);
     expect(html).toContain('href="https://boards.example.com/2" target="_blank" rel="noopener noreferrer nofollow"');
+  });
+
+  it("web3.career: the exact apply_url, a followed link without noreferrer, and web3.career named as the source", () => {
+    const apply = "https://web3.career/r/=cTMxEDN__U4HFyv?ref=U4HFyv&utm_source=w3c";
+    const html = renderToStaticMarkup(
+      <JobTicker jobs={[job(1, { href: apply, rel: "noopener", via: "web3.career" })]} />,
+    );
+    const a = /<a [^>]*>/.exec(html)![0];
+    expect(a).toContain(`href="${apply.replace(/&/g, "&amp;")}"`);
+    expect(a).toContain('rel="noopener"');
+    expect(a).not.toMatch(/nofollow|noreferrer|ugc|sponsored/);
+    expect(a).toContain("via web3.career");
+    expect(text(html)).toContain("via web3.career");
   });
 });

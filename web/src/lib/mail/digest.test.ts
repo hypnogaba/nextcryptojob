@@ -68,6 +68,17 @@ describe("digestEmail", () => {
     expect(mail.html).toContain("&lt;/p&gt;&lt;script&gt;x()&lt;/script&gt;");
   });
 
+  it("a web3.career job: their apply_url unchanged in HTML and text, no rel at all, web3.career named as the source", () => {
+    const apply = "https://web3.career/r/=cTMxEDN__U4HFyv?ref=U4HFyv&utm_source=w3c";
+    const mail = digestEmail({ localDate: "2026-09-12", jobs: [job({ url: apply }), job({ position: 2 })], site: ORIGIN, unsubscribeUrl: UNSUB });
+    const hrefs = [...mail.html.matchAll(/<a href="([^"]*)"([^>]*)>/g)];
+    expect(hrefs[0]![1]!.replace(/&amp;/g, "&")).toBe(apply);
+    expect(hrefs.every((m) => !/rel=/.test(m[2]!))).toBe(true);
+    expect(mail.text).toContain(`via web3.career\n${apply}`);
+    expect(mail.html.match(/via web3\.career/g)).toHaveLength(1);
+    expect(mail.text.match(/via web3\.career/g)).toHaveLength(1);
+  });
+
   it("adds List-Unsubscribe headers only for an https pause link", () => {
     const https = digestEmail({ localDate: "2026-09-12", jobs: [job()], site: ORIGIN, unsubscribeUrl: UNSUB });
     expect(https.headers).toEqual({ "List-Unsubscribe": `<${UNSUB}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });

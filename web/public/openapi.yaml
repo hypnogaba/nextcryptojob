@@ -1585,8 +1585,16 @@ components:
         roles:
           type: array
           items: { $ref: "#/components/schemas/RoleKey" }
-        url: { type: string, description: Where to apply (company jobs go through https://nextcryptojob.xyz/jobs/<id>). }
+        url:
+          type: string
+          description: >-
+            Where to apply (company jobs go through https://nextcryptojob.xyz/jobs/<id>). Link to it exactly as
+            given: do not add or change query parameters and do not mark the link rel="nofollow". For jobs with
+            via web3.career this is their apply_url, and their API terms require a followed link to it unchanged.
         posted_at: { type: [string, "null"], format: date-time }
+        via:
+          type: string
+          description: The job board to name as the source of this job (today only "web3.career"). Absent for other jobs.
     PublicJobList:
       type: object
       required: [data, next_cursor]

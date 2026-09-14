@@ -148,10 +148,26 @@ describe("ticker", () => {
     expect(tickerHref(job({ url: "javascript:alert(1)" }))).toBeNull();
     expect(tickerHref(job({ url: "mailto:jobs@example.com" }))).toBeNull();
     expect(tickerHref(job({ url: "not a url" }))).toBeNull();
-    expect(tickerHref(job({ url: "https://boards.example.com/a?x=1" }))).toEqual({ href: "https://boards.example.com/a?x=1", external: true });
-    expect(tickerHref(job({ source: "company", jobId: "job_a b", url: "mailto:x@example.com" }))).toEqual({ href: "/jobs/job_a%20b", external: false });
+    expect(tickerHref(job({ url: "https://boards.example.com/a?x=1" }))).toEqual({
+      href: "https://boards.example.com/a?x=1", external: true, rel: "noopener noreferrer nofollow", via: null });
+    expect(tickerHref(job({ source: "company", jobId: "job_a b", url: "mailto:x@example.com" }))).toEqual({
+      href: "/jobs/job_a%20b", external: false, rel: null, via: null });
     const jobs = tickerJobs([job({ title: "Script", url: "javascript:alert(1)", salary: pay }), job({ title: "Ok", salary: pay })]);
     expect(jobs.map((j) => j.title)).toEqual(["Ok"]);
+  });
+
+  it("web3.career: apply_url byte for byte, a followed link with the referrer, web3.career named", () => {
+    const pay = usd(150_000, 190_000);
+    // Рядки, які new URL().toString() переписав би (регістр хоста, порт 443, крапки в шляху): лишаються як є.
+    for (const apply of [
+      "https://web3.career/r/=cTMxEDN__U4HFyv",
+      "https://web3.career/r/wczNxUTM__U4HFyv?utm_source=w3c&ref=U4HFyv&b=2&a=1",
+      "https://Web3.Career:443/r/./x__U4HFyv?q=a b".replace(" ", "%20"),
+    ]) {
+      expect(tickerHref(job({ url: apply }))).toEqual({ href: apply, external: true, rel: "noopener", via: "web3.career" });
+    }
+    const [t] = tickerJobs([job({ url: "https://web3.career/r/wczNxUTM__U4HFyv", salary: pay })]);
+    expect(t).toMatchObject({ href: "https://web3.career/r/wczNxUTM__U4HFyv", rel: "noopener", via: "web3.career" });
   });
 
   it("leaves out national boards and clips long text", () => {

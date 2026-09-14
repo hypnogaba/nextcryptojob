@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { cleanText, companyJobLocation } from "@/lib/digest/format";
 import { jobsDb, type JobsDb } from "@/lib/jobs-db";
 import { companyKey } from "@/lib/jobs/clean";
+import { jobVia } from "@/lib/jobs/link";
 import { crawlPool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/pool";
 import { foldText, mentionsCity } from "@/lib/jobs/place";
 import { isoTime, sqlTime } from "@/lib/time";
@@ -192,7 +193,12 @@ function openCursor(cursor: string): Cursor {
   return { p: v.p as number | null, s: v.s, id: v.id };
 }
 
+/**
+ * Вакансія для search_jobs (REST і MCP). `url` рівно та адреса, що в базі: для web3.career це їхній
+ * apply_url, який не можна міняти (lib/jobs/link.ts); `via` каже, кого назвати джерелом.
+ */
 function toPublic(job: PoolJob): PublicJob {
+  const via = job.source === "crawl" ? jobVia(job.url) : null;
   return {
     job_id: job.jobId,
     source: job.source,
@@ -205,6 +211,7 @@ function toPublic(job: PoolJob): PublicJob {
     roles: job.roles,
     url: job.url,
     posted_at: job.postedAt,
+    ...(via ? { via } : {}),
   };
 }
 

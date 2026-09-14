@@ -1,4 +1,5 @@
 import { cleanText, safeUrl, shortDate } from "@/lib/digest/format";
+import { jobVia } from "@/lib/jobs/link";
 import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
 
@@ -33,7 +34,7 @@ export function escapeHtml(text: string): string {
 
 export const DIGEST_FOOTER_REASON = "You get this because you turned on daily jobs on NextCryptoJob.";
 
-type Job = { title: string; meta: string; why: string; url: string | null; postedBy: string | null };
+type Job = { title: string; meta: string; why: string; url: string | null; postedBy: string | null; via: string | null };
 
 function tidy(j: DigestEmailJob): Job {
   const meta = [cleanText(j.company, 100), j.location ? cleanText(j.location, 100) : null, j.salary ? cleanText(j.salary, 60) : null];
@@ -41,8 +42,10 @@ function tidy(j: DigestEmailJob): Job {
     title: cleanText(j.title, 200),
     meta: meta.filter(Boolean).join(" · "),
     why: cleanText(j.why, 300),
+    // Адреса як є (safeUrl лише перевіряє): умови web3.career забороняють міняти apply_url.
     url: safeUrl(j.url),
     postedBy: j.posted_by ? cleanText(j.posted_by, 100) : null,
+    via: j.posted_by ? null : jobVia(j.url),
   };
 }
 
@@ -74,6 +77,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
       j.meta,
       j.why,
       j.postedBy ? `Posted by ${j.postedBy} on NextCryptoJob` : null,
+      j.via ? `via ${j.via}` : null,
       j.url,
     ]
       .filter(Boolean)
@@ -94,6 +98,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const htmlJobs = jobs
     .map((j, i) => {
       const title = `${i + 1}. ${escapeHtml(j.title)}`;
+      // Без rel: у листі це follow-посилання, як і вимагає web3.career.
       const titleHtml = j.url ? `<a href="${escapeHtml(j.url)}" style="color:${BRAND}">${title}</a>` : title;
       return (
         `<div style="border:1px solid ${LINE};border-radius:8px;padding:16px;margin:0 0 12px;background:#ffffff">` +
@@ -103,6 +108,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         (j.postedBy
           ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob</p>`
           : "") +
+        (j.via ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">via ${escapeHtml(j.via)}</p>` : "") +
         `</div>`
       );
     })

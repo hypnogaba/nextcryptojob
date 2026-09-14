@@ -1,6 +1,7 @@
 import { loadCompanyJobs } from "@/lib/crm/public-jobs";
 import { cleanText } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
+import { externalJobLink } from "./link";
 import { formatSalary } from "./match";
 import { FAILURE_BACKOFF_MS, crawlPool, POOL_TTL_MS, type PoolJob } from "./pool";
 
@@ -45,9 +46,13 @@ export type TickerJob = {
   company: string;
   place: string | null;
   salary: string;
-  /** Вакансія компанії: /jobs/<id> на сайті; зі сканування: http(s) адреса дошки. */
+  /** Вакансія компанії: /jobs/<id> на сайті; зі сканування: http(s) адреса дошки рівно як у базі. */
   href: string;
   external: boolean;
+  /** rel зовнішнього посилання (lib/jobs/link.ts); null для вакансій компаній. */
+  rel: string | null;
+  /** Кого назвати джерелом («web3.career»), або null. */
+  via: string | null;
 };
 
 export type HomeBoard =
@@ -92,15 +97,17 @@ export function updatedAgo(ms: number | null, now: number): string | null {
 // ---------------------------------------------------------------------------
 // Стрічка
 
-/** Посилання стрічки: вакансія компанії веде на її сторінку в нас, сканована лише на http(s). */
-export function tickerHref(job: PoolJob): { href: string; external: boolean } | null {
-  if (job.source === "company") return { href: `/jobs/${encodeURIComponent(job.jobId)}`, external: false };
-  try {
-    const u = new URL(job.url);
-    return u.protocol === "https:" || u.protocol === "http:" ? { href: u.toString(), external: true } : null;
-  } catch {
-    return null;
-  }
+type TickerLink = { href: string; external: boolean; rel: string | null; via: string | null };
+
+/**
+ * Посилання стрічки: вакансія компанії веде на її сторінку в нас, сканована лише на http(s), і
+ * адреса рівно та, що в базі (web3.career забороняє міняти apply_url; rel вирішує lib/jobs/link.ts).
+ */
+export function tickerHref(job: PoolJob): TickerLink | null {
+  if (job.source === "company") return { href: `/jobs/${encodeURIComponent(job.jobId)}`, external: false, rel: null, via: null };
+  const link = externalJobLink(job.url);
+  if (!link || !/^https?:/i.test(link.href)) return null;
+  return { href: link.href, external: true, rel: link.rel, via: link.via };
 }
 
 /**
@@ -110,7 +117,7 @@ export function tickerHref(job: PoolJob): { href: string; external: boolean } | 
  * не http(s) посиланням, з національних дощок (country: назви мовою країни).
  */
 export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJob[] {
-  type Cand = { job: PoolJob; salary: string; link: { href: string; external: boolean } };
+  type Cand = { job: PoolJob; salary: string; link: TickerLink };
   const cands: Cand[] = [];
   for (const job of all) {
     if (job.country || !job.salary?.currency || job.roles.length === 0) continue;
@@ -156,6 +163,8 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
         salary: c.salary,
         href: c.link.href,
         external: c.link.external,
+        rel: c.link.rel,
+        via: c.link.via,
       });
       if (out.length >= size) break;
     }

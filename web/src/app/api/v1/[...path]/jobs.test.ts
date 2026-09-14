@@ -437,6 +437,20 @@ describe("search_jobs", () => {
     expect((await call("GET", "/public/jobs?role=nobody")).status).toBe(422);
   });
 
+  it("web3.career jobs: url is their apply_url byte for byte over REST and MCP, with via web3.career; others have no via", async () => {
+    const apply = "https://web3.career/r/wczNxUTM__U4HFyv?ref=U4HFyv&utm_source=w3c&b=2&a=1";
+    const w3 = crawlJob({ title: "Community Manager", remote: true, url: apply });
+    const other = crawlJob({ title: "Rust Engineer", remote: true, url: "https://boards.example.com/rust" });
+    const res = await call("GET", "/public/jobs");
+    expect(schemaErrors("GET", "/public/jobs", res)).toEqual([]);
+    const by = (id: string) => res.body.data.find((j: { job_id: string }) => j.job_id === `nr_${id}`);
+    expect(by(w3)).toMatchObject({ url: apply, via: "web3.career" });
+    expect(by(other).url).toBe("https://boards.example.com/rust");
+    expect(by(other)).not.toHaveProperty("via");
+    const tool = await callTool(mcpPost, "search_jobs", { role: "community" });
+    expect(tool.structuredContent.data[0]).toMatchObject({ url: apply, via: "web3.career" });
+  });
+
   it("pages with a cursor and reads the job pool once per isolate, not once per search", async () => {
     for (let i = 0; i < 5; i++) crawlJob({ title: `Blockchain Engineer ${i}`, remote: true, postedAt: iso((i + 1) * 3_600_000) });
     const first = await call("GET", "/public/jobs?limit=2");

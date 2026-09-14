@@ -522,6 +522,8 @@ export const PublicJob = z.object({
   roles: z.array(RoleKey),
   url: z.string(),
   posted_at: IsoDateTime.nullable(),
+  /** Дошка, яку треба назвати джерелом (зараз лише «web3.career», умови їхнього API); без поля для решти. */
+  via: z.string().optional(),
 });
 
 export const PublicJobList = z.object({ data: z.array(PublicJob), next_cursor: z.string().nullable() });

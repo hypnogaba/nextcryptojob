@@ -9,6 +9,7 @@ import { dayLabel } from "@/lib/digest/format";
 import { loadJobsPage, type JobDetails, type SentDigest, type SentJob } from "@/lib/digest/history";
 import { instantMatches, type InstantMatches } from "@/lib/jobs/instant";
 import { jobsDb } from "@/lib/jobs-db";
+import { externalJobLink, jobVia } from "@/lib/jobs/link";
 import { briefDone, type SavedStep } from "@/lib/onboarding/steps";
 import { emptyState, noMatch, scheduleLine } from "./empty-state";
 
@@ -39,8 +40,11 @@ function JobTitle({ d }: { d: Pick<JobDetails, "title" | "url"> }) {
       </a>
     );
   }
+  // Чужа дошка: адреса як є, rel вирішує lib/jobs/link.ts (web3.career лише follow, без noreferrer).
+  const link = externalJobLink(d.url);
+  if (!link) return <span className={WRAP}>{d.title}</span>;
   return (
-    <a href={d.url} target="_blank" rel="noopener noreferrer nofollow" className={titleClass}>
+    <a href={link.href} target="_blank" rel={link.rel} className={titleClass}>
       {d.title}
     </a>
   );
@@ -49,6 +53,7 @@ function JobTitle({ d }: { d: Pick<JobDetails, "title" | "url"> }) {
 /** Одна вакансія: назва-посилання, компанія й місце, рядок «чому». */
 function JobRow({ d, why }: { d: JobDetails; why: string | null }) {
   const meta = [d.company, d.location, d.salary].filter(Boolean).join(" · ");
+  const via = d.url && !d.postedBy ? jobVia(d.url) : null;
   return (
     <li className="grid gap-1.5 rounded-xl border border-line bg-surface p-4 sm:p-5">
       <h3 className={`font-sans text-base font-semibold ${WRAP}`}>
@@ -57,6 +62,7 @@ function JobRow({ d, why }: { d: JobDetails; why: string | null }) {
       {meta ? <p className={`text-sm text-ink-muted ${WRAP}`}>{meta}</p> : null}
       {why ? <p className={`text-sm text-ink ${WRAP}`}>{why}</p> : null}
       {d.postedBy ? <p className={`text-xs text-ink-muted ${WRAP}`}>Posted by {d.postedBy} on NextCryptoJob</p> : null}
+      {via ? <p className="text-xs text-ink-muted">via {via}</p> : null}
     </li>
   );
 }

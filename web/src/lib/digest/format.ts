@@ -13,12 +13,18 @@ export function cleanText(text: string, max = 140): string {
 /**
  * Адреса вакансії: http(s) або mailto (так подають вакансії компаній, 0003 apply_url).
  * Інше (javascript:, data:) з чужих дощок посиланням не стає.
+ *
+ * Лише перевірка, без нормалізації: повертається та сама адреса (без пробілів по краях), а не
+ * `new URL().toString()`. Умови web3.career забороняють міняти їхній apply_url хоч на символ
+ * (lib/jobs/link.ts). Адреса з пробілом чи керівним символом усередині посиланням не стає: її
+ * довелось би переписати.
  */
 export function safeUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
+  const url = raw?.trim();
+  if (!url || /[\s\u0000-\u001f\u007f]/.test(url)) return null;
   try {
-    const u = new URL(raw);
-    return ["https:", "http:", "mailto:"].includes(u.protocol) ? u.toString() : null;
+    const u = new URL(url);
+    return ["https:", "http:", "mailto:"].includes(u.protocol) ? url : null;
   } catch {
     return null;
   }
