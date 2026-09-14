@@ -2,7 +2,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, crmDb, run } from "@/test/crm-fixtures";
-import { migratedD1, type TestDb } from "@/test/sqlite-d1";
+import { jobsTestDb } from "@/test/jobs-db";
+import { type TestDb } from "@/test/sqlite-d1";
 import { HISTORY_LIMIT, loadJobsPage } from "./history";
 
 let t: TestDb;
@@ -10,16 +11,8 @@ let nr: TestDb;
 let jobs: JobsDb;
 let jobsCalls: unknown[][];
 
-/** База NextRole у тесті: лише jobs_cache з колонками, які читає сторінка. */
-function nextroleDb(): TestDb {
-  const db = migratedD1([]);
-  db.raw.exec(`CREATE TABLE jobs_cache (
-    id TEXT PRIMARY KEY, url TEXT NOT NULL, company TEXT NOT NULL, company_key TEXT NOT NULL DEFAULT '',
-    title TEXT NOT NULL, location TEXT, remote INTEGER NOT NULL DEFAULT 0, salary_min INTEGER, salary_max INTEGER,
-    salary_currency TEXT, tags TEXT NOT NULL DEFAULT '[]', dedupe_key TEXT NOT NULL DEFAULT '', posted_at TEXT,
-    fetched_at TEXT NOT NULL DEFAULT '2026-09-12T00:00:00Z')`);
-  return db;
-}
+/** База вакансій у тесті: справжня схема db/jobs. */
+const jobsDbForTest = (): TestDb => jobsTestDb();
 
 function spyJobs(inner: JobsDb): JobsDb {
   return {
@@ -34,7 +27,9 @@ function spyJobs(inner: JobsDb): JobsDb {
 function nrJob(id: string, o: { title?: string; company?: string; location?: string | null; remote?: number; url?: string; min?: number | null; max?: number | null; cur?: string | null } = {}) {
   run(
     nr.raw,
-    "INSERT INTO jobs_cache (id, url, company, title, location, remote, salary_min, salary_max, salary_currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, salary_min, salary_max, salary_currency,
+                             source, dedupe_key, fetched_at, first_seen_at)
+     VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, 'greenhouse:x', '', '2026-09-12T00:00:00Z', '2026-09-12T00:00:00Z')`,
     id,
     o.url ?? `https://jobs.example.com/${id}`,
     o.company ?? `Company ${id}`,
@@ -96,7 +91,7 @@ const refsOf = (page: Awaited<ReturnType<typeof loadJobsPage>>) => page!.digests
 
 beforeEach(() => {
   t = crmDb();
-  nr = nextroleDb();
+  nr = jobsDbForTest();
   jobsCalls = [];
   jobs = spyJobs(readOnlyJobsDb(nr.d1));
   user(t.raw, "ada");
@@ -144,7 +139,7 @@ describe("loadJobsPage: what it shows", () => {
       ["2026-09-12", "email", ["nr:3", "nr:4"]],
       ["2026-09-10", "telegram", ["nr:1", "nr:2"]],
     ]);
-    // Один запит до бази NextRole на всі добірки.
+    // Один запит до бази вакансій на всі добірки.
     expect(jobsCalls).toHaveLength(1);
   });
 
@@ -169,7 +164,7 @@ describe("loadJobsPage: what it shows", () => {
     expect(jobsCalls[0]).toHaveLength(HISTORY_LIMIT);
   });
 
-  it("fills details from NextRole and company jobs, and says which are gone", async () => {
+  it("fills details from scanned and company jobs, and says which are gone", async () => {
     nrJob("1", { title: "Protocol  Engineer", company: "Paying Labs", location: null, remote: 1, min: 120000, max: 150000, cur: "USD" });
     nrJob("2", { url: "javascript:alert(1)" });
     const co = addCompany(t.raw, { name: "Acme Labs" });
@@ -198,7 +193,7 @@ describe("loadJobsPage: what it shows", () => {
     expect(d.jobs[0].why).toBe("Why nr:1");
   });
 
-  it("keeps the page when the NextRole DB fails, marking its jobs unavailable", async () => {
+  it("keeps the page when the jobs DB fails, marking its jobs unavailable", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const failing: JobsDb = { all: async () => Promise.reject(new Error("D1_ERROR: 429")), first: async () => null };
     digest("ada", "dg_a", "2026-09-12", ["nr:1"]);
@@ -206,7 +201,7 @@ describe("loadJobsPage: what it shows", () => {
     expect(d.jobs.map((j) => j.state)).toEqual(["unavailable"]);
   });
 
-  it("does not touch the NextRole DB when there is nothing from it", async () => {
+  it("does not touch the jobs DB when there is nothing from it", async () => {
     await loadJobsPage(t.d1, jobs, "ada");
     expect(jobsCalls).toEqual([]);
   });
