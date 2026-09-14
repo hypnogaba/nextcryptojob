@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
  * Печатка картки як SVG. Кожен шар = одна пелюстка в <defs> і її повороти <use>:
  * у кілька разів менше розмітки, ніж повна крива. Штрих, пунктир і зсув задає
  * група шару, екземпляри <use> їх успадковують, тож анімація малювання (globals.css,
- * .ncj-seal-draw) іде по всіх пелюстках шару разом, шар за шаром.
+ * .ncj-seal-draw) іде по всіх пелюстках шару разом, шар за шаром, а обертання (.ncj-seal-spin)
+ * крутить шар цілим навколо центру viewBox.
  * Без хуків: працює і на сервері, і в клієнті.
  */
 export function Seal({
@@ -17,6 +18,7 @@ export function Seal({
   segments = 6,
   density = "page",
   draw = false,
+  spin = false,
   className,
 }: {
   seed: number;
@@ -29,6 +31,8 @@ export function Seal({
   density?: SealDensity;
   /** Малювати себе при показі (один раз; статично під prefers-reduced-motion). */
   draw?: boolean;
+  /** Шари повільно обертаються, сусідні в різні боки (статично під prefers-reduced-motion). */
+  spin?: boolean;
   className?: string;
 }) {
   const layers = makeSeal(seed, level, density);
@@ -37,7 +41,7 @@ export function Seal({
   return (
     <svg
       viewBox={`-${SEAL_BOX} -${SEAL_BOX} ${2 * SEAL_BOX} ${2 * SEAL_BOX}`}
-      className={cn("ncj-seal", draw && "ncj-seal-draw", className)}
+      className={cn("ncj-seal", draw && "ncj-seal-draw", spin && "ncj-seal-spin", className)}
       aria-hidden="true"
       focusable="false"
     >
