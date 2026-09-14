@@ -38,31 +38,31 @@ beforeEach(async () => {
   await createSession("u", null);
 });
 
-describe("createCardAction (a card only with a verified anchor)", () => {
-  it("refuses an Engineer card while GitHub is not verified", async () => {
+describe("createCardAction (trust model of 13.09: self-reported sources are enough)", () => {
+  it("creates an Engineer card with a GitHub the person only typed in", async () => {
     score("engineer", 55);
-    exec("INSERT INTO identities (user_id, kind, value, verify_code) VALUES ('u', 'github', 'ada', 'ncj-aaaaaa')");
-    await expect(run(createCardAction({}, form("engineer")))).resolves.toMatchObject({
-      message: { tone: "error", text: expect.stringMatching(/Verify your GitHub/) },
-    });
-    expect(rows("SELECT * FROM cards")).toEqual([]);
-  });
-
-  it("creates it once GitHub is verified", async () => {
-    score("engineer", 55);
-    exec(
-      "INSERT INTO identities (user_id, kind, value, verified_via, verified_at) VALUES ('u', 'github', 'ada', 'bio_code', datetime('now'))",
-    );
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'github', 'ada')");
     await expect(run(createCardAction({}, form("engineer")))).resolves.toMatch(/^\/c\/[A-Za-z0-9_-]{10}$/);
   });
 
-  it("refuses a BD card without a verified X, and allows a Trader card without any", async () => {
+  it("creates BD and Trader cards with nothing verified", async () => {
     score("bd", 40);
     score("trader", 82);
-    await expect(run(createCardAction({}, form("bd")))).resolves.toMatchObject({
-      message: { text: expect.stringMatching(/Verify your X/) },
-    });
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
+    await expect(run(createCardAction({}, form("bd")))).resolves.toMatch(/^\/c\//);
     await expect(run(createCardAction({}, form("trader")))).resolves.toMatch(/^\/c\//);
-    expect(rows("SELECT role FROM cards")).toEqual([{ role: "trader" }]);
+    expect(rows("SELECT role FROM cards ORDER BY role")).toEqual([{ role: "bd" }, { role: "trader" }]);
+  });
+
+  it("still refuses a role without a score, a role the person did not pick, and an unknown role", async () => {
+    score("community", 30);
+    await expect(run(createCardAction({}, form("engineer")))).resolves.toMatchObject({
+      message: { text: "There is no score for this role yet." },
+    });
+    await expect(run(createCardAction({}, form("community")))).resolves.toMatchObject({
+      message: { text: "There is no score for this role yet." },
+    });
+    await expect(run(createCardAction({}, form("bogus")))).resolves.toMatchObject({ message: { text: "Unknown role." } });
+    expect(rows("SELECT * FROM cards")).toEqual([]);
   });
 });

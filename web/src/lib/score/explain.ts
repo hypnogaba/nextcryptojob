@@ -118,22 +118,14 @@ const GAP_KIND: Record<string, { label: string; kinds: IdentityKind[] }> = {
 };
 
 /**
- * Що з підключеного рахується. X і GitHub лише підтверджені кодом (рушій
- * неперевірені не бере); решту сайт поки не перевіряє, вона рахується як є.
+ * Що з підключеного рахується. З 13.09 (модель довіри, docs/DECISIONS.md) усе, що людина вписала:
+ * рушій бере X і GitHub без коду. `unverified` лишається порожнім; поле є, щоб поради не
+ * змінювали форму.
  */
 export type SourceState = { counted: Set<IdentityKind>; unverified: Set<IdentityKind> };
 
-const NEEDS_CODE: ReadonlySet<IdentityKind> = new Set(["x", "github"]);
-
 export function sourceState(identities: { kind: IdentityKind; verifiedAt: string | null }[]): SourceState {
-  const counted = new Set<IdentityKind>();
-  const unverified = new Set<IdentityKind>();
-  for (const i of identities) {
-    if (!NEEDS_CODE.has(i.kind) || i.verifiedAt) counted.add(i.kind);
-    else unverified.add(i.kind);
-  }
-  for (const k of counted) unverified.delete(k);
-  return { counted, unverified };
+  return { counted: new Set(identities.map((i) => i.kind)), unverified: new Set() };
 }
 
 /** «Verify GitHub», «Connect X or YouTube», «Connect Sherlock or verify GitHub». */
@@ -168,19 +160,30 @@ function round(v: number | null | undefined): number | null {
 export function gapSentence(key: string, reason: string): string {
   const base = key.split(".")[0];
   const label = GAP_KIND[base]?.label ?? base;
-  if (/not verified/i.test(reason)) return `${label}: check your code to count it.`;
+  // Бал, порахований до 13.09, коли X без коду не збирали: наступний перерахунок його прочитає.
+  if (/not verified/i.test(reason)) return `${label}: we read it on your next score update.`;
   if (/sample too small/i.test(reason)) return `${label}: not enough transactions yet to judge trading.`;
   if (/^not configured/i.test(reason)) return `${label}: we do not collect this source yet. It does not lower your score.`;
   return `${label}: we could not read it this time. It does not lower your score.`;
 }
 
+/** Бал порахований до 13.09, коли X і GitHub без коду не збирали: є прогалина «not verified». */
+export function hasStaleVerifyGap(breakdownJson: string | null | undefined): boolean {
+  return Object.values(parseBreakdown(breakdownJson ?? "{}").gaps ?? {}).some((g) => /not verified/i.test(g));
+}
+
 /** Причина без балу (missing_anchor:…) або пояснення шляху. */
-function reasonSentence(role: RoleKey, reason: string | null | undefined, state: SourceState): string | null {
+function reasonSentence(role: RoleKey, breakdown: Breakdown, state: SourceState): string | null {
+  const reason = breakdown.reason;
   if (!reason) return null;
   const name = ROLES[role].name;
   if (reason.startsWith("missing_anchor:")) {
     const kinds = [...new Set(anchorKinds({ reason }))];
     const have = kinds.filter((k) => state.counted.has(k));
+    const stale = have.filter((k) => /not verified/i.test(breakdown.gaps?.[k] ?? ""));
+    if (stale.length > 0) {
+      return `Update your score: we now count your ${[...new Set(stale.map((k) => OWN_NAME[k]))].join(" and ")} without a code.`;
+    }
     if (have.length > 0) {
       const own = [...new Set(have.map((k) => OWN_NAME[k]))].join(" or ");
       return `We found nothing to score for ${name} in your ${own} yet.`;
@@ -199,6 +202,7 @@ type Candidate = { kinds: IdentityKind[]; text: string; rank: number };
 function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): string[] {
   const out: Candidate[] = [];
   for (const [key, { weight }] of Object.entries(breakdown.core ?? {})) {
+    if (key === "audits") continue; // Sherlock з анкети прибрано (13.09).
     const kinds = (FEEDS[key] ?? []).filter((k) => !state.counted.has(k));
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
     out.push({ kinds, text: `${actionFor(kinds, state)}: it counts for ${weight}% of this score.`, rank: 1000 + weight });
@@ -207,9 +211,6 @@ function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): strin
     const kinds = (FEEDS[key] ?? []).filter((k) => !state.counted.has(k));
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
     out.push({ kinds, text: `${actionFor(kinds, state)}: it can add up to ${max} points.`, rank: max });
-  }
-  if (role === "security_auditor" && breakdown.reason !== "path:audits" && !state.counted.has("sherlock")) {
-    out.push({ kinds: ["sherlock"], text: "Connect Sherlock: audit contest results can raise this score.", rank: 999 });
   }
   // Без головного джерела про нього вже каже причина; порада повторила б її.
   const anchors = new Set(anchorKinds(breakdown));
@@ -226,13 +227,17 @@ function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): strin
     .map((c) => c.text);
 }
 
-/** Підключення головних джерел, яких бракує (reason = missing_anchor:<ключі>). */
+/**
+ * Підключення головних джерел, яких бракує (reason = missing_anchor:<ключі>). Без Sherlock: поле
+ * прибрано з анкети (13.09), тож і радити його нікуди.
+ */
 function anchorKinds(breakdown: Breakdown): IdentityKind[] {
   if (!breakdown.reason?.startsWith("missing_anchor:")) return [];
   return breakdown.reason
     .slice("missing_anchor:".length)
     .split(",")
-    .flatMap((k) => FEEDS[k] ?? []);
+    .flatMap((k) => FEEDS[k] ?? [])
+    .filter((k) => k !== "sherlock");
 }
 
 /** Прогалини, що стосуються джерел цієї ролі. */
@@ -267,8 +272,7 @@ export function explainRole(role: RoleKey, row: ScoreRow | null, state: SourceSt
   const gaps = gapsFor(breakdown);
   const tips = tipsFor(role, breakdown, state);
   if (row.score === null || !Number.isFinite(row.score)) {
-    const reason =
-      reasonSentence(role, breakdown.reason, state) ?? `We could not compute ${article(name)} ${name} score yet.`;
+    const reason = reasonSentence(role, breakdown, state) ?? `We could not compute ${article(name)} ${name} score yet.`;
     return { role, name, state: "missing", reason, tips, gaps };
   }
 
@@ -286,7 +290,7 @@ export function explainRole(role: RoleKey, row: ScoreRow | null, state: SourceSt
     core: bars(breakdown.core, (e) => e.weight),
     bonus: bars(breakdown.bonus, (e) => e.max),
     cover: Math.round(breakdown.cover ?? 0),
-    reason: reasonSentence(role, breakdown.reason, state),
+    reason: reasonSentence(role, breakdown, state),
     gaps,
     tips,
     formulaVersion: row.formula_version,

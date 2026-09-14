@@ -56,10 +56,10 @@ describe("cardView", () => {
     );
   });
 
-  it("marks a trader card as wallets not verified, and no other card", () => {
+  it("puts no marker on any card, a trader card included (trust model of 13.09)", () => {
     const trader = cardView({ ...FIXTURE, role: "trader" });
-    expect(trader.marker).toBe("Wallets not verified");
-    expect(trader.summary).toMatch(/Wallets not verified\.$/);
+    expect(trader.marker).toBeNull();
+    expect(trader.summary).not.toMatch(/not verified/i);
     expect(cardView(FIXTURE).marker).toBeNull();
   });
 

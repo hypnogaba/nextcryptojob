@@ -8,8 +8,6 @@ import type { CollectorCtx, CollectorRegistry, EngineEnv } from "./registry.js";
 export const DEFAULT_DEADLINE_MS = 45_000;
 /** Прогалина джерела, яке не встигло до дедлайну. Завдання від неї не падає. */
 export const TIMEOUT_GAP = "timeout";
-/** X без підтвердження не рахується (договір §2), але людина бачить, чому. */
-export const NOT_VERIFIED_GAP = "not verified";
 
 export type SourceOutcome = {
   result: Fetched<unknown>;
@@ -38,9 +36,9 @@ class DeadlineError extends Error {
 }
 
 /**
- * З чим звіряти профіль Sherlock: лише підтверджені GitHub і X (договір §2). Неперевірений GitHub
- * рахується як GitHub, але Sherlock не підтверджує: інакше чужий логін, вписаний без коду в біо,
- * відмикав би чужий заробіток.
+ * З чим звіряти профіль Sherlock: лише підтверджені GitHub і X (договір §2). Самозаявлені X і GitHub
+ * рахуються як свої джерела (модель довіри 13.09), але Sherlock не підтверджують: інакше чужий логін,
+ * вписаний без коду в біо, відмикав би чужий заробіток.
  */
 export function auditLinks(i: CollectorInputs): { github: string | null; x: string | null } {
   return { github: i.github?.verified ? i.github.login : null, x: i.x?.verified ? i.x.handle : null };
@@ -124,7 +122,6 @@ export async function collectPerson(inputs: CollectorInputs, o: CollectOptions):
 
   try {
     const entries = await Promise.all(planned.map(async (source): Promise<[SourceKey, SourceOutcome]> => {
-      if (source === "x" && !inputs.x!.verified) return [source, { result: { ok: false, gap: NOT_VERIFIED_GAP }, ms: 0 }];
       const start = performance.now();
       const running = Promise.resolve()
         .then(() => call(source, inputs, o.registry, ctx))

@@ -2,95 +2,140 @@
 
 import { useActionState, useState } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
-import { ERROR } from "@/components/form/styles";
+import { ERROR, FIELD, HINT, LABEL } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
-import { POSITION_CODE } from "@/lib/roles/recipes";
 import { ROLES, type RoleKey } from "@/lib/card/roles";
-import { isScoredRole, MAX_ROLES, ROLE_ORDER, unscoredNote } from "@/lib/roles/catalog";
+import { MAX_ROLES, ROLE_ORDER, UNSCORED } from "@/lib/roles/catalog";
+import { ROLE_TEXT_MAX } from "@/lib/onboarding/store";
 import { cn } from "@/lib/utils";
 import { saveRolesAction } from "../actions/answers";
 import type { StepState } from "../flow";
 
-function RoleOption({
-  role,
-  checked,
-  disabled,
-  suggested,
-  onToggle,
-}: {
-  role: RoleKey;
-  checked: boolean;
-  disabled: boolean;
-  suggested: boolean;
-  onToggle: (role: RoleKey) => void;
-}) {
-  const note = unscoredNote(role);
-  return (
-    <label
-      className={cn(
-        "flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border bg-surface px-3 py-3 transition-colors",
-        checked ? "border-ink shadow-[inset_0_0_0_1px_var(--ink)]" : "border-line hover:border-line-strong",
-        disabled && "cursor-not-allowed opacity-60",
-      )}
-    >
-      <input
-        type="checkbox"
-        name="role"
-        value={role}
-        checked={checked}
-        disabled={disabled}
-        onChange={() => onToggle(role)}
-        className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]"
-      />
-      <span className="grid gap-0.5">
-        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold text-ink">
-          <span aria-hidden className="font-display text-lg leading-none font-black">
-            {POSITION_CODE[role]}
-          </span>
-          {ROLES[role].name}
-          {suggested ? <span className="text-xs font-semibold text-brand">Suggested</span> : null}
-        </span>
-        {note ? <span className="text-xs text-ink-muted">{note}</span> : null}
-      </span>
-    </label>
-  );
-}
+const CHIP =
+  "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors " +
+  "focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none";
 
-export function RolesForm({ initial, suggested }: { initial: RoleKey[]; suggested: RoleKey[] }) {
+/**
+ * Крок ролей як підтвердження здогаду: ролі, які ми прочитали з першого кроку, стоять вибраними
+ * (прибрати хрестиком), решту можна додати одним натисканням, до трьох. Якщо роботи людини в
+ * списку немає, вона пише її своїми словами: ми шукаємо вакансії з цими словами в назві.
+ */
+export function RolesForm({
+  initial,
+  inferred,
+  roleText,
+}: {
+  /** Вибрані на початку: збережені ролі або здогад зі слів. */
+  initial: RoleKey[];
+  /** Що ми прочитали з першого кроку (може бути порожньо). */
+  inferred: RoleKey[];
+  roleText: string;
+}) {
   const [state, action] = useActionState(saveRolesAction, {} as StepState);
   const [selected, setSelected] = useState<RoleKey[]>(initial);
   const full = selected.length >= MAX_ROLES;
-
-  const toggle = (role: RoleKey) =>
-    setSelected((cur) => (cur.includes(role) ? cur.filter((r) => r !== role) : cur.length < MAX_ROLES ? [...cur, role] : cur));
-
-  const group = (roles: RoleKey[]) =>
-    roles.map((role) => (
-      <RoleOption
-        key={role}
-        role={role}
-        checked={selected.includes(role)}
-        disabled={full && !selected.includes(role)}
-        suggested={suggested.includes(role)}
-        onToggle={toggle}
-      />
-    ));
-
+  const remove = (role: RoleKey) => setSelected((cur) => cur.filter((r) => r !== role));
+  const add = (role: RoleKey) => setSelected((cur) => (cur.includes(role) || cur.length >= MAX_ROLES ? cur : [...cur, role]));
+  // Спершу ті, що ми прочитали, але людина прибрала; далі порядок договору.
+  const others = [...inferred, ...ROLE_ORDER.filter((r) => !inferred.includes(r))].filter((r) => !selected.includes(r));
+  const notes = selected.filter((r) => UNSCORED[r]);
   const error = state.errors?.role;
+  const textError = state.errors?.role_text;
+
   return (
-    <form action={action} className="grid gap-6">
-      <fieldset className="grid gap-2">
-        <legend className="mb-2 text-sm font-medium text-ink">Scored now</legend>
-        <div className="grid gap-2 sm:grid-cols-2">{group(ROLE_ORDER.filter(isScoredRole))}</div>
-      </fieldset>
-      <fieldset className="grid gap-2">
-        <legend className="mb-2 text-sm font-medium text-ink">Score coming soon</legend>
-        <div className="grid gap-2 sm:grid-cols-2">{group(ROLE_ORDER.filter((r) => !isScoredRole(r)))}</div>
-      </fieldset>
-      <div className="grid gap-3">
-        <p className="text-sm text-ink-muted" aria-live="polite">
-          {selected.length} of {MAX_ROLES} chosen
+    <form action={action} className="grid gap-8">
+      <section aria-labelledby="picked-h" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
+        <h2 id="picked-h" className="font-sans text-base font-semibold text-ink">
+          {inferred.length > 0 ? "We think you are looking for:" : "We could not tell your role from your words."}
+        </h2>
+        {selected.length > 0 ? (
+          <ul className="flex flex-wrap gap-2" aria-label="Your roles">
+            {selected.map((role) => (
+              <li key={role}>
+                <input type="hidden" name="role" value={role} />
+                <button
+                  type="button"
+                  onClick={() => remove(role)}
+                  aria-label={`Remove ${ROLES[role].name}`}
+                  className={cn(CHIP, "border-ink bg-ink text-surface hover:bg-ink/85")}
+                >
+                  {ROLES[role].name}
+                  <span aria-hidden className="text-base leading-none">
+                    &times;
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-muted">No role yet. Add the closest one below.</p>
+        )}
+        <p className={HINT}>
+          {selected.length > 0
+            ? "Correct? Remove what is wrong or add a role below. We send you jobs for these roles and score you for them."
+            : "We send you jobs for the roles you pick and score you for them."}
         </p>
+        {notes.map((role) => (
+          <p key={role} className="text-sm text-ink">
+            {ROLES[role].name}: we send you jobs, but there is no score for it yet. It needs{" "}
+            {UNSCORED[role] === "needs_portfolio" ? "a portfolio" : "a CV"}, and that is coming soon.
+          </p>
+        ))}
+      </section>
+
+      <section aria-labelledby="add-h" className="grid gap-3">
+        <h2 id="add-h" className={LABEL}>
+          Add a role <span className="font-normal text-ink-muted">({selected.length} of {MAX_ROLES})</span>
+        </h2>
+        <ul className="flex flex-wrap gap-2">
+          {others.map((role) => (
+            <li key={role}>
+              <button
+                type="button"
+                onClick={() => add(role)}
+                disabled={full}
+                className={cn(
+                  CHIP,
+                  "border-line bg-surface text-ink hover:border-ink disabled:cursor-not-allowed disabled:opacity-50",
+                )}
+              >
+                <span aria-hidden className="text-base leading-none text-ink-muted">
+                  +
+                </span>
+                {ROLES[role].name}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {full ? <p className={HINT}>Up to {MAX_ROLES} roles. Remove one to add another.</p> : null}
+      </section>
+
+      <div className="grid gap-2">
+        <label htmlFor="role_text" className={LABEL}>
+          My role is not in the list <span className="font-normal text-ink-muted">(optional)</span>
+        </label>
+        <input
+          id="role_text"
+          name="role_text"
+          type="text"
+          maxLength={ROLE_TEXT_MAX}
+          defaultValue={state.values?.role_text ?? roleText}
+          placeholder="For example: Tokenomics designer"
+          aria-invalid={textError ? true : undefined}
+          aria-describedby="role-text-hint"
+          className={FIELD}
+        />
+        <p id="role-text-hint" className={HINT}>
+          Write it in a few words. We also send you jobs whose title has these words. Separate two roles with a comma.
+        </p>
+        {textError ? (
+          <p role="alert" className={ERROR}>
+            {textError}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3">
         {error ? (
           <p role="alert" className={ERROR}>
             {error}
@@ -98,7 +143,7 @@ export function RolesForm({ initial, suggested }: { initial: RoleKey[]; suggeste
         ) : null}
         <FormMessageLine message={state.message} />
         <SubmitButton pendingLabel="Saving..." className="h-11 text-base" disabled={selected.length === 0}>
-          Continue
+          {selected.length > 0 ? "Yes, continue" : "Pick a role to continue"}
         </SubmitButton>
       </div>
     </form>

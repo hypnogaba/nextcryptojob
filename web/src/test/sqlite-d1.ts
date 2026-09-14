@@ -43,6 +43,8 @@ export const APPLIED_AFTER_CRM = [
   "0018_apply_click_seen.sql",
   // Доріжка web (головна адмінки): cron_runs, app_settings, індекс digest_runs(created_at). Ще НЕ накочено.
   "0019_admin_home.sql",
+  // Доріжка web (анкета 14.09): users.role_text, своя роль словами. Ще НЕ накочено.
+  "0020_role_text.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

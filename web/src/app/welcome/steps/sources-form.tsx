@@ -7,33 +7,27 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { saveSourcesAction } from "../actions/sources";
 import type { StepState } from "../flow";
 
-type Key = "github" | "youtube" | "site" | "sherlock";
+type Key = "github" | "youtube" | "site";
 
 const FIELDS: { key: Key; label: string; placeholder: string; hint: string; inputMode?: "url" }[] = [
   {
     key: "github",
     label: "GitHub",
     placeholder: "yourlogin",
-    hint: "Login or profile link. Needed for Engineer, Security auditor and DevRel scores.",
+    hint: "Login or profile link. The main source for Engineer, Security auditor and DevRel scores.",
   },
   {
     key: "youtube",
     label: "YouTube",
     placeholder: "@yourchannel",
-    hint: "@handle or channel link. Counts for creator and marketing roles.",
+    hint: "@handle or channel link. Counts for Creator and Marketing scores.",
   },
   {
     key: "site",
     label: "Website or blog",
     placeholder: "https://yoursite.com",
-    hint: "Your own site. We read its public posts and feed.",
+    hint: "Your own site or blog. We read its public posts and feed. Adds to every score.",
     inputMode: "url",
-  },
-  {
-    key: "sherlock",
-    label: "Sherlock handle",
-    placeholder: "yourhandle",
-    hint: "For auditors. We use it only if your Sherlock profile lists this GitHub or your X.",
   },
 ];
 

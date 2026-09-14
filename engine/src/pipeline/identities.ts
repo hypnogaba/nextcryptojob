@@ -11,11 +11,11 @@ export type IdentityRow = {
 
 /**
  * Входи збирачів однієї людини.
- * X рахується лише підтверджений (`verified_at`); непідтверджений лишається тут із verified = false,
- * щоб конвеєр записав прогалину «not verified», а не мовчки забув джерело.
- * GitHub рахується й без підтвердження (бал GitHub), але профіль Sherlock з ним звіряється лише
- * з підтвердженим (код у біо): інакше будь-хто вписав би чужий GitHub і забрав чужий заробіток.
- * Гаманці рахуються й без підпису: вставлена адреса вже доказ, підпис лише значок.
+ * Модель довіри з 13.09 (docs/DECISIONS.md): X, GitHub і гаманці, які людина вписала сама, рахуються
+ * як є, без коду в біо й без підпису. `verified` = рядок має `verified_at` (підтверджений до 13.09 або
+ * забраний у «загарбника» кодом заявки); решта самозаявлена (selfReportedSources).
+ * Профіль Sherlock звіряється лише з підтвердженими GitHub або X: інакше будь-хто вписав би чужий
+ * GitHub і забрав чужий заробіток аудитора (поле Sherlock з анкети прибрано, рушій його не ламає).
  */
 export type CollectorInputs = {
   x: { handle: string; verified: boolean } | null;
@@ -69,5 +69,20 @@ export function plannedSources(i: CollectorInputs): SourceKey[] {
   if (i.evm.length) out.push("evm", "hyperliquid");
   if (i.solana.length) out.push("solana");
   if (i.sherlock) out.push("audits");
+  return out;
+}
+
+/**
+ * Джерела, які людина вписала сама і які ніхто не підтверджував: X і GitHub без `verified_at`,
+ * гаманці завжди (підпису немає), YouTube і сайт завжди. Для журналу рушія й для показу «self-reported».
+ */
+export function selfReportedSources(i: CollectorInputs): SourceKey[] {
+  const out: SourceKey[] = [];
+  if (i.x && !i.x.verified) out.push("x");
+  if (i.github && !i.github.verified) out.push("github");
+  if (i.youtube) out.push("youtube");
+  if (i.site) out.push("site");
+  if (i.evm.length) out.push("evm");
+  if (i.solana.length) out.push("solana");
   return out;
 }

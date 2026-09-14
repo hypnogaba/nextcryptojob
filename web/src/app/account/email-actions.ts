@@ -16,8 +16,8 @@ import { clientIp } from "@/lib/auth/ratelimit";
 import { requireUser } from "@/lib/auth/session";
 
 /**
- * «Add email» для людини без пошти (вхід лише через Telegram), на /account і
- * /settings. Той самий код з листа, що й для входу, але прив'язаний до цієї
+ * «Add email» для людини без пошти (вхід лише через Telegram), на /account,
+ * /settings і в кроці анкети про канал. Той самий код з листа, що й для входу, але прив'язаний до цієї
  * людини (lib/auth/email-code.ts, CodePurpose). users.email з'являється лише
  * після правильного коду.
  */
@@ -52,6 +52,8 @@ export async function addEmailAction(prev: AddEmailState, form: FormData): Promi
     if (res.ok) {
       revalidatePath("/account");
       revalidatePath("/settings");
+      // Крок анкети «How should we send your jobs?»: після пошти з'являється варіант Email.
+      revalidatePath("/welcome");
       return { step: "done", email: res.email, message: added() };
     }
     switch (res.reason) {

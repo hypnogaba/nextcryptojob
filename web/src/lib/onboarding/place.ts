@@ -71,3 +71,40 @@ export function parsePlace(form: {
     },
   };
 }
+
+/** Що вдалося взяти зі слів людини (крок 1) для кроку місця. */
+export type PlaceGuess = { where: WhereChoice | null; salary: number | null; currency: Currency | null };
+
+const REMOTE_WORDS = /(?<![\p{L}])(remote(ly)?|anywhere|worldwide|віддален\p{L}*|дистанційн\p{L}*|удал[её]нн?\p{L}*|дистанционн\p{L}*)(?![\p{L}])/iu;
+const CURRENCY_OF: Record<string, Currency> = {
+  $: "USD", usd: "USD", usdc: "USD", usdt: "USD", dollar: "USD", dollars: "USD", "доларів": "USD", "долларов": "USD",
+  "€": "EUR", eur: "EUR", euro: "EUR", euros: "EUR", "євро": "EUR", "евро": "EUR",
+  "£": "GBP", gbp: "GBP", pounds: "GBP",
+};
+const CUR = "(\\$|€|£|usdc|usdt|usd|eur|gbp|euros?|dollars?|pounds|євро|евро|доларів|долларов)";
+const NUM = "(\\d{1,3}(?:[ ,.’']\\d{3})+|\\d+(?:[.,]\\d+)?)\\s*(k)?";
+const SALARY_RE = new RegExp(`(?:${CUR}\\s*${NUM}|${NUM}\\s*${CUR})`, "iu");
+const MONTH = /^[\s,]*(a|per|\/|в|на)?\s*(month|mo|monthly|місяць|месяц)/iu;
+const MONTHLY_WORD = /^[\s,]*monthly/iu;
+
+/**
+ * «BD lead, remote, from 3,000 EUR a month» → віддалено й 36 000 EUR на рік. Лише те, що сказано
+ * явно: число без валюти зарплатою не вважаємо, місто не вгадуємо. Людина бачить і править.
+ */
+export function placeFromText(text: string): PlaceGuess {
+  const where = REMOTE_WORDS.test(text) ? "remote" : null;
+  const m = SALARY_RE.exec(text);
+  if (!m) return { where, salary: null, currency: null };
+  const cur = (m[1] ?? m[6] ?? "").toLowerCase();
+  const rawNum = m[2] ?? m[4] ?? "";
+  const k = Boolean(m[3] ?? m[5]);
+  // «3,000» і «3.000» це тисячі; «3.5k» це 3 500.
+  const grouped = /^\d{1,3}(?:[ ,.’']\d{3})+$/.test(rawNum);
+  const base = Number(grouped ? rawNum.replace(/[ ,.’']/g, "") : rawNum.replace(",", "."));
+  let amount = Math.round(base * (k ? 1000 : 1));
+  const after = text.slice(m.index + m[0].length, m.index + m[0].length + 20);
+  if (MONTH.test(after) || MONTHLY_WORD.test(after)) amount *= 12;
+  const currency = CURRENCY_OF[cur] ?? null;
+  if (!currency || !Number.isFinite(amount) || amount < 1000 || amount > SALARY_MAX) return { where, salary: null, currency: null };
+  return { where, salary: amount, currency };
+}

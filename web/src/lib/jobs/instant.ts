@@ -49,13 +49,15 @@ export type BriefRow = {
   city: string | null;
   salary_min: number | null;
   salary_currency: string | null;
+  /** Своя роль словами (0020_role_text). */
+  role_text?: string | null;
 };
 
 /** Анкета для підбору, як profileOf у engine/src/digest/schedule.ts (тест звіряє). */
 export function profileOf(u: BriefRow): DigestProfile {
   return {
     roles: parseRoles(u.roles), remoteMode: u.remote_mode, city: u.city?.trim() || null,
-    salaryMin: u.salary_min, salaryCurrency: u.salary_currency,
+    salaryMin: u.salary_min, salaryCurrency: u.salary_currency, roleText: u.role_text?.trim() || null,
   };
 }
 

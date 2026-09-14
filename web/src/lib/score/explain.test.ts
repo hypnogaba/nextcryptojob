@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IdentityKind } from "@/lib/identity/normalize";
-import { explainRole, gapSentence, sourceState, type ScoreRow } from "./explain";
+import { explainRole, gapSentence, hasStaleVerifyGap, sourceState, type ScoreRow } from "./explain";
 
 const row = (score: number | null, breakdown: object): ScoreRow => ({
   role: "engineer",
@@ -57,9 +57,9 @@ describe("explainRole", () => {
     expect(view.state === "missing" && view.tips.some((t) => t.includes("GitHub"))).toBe(false);
   });
 
-  it("names both paths for a security auditor", () => {
+  it("asks a security auditor for GitHub only (Sherlock left setup on 13.09)", () => {
     const view = explainRole("security_auditor", row(null, { reason: "missing_anchor:audits,gh_eng" }), kinds());
-    expect(view).toMatchObject({ reason: "Connect Sherlock or GitHub to get a Security auditor score." });
+    expect(view).toMatchObject({ reason: "Connect GitHub to get a Security auditor score." });
   });
 
   it("does not ask to connect what is connected but empty", () => {
@@ -95,7 +95,7 @@ describe("explainRole", () => {
   it("explains the security path and the X-only research score", () => {
     expect(
       explainRole("security_auditor", row(60, { reason: "path:gh_eng+x", core: {} }), kinds("github", "x")),
-    ).toMatchObject({ reason: "Scored on GitHub and X.", tips: ["Connect Sherlock: audit contest results can raise this score."] });
+    ).toMatchObject({ reason: "Scored on GitHub and X.", tips: [] });
     expect(explainRole("data_research", row(40, { reason: "x_only" }), kinds("x"))).toMatchObject({
       reason: "Scored on X only, because we found no published work yet.",
     });
@@ -135,46 +135,52 @@ describe("explainRole", () => {
 });
 
 describe("unverified X and GitHub", () => {
-  it("counts X and GitHub only when verified, other sources as they are", () => {
+  it("counts every connected source, verified or only typed in (trust model of 13.09)", () => {
     const state = sourceState([
       { kind: "x", verifiedAt: null },
       { kind: "github", verifiedAt: "2026-09-12 10:00:00" },
       { kind: "evm", verifiedAt: null },
       { kind: "site", verifiedAt: null },
     ]);
-    expect([...state.counted].sort()).toEqual(["evm", "github", "site"]);
-    expect([...state.unverified]).toEqual(["x"]);
+    expect([...state.counted].sort()).toEqual(["evm", "github", "site", "x"]);
+    expect([...state.unverified]).toEqual([]);
   });
 
-  it("asks to verify, not to connect, a source that waits for its code", () => {
-    const state = sourceState([{ kind: "github", verifiedAt: null }]);
-    expect(explainRole("engineer", row(null, { reason: "missing_anchor:gh_eng" }), state)).toMatchObject({
-      reason: "Verify GitHub to get an Engineer score.",
+  it("asks to connect a missing anchor and never to verify one", () => {
+    expect(explainRole("engineer", row(null, { reason: "missing_anchor:gh_eng" }), sourceState([]))).toMatchObject({
+      reason: "Connect GitHub to get an Engineer score.",
     });
     expect(
       explainRole(
         "product_manager",
         row(30, { core: { x: { weight: 50, value: 40 }, gh_builder: { weight: 25, value: null } } }),
-        sourceState([{ kind: "x", verifiedAt: "2026-09-12 10:00:00" }, { kind: "github", verifiedAt: null }]),
+        sourceState([{ kind: "x", verifiedAt: null }]),
       ),
-    ).toMatchObject({ tips: ["Verify GitHub: it counts for 25% of this score."] });
+    ).toMatchObject({ tips: ["Connect GitHub: it counts for 25% of this score."] });
   });
 
-  it("mixes verify and connect when both are missing", () => {
-    const state = sourceState([{ kind: "github", verifiedAt: null }]);
-    expect(explainRole("security_auditor", row(null, { reason: "missing_anchor:audits,gh_eng" }), state)).toMatchObject({
-      reason: "Connect Sherlock or verify GitHub to get a Security auditor score.",
+  it("does not suggest Sherlock any more (removed from setup on 13.09)", () => {
+    const view = explainRole(
+      "security_auditor",
+      row(40, { core: { audits: { weight: 60, value: null }, gh_eng: { weight: 25, value: 50 } }, reason: "path:gh_eng+x" }),
+      sourceState([{ kind: "github", verifiedAt: null }]),
+    );
+    expect(JSON.stringify(view)).not.toMatch(/Sherlock/);
+    expect(explainRole("security_auditor", row(null, { reason: "missing_anchor:audits,gh_eng" }), sourceState([]))).toMatchObject({
+      reason: "Connect GitHub to get a Security auditor score.",
     });
   });
 
-  it("words the engine's 'not verified' gap as a code to check", () => {
-    const view = explainRole(
-      "bd",
-      row(null, { core: { x: { weight: 100, value: null } }, reason: "missing_anchor:x", gaps: { x: "not verified" } }),
-      sourceState([{ kind: "x", verifiedAt: null }]),
-    );
-    expect(view).toMatchObject({ reason: "Verify X to get a BD & partnerships score.", gaps: ["X: check your code to count it."] });
-    expect(gapSentence("github", "not verified")).toBe("GitHub: check your code to count it.");
+  it("a score from before 13.09 with the old 'not verified' gap asks for an update, not for a code", () => {
+    const breakdown = { core: { x: { weight: 100, value: null } }, reason: "missing_anchor:x", gaps: { x: "not verified" } };
+    const view = explainRole("bd", row(null, breakdown), sourceState([{ kind: "x", verifiedAt: null }]));
+    expect(view).toMatchObject({
+      reason: "Update your score: we now count your X without a code.",
+      gaps: ["X: we read it on your next score update."],
+    });
+    expect(hasStaleVerifyGap(JSON.stringify(breakdown))).toBe(true);
+    expect(hasStaleVerifyGap(JSON.stringify({ gaps: { site: "site: HTTP 404" } }))).toBe(false);
+    expect(hasStaleVerifyGap(null)).toBe(false);
   });
 });
 

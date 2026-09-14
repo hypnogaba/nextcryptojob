@@ -80,13 +80,30 @@ describe("scoreUser", () => {
     expect(summary.scored).toBeGreaterThan(0);
   });
 
-  it("непідтверджений X не збирається: прогалина 'not verified', і профіль Sherlock з ним не звіряється", async () => {
+  it("модель довіри 13.09: самозаявлений X збирається й дає бал, але профіль Sherlock з ним не звіряється", async () => {
     fullIdentities(false);
     const registry = fakeRegistry();
-    await scoreUser(USER, { registry, db, env: {} });
-    expect(registry.calls.map((c) => c.collector)).not.toContain("collectX");
+    const summary = await scoreUser(USER, { registry, db, env: {}, now: () => NOW });
+    expect(registry.calls.find((c) => c.collector === "collectX")!.input).toBe("alice");
     expect(registry.calls.find((c) => c.collector === "collectAudits")!.input).toEqual({ sherlock: "alice", github: "alice-gh", x: null });
-    expect(facts().x).toMatchObject({ facts_json: null, gap_reason: "not verified" });
+    expect(JSON.parse(facts().x!.facts_json!)).toEqual(sampleX());
+    expect(facts().x!.gap_reason).toBeNull();
+    // Власникова ситуація 14.09: роль з X як головним джерелом має бал, а не missing_anchor:x.
+    expect(scores().bd!.score).toBeGreaterThan(0);
+    expect(scores().marketing_content!.score).toBeGreaterThan(0);
+    expect(JSON.parse(scores().bd!.breakdown_json).gaps?.x).toBeUndefined();
+    expect(summary.selfReported).toEqual(["x", "site", "evm", "solana"]);
+  });
+
+  it("лише самозаявлені X і гаманці (без жодного коду) дають бали ролям X і трейдера", async () => {
+    db.addIdentity(USER, "x", "alice");
+    db.addIdentity(USER, "evm", EVM_A);
+    const summary = await scoreUser(USER, { registry: fakeRegistry(), db, env: {}, now: () => NOW });
+    const s = scores();
+    for (const role of ["bd", "community", "marketing_content", "creator_kol", "product_manager", "trader"]) {
+      expect(s[role]!.score, role).toBeGreaterThan(0);
+    }
+    expect(summary.selfReported).toEqual(["x", "evm"]);
   });
 
   it("БЕЗПЕКА: непідтверджений GitHub рахується як GitHub, але Sherlock з ним не звіряється", async () => {

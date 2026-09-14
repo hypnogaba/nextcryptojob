@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
-import { parsePlace, parseSalary, whereFromMode } from "./place";
+import { parsePlace, parseSalary, placeFromText, whereFromMode } from "./place";
 import { finishOnboarding, loadAnswers, placeFields, rolesFields, saveStep, targetFields } from "./store";
 import { advance, briefDone, canVisit, nextStep, parseSavedStep, prevStep, stepPosition, stepToShow } from "./steps";
 
@@ -136,6 +136,7 @@ describe("answers store", () => {
     expect(await loadAnswers(t.d1, "a")).toEqual({
       targetText: "Rust engineer",
       roles: ["engineer", "security_auditor"],
+      roleText: "",
       remoteMode: "remote",
       city: null,
       salaryMin: 100000,
@@ -151,5 +152,25 @@ describe("answers store", () => {
     expect((await loadAnswers(t.d1, "a")).step).toBe("delivery");
     t.raw.exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('a', 'scoring', 1, 'v1')");
     expect((await loadAnswers(t.d1, "a")).step).toBe("wallets");
+  });
+});
+
+describe("placeFromText: remote and pay from the words of step 1", () => {
+  it("takes remote and a monthly salary as a yearly one", () => {
+    expect(placeFromText("BD lead at a DeFi protocol, remote, from 3,000 EUR a month, I closed 20+ partnerships")).toEqual({
+      where: "remote",
+      salary: 36_000,
+      currency: "EUR",
+    });
+    expect(placeFromText("Solidity engineer, remote or Lisbon, from $90k a year")).toEqual({ where: "remote", salary: 90_000, currency: "USD" });
+    expect(placeFromText("from €2.5k per month")).toEqual({ where: null, salary: 30_000, currency: "EUR" });
+    expect(placeFromText("3.000 € monthly")).toEqual({ where: null, salary: 36_000, currency: "EUR" });
+    expect(placeFromText("віддалено, від 2000 доларів на місяць")).toEqual({ where: "remote", salary: 24_000, currency: "USD" });
+  });
+
+  it("does not guess: a number without a currency is not a salary, and no city is read", () => {
+    expect(placeFromText("I closed 20+ partnerships in 2024")).toEqual({ where: null, salary: null, currency: null });
+    expect(placeFromText("Engineer in Lisbon")).toEqual({ where: null, salary: null, currency: null });
+    expect(placeFromText("tip me $5")).toEqual({ where: null, salary: null, currency: null });
   });
 });

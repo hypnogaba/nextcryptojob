@@ -41,8 +41,11 @@ export function WalletsForm({ initial, editing }: { initial: string; editing: bo
         className={cn(TEXTAREA, "font-mono text-sm")}
       />
       <p id="wallets-hint" className={HINT}>
-        Paste one or more EVM or Solana addresses, up to {MAX_WALLETS}. We only read public activity. You never sign
-        anything here.
+        Paste EVM or Solana addresses, one per line, up to {MAX_WALLETS}. Each wallet adds its history to your score. We
+        only read public activity: you never sign anything, and companies never see your addresses.
+      </p>
+      <p className="text-sm font-medium text-ink" aria-live="polite">
+        {parsed.wallets.length} of {MAX_WALLETS} wallets
       </p>
 
       {inputs.length > 0 ? (

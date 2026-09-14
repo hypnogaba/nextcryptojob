@@ -3,13 +3,9 @@
 import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
 import { audit } from "@/lib/audit";
-import { consume } from "@/lib/auth/ratelimit";
 import { requireUser } from "@/lib/auth/session";
-import { cardEligibility } from "@/lib/card/eligibility";
-import { isRoleKey } from "@/lib/card/roles";
-import { CardInputError, createCard } from "@/lib/card/store";
+import { issueCard } from "@/lib/card/issue";
 import { db } from "@/lib/db";
-import { parseRoles } from "@/lib/roles/catalog";
 import { enqueueScoreJob } from "@/lib/score/queue";
 
 export type ProfileActionState = { message?: FormMessage; name?: string };
@@ -29,61 +25,21 @@ export async function rescoreAction(_prev: ProfileActionState): Promise<ProfileA
   }
 }
 
-function breakdownReason(json: string): string | null {
-  try {
-    const reason = (JSON.parse(json) as { reason?: unknown })?.reason;
-    return typeof reason === "string" ? reason : null;
-  } catch {
-    return null;
-  }
-}
-
-/** 20 карток на годину: кожна нова відкликає попередню тієї ж ролі. */
-const CARD_LIMITS = { windowMinutes: 60, maxAttempts: 20, blockMinutes: 60 };
-
 /** «Create my card»: знімок балу ролі з іменем, яке людина підтвердила. */
 export async function createCardAction(_prev: ProfileActionState, form: FormData): Promise<ProfileActionState> {
   const user = await requireUser();
-  const d = db();
   const role = String(form.get("role") ?? "");
   const name = String(form.get("name") ?? "");
-  if (!isRoleKey(role)) return { message: { tone: "error", text: "Unknown role." }, name };
-
-  const row = await d
-    .prepare(
-      `SELECT s.score, s.formula_version, s.breakdown_json, u.roles,
-              EXISTS (SELECT 1 FROM identities WHERE user_id = s.user_id AND kind = 'x' AND verified_at IS NOT NULL) AS x,
-              EXISTS (SELECT 1 FROM identities WHERE user_id = s.user_id AND kind = 'github' AND verified_at IS NOT NULL) AS github
-         FROM scores s JOIN users u ON u.id = s.user_id
-        WHERE s.user_id = ? AND s.role = ?`,
-    )
-    .bind(user.id, role)
-    .first<{ score: number | null; formula_version: string; breakdown_json: string; roles: string; x: number; github: number }>();
-  if (!row || row.score === null || !parseRoles(row.roles).includes(role)) {
-    return { message: { tone: "error", text: "There is no score for this role yet." }, name };
-  }
-  // Те саме правило, що вимикає кнопку на сторінці: дію можна викликати й напряму.
-  const eligible = cardEligibility(role, breakdownReason(row.breakdown_json), { x: row.x === 1, github: row.github === 1 });
-  if (!eligible.ok) return { message: { tone: "error", text: eligible.reason }, name };
-  const verdict = await consume(`card:${user.id}`, CARD_LIMITS, d);
-  if (!verdict.allowed) {
-    return { message: { tone: "error", text: `Too many cards. Try again in ${verdict.retryAfterMinutes} minutes.` }, name };
-  }
-
-  let slug: string;
+  let res;
   try {
-    slug = await createCard(d, {
-      userId: user.id,
-      role,
-      score: row.score,
-      displayName: name,
-      formulaVersion: row.formula_version,
-    });
+    // Те саме правило, що вимикає кнопку на сторінці: дію можна викликати й напряму.
+    res = await issueCard(db(), user.id, { role, displayName: name });
   } catch (err) {
-    if (err instanceof CardInputError) return { message: { tone: "error", text: err.message }, name };
     console.error("createCard failed:", err instanceof Error ? err.message : String(err));
     return { message: { tone: "error", text: "Something went wrong. Try again." }, name };
   }
+  if (!res.ok) return { message: { tone: "error", text: res.message }, name };
+  const slug = res.slug;
   await audit(user.id, "card.create", slug, { role });
   redirect(`/c/${slug}`);
 }

@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isAdminEmail } from "@/lib/auth/admin";
 import { requestCodeMessage, SIGNUPS_CLOSED, verifyCodeMessage } from "@/lib/auth/code-messages";
 import {
   CODE_TTL_MINUTES,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/auth/email-code";
 import { clientIp } from "@/lib/auth/ratelimit";
 import { signOut } from "@/lib/auth/session";
+import { appEnv } from "@/lib/db";
 
 /**
  * Дії входу. Server Action, бо лише вони (і Route Handler) можуть ставити
@@ -38,9 +40,9 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
       console.error("verifyCode failed:", err instanceof Error ? err.message : String(err));
       return { step: "code", email, message: GENERIC };
     }
-    // redirect кидає виняток, тож стоїть поза try. Новий акаунт іде
-    // налаштовувати профіль, той, хто повернувся, у свій кабінет.
-    if (res.ok) redirect(res.created ? "/welcome" : "/account");
+    // redirect кидає виняток, тож стоїть поза try. Адмін (пошта зі списку, сесія поштою) іде
+    // в адмінку без анкети; новий акаунт налаштовувати профіль; той, хто повернувся, у кабінет.
+    if (res.ok) redirect(landingAfterEmailLogin(email, res.created));
     if (res.reason === "signups_closed") return { step: "email", email, message: { tone: "info", text: SIGNUPS_CLOSED } };
     if (res.reason === "invalid_email") return { step: "email", email, message: verifyCodeMessage(res, UNAVAILABLE) };
     return { step: "code", email, message: verifyCodeMessage(res, UNAVAILABLE) };
@@ -66,6 +68,12 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
   }
   const step = prev.step === "code" && res.reason !== "invalid_email" ? "code" : "email";
   return { step, email, message: requestCodeMessage(res, UNAVAILABLE) };
+}
+
+/** Куди після входу кодом з листа. Не експортуємо: у файлі "use server" кожен експорт стає дією. */
+function landingAfterEmailLogin(email: string, created: boolean): string {
+  if (isAdminEmail(email, (appEnv() as { ADMIN_EMAILS?: string }).ADMIN_EMAILS)) return "/admin";
+  return created ? "/welcome" : "/account";
 }
 
 export async function signOutAction(): Promise<void> {

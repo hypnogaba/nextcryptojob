@@ -109,13 +109,15 @@ type EvidenceRow = {
   formula_version: string | null;
   wallet: string | null;
   kinds: string | null;
+  self_reported: number | null;
 };
 
 const IDENTITY_KINDS = new Set<IdentityKind>(["x", "github", "youtube", "site", "evm", "solana", "sherlock"]);
 
 /**
  * Те, що стоїть за карткою: поточний рядок scores власника для її ролі,
- * підтверджений гаманець для печатки й підключення, які рахуються. Хто власник,
+ * підтверджений гаманець для печатки, підключення, які рахуються (з 13.09 усі), і чи є серед
+ * них самозаявлені (без підтвердження). Хто власник,
  * назовні не виходить. null, якщо картки немає або її відкликано.
  */
 export async function getCardEvidence(db: D1Database, slug: string): Promise<CardEvidence | null> {
@@ -127,7 +129,8 @@ export async function getCardEvidence(db: D1Database, slug: string): Promise<Car
                 WHERE i.user_id = c.user_id AND i.kind IN ('evm', 'solana') AND i.verified_at IS NOT NULL
                 ORDER BY i.created_at, i.value LIMIT 1) AS wallet,
               (SELECT group_concat(k.kind) FROM (SELECT DISTINCT i.kind FROM identities i
-                WHERE i.user_id = c.user_id AND (i.verified_at IS NOT NULL OR i.kind NOT IN ('x', 'github'))) k) AS kinds
+                WHERE i.user_id = c.user_id) k) AS kinds,
+              EXISTS (SELECT 1 FROM identities i WHERE i.user_id = c.user_id AND i.verified_at IS NULL) AS self_reported
          FROM cards c LEFT JOIN scores s ON s.user_id = c.user_id AND s.role = c.role
         WHERE c.slug = ? AND c.revoked_at IS NULL`,
     )
@@ -140,6 +143,7 @@ export async function getCardEvidence(db: D1Database, slug: string): Promise<Car
     formulaVersion: row.formula_version ?? "",
     wallet: row.wallet,
     connected: (row.kinds ?? "").split(",").filter((k): k is IdentityKind => IDENTITY_KINDS.has(k as IdentityKind)),
+    selfReported: row.self_reported === 1,
   };
 }
 

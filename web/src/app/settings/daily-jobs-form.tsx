@@ -19,6 +19,11 @@ type Props = {
   /** Показувати «Pause daily jobs» (у налаштуваннях так, в анкеті ні). */
   showPause?: boolean;
   submitLabel?: string;
+  /**
+   * Не показувати канал, яким зараз не можна слати (анкета): людина без пошти бачить лише
+   * Telegram і поруч «Add email», а не вимкнений варіант, який нікуди не веде.
+   */
+  hideUnavailable?: boolean;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -55,6 +60,7 @@ export function DailyJobsForm({
   action: submit = saveDailyJobsAction,
   showPause = true,
   submitLabel = "Save",
+  hideUnavailable = false,
 }: Props) {
   const [state, action] = useActionState(submit, {} as SettingsState);
   const zoneRef = useRef<HTMLSelectElement>(null);
@@ -79,42 +85,49 @@ export function DailyJobsForm({
   // Після дії React скидає форму до значень за замовчуванням, а <select> при цьому
   // бере варіант із першого показу, навіть керований. Ключ зі збережених значень
   // перебудовує форму, щойно сервер віддав нові, тож видно саме збережене.
-  const saved = `${channel}|${hour}|${timezone ?? ""}|${paused ? 1 : 0}`;
+  // Пошта й Telegram у ключі теж: після «Add email» з'являється новий варіант.
+  const saved = `${channel}|${hour}|${timezone ?? ""}|${paused ? 1 : 0}|${email ?? ""}|${telegramLinked ? 1 : 0}`;
+  const showEmail = !hideUnavailable || email !== null;
+  const showTelegram = !hideUnavailable || telegramLinked;
   return (
     <form key={saved} action={action} className="grid gap-5">
       <fieldset className="grid gap-2" aria-describedby={errors.channel ? "channel-error" : undefined}>
         <legend className={`${LABEL} mb-2`}>Send my jobs by</legend>
-        <label className={RADIO_ROW}>
-          <input
-            type="radio"
-            name="channel"
-            value="email"
-            defaultChecked={channel === "email"}
-            disabled={!email}
-            className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
-          />
-          <span className="grid gap-0.5">
-            <span className="text-base text-ink">Email</span>
-            <span className={HINT}>{email ?? "Add an email above to use this."}</span>
-          </span>
-        </label>
-        <label className={RADIO_ROW}>
-          <input
-            type="radio"
-            name="channel"
-            value="telegram"
-            defaultChecked={channel === "telegram"}
-            disabled={!telegramLinked}
-            aria-describedby="telegram-hint"
-            className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
-          />
-          <span className="grid gap-0.5">
-            <span className="text-base text-ink">Telegram</span>
-            <span id="telegram-hint" className={HINT}>
-              {telegramLinked ? "A message from our bot." : "Connect Telegram on your account page to use this."}
+        {showEmail ? (
+          <label className={RADIO_ROW}>
+            <input
+              type="radio"
+              name="channel"
+              value="email"
+              defaultChecked={channel === "email"}
+              disabled={!email}
+              className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-base text-ink">Email</span>
+              <span className={HINT}>{email ?? "Add an email above to use this."}</span>
             </span>
-          </span>
-        </label>
+          </label>
+        ) : null}
+        {showTelegram ? (
+          <label className={RADIO_ROW}>
+            <input
+              type="radio"
+              name="channel"
+              value="telegram"
+              defaultChecked={channel === "telegram"}
+              disabled={!telegramLinked}
+              aria-describedby="telegram-hint"
+              className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-base text-ink">Telegram</span>
+              <span id="telegram-hint" className={HINT}>
+                {telegramLinked ? "A message from our bot." : "Connect Telegram on your account page to use this."}
+              </span>
+            </span>
+          </label>
+        ) : null}
         {errors.channel ? (
           <p id="channel-error" role="alert" className={ERROR}>
             {errors.channel}

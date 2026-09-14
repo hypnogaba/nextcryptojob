@@ -93,8 +93,8 @@ export async function setVisibilityAction(_prev: SettingsState, form: FormData):
   revalidatePath("/settings");
   return {
     message: on
-      ? { tone: "success", text: "Companies with access can now find you." }
-      : { tone: "success", text: "You are hidden. Companies cannot find you." },
+      ? { tone: "success", text: "Saved. You are visible: companies with access can now find you." }
+      : { tone: "success", text: "Saved. You are hidden: companies cannot find you." },
   };
 }
 

@@ -60,7 +60,7 @@ describe("worker", () => {
 
     const jobLines = w.log.filter((l) => l.startsWith("job "));
     expect(jobLines).toHaveLength(5);
-    expect(jobLines[0]).toMatch(/^job \d+ user user\d-00 connect done \d+ms gaps=0 scored=\d+$/);
+    expect(jobLines[0]).toMatch(/^job \d+ user user\d-00 connect done \d+ms gaps=0 scored=\d+ self-reported=github$/);
     expect(w.log.join("\n")).not.toMatch(/secret-login/);
   });
 

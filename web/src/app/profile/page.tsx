@@ -12,7 +12,7 @@ import { loadAnswers } from "@/lib/onboarding/store";
 import { cardBack } from "@/lib/card/back";
 import { sealSeed } from "@/lib/card/seal";
 import { listActiveCards } from "@/lib/card/store";
-import { explainRole, sourceState, type Breakdown } from "@/lib/score/explain";
+import { explainRole, hasStaleVerifyGap, sourceState } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
 import { isActive, profileStatus } from "@/lib/score/status";
 import { parseWait } from "../welcome/flow";
@@ -20,20 +20,10 @@ import { RescoreButton } from "./rescore-button";
 import { RoleCard } from "./role-card";
 import { SourcesPanel } from "./sources-panel";
 import { StatusPanel } from "./status-panel";
-import { VerifyPrompt } from "./verify-prompt";
 
 export const metadata: Metadata = { title: "Your profile", robots: { index: false } };
 
 type Props = { searchParams: Promise<{ wait?: string | string[] }> };
-
-function reasonOf(json: string | undefined): string | null {
-  try {
-    const reason = (JSON.parse(json ?? "{}") as Breakdown).reason;
-    return typeof reason === "string" ? reason : null;
-  } catch {
-    return null;
-  }
-}
 
 /** Сторінка балу: ролі людини, бал кожної з поясненням, стан черги, джерела. */
 export default async function ProfilePage({ searchParams }: Props) {
@@ -51,19 +41,20 @@ export default async function ProfilePage({ searchParams }: Props) {
   const done = briefDone(answers.step);
   const state = sourceState(identities);
   const x = identities.find((i) => i.kind === "x") ?? null;
-  const github = identities.find((i) => i.kind === "github") ?? null;
-  const verified = { x: Boolean(x?.verifiedAt), github: Boolean(github?.verifiedAt) };
-  const defaultName = suggestDisplayName(verified.x ? x!.value : null, user.email);
+  // Модель довіри 13.09: нік X, який людина вписала, іде в ім'я на картці й без коду.
+  const defaultName = suggestDisplayName(x?.value ?? null, user.email);
   const active = isActive(status);
   const wait = parseWait((await searchParams).wait);
-  const changed = done && consent && status.sourcesChanged && !active;
+  // Бал, порахований до 13.09 без X чи GitHub (прогалина «not verified»), теж просить оновлення.
+  const stale = [...scores.values()].some((r) => hasStaleVerifyGap(r.breakdown_json));
+  const changed = done && consent && (status.sourcesChanged || stale) && !active;
   // Печатка з підтвердженого гаманця, інакше зі slug картки (підпису гаманців у релізі 1 ще немає).
   const wallet = identities.find((i) => (i.kind === "evm" || i.kind === "solana") && i.verifiedAt)?.value ?? null;
 
   return (
     <section className="mx-auto grid max-w-4xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="display text-title">Your score</h1>
+        <h1 className="display text-title">Your card and score</h1>
         {done ? (
           <Link
             href="/welcome"
@@ -87,7 +78,11 @@ export default async function ProfilePage({ searchParams }: Props) {
 
       {changed ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
-          <p className="text-ink">Your sources changed since your last score.</p>
+          <p className="text-ink">
+            {status.sourcesChanged
+              ? "Your sources changed since your last score."
+              : "We now count your X, GitHub and wallets as you typed them, without a code. Update your score to include them."}
+          </p>
           {wait ? <p className="text-sm text-ink-muted">You can update it in {wait} seconds.</p> : null}
           <div className="w-fit">
             <RescoreButton label="Update my score" />
@@ -95,7 +90,19 @@ export default async function ProfilePage({ searchParams }: Props) {
         </div>
       ) : null}
 
-      {done ? <VerifyPrompt x={x} github={github} /> : null}
+      {done && !x ? (
+        <div className="grid gap-2 rounded-xl border-2 border-ink bg-surface p-4 sm:p-5">
+          <p className="text-sm text-ink">
+            Add your X account. Most roles are scored from X, and your score and card need it. Just type your handle.
+          </p>
+          <Link
+            href="/welcome?step=x"
+            className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-brand underline underline-offset-4"
+          >
+            Add X
+          </Link>
+        </div>
+      ) : null}
 
       {answers.roles.length > 0 ? (
         <div className="grid gap-4">
@@ -108,7 +115,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                 view={explainRole(role, row, state)}
                 back={row ? cardBack(row.breakdown_json, state.counted) : null}
                 defaultName={defaultName}
-                eligibility={cardEligibility(role, reasonOf(row?.breakdown_json), verified)}
+                eligibility={cardEligibility(role)}
                 active={card}
                 sealSeed={card ? sealSeed({ wallet, slug: card.slug }) : null}
               />

@@ -2,9 +2,10 @@
 // тож після перезавантаження людина продовжує з того самого місця.
 //
 // Дві частини. Спершу коротка анкета (brief): що людина шукає своїми словами, ролі,
-// віддалено чи місто й зарплата, куди й коли слати вакансії, згода. Після неї людина
-// одразу бачить вакансії на /jobs, а щоденна добірка вже може йти. Далі необов'язкове
-// «Stand out»: X, гаманці, інші джерела; кожен крок можна пропустити, добірці вони не потрібні.
+// віддалено чи місто й зарплата, куди й коли слати вакансії, згода. Після неї щоденна
+// добірка вже може йти. Далі кроки балу (рішення власника 13.09): X обов'язковий, без нього
+// далі не пускаємо; гаманці (до 10) і інші джерела необов'язкові, кожне піднімає бал. Після них
+// /welcome/score ставить бал у чергу, чекає на нього й показує картку.
 
 export const BRIEF_STEPS = ["target", "roles", "place", "delivery", "consent"] as const;
 export const STANDOUT_STEPS = ["x", "wallets", "sources"] as const;
@@ -17,7 +18,7 @@ export type SavedStep = Step | "done";
 
 export const STEP_TITLES: Record<Step, string> = {
   target: "What job are you looking for?",
-  roles: "Pick your roles",
+  roles: "Is this your role?",
   place: "Where do you want to work?",
   delivery: "How should we send your jobs?",
   consent: "One last thing",

@@ -12,10 +12,11 @@ const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../.
 export const PIPELINE_MIGRATIONS = ["0001_core.sql", "0008_sources_v5.sql"];
 /**
  * Міграції добірки: ядро, вакансії компаній і подання доступу (0003, 0004, 0012), sent і digest_runs
- * (0006), пауза добірки users.digest_paused (0011).
+ * (0006), пауза добірки users.digest_paused (0011), своя роль словами users.role_text (0020).
  */
 export const DIGEST_MIGRATIONS = [
   "0001_core.sql", "0003_crm.sql", "0004_billing.sql", "0006_digest.sql", "0011_user_settings.sql", "0012_access_views.sql",
+  "0020_role_text.sql",
 ];
 
 type Param = string | number | bigint | Buffer | null;

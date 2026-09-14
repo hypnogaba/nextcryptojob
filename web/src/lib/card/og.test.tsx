@@ -58,7 +58,7 @@ describe("renderCardImage", () => {
     }
   }, 30_000);
 
-  it("renders a trader card with the wallets marker and no breakdown", async () => {
+  it("renders a trader card with no breakdown", async () => {
     const bytes = await png(renderCardImage(cardView({ ...CARD, role: "trader", score: 82, level: 9 }), "wide"));
     expect(pngSize(bytes)).toEqual(SHARE_SIZES.wide);
     if (process.env.CARD_PNG_OUT_TRADER) {

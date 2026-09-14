@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const GROUPS: { title: string; kinds: Identity["kind"][]; step: string }[] = [
   { title: "X", kinds: ["x"], step: "x" },
   { title: "Wallets", kinds: ["evm", "solana"], step: "wallets" },
-  { title: "Other sources", kinds: ["github", "youtube", "site", "sherlock"], step: "sources" },
+  { title: "Other sources", kinds: ["github", "youtube", "site"], step: "sources" },
 ];
 
 const KIND_LABEL: Record<Identity["kind"], string> = {
@@ -35,32 +35,21 @@ function shown(i: Identity): string {
   }
 }
 
-function Badge({ identity }: { identity: Identity }) {
-  const verified = identity.verifiedAt !== null;
-  const text = verified
-    ? "Verified"
-    : identity.kind === "sherlock"
-      ? "Checked when we score"
-      : "Not verified";
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-semibold",
-        verified ? "border-ink text-ink" : "border-line text-ink-muted",
-      )}
-    >
-      {text}
-    </span>
-  );
-}
-
-/** Підключені джерела з позначками перевірки й посиланням на потрібний крок анкети. */
+/**
+ * Підключені джерела й посилання на потрібний крок анкети. Позначок «Verified / Not verified»
+ * немає: з 13.09 ми віримо тому, що людина вписала (docs/DECISIONS.md), і рахуємо все.
+ */
 export function SourcesPanel({ identities }: { identities: Identity[] }) {
   return (
     <section aria-labelledby="sources-title" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:p-6">
-      <h2 id="sources-title" className="display text-[2rem] leading-none">
-        Sources
-      </h2>
+      <div className="grid gap-1">
+        <h2 id="sources-title" className="display text-[2rem] leading-none">
+          Sources
+        </h2>
+        <p className="text-sm text-ink-muted">
+          All of these count toward your score. You added them yourself, and we read only their public activity.
+        </p>
+      </div>
       {GROUPS.map((g) => {
         const items = identities.filter((i) => g.kinds.includes(i.kind));
         return (
@@ -86,7 +75,6 @@ export function SourcesPanel({ identities }: { identities: Identity[] }) {
                         {shown(i)}
                       </span>
                     </span>
-                    <Badge identity={i} />
                   </li>
                 ))}
               </ul>

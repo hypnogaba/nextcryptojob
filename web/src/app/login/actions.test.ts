@@ -55,6 +55,17 @@ describe("loginAction", () => {
     await expect(signIn("back@example.com")).resolves.toBe("/account");
   });
 
+  it("sends an admin straight to /admin, new or returning, and never through the brief", async () => {
+    (harness.env as { ADMIN_EMAILS?: string }).ADMIN_EMAILS = "boss@example.com, Other@Example.com";
+    await expect(signIn("boss@example.com")).resolves.toBe("/admin");
+    await expect(signIn("boss@example.com")).resolves.toBe("/admin");
+    await expect(signIn("OTHER@example.com")).resolves.toBe("/admin");
+    await expect(signIn("new@example.com")).resolves.toBe("/welcome");
+    expect(rows("SELECT method FROM sessions ORDER BY rowid")).toEqual([
+      { method: "email" }, { method: "email" }, { method: "email" }, { method: "email" },
+    ]);
+  });
+
   it("tells the person email sign-in opens soon when there is no mail service", async () => {
     vi.stubEnv("NODE_ENV", "production");
     harness.env.EMAIL = undefined;

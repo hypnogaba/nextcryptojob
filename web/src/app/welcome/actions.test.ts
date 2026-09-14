@@ -9,7 +9,7 @@ import { finishAction } from "./actions/finish";
 import { continueSourcesAction, saveSourcesAction } from "./actions/sources";
 import { checkCodeAction } from "./actions/verify";
 import { saveWalletsAction, skipWalletsAction } from "./actions/wallets";
-import { claimXAction, continueXAction } from "./actions/x";
+import { saveXAction } from "./actions/x";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
@@ -65,7 +65,7 @@ describe("step guards", () => {
     await signInAt("u", "target");
     await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/welcome");
     await expect(run(saveSourcesAction({}, form({ github: "ada" })))).resolves.toBe("/welcome");
-    await expect(run(continueXAction())).resolves.toBe("/welcome");
+    await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome");
     await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/welcome");
     expect(rows("SELECT * FROM identities")).toEqual([]);
     expect(rows("SELECT * FROM consents")).toEqual([]);
@@ -92,12 +92,12 @@ describe("step guards", () => {
   });
 });
 
-describe("claiming an X handle from an unverified squatter", () => {
+describe("claiming an X handle someone else typed in first (the one place a code is still used)", () => {
   it("offers a claim code, then moves the handle on a found code", async () => {
     await signInAt("squatter", "x");
-    await expect(run(claimXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome?step=x");
+    await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome?step=wallets");
     await signInAt("owner", "x");
-    await expect(run(claimXAction({}, form({ handle: "@Ada" })))).resolves.toBe("/welcome?step=x&claim=ada");
+    await expect(run(saveXAction({}, form({ handle: "@Ada" })))).resolves.toBe("/welcome?step=x&claim=ada");
 
     const code = await claimCode(TEST_SECRET, "x", "ada", "owner");
     vi.stubGlobal("fetch", vi.fn(async () =>
@@ -111,7 +111,7 @@ describe("claiming an X handle from an unverified squatter", () => {
 
   it("says the code is missing when it is not there, and moves nothing", async () => {
     await signInAt("squatter", "x");
-    await run(claimXAction({}, form({ handle: "ada" })));
+    await run(saveXAction({}, form({ handle: "ada" })));
     await signInAt("owner", "x");
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       new Response(JSON.stringify(
@@ -170,23 +170,56 @@ describe("brief first, then jobs, then the optional stand out steps", () => {
     ]);
   });
 
-  it("ends the brief with consent and a score job, and shows the jobs at once", async () => {
+  it("ends the brief with consent and a score job, then goes straight to the required X step", async () => {
     await signInAt("u", "consent", '["engineer"]');
-    await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/jobs");
+    await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/welcome?step=x");
     expect(rows("SELECT kind, granted FROM consents")).toEqual([{ kind: "scoring", granted: 1 }]);
     expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
     // Досягнуто перший крок «Stand out»: добірці вистачає ролей і першого балу.
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "x" }]);
   });
 
-  it("lets a person skip X, wallets and sources without touching what they already added", async () => {
+  it("X is required; wallets and sources can be skipped; the last step leads to the score page", async () => {
     await signInAt("u", "x", '["engineer"]');
     exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'evm', ?)", EVM);
-    await expect(run(continueXAction())).resolves.toBe("/welcome?step=wallets");
+    // Без X далі не пускає: крок гаманців відсилає назад, а порожній нік не зберігається.
+    await expect(run(skipWalletsAction())).resolves.toBe("/welcome");
+    await expect(run(saveXAction({}, form({ handle: "  " })))).resolves.toMatchObject({ errors: { handle: "Enter your X handle." } });
+    await expect(run(saveXAction({}, form({ handle: "https://x.com/Ada_Dev" })))).resolves.toBe("/welcome?step=wallets");
     await expect(run(skipWalletsAction())).resolves.toBe("/welcome?step=sources");
-    await expect(run(continueSourcesAction())).resolves.toBe("/profile");
-    expect(rows("SELECT kind, value FROM identities")).toEqual([{ kind: "evm", value: EVM }]);
+    await expect(run(continueSourcesAction())).resolves.toBe("/welcome/score");
+    expect(rows("SELECT kind, value FROM identities ORDER BY id")).toEqual([
+      { kind: "evm", value: EVM },
+      { kind: "x", value: "ada_dev" },
+    ]);
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "done" }]);
+  });
+
+  it("trusts the handle: no code, nothing to verify, and it counts toward the score at once", async () => {
+    await signInAt("u", "x", '["bd"]');
+    await expect(run(saveXAction({}, form({ handle: "@Ada" })))).resolves.toBe("/welcome?step=wallets");
+    expect(rows("SELECT value, verify_code, verified_at FROM identities WHERE kind = 'x'")).toEqual([
+      { value: "ada", verify_code: null, verified_at: null },
+    ]);
+    // Згоду дано в кінці анкети: нік одразу йде в перерахунок.
+    expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
+    // Той самий нік ще раз: нічого не міняє й не ставить друге завдання.
+    await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome?step=wallets");
+    expect(rows("SELECT COUNT(*) AS n FROM score_jobs")).toEqual([{ n: 1 }]);
+  });
+
+  it("saves GitHub without a verification code, and Sherlock is not a field any more", async () => {
+    await signInAt("u", "sources", '["engineer"]');
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'sherlock', 'old')");
+    await expect(run(saveSourcesAction({}, form({ github: "github.com/Ada", youtube: "", site: "", sherlock: "new" })))).resolves.toBe(
+      "/welcome/score",
+    );
+    expect(rows("SELECT kind, value, verify_code FROM identities ORDER BY id")).toEqual([
+      { kind: "x", value: "ada", verify_code: null },
+      { kind: "sherlock", value: "old", verify_code: null },
+      { kind: "github", value: "ada", verify_code: null },
+    ]);
   });
 
   it("after the brief, editing an answer goes back to the jobs; words still lead to roles", async () => {
@@ -203,7 +236,37 @@ describe("brief first, then jobs, then the optional stand out steps", () => {
     harness.jar = fakeCookieJar();
     await createSession("old", null);
     expect((await loadAnswers(harness.env.DB, "old")).step).toBe("delivery");
-    await expect(run(continueXAction())).resolves.toBe("/welcome");
+    await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome");
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "x" }]);
+  });
+});
+
+describe("roles: our guess from the brief, and a role in the person's own words", () => {
+  it("saves the confirmed roles and the own-words role together", async () => {
+    await signInAt("u", "roles");
+    await expect(
+      run(saveRolesAction({}, form({ role: ["bd", "marketing_content"], role_text: "  Tokenomics   designer " }))),
+    ).resolves.toBe("/welcome?step=place");
+    expect(rows("SELECT roles, role_text FROM users")).toEqual([{ roles: '["bd","marketing_content"]', role_text: "Tokenomics designer" }]);
+    expect((await loadAnswers(harness.env.DB, "u")).roleText).toBe("Tokenomics designer");
+  });
+
+  it("with no role picked, reads one from the own-words role; with nothing to read, asks for the closest", async () => {
+    await signInAt("u", "roles");
+    await expect(run(saveRolesAction({}, form({ role_text: "Governance and partnerships lead" })))).resolves.toBe("/welcome?step=place");
+    expect(rows("SELECT roles, role_text FROM users WHERE id = 'u'")).toEqual([{ roles: '["bd"]', role_text: "Governance and partnerships lead" }]);
+
+    await signInAt("v", "roles");
+    const state = await run(saveRolesAction({}, form({ role_text: "Chief vibes officer" })));
+    expect(state).toMatchObject({ errors: { role: expect.stringMatching(/closest role/) }, values: { role_text: "Chief vibes officer" } });
+    expect(rows("SELECT roles, role_text FROM users WHERE id = 'v'")).toEqual([{ roles: "[]", role_text: null }]);
+  });
+
+  it("clears the own-words role when the field is emptied", async () => {
+    await signInAt("u", "roles");
+    await run(saveRolesAction({}, form({ role: "bd", role_text: "Tokenomics" })));
+    expect(rows("SELECT role_text FROM users")).toEqual([{ role_text: "Tokenomics" }]);
+    await run(saveRolesAction({}, form({ role: "bd", role_text: "" })));
+    expect(rows("SELECT role_text FROM users")).toEqual([{ role_text: null }]);
   });
 });
