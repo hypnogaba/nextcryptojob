@@ -13,10 +13,10 @@ describe("extractSalary", () => {
   it("євро з крапкою як роздільником тисяч", () => {
     expect(extractSalary("Gehalt: €60.000 – €80.000 pro Jahr")).toEqual({ min: 60_000, max: 80_000, currency: "EUR" });
   });
-  it("одиночна сума — підлога", () => {
+  it("одиночна сума: підлога", () => {
     expect(extractSalary("Base salary £70,000 per annum")).toEqual({ min: 70_000, max: null, currency: "GBP" });
   });
-  it("«up to» — стеля", () => {
+  it("«up to»: стеля", () => {
     expect(extractSalary("Up to $150,000 depending on experience")).toEqual({ min: null, max: 150_000, currency: "USD" });
   });
   it("код валюти перед числом і після", () => {
@@ -40,12 +40,12 @@ describe("extractSalary", () => {
     expect(extractSalary("$45 - $60 per hour")).toBeNull();
     expect(extractSalary("Pay: $35/hour")).toBeNull();
   });
-  it("роки, 401(k), відсотки й equity — не зарплата", () => {
+  it("роки, 401(k), відсотки й equity не зарплата", () => {
     expect(extractSalary("Founded in 2019, growing 2024-2026. 401(k) match up to 4%.")).toBeNull();
     expect(extractSalary("Equity: 0.1% - 0.5%")).toBeNull();
     expect(extractSalary("5+ years of experience, 24/7 on-call")).toBeNull();
   });
-  it("бонуси й інвестиційні раунди — не зарплата", () => {
+  it("бонуси й інвестиційні раунди не зарплата", () => {
     expect(extractSalary("We raised $50M Series B. $5,000 sign-on bonus.")).toBeNull();
     expect(extractSalary("$2,000 learning budget")).toBeNull();
   });

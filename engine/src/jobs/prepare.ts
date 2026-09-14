@@ -63,7 +63,12 @@ export interface Dropped {
   duplicate: number;
 }
 
-export interface Prepared { rows: JobRow[]; dropped: Dropped }
+export interface Prepared {
+  rows: JobRow[];
+  dropped: Dropped;
+  /** Які не-крипто компанії відсіяно й скільки разів: щоб видно було, чи список не зачепив зайвого. */
+  nonCrypto: Record<string, number>;
+}
 
 /**
  * Усі правила за один прохід: крипто → живий URL → компанія → вікно → вилка → дедуп.
@@ -71,6 +76,7 @@ export interface Prepared { rows: JobRow[]; dropped: Dropped }
  */
 export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date): Prepared {
   const dropped: Dropped = { notCrypto: 0, company: 0, old: 0, broken: 0, duplicate: 0 };
+  const nonCrypto: Record<string, number> = {};
   const seenKey = new Set<string>();
   const seenId = new Set<string>();
   const rows: JobRow[] = [];
@@ -83,7 +89,7 @@ export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date):
     const company = collapse(j.company ?? "");
     if (!hasLiveUrl(url) || !title || !company) { dropped.broken++; continue; }
     const key = companyKey(company);
-    if (isNonCryptoCompany(key, company)) { dropped.company++; continue; }
+    if (isNonCryptoCompany(key, company)) { dropped.company++; nonCrypto[company] = (nonCrypto[company] ?? 0) + 1; continue; }
     if (!isFresh(j.postedAt, windowDays, now)) { dropped.old++; continue; }
     const id = jobId(url);
     const dk = dedupeKey(company, title);
@@ -110,5 +116,5 @@ export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date):
       fetchedAt,
     });
   }
-  return { rows, dropped };
+  return { rows, dropped, nonCrypto };
 }

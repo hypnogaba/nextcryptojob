@@ -17,7 +17,7 @@ const decode = (v: string): string =>
   v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
    .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
    .replace(/&#(\d+);/g, (all: string, n: string) => {
-     // fromCodePoint кидає на &#99999999; — одна така сутність у чужій стрічці валила б усю дошку.
+     // fromCodePoint кидає на &#99999999;: одна така сутність у чужій стрічці валила б усю дошку.
      const cp = Number(n);
      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : all;
    });
@@ -71,7 +71,7 @@ export function splitBoardTitle(raw: string): { company: string; title: string }
     title = title.replace(/^job application for\s+/i, "");
     if (company && title && company.length <= 60) return { company, title };
   }
-  const colon = /^(.+?)\s*[:|–—]\s*(.+)$/.exec(clean);
+  const colon = /^(.+?)\s*[:|–\u2014]\s*(.+)$/.exec(clean);
   if (colon && colon[1]!.length <= 60) return { company: colon[1]!.trim(), title: colon[2]!.trim() };
   return null;
 }
@@ -96,7 +96,7 @@ const rssItems = (xml: string): Array<{ title: string; link: string; date: strin
 
 /**
  * Опис remote3: «at Ihsan - Full-Time - Worldwide - $120k - $240k /yr». Місце третім шматком,
- * вилку бере extractSalary з усього рядка (/yr — рік).
+ * вилку бере extractSalary з усього рядка (/yr означає рік).
  */
 export function parseRssBoard(xml: string, board: BoardSource): RawJob[] {
   const out: RawJob[] = [];

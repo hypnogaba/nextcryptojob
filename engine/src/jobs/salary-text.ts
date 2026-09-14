@@ -3,16 +3,16 @@
  * Вилка з тексту оголошення. Без моделі, без мережі.
  *
  * Лише 226 з 18 767 рядків кешу мають salary_min: ATS майже ніколи не
- * віддають вилку окремим полем, зате пишуть її в текст — «$120,000 -
+ * віддають вилку окремим полем, зате пишуть її в текст: «$120,000 -
  * $150,000», «€60.000 – €80.000», «60k-80k EUR». Цей модуль ловить саме такі
  * записи і повертає числа, які далі йдуть у jobs_cache і в картку.
  *
  * Правила, кожне з реального тексту:
- * - число без валюти поруч — не зарплата (роки «2024–2026», «401(k)»,
+ * - число без валюти поруч не зарплата (роки «2024–2026», «401(k)»,
  *   «24/7», «5 years»);
- * - відсотки й equity — ні;
- * - «per hour» — пропускаємо: у річну шкалу без припущень не перевести;
- * - «per month», «par mois», «в місяць» — множимо на 12, бо картка й
+ * - відсотки й equity ні;
+ * - «per hour» пропускаємо: у річну шкалу без припущень не перевести;
+ * - «per month», «par mois», «в місяць» множимо на 12, бо картка й
  *   профіль порівнюють річні числа;
  * - вилка важливіша за одиночну суму: якщо є обидві, беремо вилку.
  */
@@ -43,7 +43,7 @@ const TOKEN = new RegExp(
   "gu",
 );
 
-const RANGE_SEP = /^\s*(?:-|–|—|to|à|до|and|et|und|і|и|\.{2,3})\s*$/i;
+const RANGE_SEP = /^\s*(?:-|–|\u2014|to|à|до|and|et|und|і|и|\.{2,3})\s*$/i;
 const HOURLY = /\b(?:per|an|\/)\s?(?:hour|hr|h)\b|hourly|de l'heure|par heure|на годину|в час|в год(?:ину)?\b|per day|daily|par jour|на день/i;
 const MONTHLY = /\b(?:per|a|\/)\s?(?:month|mo)\b|monthly|par mois|mensuel|\bmois\b|в місяць|на місяць|щомісяч|в месяц|ежемесяч|міс\.|мес\./i;
 const UP_TO = /(?:up to|jusqu'?à|до|until|max(?:imum)?\.?)\s*$/i;
@@ -63,7 +63,7 @@ const codeOf = (raw: string | undefined): string | null => {
 
 function parseNumber(raw: string, hasK: boolean): number {
   const grouped = /^\d{1,3}(?:[ ,.'  ]\d{3})+$/.test(raw);
-  // «60.000» без k — тисячі; «1.5k» — дробове.
+  // «60.000» без k це тисячі; «1.5k» дробове.
   if (grouped && !hasK) return Number(raw.replace(/[ ,.'  ]/g, ""));
   const n = Number(raw.replace(/[   ']/g, "").replace(",", "."));
   return hasK ? n * 1000 : n;
@@ -89,9 +89,9 @@ function tokens(text: string): Token[] {
 const MIN_YEARLY = 1_000;
 const MAX_YEARLY = 5_000_000;
 
-/** Період за словами навколо суми: null — не зарплата або година/день, 12 — місяць, 1 — рік. */
+/** Період за словами навколо суми: null: не зарплата або година/день, 12: місяць, 1: рік. */
 function periodFactor(text: string, start: number, end: number): number | null {
-  // Вікно — в межах речення: «$1,500 stipend. Base: $100k…» не має
+  // Вікно в межах речення: «$1,500 stipend. Base: $100k…» не має
   // отруювати сусідню вилку словом із попередньої фрази.
   const after = text.slice(end, end + 40).split(/[.!?;\n](?=\s|$)/)[0]!;
   const before = text.slice(Math.max(0, start - 40), start).split(/[.!?;\n](?=\s|$)/).pop()!;
@@ -127,7 +127,7 @@ export function extractSalary(text: string | null | undefined): Salary | null {
     return { min: lo, max: hi, currency };
   }
 
-  // 2. Одиночна сума з валютою. «up to» робить її стелею, інакше — підлогою.
+  // 2. Одиночна сума з валютою. «up to» робить її стелею, інакше підлогою.
   for (const x of ts) {
     if (!x.currency) continue;
     const factor = periodFactor(t, x.start, x.end);

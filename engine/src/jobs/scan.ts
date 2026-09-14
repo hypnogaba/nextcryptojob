@@ -63,6 +63,8 @@ export interface ScanReport {
   kept: number;
   newJobs: number;
   dropped: Dropped;
+  /** Відсіяні не-крипто компанії: назва → скільки вакансій. */
+  nonCrypto: Record<string, number>;
   bySource: Array<{ source: string; raw: number; kept: number; error?: string }>;
   pool: PoolStats;
   rowsWritten: { estimated: number; measured: number | null };
@@ -181,7 +183,7 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
 
     const results = await mapLimit(list, CONCURRENCY, (t) => t.run());
     const raw = results.flatMap((r) => r.jobs);
-    const { rows, dropped } = prepare(raw, windowDays, now);
+    const { rows, dropped, nonCrypto } = prepare(raw, windowDays, now);
     const existing = await store.existingIds();
     const newJobs = rows.filter((r) => !existing.has(r.id)).length;
 
@@ -200,7 +202,7 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
     const pool = poolStats(rows, now);
 
     const notes = {
-      window_days: windowDays, raw: raw.length, dropped, skipped_dead: skipped.length,
+      window_days: windowDays, raw: raw.length, dropped, skipped_dead: skipped.length, non_crypto: nonCrypto,
       pool: { live: pool.pool, unique: pool.unique, with_salary: pool.withSalary, companies: pool.companies },
       boards: bySource.filter((s) => /^(board|aggregator):/.test(s.source)),
       failures: bySource.filter((s) => s.error).slice(0, 40).map((s) => ({ source: s.source, error: s.error })),
@@ -215,7 +217,7 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
     const report: ScanReport = {
       runId, dry: store.dry, status, windowDays,
       sources: { total: list.length + skipped.length, ok, failed, rateLimited, skippedDead: skipped.length },
-      raw: raw.length, kept: rows.length, newJobs, dropped, bySource, pool,
+      raw: raw.length, kept: rows.length, newJobs, dropped, nonCrypto, bySource, pool,
       rowsWritten: { estimated: store.estimatedRows, measured: store.dry ? null : store.measuredRows },
       rows,
     };
@@ -245,6 +247,8 @@ export function formatScanReport(r: ScanReport): string[] {
       ? `  D1 rows written if this ran for real: ${r.rowsWritten.estimated} (estimate: 1 per job row, scan_runs 3, source_state 1 per change)`
       : `  D1 rows written: ${r.rowsWritten.measured ?? "unknown"} (estimate ${r.rowsWritten.estimated})`,
   ];
+  const nc = Object.entries(r.nonCrypto).sort((a, b) => b[1] - a[1]);
+  if (nc.length) out.push(`  non-crypto companies dropped: ${nc.slice(0, 12).map(([c, n]) => `${c} ${n}`).join(", ")}`);
   const top = [...r.bySource].sort((a, b) => b.kept - a.kept).slice(0, 12);
   out.push(`  top sources: ${top.map((s) => `${s.source} ${s.kept}`).join(", ")}`);
   const failures = r.bySource.filter((s) => s.error);

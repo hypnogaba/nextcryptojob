@@ -161,7 +161,7 @@ describe("дошки", () => {
   it("remote3: «Роль at Компанія», компанія двічі, місце й вилка з опису", () => {
     const jobs = parseRssBoard(fixture("remote3.rss"), R3);
     expect(jobs).toHaveLength(8);
-    expect(jobs[0]).toMatchObject({ company: "Ihsan", title: "Founding Senior Payments Platform Engineer — Stablecoin Neobank",
+    expect(jobs[0]).toMatchObject({ company: "Ihsan", title: "Founding Senior Payments Platform Engineer \u2014 Stablecoin Neobank",
       location: null, remote: true, salaryMin: 120_000, salaryMax: 240_000, salaryCurrency: "USD" });
     expect(jobs[1]).toMatchObject({ company: "Bybit", title: "Lead Security Management Engineer" });
     expect(jobs.find((j) => j.location === "Kuala Lumpur")?.title).toBe("Principal Security Development Engineer");
