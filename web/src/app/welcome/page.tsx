@@ -6,14 +6,12 @@ import { requireUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
 import { loadSettings } from "@/lib/account/settings";
 import { timezoneList } from "@/lib/account/timezones";
-import { normalizeGithub, normalizeX } from "@/lib/identity/normalize";
 import { listIdentities, type Identity } from "@/lib/identity/store";
 import { MAX_WALLETS } from "@/lib/identity/wallets";
 import { placeFromText, whereFromMode } from "@/lib/onboarding/place";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { briefDone, isBriefStep, stepToShow, type Step } from "@/lib/onboarding/steps";
 import { guessRoles } from "@/lib/roles/infer";
-import { claimCode, holderOf } from "@/lib/verify/claim";
 import { AddEmailForm } from "../account/add-email-form";
 import { DailyJobsForm } from "../settings/daily-jobs-form";
 import { saveDeliveryAction } from "./actions/delivery";
@@ -21,7 +19,6 @@ import { continueSourcesAction } from "./actions/sources";
 import { skipWalletsAction } from "./actions/wallets";
 import { parseWait } from "./flow";
 import { StepShell } from "./step-shell";
-import { ClaimPanel } from "./steps/claim-panel";
 import { PlaceForm } from "./steps/place-form";
 import { RolesForm } from "./steps/roles-form";
 import { SkipForNow } from "./steps/skip-for-now";
@@ -33,22 +30,9 @@ import { XForm } from "./steps/x-form";
 export const metadata: Metadata = { title: "Set up your profile", robots: { index: false } };
 
 type Param = string | string[] | undefined;
-type Props = { searchParams: Promise<{ step?: Param; claim?: Param; wait?: Param }> };
+type Props = { searchParams: Promise<{ step?: Param; wait?: Param }> };
 
 const LINK = "font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
-
-/**
- * Код заявки на нік, який тримає інший профіль без підтвердження, або null
- * (нік вільний, уже свій, підтверджений кимось, хибний, або немає секрету).
- */
-async function claimFor(d: D1Database, userId: string, kind: "x" | "github", raw: Param) {
-  if (typeof raw !== "string" || !raw) return null;
-  const parsed = kind === "x" ? normalizeX(raw) : normalizeGithub(raw);
-  const secret = appEnv().SESSION_SECRET;
-  if (!parsed.ok || !secret) return null;
-  if ((await holderOf(d, userId, kind, parsed.value)) !== "pending") return null;
-  return { value: parsed.value, code: await claimCode(secret, kind, parsed.value, userId) };
-}
 
 /**
  * Анкета першого входу. Досягнутий крок у users.onboarding_step: після
@@ -203,20 +187,15 @@ export default async function WelcomePage({ searchParams }: Props) {
       );
     }
 
-    case "x": {
-      const claim = await claimFor(d, user.id, "x", sp.claim);
+    case "x":
+      // Без коду в біо й без перевірки, навіть коли той самий нік уже вписав хтось інший (раунд 3).
       return shell(
         step,
         editing
           ? "We read your public profile and posts to score you."
           : "Required to continue. We read your public profile and posts to score you: followers, known crypto accounts that follow you and reactions to your posts. One X account per profile.",
-        claim ? (
-          <ClaimPanel kind="x" value={claim.value} code={claim.code} backHref="/welcome?step=x" />
-        ) : (
-          <XForm initial={one("x")?.value ?? ""} editing={editing} />
-        ),
+        <XForm initial={one("x")?.value ?? ""} editing={editing} />,
       );
-    }
 
     case "wallets":
       return shell(
@@ -234,13 +213,11 @@ export default async function WelcomePage({ searchParams }: Props) {
         </div>,
       );
 
-    case "sources": {
-      const claim = await claimFor(d, user.id, "github", sp.claim);
+    case "sources":
       return shell(
         step,
         "Optional, and each one raises your score. Add what shows your work.",
         <div className="grid gap-10">
-          {claim ? <ClaimPanel kind="github" value={claim.value} code={claim.code} backHref="/welcome?step=sources" /> : null}
           <SourcesForm
             editing={editing}
             initial={{
@@ -254,6 +231,5 @@ export default async function WelcomePage({ searchParams }: Props) {
           )}
         </div>,
       );
-    }
   }
 }

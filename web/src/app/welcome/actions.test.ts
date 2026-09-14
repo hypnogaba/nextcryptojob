@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSession } from "@/lib/auth/session";
-import { claimCode } from "@/lib/verify/claim";
-import { exec, fakeCookieJar, harness, RedirectCalled, resetHarness, rows, TEST_SECRET } from "@/test/harness";
+import { exec, fakeCookieJar, harness, RedirectCalled, resetHarness, rows } from "@/test/harness";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { savePlaceAction, saveRolesAction, saveTargetAction } from "./actions/answers";
 import { saveDeliveryAction } from "./actions/delivery";
 import { continueSourcesAction, saveSourcesAction } from "./actions/sources";
-import { checkCodeAction } from "./actions/verify";
 import { saveWalletsAction, skipWalletsAction } from "./actions/wallets";
 import { saveXAction } from "./actions/x";
 
@@ -94,37 +92,40 @@ describe("step guards", () => {
   });
 });
 
-describe("claiming an X handle someone else typed in first (the one place a code is still used)", () => {
-  it("offers a claim code, then moves the handle on a found code", async () => {
-    await signInAt("squatter", "x");
+describe("no X verification (owner 14.09, round 3: \"It again asks me to verify X. No verification.\")", () => {
+  it("a handle someone else already added is saved on this profile too, with no code and no claim page", async () => {
+    await signInAt("first", "x");
     await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome?step=wallets");
+    exec("UPDATE identities SET verified_via = 'bio_code', verified_at = datetime('now') WHERE user_id = 'first'");
     await signInAt("owner", "x");
-    await expect(run(saveXAction({}, form({ handle: "@Ada" })))).resolves.toBe("/welcome?step=x&claim=ada");
-
-    const code = await claimCode(TEST_SECRET, "x", "ada", "owner");
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response(JSON.stringify({ data: { screenName: "ada", description: `me ${code}` } })),
-    ));
-    await expect(run(checkCodeAction({}, form({ kind: "x", claim: "ada" })))).resolves.toBe("/welcome?step=x");
-    expect(rows("SELECT user_id, value, verified_via FROM identities WHERE kind = 'x'")).toEqual([
-      { user_id: "owner", value: "ada", verified_via: "bio_code" },
+    await expect(run(saveXAction({}, form({ handle: "@Ada" })))).resolves.toBe("/welcome?step=wallets");
+    expect(rows("SELECT user_id, value, verify_code, verified_at FROM identities WHERE kind = 'x' ORDER BY id")).toEqual([
+      { user_id: "first", value: "ada", verify_code: null, verified_at: expect.any(String) },
+      { user_id: "owner", value: "ada", verify_code: null, verified_at: null },
     ]);
+    expect(rows("SELECT reason FROM score_jobs WHERE user_id = 'owner'")).toEqual([{ reason: "connect" }]);
   });
 
-  it("says the code is missing when it is not there, and moves nothing", async () => {
-    await signInAt("squatter", "x");
-    await run(saveXAction({}, form({ handle: "ada" })));
-    await signInAt("owner", "x");
-    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
-      new Response(JSON.stringify(
-        String(url).endsWith("twitter_user_info")
-          ? { data: { screenName: "ada", description: "nope" } }
-          : { data: [{ id: "1", conversationId: "1", text: "gm", userScreenName: "ada" }] },
-      )),
-    ));
-    const state = await run(checkCodeAction({}, form({ kind: "x", claim: "ada" })));
-    expect(state).toMatchObject({ message: { tone: "error", text: expect.stringContaining("Retweets do not count") } });
-    expect(rows("SELECT user_id FROM identities WHERE kind = 'x'")).toEqual([{ user_id: "squatter" }]);
+  it("the same for GitHub, YouTube, a site and wallets", async () => {
+    await signInAt("first", "sources", '["engineer"]');
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('first', 'x', 'first')");
+    await run(saveSourcesAction({}, form({ github: "ada", youtube: "@ada", site: "https://ada.dev" })));
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('first', 'evm', ?)", EVM);
+
+    await signInAt("owner", "sources", '["engineer"]');
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('owner', 'x', 'owner')");
+    await expect(run(saveSourcesAction({}, form({ github: "ada", youtube: "@ada", site: "https://ada.dev" })))).resolves.toBe(
+      "/welcome/score",
+    );
+    exec("UPDATE users SET onboarding_step = 'wallets' WHERE id = 'owner'");
+    await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/welcome?step=sources");
+    expect(rows("SELECT kind FROM identities WHERE user_id = 'owner' ORDER BY kind")).toEqual([
+      { kind: "evm" },
+      { kind: "github" },
+      { kind: "site" },
+      { kind: "x" },
+      { kind: "youtube" },
+    ]);
   });
 });
 

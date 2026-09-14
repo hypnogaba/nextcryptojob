@@ -153,6 +153,17 @@ describe("X step", () => {
     expect(html).not.toContain("Copy code");
   });
 
+  it("never asks to verify, even when another profile already added the same handle (old claim links too)", async () => {
+    await signIn({ step: "x", roles: '["bd"]' });
+    exec("INSERT INTO users (id, email) VALUES ('other', 'other@example.com')");
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('other', 'x', 'ada'), ('other', 'github', 'ada')");
+    for (const step of ["x", "sources"]) {
+      const html = renderToStaticMarkup(await WelcomePage({ searchParams: Promise.resolve({ step, claim: "ada" } as never) }));
+      expect(html).not.toContain("Copy code");
+      expect(html).not.toMatch(/verify|prove it|Is @ada yours/i);
+    }
+  });
+
   it("someone who reached wallets without X under the old order is sent to X first", async () => {
     await signIn({ step: "wallets", roles: '["bd"]' });
     expect(await render("wallets")).toContain("Your X account");

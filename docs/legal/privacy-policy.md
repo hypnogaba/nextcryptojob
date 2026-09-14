@@ -104,7 +104,6 @@ tags, and, for x402 payments, the paying wallet address and the transaction hash
 | Purpose | Main data | Legal basis |
 |---|---|---|
 | Create and run your account, sign you in | Email or Telegram ID, settings | Contract, art. 6(1)(b) GDPR <https://gdpr-info.eu/art-6-gdpr/> |
-| Verify that you control your X account | X handle, verification code | Contract, art. 6(1)(b) |
 | Collect public data and compute your score (profiling) | Sections 3.1 to 3.3 | Contract, art. 6(1)(b): the score is part of the service you accept at the end of setup. It uses only the sources you add. |
 | Write the plain-language explanation of your score | Score breakdown and counts | Contract, art. 6(1)(b) (part of the score) |
 | Publish your card page | Score, role, level, pattern | Your consent (you choose to publish) [to confirm product behaviour: card page public only after you publish it] |
@@ -113,7 +112,7 @@ tags, and, for x402 payments, the paying wallet address and the transaction hash
 | Send your daily job digest by email or Telegram | Email or Telegram ID, roles, place, salary | Your consent, art. 6(1)(a). The digest can include jobs posted by paying companies, so we also treat it as covered by art. L34-5 of the French Postal and Electronic Communications Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961/> [to confirm with lawyer: consent or contract basis for the digest] |
 | Review your score by a person when you appeal | Your appeal, score data | Contract, and our duty to offer human review under art. 22(3) GDPR |
 | Answer your rights requests | Identity check data, request | Legal obligation, art. 6(1)(c) GDPR |
-| Keep the service secure, stop abuse and fraud (rate limits, one wallet per account, logs) | Technical data, identifiers | Legitimate interest in protecting users and the service, art. 6(1)(f) GDPR |
+| Keep the service secure, stop abuse and fraud (rate limits, reports about cards, logs) | Technical data, identifiers | Legitimate interest in protecting users and the service, art. 6(1)(f) GDPR |
 | Measure site audience without cookies | Page views, aggregated | Legitimate interest, art. 6(1)(f) |
 | Send service messages (security, changes to terms, inactivity warning) | Email or Telegram ID | Contract, art. 6(1)(b), and legal obligation where it applies |
 | Manage company subscriptions, invoices and accounting | Company user and billing data | Contract, art. 6(1)(b); legal obligation to keep accounting records, art. L123-22 French Commercial Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006219327> |

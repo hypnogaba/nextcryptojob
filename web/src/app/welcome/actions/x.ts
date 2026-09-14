@@ -1,13 +1,13 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { normalizeX } from "@/lib/identity/normalize";
 import { getIdentity, setSingleIdentity } from "@/lib/identity/store";
 import { saveStep } from "@/lib/onboarding/store";
 import { field, goNext, identityWriteGuard, recordChange, stepContext, type StepState } from "../flow";
 
 // Крок X: обов'язковий, одразу після анкети. Людина вписує нік, ми йому віримо (модель довіри
-// 13.09, docs/DECISIONS.md): без коду в біо й без входу через X. Далі без ніка не пускаємо.
+// 13.09, docs/DECISIONS.md): без коду в біо й без входу через X. Той самий нік в іншому профілі
+// теж не заважає (раунд 3 власника, 14.09: «жодної перевірки»). Далі без ніка не пускаємо.
 
 export async function saveXAction(_prev: StepState, form: FormData): Promise<StepState> {
   const ctx = await stepContext("x");
@@ -19,15 +19,7 @@ export async function saveXAction(_prev: StepState, form: FormData): Promise<Ste
   if (before?.value !== handle.value) {
     const limited = await identityWriteGuard(ctx);
     if (limited) return { message: limited, values: { handle: raw } };
-    const res = await setSingleIdentity(ctx.d, ctx.user.id, "x", handle.value);
-    if (!res.ok) {
-      // Нік уже в іншому профілі без підтвердження: власник забирає його кодом заявки.
-      if (res.reason === "pending") redirect(`/welcome?step=x&claim=${encodeURIComponent(handle.value)}`);
-      return {
-        errors: { handle: "This X account is already linked to another profile." },
-        values: { handle: raw },
-      };
-    }
+    await setSingleIdentity(ctx.d, ctx.user.id, "x", handle.value);
     await recordChange(ctx, "x");
   }
   await saveStep(ctx.d, ctx.user.id, "x", {}, ctx.answers.step);

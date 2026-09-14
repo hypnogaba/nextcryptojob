@@ -59,16 +59,12 @@ to get a job, an interview or an introduction, do not pay. Report it to
 another person's X account, GitHub, YouTube channel, website or wallet. This is
 impersonation. It can also harm the real owner.
 
-**How we check.**
+**We take your word for it.** We do not ask you to prove control: no code in your bio,
+no sign-in with X, no wallet signature. Your public card says that the sources are
+self-reported, and anyone can report a card.
 
-- X: you prove control by putting a code in your bio or in a post.
-- Wallets: you paste addresses. We do not check them by signature unless you choose to sign. A signed wallet gets a "verified" badge. An unsigned wallet shows no badge.
-- One wallet address can belong to one account only.
-- GitHub, YouTube and website: [to confirm product behaviour: how control is checked; unverified sources show no badge].
-
-**Disputes.** If two people claim the same wallet or account, we may ask both to prove
-control (for example by signing a message with the wallet). The person who proves
-control keeps it. We remove it from the other account and may suspend that account.
+- The same X account, GitHub, YouTube channel, website or wallet can be on more than one account. Nobody can block you by adding your account first.
+- If someone reports that an account or wallet on a profile is not theirs, we may ask the person to prove control (for example by signing a message with the wallet). If they cannot, we remove it from their profile and may suspend the profile.
 
 **We never ask for your keys.** We will never ask for your private key or seed phrase.
 A signature for verification only signs a text message. It never moves funds or gives

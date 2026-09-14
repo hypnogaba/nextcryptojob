@@ -38,11 +38,11 @@ processing is not occasional and includes profiling.
 
 | Field | Value |
 |---|---|
-| Purpose | Link X, wallets, GitHub, YouTube, website to the account; verify X by code in bio or post; optional wallet signature; one address per account |
+| Purpose | Link X, wallets, GitHub, YouTube, website to the account; self-reported, no code in the bio; the same source can be on more than one account |
 | Data subjects | Candidates |
 | Data | X handle; EVM and Solana addresses; GitHub login; YouTube channel; website URL; verification method and date |
 | Legal basis | Contract, art. 6(1)(b); legitimate interest in preventing impersonation, art. 6(1)(f) |
-| Recipients | Operator; 6551 (reads X bio or post); Cloudflare |
+| Recipients | Operator; Cloudflare |
 | Transfers | 6551 [to confirm country and safeguard] |
 | Retention | Active account |
 
