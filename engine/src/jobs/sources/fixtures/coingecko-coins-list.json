@@ -1,0 +1,127 @@
+[
+{
+"id": "_",
+"symbol": "gib",
+"name": "\u0f3c \u3064 \u25d5_\u25d5 \u0f3d\u3064"
+},
+{
+"id": "000-capital",
+"symbol": "000",
+"name": "000 Capital"
+},
+{
+"id": "allora",
+"symbol": "allo",
+"name": "Allora"
+},
+{
+"id": "arbitrum",
+"symbol": "arb",
+"name": "Arbitrum"
+},
+{
+"id": "axiom",
+"symbol": "axiom",
+"name": "Axiom"
+},
+{
+"id": "bob",
+"symbol": "bob",
+"name": "BOB"
+},
+{
+"id": "bob-2",
+"symbol": "bob",
+"name": "BOB"
+},
+{
+"id": "bob-6",
+"symbol": "bob",
+"name": "Bob"
+},
+{
+"id": "bob-build-on-bitcoin",
+"symbol": "bob",
+"name": "BOB (Build on Bitcoin)"
+},
+{
+"id": "ethena",
+"symbol": "ena",
+"name": "Ethena"
+},
+{
+"id": "ethena-staked-ena",
+"symbol": "sena",
+"name": "Ethena Staked ENA"
+},
+{
+"id": "ethena-usde",
+"symbol": "usde",
+"name": "Ethena USDe"
+},
+{
+"id": "legend-2",
+"symbol": "legend",
+"name": "Legend"
+},
+{
+"id": "legend-3",
+"symbol": "$legend",
+"name": "Legend"
+},
+{
+"id": "legend-4",
+"symbol": "legend",
+"name": "LEGEND"
+},
+{
+"id": "lido-dao",
+"symbol": "ldo",
+"name": "Lido DAO"
+},
+{
+"id": "solana",
+"symbol": "sol",
+"name": "Solana"
+},
+{
+"id": "staked-ether",
+"symbol": "steth",
+"name": "Lido Staked Ether"
+},
+{
+"id": "tether",
+"symbol": "usdt",
+"name": "Tether"
+},
+{
+"id": "tether-gold",
+"symbol": "xaut",
+"name": "Tether Gold"
+},
+{
+"id": "uniswap",
+"symbol": "uni",
+"name": "Uniswap"
+},
+{
+"id": "uniswap-wormhole",
+"symbol": "uni",
+"name": "Uniswap (Wormhole)"
+},
+{
+"id": "usd-coin",
+"symbol": "usdc",
+"name": "USDC"
+},
+{
+"id": "zksync",
+"symbol": "zk",
+"name": "ZKsync"
+},
+{
+"id": "zksync-bridged-usdc-zksync",
+"symbol": "usdc",
+"name": "zkSync Bridged USDC (zkSync)"
+}
+]

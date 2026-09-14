@@ -9,6 +9,7 @@
 //   node dist/cli.js jobs-scan [--dry] [--registry <file>] [--out <file>]
 //   node dist/cli.js jobs-discover [--dry] [--out <file>]
 //   node dist/cli.js jobs-about [--dry]
+//   node dist/cli.js jobs-tokens [--dry] [--prices]
 //   node dist/cli.js jobs-prune [--dry] [--days N]
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -29,11 +30,12 @@ import { scoreUser } from "./pipeline/run-person.js";
 import { formatScoreFacts, type ScoreFactsArgs, scoreFacts } from "./pipeline/score-facts.js";
 import { runCompanyAbout } from "./jobs/about.js";
 import { runJobsDiscover } from "./jobs/discover.js";
-import { JOBS_DB_ENV, jobsD1FromEnv } from "./jobs/env.js";
+import { envFlag, JOBS_DB_ENV, jobsD1FromEnv } from "./jobs/env.js";
 import { runJobsPrune } from "./jobs/prune.js";
 import { runJobsScan } from "./jobs/scan.js";
 import { loadSeed, SEED_PATH } from "./jobs/seed.js";
 import { type JobsBackend, JobsStore } from "./jobs/store.js";
+import { runCompanyTokens, runTokenPrices } from "./jobs/tokens.js";
 
 export const USAGE = `usage: nextcryptojob-engine <command>
   worker                                   run the score_jobs worker until SIGTERM
@@ -55,15 +57,20 @@ export const USAGE = `usage: nextcryptojob-engine <command>
       [--user <id>]                        with --dry-run: this person, whatever the hour
       [--profile <json>]                   with --dry-run: a made-up profile, e.g.
                                            '{"roles":["engineer"],"remote_mode":"remote,city","city":"Paris"}'
-  jobs-scan                                read every crypto job source, write the jobs DB (daily timer)
+  jobs-scan                                read every crypto job source, write the jobs DB (daily timer),
+                                           then refresh company token prices from CoinGecko
       [--dry]                              read the sources, write nothing, print what would be written
       [--registry <file>]                  with --dry and no CF_JOBS_D1_DATABASE_ID: companies and boards from
                                            this JSON (default db/jobs/seed/registry.json)
       [--out <file>]                       also write the report and the rows as JSON
   jobs-discover [--dry] [--out <file>]     add new crypto companies with a public ATS to the registry (weekly)
-                                           (then jobs-about for the whole registry)
+                                           (then jobs-about and jobs-tokens for the whole registry)
   jobs-about [--dry]                       fill a missing company domain and a one or two sentence "about" from
-                                           the registry note, job links, Greenhouse, Workable and speedrun
+                                           the registry note, job links, Ashby, Greenhouse, Workable and speedrun
+  jobs-tokens [--dry] [--out <file>]       map companies to their CoinGecko token (by hand or confirmed by the
+                                           company domain), then refresh prices; --dry also counts the domains
+                                           jobs-about would add
+      [--prices]                           only refresh the prices of mapped tokens
   jobs-prune [--dry] [--days N]            delete jobs the scan has not seen for N days (default 30; weekly)`;
 
 /** Залежності команд: у тестах підставні, у продукті з оточення. */
@@ -199,8 +206,11 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
         const outFile = flag(args, "--out");
         if (args.length || (registry && !dry)) { err(USAGE); return 2; }
         const store = jobsStore(deps, dry, registry);
-        const report = await runJobsScan({ store, env: deps.env, log: out, fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
+        const fetch = deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined;
+        const report = await runJobsScan({ store, env: deps.env, log: out, fetch });
         if (outFile) writeFileSync(outFile, JSON.stringify(report, null, 1));
+        // Ціни токенів компаній: один запит CoinGecko; збій лишає попередні ціни й не міняє результату скану.
+        if (envFlag(deps.env, "JOBS_TOKENS", true)) await runTokenPrices({ store: jobsStore(deps, dry, registry), env: deps.env, log: out, fetch });
         return 0;
       }
       case "jobs-discover": {
@@ -216,6 +226,14 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
         } catch (e) {
           out(`jobs-about after jobs-discover failed: ${shortError(e, 300)}`);
         }
+        // Токени після доменів: зіставлення підтверджується доменом компанії.
+        if (envFlag(deps.env, "JOBS_TOKENS", true)) {
+          try {
+            await runCompanyTokens({ store: jobsStore(deps, dry), env: deps.env, log: out, fetch });
+          } catch (e) {
+            out(`jobs-tokens after jobs-discover failed: ${shortError(e, 300)}`);
+          }
+        }
         return 0;
       }
       case "jobs-about": {
@@ -223,6 +241,28 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
         if (args.length) { err(USAGE); return 2; }
         await runCompanyAbout({ store: jobsStore(deps, dry), env: deps.env, log: out,
           fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
+        return 0;
+      }
+      case "jobs-tokens": {
+        const dry = has(args, "--dry");
+        const pricesOnly = has(args, "--prices");
+        const outFile = flag(args, "--out");
+        if (args.length) { err(USAGE); return 2; }
+        const fetch = deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined;
+        if (pricesOnly) {
+          const r = await runTokenPrices({ store: jobsStore(deps, dry), env: deps.env, log: out, fetch });
+          if (outFile) writeFileSync(outFile, JSON.stringify(r, null, 1));
+          return r.error ? 1 : 0;
+        }
+        // Насухо домени, яких ще немає в базі, але які дописав би jobs-about (щотижня він іде перед токенами).
+        let domains: Map<string, string> | undefined;
+        if (dry) {
+          const about = await runCompanyAbout({ store: jobsStore(deps, true), env: deps.env, log: out, fetch });
+          domains = new Map(about.fills.filter((f) => f.domain).map((f) => [f.slug, f.domain!]));
+        }
+        const r = await runCompanyTokens({ store: jobsStore(deps, dry), env: deps.env, log: out, fetch, domains });
+        for (const m of r.matches.slice(0, 40)) out(`  ${m.name} (${m.domain ?? "no domain"}) -> ${m.coingeckoId} $${m.symbol} [${m.confidence}]`);
+        if (outFile) writeFileSync(outFile, JSON.stringify(r, null, 1));
         return 0;
       }
       case "jobs-prune": {

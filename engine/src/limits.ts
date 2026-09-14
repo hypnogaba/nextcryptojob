@@ -162,6 +162,12 @@ const SUFFIX_ALIASES: Array<[suffix: string, budget: string]> = [
   [".teamtailor.com", "teamtailor"],
 ];
 
+/** Бюджет CoinGecko (api.coingecko.com). */
+export const COINGECKO = "api.coingecko.com";
+/** Пауза між запитами до CoinGecko без ключа і з демо-ключем, мс. */
+export const COINGECKO_PUBLIC_INTERVAL_MS = 13_000;
+export const COINGECKO_KEY_INTERVAL_MS = 2_500;
+
 /** Бюджет пошуку GitHub (api.github.com/search/...). */
 export const GITHUB_SEARCH = "github-search";
 
@@ -214,6 +220,12 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   "superteam.fun": { concurrency: 1, minIntervalMs: 1_000 },
   // Getro лише в розвідці (раз на тиждень, JOBS_GETRO_DISCOVERY=1): по одному запиту раз на 1,5 с, тротлить агресивно.
   "api.getro.com": { concurrency: 1, minIntervalMs: 1_500 },
+  // Сторінки дошок Ashby (jobs-about: сайт компанії з organization.publicWebsite), раз на тиждень.
+  "jobs.ashbyhq.com": { concurrency: 2, minIntervalMs: 300 },
+  // CoinGecko (jobs-tokens, ціни токенів після jobs-scan). Публічний API без ключа 14.09.2026 з Mac
+  // пропускав 5 до 7 запитів на хвилину, далі 429 з Retry-After 60: тому по одному раз на 13 с (≈ 4,6 на
+  // хвилину). З демо-ключем (COINGECKO_API_KEY, 30 на хвилину) src/jobs/tokens.ts ставить 2,5 с (24 на хвилину).
+  [COINGECKO]: { concurrency: 1, minIntervalMs: COINGECKO_PUBLIC_INTERVAL_MS },
 };
 const OTHER_HOST: LimiterOptions = { concurrency: 4, minIntervalMs: 0 };
 
@@ -279,12 +291,30 @@ export function backoffFor(urlOrHost: string | URL, ms: number): void {
   limiterFor(key).backoff(Math.min(ms, MAX_BACKOFF_MS));
 }
 
+/**
+ * Інші межі бюджету на весь процес, коли вони залежать від оточення (CoinGecko з ключем терпить більше).
+ * Кличте на початку команди, поки бюджет простоює: новий обмежувач заступає старий, і черга старого
+ * (якщо там хтось чекав) дограє за старими межами.
+ */
+export function configureBudget(hostOrBudget: string, options: LimiterOptions): void {
+  const key = budgetKey(hostOrBudget);
+  // Межі, які поставив тест (__setLimiter), лишаються: тест знає краще.
+  if (pinned.has(key)) return;
+  registry.set(key, makeLimiter(options));
+}
+
+/** Бюджети, задані тестом через __setLimiter. */
+const pinned = new Set<string>();
+
 /** Лише для тестів: забути всі обмежувачі. */
 export function __resetLimiters(): void {
   registry.clear();
+  pinned.clear();
 }
 
 /** Лише для тестів: інші межі бюджету до наступного __resetLimiters (напр. без паузи між запитами). */
 export function __setLimiter(hostOrBudget: string, options: LimiterOptions): void {
-  registry.set(budgetKey(hostOrBudget), makeLimiter(options));
+  const key = budgetKey(hostOrBudget);
+  registry.set(key, makeLimiter(options));
+  pinned.add(key);
 }

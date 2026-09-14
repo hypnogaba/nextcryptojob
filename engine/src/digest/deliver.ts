@@ -6,6 +6,7 @@
 import { createHmac } from "node:crypto";
 import { limiterFor } from "../limits.js";
 import type { EngineEnv } from "../pipeline/registry.js";
+import { companySiteUrl } from "./token.js";
 
 export const DEFAULT_SITE_URL = "https://nextcryptojob.xyz";
 export const SIGNATURE_HEADER = "NCJ-Internal-Signature";
@@ -37,6 +38,10 @@ export interface DeliveryJob {
   salaryEstimate?: string | null;
   /** Одне-два речення про компанію (companies.about, db/jobs 0005); null, якщо не знаємо. */
   about?: string | null;
+  /** Домен сайту компанії (companies.domain): посилання «arbitrum.io» поруч із вакансією; null, якщо не знаємо. */
+  companyDomain?: string | null;
+  /** «$ARB $0.42 · MC $1.9B · +3.1%» (token.ts tokenChip, лише свіжі ціни); null, якщо токена немає. */
+  token?: string | null;
 }
 
 export interface DigestMessage {
@@ -135,6 +140,19 @@ export function jobVia(url: string): string | null {
   return host === "web3.career" || host?.endsWith(".web3.career") ? "web3.career" : null;
 }
 
+/**
+ * Рядок «сайт компанії · токен» для Telegram: `<a href="https://arbitrum.io">arbitrum.io</a> · $ARB $0.42 · MC $1.9B · +3.1%`.
+ * Лише сайт, лише токен або null, якщо немає ні того, ні того.
+ */
+export function companyLineHtml(domain: string | null | undefined, token: string | null | undefined): string | null {
+  const site = companySiteUrl(domain);
+  const parts = [
+    site ? `<a href="${escapeHtml(site)}">${escapeHtml(site.slice("https://".length))}</a>` : null,
+    token ? escapeHtml(cleanText(token, 80)) : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 /** «We checked 1,437 live crypto jobs. These 5 fit you best.»; null, якщо переглянутих не знаємо. */
 export function checkedLine(checked: number | null | undefined, shown: number): string | null {
   if (!checked || checked < shown || shown <= 0) return null;
@@ -159,6 +177,8 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
       `<i>${escapeHtml(j.why)}</i>`,
       // Що робить компанія: лише коли знаємо з її дошки чи speedrun (companies.about).
       ...(j.about ? [escapeHtml(cleanText(j.about, 240))] : []),
+      // Сайт компанії і її токен одним коротким рядком (db/jobs 0004/0005).
+      ...[companyLineHtml(j.companyDomain, j.token)].filter((l): l is string => l !== null),
     ];
     if (!linked && /^mailto:/i.test(j.url)) lines.push(`Apply: ${escapeHtml(j.url.replace(/^mailto:/i, "").split("?")[0]!)}`);
     if (j.postedBy) lines.push(`Posted by ${escapeHtml(cleanText(j.postedBy, 60))} on NextCryptoJob`);
@@ -249,6 +269,10 @@ export interface EmailPayload {
     salary_estimate: string | null;
     /** Одне-два речення про компанію (з 14.09.2026, необов'язкове). */
     about?: string | null;
+    /** Домен сайту компанії («arbitrum.io», з 14.09.2026, необов'язкове): сайт робить з нього посилання https. */
+    company_domain?: string | null;
+    /** Рядок токена «$ARB $0.42 · MC $1.9B · +3.1%» (з 14.09.2026, необов'язкове), лише свіжі ціни. */
+    token?: string | null;
   }>;
 }
 
@@ -261,6 +285,8 @@ export function emailPayload(m: DigestMessage, now: Date): EmailPayload {
       location: j.location ? cleanText(j.location, 100) : null, salary: j.salary, why: j.why, url: j.url,
       posted_by: j.postedBy, source: j.source, salary_estimate: j.salary ? null : j.salaryEstimate ?? null,
       about: j.about ? cleanText(j.about, 240) : null,
+      company_domain: companySiteUrl(j.companyDomain) ? j.companyDomain!.trim().toLowerCase().replace(/^www\./, "") : null,
+      token: j.token ? cleanText(j.token, 80) : null,
     })),
   };
 }

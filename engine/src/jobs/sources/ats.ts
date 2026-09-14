@@ -28,7 +28,7 @@ export function hostSlug(slug: string, provider: string): string {
 
 /** Шлях: слаг Ashby буває з крапкою (kraken.com) і з %20 (Sui%20Foundation). */
 const PATH_SLUG = /^[a-z0-9][a-z0-9_.%-]{0,80}$/i;
-function pathSlug(slug: string, provider: string): string {
+export function pathSlug(slug: string, provider: string): string {
   if (!PATH_SLUG.test(slug) || slug.includes("..") || /%(?!20)/i.test(slug)) {
     throw new Error(`${provider}: неприпустимий slug «${slug.slice(0, 40)}»`);
   }

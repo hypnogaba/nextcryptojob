@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../cli.js";
 import { __resetLimiters } from "../limits.js";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
-import { aboutText, companyDomain, domainFromAshbySlug, domainFromJobUrls, domainFromNote, runCompanyAbout } from "./about.js";
+import { aboutText, ashbyWebsiteDomain, companyDomain, domainFromAshbySlug, domainFromJobUrls, domainFromNote, runCompanyAbout } from "./about.js";
 import { type SeedRegistry, seedSql } from "./seed.js";
 import { type JobsBackend, JobsStore } from "./store.js";
 
@@ -85,6 +85,19 @@ describe("company domain", () => {
     expect(domainFromAshbySlug("teamtailor", "crossmint.na")).toBeNull();
   });
 
+  it("reads the company site from the Ashby job board page, never an ATS or a generic host", () => {
+    expect(ashbyWebsiteDomain(fixture("ashby-page-alchemy.html"))).toBe("alchemy.com");
+    const page = (site: string) => `<script>window.__appData = {"organization":{"name":"X","publicWebsite":${JSON.stringify(site)}}};</script>`;
+    // Вбудований JSON може екранувати «/».
+    expect(ashbyWebsiteDomain(String.raw`<script>window.__appData = {"organization":{"publicWebsite":"https:\/\/careers.acme.io\/"}};</script>`))
+      .toBe("acme.io");
+    expect(ashbyWebsiteDomain(page("acme.xyz"))).toBe("acme.xyz");
+    expect(ashbyWebsiteDomain(page("https://jobs.ashbyhq.com/acme"))).toBeNull();
+    expect(ashbyWebsiteDomain(page("https://linktr.ee/acme"))).toBeNull();
+    expect(ashbyWebsiteDomain(`<script>window.__appData = {"organization":{"name":"X","publicWebsite":null}};</script>`)).toBeNull();
+    expect(ashbyWebsiteDomain("<html>no data</html>")).toBeNull();
+  });
+
   it("picks the most common own host among job links", () => {
     expect(domainFromJobUrls([
       "https://job-boards.greenhouse.io/x/1", "https://www.acme.io/careers/1", "https://acme.io/careers/2", "https://blog.other.io/x",
@@ -101,6 +114,8 @@ const REGISTRY: SeedRegistry = {
     { slug: "coinbase", name: "Coinbase", ats_provider: "greenhouse", ats_slug: "coinbase", discovered_via: "seed", enabled: 1, note: null },
     { slug: "trailofbits", name: "Trail of Bits", ats_provider: "workable", ats_slug: "trailofbits", discovered_via: "seed", enabled: 1, note: null },
     { slug: "kraken", name: "Kraken", ats_provider: "ashby", ats_slug: "kraken.com", discovered_via: "seed", enabled: 1, note: null },
+    { slug: "acme-ashby", name: "Acme On Ashby", ats_provider: "ashby", ats_slug: "acmeashby", discovered_via: "seed", enabled: 1, note: null },
+    { slug: "offashby", name: "Off Ashby", ats_provider: "ashby", ats_slug: "offashby", discovered_via: "seed", enabled: 0, note: "disabled" },
     { slug: "anchorage", name: "Anchorage", ats_provider: "lever", ats_slug: "anchorage", discovered_via: "speedrun", enabled: 1, note: null },
     { slug: "3jane", name: "3Jane", ats_provider: "lever", ats_slug: "3jane", discovered_via: "portfolio:paradigm", enabled: 1,
       note: "listed on the public portfolio page https://www.paradigm.xyz/investments; company site https://www.3jane.xyz/ careers page https://www.3jane.xyz/ links lever:3jane" },
@@ -122,6 +137,7 @@ const fetchImpl = (async (input: string) => {
   if (url === "https://boards-api.greenhouse.io/v1/boards/coinbase") return json(fixture("greenhouse-board-coinbase.json"));
   if (url.startsWith("https://boards-api.greenhouse.io/")) return new Response("down", { status: 500 });
   if (url === "https://apply.workable.com/api/v1/widget/accounts/trailofbits") return json(fixture("workable-trailofbits.json"));
+  if (url === "https://jobs.ashbyhq.com/acmeashby") return new Response(fixture("ashby-page-alchemy.html"), { status: 200, headers: { "content-type": "text/html" } });
   if (url.includes("/collections/crypto-web3")) return json(fixture("speedrun-collection-crypto.json"));
   if (url.includes("/companies?")) return json(fixture("speedrun-companies-page.json"));
   if (url.includes("/companies/anchorage?")) return json(fixture("speedrun-company-anchorage.json"));
@@ -165,7 +181,11 @@ describe("jobs-about", () => {
     expect(bySlug.offgh!.about).toBeNull();
     // Вакансії дошки (web3.career) домену ATS-компанії не дають.
     expect(Object.values(bySlug).some((p) => p.domain === "boardco.io")).toBe(false);
-    expect(r.domains).toEqual({ note: 1, ashby: 1, jobs: 1 });
+    expect(r.domains).toEqual({ note: 1, ashby: 1, jobs: 1, ashbyPage: 1 });
+    // Сайт зі сторінки дошки Ashby (знімок сторінки Alchemy); вимкнену компанію на Ashby не питаємо.
+    expect(bySlug["acme-ashby"]!.domain).toBe("alchemy.com");
+    expect(urls.some((u) => u.includes("jobs.ashbyhq.com/offashby"))).toBe(false);
+    expect(urls.some((u) => u.includes("jobs.ashbyhq.com/kraken"))).toBe(false);
     // Мережа speedrun знає Anchorage за назвою: її blurb.
     expect(bySlug.anchorage!.about).toMatch(/^Federally chartered crypto bank for institutions/);
     expect(r.about).toEqual({ greenhouse: 1, workable: 1, speedrun: 1 });
@@ -215,15 +235,18 @@ describe("jobs-about", () => {
   });
 
   it("keeps to the request budget", async () => {
-    const r = await run(new JobsStore(db, true), { JOBS_ABOUT_BUDGET: "1" });
+    const r = await run(new JobsStore(db, true), { JOBS_ABOUT_BUDGET: "1", JOBS_ABOUT_DOMAIN_BUDGET: "0" });
     expect(r.fetched).toBe(1);
+    const pages = await run(new JobsStore(db, true), { JOBS_ABOUT_BUDGET: "0", JOBS_ABOUT_DOMAIN_BUDGET: "1" });
+    expect(pages.fetched).toBe(1);
+    expect(pages.domains.ashbyPage).toBe(1);
   });
 
   it("runs from the command line; --dry writes nothing", async () => {
     const out: string[] = [];
     const code = await runCli(["jobs-about", "--dry"], { env: {}, jobsBackend: () => db, fetchImpl, out: (l) => out.push(l) });
     expect(code).toBe(0);
-    expect(out.join("\n")).toMatch(/^jobs-about --dry: 8 companies; domains \+3/m);
+    expect(out.join("\n")).toMatch(/^jobs-about --dry: 10 companies; domains \+4 .*ashby page 1\)/m);
     expect(db.seen.some((s) => s.startsWith("UPDATE"))).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import { companyKey, isNonCryptoCompany } from "./clean.js";
 import type { JobsDb } from "./jobs-db.js";
 import { annualRange, type DigestJob, formatSalary, isFresh, isRemoteLocation, type JobSalary } from "./match.js";
 import { parseRoles, titleRoles } from "./roles.js";
+import { type TokenColumns, type TokenQuote, tokenQuoteOf } from "./token.js";
 
 // Правило «жива вакансія» (14.09.2026, однакове для сканера, добірки, сайту й адмінки):
 //   1. Вакансія є в ОСТАННЬОМУ вдалому скані свого джерела. Скан пише всім рядкам прогону той самий
@@ -228,27 +229,41 @@ export async function loadCompanyPool(db: Db, log: (l: string) => void, siteUrl:
   return rows.map((r) => companyJob(r, siteUrl)).filter((j): j is DigestJob => j !== null);
 }
 
-// ---------------- про компанію (db/jobs/0005) ----------------
+// ---------------- про компанію (db/jobs/0005, токен з 0004) ----------------
 
-/** Що знаємо про роботодавця: домен для значка, одне-два речення про те, що він робить. */
-export type CompanyProfile = { domain: string | null; about: string | null };
+/**
+ * Що знаємо про роботодавця: домен (значок і посилання на сайт), одне-два речення про те, що він робить,
+ * і ринкові дані його токена (db/jobs/0004; свіжість перевіряє той, хто показує: token.ts tokenChip).
+ */
+export type CompanyProfile = { domain: string | null; about: string | null; token: TokenQuote | null };
 
-/** Рядки реєстру, де хоч щось заповнено (пише engine jobs-about). Кілька сотень рядків, один запит на прогін. */
-export const PROFILES_SQL = "SELECT name, domain, about FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL";
+/** Рядки реєстру, де хоч щось заповнено (пишуть engine jobs-about і jobs-tokens). Кілька сотень рядків, один запит на прогін. */
+export const PROFILES_SQL = `SELECT name, domain, about, token_symbol, token_price_usd, token_mcap_usd, token_change_24h, token_updated_at
+  FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL OR token_price_usd IS NOT NULL`;
+/** Той самий запит без стовпців 0004 (базу ще не оновлено): добірка йде без рядка токена. */
+export const PROFILES_SQL_NO_TOKEN = "SELECT name, domain, about FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL";
 
 /** Домен, яким можна вірити як імені хоста: лише літери, цифри, дефіс і крапки. */
 export const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 
+type ProfileRow = { name: string; domain: string | null; about: string | null } & TokenColumns;
+
 /**
  * Профілі за ключем компанії (companyKey назви, як jobs_cache.company_key вакансій з ATS цієї компанії).
- * Два рядки з одним ключем: перший непорожній домен і перший непорожній опис. Без 0005 (стовпців
- * немає) або коли база не відповіла: порожньо, і добірка йде без речень про компанію.
+ * Два рядки з одним ключем: перший непорожній домен, опис і токен. Без 0005 (стовпців немає) або коли база
+ * не відповіла: порожньо, і добірка йде без речень про компанію. Без 0004: без токена, решта як була.
  */
 export async function loadCompanyProfiles(jobs: JobsDb, log: (l: string) => void): Promise<Map<string, CompanyProfile>> {
   const out = new Map<string, CompanyProfile>();
-  let rows: Array<{ name: string; domain: string | null; about: string | null }>;
+  let rows: ProfileRow[];
   try {
-    rows = (await jobs.select<{ name: string; domain: string | null; about: string | null }>(PROFILES_SQL)).rows;
+    try {
+      rows = (await jobs.select<ProfileRow>(PROFILES_SQL)).rows;
+    } catch (e) {
+      if (!(e instanceof Error && /no such column/i.test(e.message))) throw e;
+      rows = (await jobs.select<ProfileRow>(PROFILES_SQL_NO_TOKEN)).rows;
+      log("digest: companies token columns missing (db/jobs 0004 not applied), jobs go without the token line");
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log(/no such column/i.test(msg)
@@ -261,8 +276,9 @@ export async function loadCompanyProfiles(jobs: JobsDb, log: (l: string) => void
     if (!key) continue;
     const domain = r.domain && DOMAIN_RE.test(r.domain.trim().toLowerCase()) ? r.domain.trim().toLowerCase() : null;
     const about = r.about?.replace(/\s+/g, " ").trim() || null;
+    const token = tokenQuoteOf(r);
     const cur = out.get(key);
-    out.set(key, { domain: cur?.domain ?? domain, about: cur?.about ?? about });
+    out.set(key, { domain: cur?.domain ?? domain, about: cur?.about ?? about, token: cur?.token ?? token });
   }
   return out;
 }

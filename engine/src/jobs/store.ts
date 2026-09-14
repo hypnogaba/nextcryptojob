@@ -47,7 +47,7 @@ export interface NewCompany { slug: string; name: string; provider: AtsProvider;
  * завершення лише таблиця (1). companies: таблиця й UNIQUE(ats_provider, ats_slug) (2).
  * Живий прогін бере справжнє число з meta.rows_written.
  */
-export const WRITE_COST = { job: 1, runStart: 2, runFinish: 1, sourceState: 1, company: 2, companyProfile: 1 } as const;
+export const WRITE_COST = { job: 1, runStart: 2, runFinish: 1, sourceState: 1, company: 2, companyProfile: 1, companyToken: 1 } as const;
 
 /** Рядок реєстру для jobs-about (db/jobs/0005): що про компанію вже відомо. */
 export interface CompanyProfileRow {
@@ -66,6 +66,29 @@ export const FILL_PROFILE_SQL = `UPDATE companies SET domain = COALESCE(domain, 
  WHERE slug = ? AND ((domain IS NULL AND ? IS NOT NULL) OR (about IS NULL AND ? IS NOT NULL))`;
 
 const isMissingColumn = (e: unknown): boolean => e instanceof Error && /no such column/i.test(e.message);
+
+/** Рядок реєстру для jobs-tokens (db/jobs/0004): домен і поточне зіставлення з монетою CoinGecko. */
+export interface TokenRow {
+  slug: string; name: string; enabled: number; domain: string | null;
+  coingecko_id: string | null; token_symbol: string | null; token_confidence: string | null; token_checked_at: string | null;
+}
+
+export type TokenConfidence = "override" | "homepage" | "none";
+
+/** Нове зіставлення компанії. clearPrice: монета змінилась або зникла, старі ціни не її. */
+export interface TokenMapping {
+  slug: string; coingeckoId: string | null; symbol: string | null; confidence: TokenConfidence; checkedAt: string; clearPrice: boolean;
+}
+
+/** Ціна монети з /simple/price. */
+export interface TokenPrice { coingeckoId: string; priceUsd: number; mcapUsd: number | null; change24h: number | null; updatedAt: string }
+
+const MAPPING_SQL = `UPDATE companies SET coingecko_id = ?, token_symbol = ?, token_confidence = ?, token_checked_at = ? WHERE slug = ?`;
+const MAPPING_CLEAR_SQL = `UPDATE companies SET coingecko_id = ?, token_symbol = ?, token_confidence = ?, token_checked_at = ?,
+  token_price_usd = NULL, token_mcap_usd = NULL, token_change_24h = NULL, token_updated_at = NULL WHERE slug = ?`;
+/** Ціна всім рядкам цієї монети (компанія може мати кілька рядків реєстру з різними ATS). */
+export const PRICE_SQL = `UPDATE companies SET token_price_usd = ?, token_mcap_usd = ?, token_change_24h = ?, token_updated_at = ?
+ WHERE coingecko_id = ?`;
 
 /** Рядків в одній інструкції вставки вакансій: 20 стовпців × 5 = 100 параметрів (D1 дозволяє 100). */
 export const JOBS_PER_STATEMENT = 5;
@@ -286,6 +309,50 @@ export class JobsStore {
     const real = fills.filter((f) => f.domain !== null || f.about !== null);
     await this.write(real.map((f) => ({ sql: FILL_PROFILE_SQL, params: [f.domain, f.about, f.slug, f.domain, f.about] })),
       real.length * WRITE_COST.companyProfile);
+  }
+
+  /**
+   * Реєстр для jobs-tokens. null: стовпців ще немає (db/jobs/0004 не накочено). Без бази (насухо) засів:
+   * доменів там немає, тож спрацюють лише пари, задані руками.
+   */
+  async loadTokenRows(): Promise<TokenRow[] | null> {
+    if (!this.backend) {
+      return this.seed!.companies.map((c) => ({ slug: c.slug, name: c.name, enabled: c.enabled, domain: null,
+        coingecko_id: null, token_symbol: null, token_confidence: null, token_checked_at: null }));
+    }
+    try {
+      return await this.backend.query<TokenRow>(
+        `SELECT slug, name, enabled, domain, coingecko_id, token_symbol, token_confidence, token_checked_at
+           FROM companies ORDER BY slug`);
+    } catch (e) {
+      if (isMissingColumn(e)) return null;
+      throw e;
+    }
+  }
+
+  /** Зіставлені монети і скільки рядків реєстру кожна має. null: стовпців ще немає (0004). */
+  async tokenIds(): Promise<Map<string, number> | null> {
+    if (!this.backend) return new Map();
+    try {
+      const rows = await this.backend.query<{ coingecko_id: string; n: number }>(
+        "SELECT coingecko_id, COUNT(*) AS n FROM companies WHERE coingecko_id IS NOT NULL GROUP BY coingecko_id ORDER BY coingecko_id");
+      return new Map(rows.map((r) => [r.coingecko_id, Number(r.n) || 1]));
+    } catch (e) {
+      if (isMissingColumn(e)) return null;
+      throw e;
+    }
+  }
+
+  /** Записати зіставлення: одна інструкція на компанію (без індексу 1 рядок). */
+  async writeTokenMappings(ms: readonly TokenMapping[]): Promise<void> {
+    await this.write(ms.map((m) => ({ sql: m.clearPrice ? MAPPING_CLEAR_SQL : MAPPING_SQL,
+      params: [m.coingeckoId, m.symbol, m.confidence, m.checkedAt, m.slug] })), ms.length * WRITE_COST.companyToken);
+  }
+
+  /** Записати ціни: одна інструкція на монету; `rowsPerId` для оцінки записів насухо. */
+  async writeTokenPrices(ps: readonly TokenPrice[], rowsPerId: ReadonlyMap<string, number> = new Map()): Promise<void> {
+    const estimate = ps.reduce((n, p) => n + (rowsPerId.get(p.coingeckoId) ?? 1) * WRITE_COST.companyToken, 0);
+    await this.write(ps.map((p) => ({ sql: PRICE_SQL, params: [p.priceUsd, p.mcapUsd, p.change24h, p.updatedAt, p.coingeckoId] })), estimate);
   }
 
   /** Скільки вакансій скан не бачив з `before` (ISO). */

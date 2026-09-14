@@ -25,6 +25,7 @@ import {
 import type { JobsDb } from "./jobs-db.js";
 import { type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
 import { isRoleKey, parseRoles } from "./roles.js";
+import { tokenChip } from "./token.js";
 
 /** Прогін, що висить 'pending' довше, уже не доставиться: процес упав між записом і відправкою. */
 export const STALE_PENDING_MINUTES = 30;
@@ -238,16 +239,22 @@ const who = (id: string) => id.slice(0, 8);
  */
 export function deliveryJobs(
   picks: readonly DigestPick[], estimates: ReadonlyMap<string, SalaryEstimate> = new Map(),
-  profiles: ReadonlyMap<string, CompanyProfile> = new Map(),
+  profiles: ReadonlyMap<string, CompanyProfile> = new Map(), now: Date = new Date(),
 ): DeliveryJob[] {
-  return picks.map((p, i) => ({
+  return picks.map((p, i) => {
+    // Про компанію, її сайт і токен лише для вакансій зі сканування: у вакансії компанії є своя сторінка на сайті.
+    const known = p.job.source === "nextrole" ? profiles.get(p.job.companyKey) ?? null : null;
+    return {
     position: i + 1, title: p.job.title, company: p.job.company, location: p.job.location,
     salary: formatSalary(p.job.salary), why: p.why, url: p.job.url,
     salaryEstimate: formatSalary(p.job.salary) ? null : estimateText(estimates.get(p.job.ref)),
     postedBy: p.job.source === "company" ? p.job.company : null, source: p.job.source,
-    // Про компанію лише для вакансій зі сканування: у вакансії компанії є своя сторінка на сайті.
-    about: p.job.source === "nextrole" ? (profiles.get(p.job.companyKey)?.about ?? null) : null,
-  }));
+    about: known?.about ?? null,
+    companyDomain: known?.domain ?? null,
+    // Лише свіжі ціни (не старші за TOKEN_STALE_DAYS): інакше рядка немає.
+    token: tokenChip(known?.token, now)?.text ?? null,
+    };
+  });
 }
 
 /** Що бачить людина поруч із вибором: оцінки дошки, профілі компаній, скільки вакансій переглянуто. */
@@ -387,7 +394,7 @@ async function buildAndDeliver(
   }
 
   const message: DigestMessage = {
-    digestId, userId: row.id, localDate, jobs: deliveryJobs(picks, extras.estimates, extras.profiles), checked: extras.checked,
+    digestId, userId: row.id, localDate, jobs: deliveryJobs(picks, extras.estimates, extras.profiles, (deps.now ?? (() => new Date()))()), checked: extras.checked,
   };
   const outcome = await deliverDigest(deliveryUser(row), message, plan,
     // Годинник, а не мить початку прогону: `ts` листа ставиться під час відправки. Прогін

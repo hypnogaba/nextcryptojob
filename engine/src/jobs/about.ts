@@ -5,19 +5,20 @@
 // Лише з джерел, які самі це віддають, і лише де дешево:
 // - домен: примітка реєстру «company site https://…», слаг Ashby, що сам є доменом (kraken.com), і
 //   найчастіший власний хост серед адрес вакансій компанії (Greenhouse часто веде на coinbase.com/careers);
-//   без жодного запиту в мережу;
+//   без жодного запиту в мережу; решті компаній на Ashby сайт з їхньої публічної сторінки вакансій
+//   (jobs.ashbyhq.com/<slug>, поле organization.publicWebsite), один запит на компанію;
 // - опис: дошка Greenhouse (`content`, один запит на компанію), акаунт Workable (`description`, один
 //   запит), `blurb` компанії мережі speedrun (список компаній і одна деталь на знайдену за назвою).
 // Нічого не вгадується з назви. Заповнене не переписується, null не пишеться (store.FILL_PROFILE_SQL):
 // перший прогін пише кілька сотень рядків (1 рядок на компанію, індексу на цих стовпцях немає), далі
 // лише нових роботодавців.
 import { companyKey } from "../digest/clean.js";
-import { fetchJson, type FetchOptions } from "../http.js";
+import { fetchJson, fetchXml, type FetchOptions } from "../http.js";
 import type { EngineEnv } from "../pipeline/registry.js";
 import { looseKey } from "./discover.js";
 import { envFlag, envInt } from "./env.js";
 import { mapLimit } from "./run.js";
-import { atsSourceKey, hostSlug } from "./sources/ats.js";
+import { atsSourceKey, hostSlug, pathSlug } from "./sources/ats.js";
 import { fetchSpeedrunBlurb, fetchSpeedrunCryptoCompanies } from "./sources/speedrun.js";
 import type { CompanyProfileFill, CompanyProfileRow, JobsStore } from "./store.js";
 import { isAtsProvider } from "./types.js";
@@ -28,6 +29,8 @@ export const ABOUT_MAX = 240;
 export const ABOUT_MIN = 40;
 /** Скільки запитів за описом за прогін найбільше (без списку компаній speedrun). */
 export const ABOUT_FETCH_BUDGET = 150;
+/** Скільки сторінок Ashby за сайтом компанії за прогін найбільше (окремо від опису). */
+export const ABOUT_DOMAIN_BUDGET = 200;
 
 // ---------------- текст ----------------
 
@@ -96,6 +99,9 @@ const NOT_COMPANY_HOSTS = [
   "cryptojobslist.com", "cryptocurrencyjobs.co", "superteam.fun", "github.com", "gitbook.io", "medium.com",
   "x.com", "twitter.com", "t.me", "telegram.org", "discord.com", "discord.gg", "tally.so", "airtable.com",
   "wixsite.com", "webflow.io", "framer.website", "join.com", "polymer.co", "workatastartup.com", "ycombinator.com",
+  // Сторінки «усі посилання» й безкоштовні хостинги: сайт на них може мати будь-хто.
+  "linktr.ee", "bio.link", "beacons.ai", "carrd.co", "substack.com", "mirror.xyz", "paragraph.xyz", "github.io", "vercel.app",
+  "netlify.app", "pages.dev",
 ];
 
 /** Перший ярлик, що означає «сторінка кар'єри», а не окремий продукт. */
@@ -160,6 +166,26 @@ export function planDomain(row: CompanyProfileRow, urlsBySource: ReadonlyMap<str
     ?? (key ? domainFromJobUrls(urlsBySource.get(key) ?? []) : null);
 }
 
+/**
+ * Сайт компанії зі сторінки дошки Ashby: вбудовані дані `window.__appData` мають
+ * `"organization":{…,"publicWebsite":"https://www.alchemy.com/",…}`. null, якщо поля немає чи воно не сайт компанії.
+ */
+export function ashbyWebsiteDomain(html: string): string | null {
+  const org = html.indexOf('"organization"');
+  if (org < 0) return null;
+  const m = /"publicWebsite"\s*:\s*"((?:[^"\\]|\\.){1,300})"/.exec(html.slice(org, org + 4000));
+  if (!m) return null;
+  let url: string;
+  try { url = JSON.parse(`"${m[1]}"`) as string; } catch { return null; }
+  return companyDomain(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+}
+
+/** Домен компанії з її сторінки вакансій на Ashby (jobs.ashbyhq.com/<slug>). */
+export async function fetchAshbyWebsite(slug: string, o: FetchOptions = {}): Promise<string | null> {
+  const s = pathSlug(slug, "ashby");
+  return ashbyWebsiteDomain(await fetchXml(`https://jobs.ashbyhq.com/${encodeURIComponent(s)}`, {}, { timeoutMs: 15_000, ...o }));
+}
+
 // ---------------- опис з ATS ----------------
 
 const GREENHOUSE_SLUG = /^[a-z0-9][a-z0-9_.-]{0,80}$/i;
@@ -192,7 +218,8 @@ export interface AboutReport {
   /** Стовпців domain/about ще немає: нічого не зроблено. */
   skipped: string | null;
   companies: number;
-  domains: { note: number; ashby: number; jobs: number };
+  /** ashby: слаг Ashby є доменом; ashbyPage: сайт зі сторінки дошки Ashby (запит). */
+  domains: { note: number; ashby: number; jobs: number; ashbyPage: number };
   about: { greenhouse: number; workable: number; speedrun: number };
   /** Запитів за описом (без списку компаній speedrun) і скільки з них не відповіли. */
   fetched: number;
@@ -209,7 +236,7 @@ export async function runCompanyAbout(deps: AboutDeps): Promise<AboutReport> {
   const { store, env } = deps;
   const log = deps.log ?? ((l: string) => console.log(l));
   const o = deps.fetch ?? {};
-  const report: AboutReport = { dry: store.dry, skipped: null, companies: 0, domains: { note: 0, ashby: 0, jobs: 0 },
+  const report: AboutReport = { dry: store.dry, skipped: null, companies: 0, domains: { note: 0, ashby: 0, jobs: 0, ashbyPage: 0 },
     about: { greenhouse: 0, workable: 0, speedrun: 0 }, fetched: 0, failed: 0, fills: [], rowsWritten: { estimated: 0, measured: null } };
 
   const rows = await store.loadCompanyProfiles();
@@ -243,6 +270,22 @@ export async function runCompanyAbout(deps: AboutDeps): Promise<AboutReport> {
     fill(row.slug).domain = d;
     if (fromNote) report.domains.note++; else if (fromSlug) report.domains.ashby++; else report.domains.jobs++;
   }
+
+  // 1б. Решта компаній на Ashby: сайт з їхньої публічної сторінки вакансій (лише увімкнені, у межах бюджету).
+  const ashbyPages = rows
+    .filter((r) => Number(r.enabled) === 1 && !r.domain && !fills.get(r.slug)?.domain && r.ats_provider === "ashby")
+    .slice(0, envInt(env, "JOBS_ABOUT_DOMAIN_BUDGET", ABOUT_DOMAIN_BUDGET, 0, 5000));
+  await mapLimit(ashbyPages, 2, async (row) => {
+    report.fetched++;
+    try {
+      const d = await fetchAshbyWebsite(row.ats_slug, o);
+      if (!d) return;
+      fill(row.slug).domain = d;
+      report.domains.ashbyPage++;
+    } catch {
+      report.failed++;
+    }
+  });
 
   // 2. Опис з ATS: лише увімкнені без опису, у межах бюджету запитів.
   let left = budget;
@@ -298,8 +341,8 @@ export async function runCompanyAbout(deps: AboutDeps): Promise<AboutReport> {
   report.rowsWritten = { estimated: store.estimatedRows, measured: store.dry ? null : store.measuredRows };
   const d = report.domains;
   const a = report.about;
-  log(`jobs-about${store.dry ? " --dry" : ""}: ${rows.length} companies; domains +${d.note + d.ashby + d.jobs} ` +
-    `(note ${d.note}, ashby slug ${d.ashby}, job links ${d.jobs}); about +${a.greenhouse + a.workable + a.speedrun} ` +
+  log(`jobs-about${store.dry ? " --dry" : ""}: ${rows.length} companies; domains +${d.note + d.ashby + d.jobs + d.ashbyPage} ` +
+    `(note ${d.note}, ashby slug ${d.ashby}, job links ${d.jobs}, ashby page ${d.ashbyPage}); about +${a.greenhouse + a.workable + a.speedrun} ` +
     `(greenhouse ${a.greenhouse}, workable ${a.workable}, speedrun ${a.speedrun}); ${report.fetched} requests, ${report.failed} failed; ` +
     `D1 rows ${store.dry ? `would be ${store.estimatedRows}` : `written ${store.measuredRows ?? "unknown"}`}`);
   return report;
