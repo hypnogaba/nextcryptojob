@@ -189,3 +189,32 @@ describe("admin", () => {
     expect(await render()).not.toContain("signed in as an admin");
   });
 });
+
+describe("consent step: companies block (owner 14.09)", () => {
+  it("first pass: a visible, pre-ticked box with the plain text, and the after-approval option unticked", async () => {
+    await signIn({ step: "consent", roles: '["engineer"]' });
+    const html = await render("consent");
+    expect(html).toContain("data-sharing");
+    expect(html).toMatch(/<input type="checkbox"[^>]*name="visible" checked=""/);
+    expect(html).toContain(
+      "Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. You can turn this off any time in Settings.",
+    );
+    expect(html).toContain("Only after I approve each company");
+    expect(html).not.toMatch(/name="approval_only"[^>]*checked=""/);
+    // Без ніка в Telegram: пояснення, що компанія спершу попросить знайомство, пошта прихована.
+    expect(html).toContain("You have no Telegram username yet");
+  });
+
+  it("shows the handle a company will see when there is one", async () => {
+    await signIn({ step: "consent", roles: '["engineer"]', telegram: "42" });
+    exec("UPDATE users SET telegram_username = 'ada_eth' WHERE id = 'u'");
+    expect(await render("consent")).toContain("Companies see @ada_eth.");
+  });
+
+  it("editing after the brief does not show the block and points to Settings", async () => {
+    await signIn({ step: "done", roles: '["engineer"]' });
+    const html = await render("consent");
+    expect(html).not.toContain("data-sharing");
+    expect(html).toContain('href="/settings#companies-title"');
+  });
+});

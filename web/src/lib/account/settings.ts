@@ -1,4 +1,4 @@
-import { consentChange, CONTACT_CONSENT, SCORING_CONSENT, VISIBILITY_CONSENT } from "@/lib/consent";
+import { consentChange, CONTACT_CONSENT, SCORING_CONSENT, VISIBILITY_CONSENT, WELCOME_SHARING } from "@/lib/consent";
 import type { Channel } from "@/lib/telegram/channel";
 import { notifyCrmVisibility } from "./hooks";
 import { canonicalTimezone } from "./timezones";
@@ -179,38 +179,31 @@ export async function setVisibility(d: D1Database, userId: string, on: boolean):
 
 export type ContactResult =
   | { ok: true; changed: boolean; from: ContactMode }
-  | { ok: false; reason: "no_user" | "invalid" | "no_telegram" };
+  | { ok: false; reason: "no_user" | "invalid" };
 
 /**
- * «How companies reach you». direct можна лише з прив'язаним Telegram і ніком
- * у ньому (без ніку показувати нічого) і пише згоду contact; повернення до
- * approval відкликає її тим самим пакетом.
+ * «Show my Telegram directly». direct пише згоду contact; повернення до approval
+ * відкликає її тим самим пакетом. direct можна обрати й без ніка в Telegram
+ * (власник 14.09: контакт видно за замовчуванням): тоді режим чекає, компанія бачить
+ * «Request intro», як і раніше, а пошту без «так» людини не бачить ніколи
+ * (contactModeOf у lib/crm/project.ts і план знайомства вимагають нік).
  */
 export async function setContactMode(d: D1Database, userId: string, mode: unknown): Promise<ContactResult> {
   if (mode !== "approval" && mode !== "direct") return { ok: false, reason: "invalid" };
   const row = await d
     .prepare(
-      `SELECT u.contact_mode, u.telegram_id, u.telegram_username, c.granted, c.text_version
+      `SELECT u.contact_mode, c.granted, c.text_version
          FROM users u LEFT JOIN consents c ON c.user_id = u.id AND c.kind = ?2
         WHERE u.id = ?1`,
     )
     .bind(userId, CONTACT_CONSENT.kind)
-    .first<{
-      contact_mode: ContactMode;
-      telegram_id: string | null;
-      telegram_username: string | null;
-      granted: number | null;
-      text_version: string | null;
-    }>();
+    .first<{ contact_mode: ContactMode; granted: number | null; text_version: string | null }>();
   if (!row) return { ok: false, reason: "no_user" };
   const from = row.contact_mode;
   const consentOn = row.granted === 1;
 
   if (mode === "direct") {
-    if (!row.telegram_id || !row.telegram_username) return { ok: false, reason: "no_telegram" };
-    if (from === "direct" && consentOn && row.text_version === CONTACT_CONSENT.version) {
-      return { ok: true, changed: false, from };
-    }
+    if (from === "direct" && consentOn) return { ok: true, changed: false, from };
     await d.batch([
       ...consentChange(d, userId, CONTACT_CONSENT.kind, true, CONTACT_CONSENT.version),
       d.prepare("UPDATE users SET contact_mode = 'direct' WHERE id = ?").bind(userId),
@@ -226,4 +219,34 @@ export async function setContactMode(d: D1Database, userId: string, mode: unknow
     d.prepare("UPDATE users SET contact_mode = 'approval' WHERE id = ?").bind(userId),
   ]);
   return { ok: true, changed: true, from };
+}
+
+// --- Вибір на кроці згоди анкети ---------------------------------------------
+
+export type WelcomeSharing = { visible: boolean; direct: boolean };
+
+/**
+ * Вибір із кроку згоди анкети (власник 14.09: видимий і нік напряму за замовчуванням,
+ * людина може відмовитись). Одним пакетом: згода visibility і згода contact з версією
+ * тексту кроку (WELCOME_SHARING) і подіями в історії, прапор і режим у users. Пишемо
+ * обидві події, навіть «ні»: так історія показує, що вибір було запропоновано і що
+ * людина обрала. Нік без видимості не має сенсу, тож direct лише разом з visible.
+ * Кличе лише перший прохід анкети: наявних людей не змінює (їхній вибір уже в налаштуваннях).
+ */
+export async function applyWelcomeSharing(
+  d: D1Database,
+  userId: string,
+  choice: WelcomeSharing,
+): Promise<WelcomeSharing> {
+  const visible = choice.visible;
+  const direct = visible && choice.direct;
+  await d.batch([
+    ...consentChange(d, userId, VISIBILITY_CONSENT.kind, visible, WELCOME_SHARING.version),
+    ...consentChange(d, userId, CONTACT_CONSENT.kind, direct, WELCOME_SHARING.version),
+    d
+      .prepare("UPDATE users SET visible_to_companies = ?, contact_mode = ? WHERE id = ?")
+      .bind(visible ? 1 : 0, direct ? "direct" : "approval", userId),
+  ]);
+  await notifyCrmVisibility(userId, visible);
+  return { visible, direct };
 }

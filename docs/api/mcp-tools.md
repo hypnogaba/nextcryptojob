@@ -130,7 +130,7 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 ### 4.2 Кандидати
 
 **`search_candidates`** → `POST /candidates/search`. Ціна: $0.50 за сторінку для гостей і компаній без підписки.
-Опис: "Search anonymous profiles of candidates who chose to be visible to companies. Returns up to 20 per page, max 10 pages per query. No names, handles, wallets or emails."
+Опис: "Search anonymous profiles of candidates who are visible to companies (candidates can hide at any time). Returns up to 20 per page, max 10 pages per query. No names, handles, wallets or emails."
 ```json
 { "type": "object", "additionalProperties": false, "properties": {
   "filters": { "$ref": "#/$defs/filters" },

@@ -2,10 +2,11 @@
 
 > **DRAFT. Not in force. For review by a French lawyer before launch.**
 > This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version of this file: 0.1 (draft), 2026-09-12.
+> Version of this file: 0.2 (draft), 2026-09-14.
 
 These are the exact short texts shown in the product. Each one is a separate choice.
-None is pre-ticked. Each can be withdrawn in Settings as easily as it was given
+None is pre-ticked, except the "companies" box on the last setup step (section 2a, owner
+decision 2026-09-14). Each can be withdrawn in Settings as easily as it was given
 (art. 7(3) GDPR, <https://gdpr-info.eu/art-7-gdpr/>).
 
 Links point to the public pages. [to confirm product: final URL paths]
@@ -34,12 +35,40 @@ Withdrawal text in Settings:
 
 > Stop scoring me. My scores and collected data will be deleted, and companies will no longer see me.
 
+## 2a. Companies box on the last setup step (new candidates, since 2026-09-14)
+
+- **Keys:** `visibility` and `contact` (two rows in `consents`, two events in `consent_events`).
+- **Version:** `welcome.v1` for both.
+- **Where:** the consent step at the end of the setup brief, below the scoring consent. First pass only: editing the step later links to Settings and changes nothing.
+- **Default:** ticked (owner decision 2026-09-14). The box and its text are visible next to the scoring box, never hidden behind a link.
+- **Requires:** `scoring` (the same submit gives it; without it nothing about companies is written).
+- **Legal basis:** consent, art. 6(1)(a) GDPR. [to confirm with lawyer: a pre-ticked box is not valid consent (GDPR recital 32; CJEU C-673/17 Planet49). Options: an unticked box, or contract (art. 6(1)(b)) or legitimate interest (art. 6(1)(f)) with an easy opt-out]
+
+> Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. You can turn this off any time in Settings.
+
+Secondary option under it (unticked by default):
+
+> Only after I approve each company
+
+Help text (not part of the consent): with a Telegram username, "Companies see @handle. Never your wallet addresses or email."; without one, "You have no Telegram username yet, so companies send you an intro request first. We never show your email without your yes."
+
+**What is recorded** (one batch, `applyWelcomeSharing` in `web/src/lib/account/settings.ts`):
+
+| Choice | `visibility` | `contact` | `users.visible_to_companies` | `users.contact_mode` |
+|---|---|---|---|---|
+| Box ticked (default) | granted 1 | granted 1 | 1 | `direct` |
+| Box ticked + "Only after I approve each company" | granted 1 | granted 0 | 1 | `approval` |
+| Box unticked | granted 0 | granted 0 | 0 | `approval` |
+
+A refusal is recorded as a `granted = 0` event too, so the history shows that the choice was offered.
+Existing candidates are not changed: their current settings stay as they are.
+
 ## 2. Visibility to companies
 
 - **Key:** `visibility`
 - **Version:** `visibility.v1`
 - **Where:** the "Show me to companies" switch in Settings and on the score page.
-- **Default:** off.
+- **Default:** on for new candidates (section 2a); off for candidates who signed up before 2026-09-14 and never switched it on.
 - **Requires:** `scoring` (no score, nothing to show).
 - **Legal basis:** consent, art. 6(1)(a) GDPR.
 
@@ -51,9 +80,10 @@ Withdrawal text in Settings:
 
 ## 3. Contact sharing
 
-Two modes. The candidate picks one. "Only after I approve" is the default.
+Two modes. The candidate picks one. Since 2026-09-14 "direct" is the default for new
+candidates (section 2a); before that it was "Only after I approve".
 
-### 3a. Per request (default mode)
+### 3a. Per request
 
 - **Key:** `contact.request`
 - **Version:** `contact.request.v1`
@@ -67,11 +97,11 @@ Buttons: `Yes, share` and `No`. "No" sends no data to the company.
 
 ### 3b. Direct mode
 
-- **Key:** `contact.direct`
-- **Version:** `contact.direct.v1`
-- **Where:** Settings, contact mode.
-- **Default:** off.
-- **Requires:** `visibility`.
+- **Key:** `contact.direct` (stored as `contact`)
+- **Version:** `contact.direct.v1` (stored as `v1`; `welcome.v1` when given on the setup step)
+- **Where:** Settings, the "Show my Telegram directly" switch in the "Show me to companies" panel. Turning it off falls back to 3a.
+- **Default:** on for new candidates (section 2a).
+- **Requires:** `visibility`, and a Telegram username. Without a username the mode waits: companies see "Request intro" (3a), and the email is never shown in this mode.
 - **Legal basis:** consent, art. 6(1)(a) GDPR.
 
 > Show my Telegram handle to every paying company that can see my profile, without asking me first. [What happens next](https://nextcryptojob.xyz/privacy#contact)
@@ -127,3 +157,4 @@ These are not consent texts and must not be shown as consent checkboxes:
 | Version | Date | Change |
 |---|---|---|
 | all `.v1` | 2026-09-12 | First draft |
+| `welcome.v1` | 2026-09-14 | Companies box on the last setup step, pre-ticked (section 2a) |

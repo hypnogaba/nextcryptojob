@@ -292,9 +292,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             ) : null}
             {result && !empty ? (
               <p className={HINT} data-contact-rule="">
-                The chip shows the score and its level. To reach someone, request an intro: the candidate sees your request and
-                decides, and if they accept you get their Telegram. Candidates marked &ldquo;Telegram handle directly&rdquo;
-                chose to show it at once.
+                The chip shows the score and its level. Candidates marked &ldquo;Telegram handle directly&rdquo; share their
+                Telegram: press Show Telegram and message them directly. For the others, request an intro: the candidate
+                decides, and if they accept you get their Telegram.
               </p>
             ) : null}
             {result && empty ? (

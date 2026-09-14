@@ -19,9 +19,9 @@ MCP server and paid requests through x402.
 ## 2. Words used here
 
 - **Candidate**: a person with a NextCryptoJob account.
-- **Visible candidate**: a candidate who switched on "Show me to companies".
+- **Visible candidate**: a candidate whose "Show me to companies" setting is on.
 - **Profile data**: what we show you about a visible candidate: score, roles, level, networks, verification badges, experience, remote or city, and similar fields.
-- **Contact data**: the contact a candidate shares with you after approving your request, or at once if they chose "show my Telegram handle directly".
+- **Contact data**: the contact a candidate shares with you after approving your request, or at once if their "Show my Telegram directly" setting is on.
 - **Candidate data**: profile data, contact data and anything else you receive about candidates through the service.
 - **Your data**: pipeline stages, notes, tags, saved searches and jobs that your team creates.
 - **Agent**: software, including an AI agent, that uses the API or MCP server for you.

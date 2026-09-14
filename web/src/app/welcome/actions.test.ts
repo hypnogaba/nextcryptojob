@@ -270,3 +270,71 @@ describe("roles: our guess from the brief, and a role in the person's own words"
     expect(rows("SELECT role_text FROM users")).toEqual([{ role_text: null }]);
   });
 });
+
+describe("the consent step also asks about companies (owner 14.09: visible and Telegram directly by default)", () => {
+  const sharing = () =>
+    rows("SELECT visible_to_companies AS visible, contact_mode FROM users WHERE id = 'u'");
+  const events = () => rows("SELECT kind, granted, text_version FROM consent_events WHERE kind <> 'scoring' ORDER BY id");
+
+  it("the pre-ticked default: visible, Telegram directly, both recorded as consent events with the step's text version", async () => {
+    await signInAt("u", "consent", '["engineer"]');
+    await expect(run(finishAction({}, form({ agree: "yes", sharing: "yes", visible: "yes" })))).resolves.toBe("/welcome?step=x");
+    expect(sharing()).toEqual([{ visible: 1, contact_mode: "direct" }]);
+    expect(events()).toEqual([
+      { kind: "visibility", granted: 1, text_version: "welcome.v1" },
+      { kind: "contact", granted: 1, text_version: "welcome.v1" },
+    ]);
+    expect(rows("SELECT kind, granted FROM consents ORDER BY kind")).toEqual([
+      { kind: "contact", granted: 1 },
+      { kind: "scoring", granted: 1 },
+      { kind: "visibility", granted: 1 },
+    ]);
+    expect(rows("SELECT action, meta_json FROM audit_log WHERE action LIKE 'consent.%' ORDER BY id")).toEqual([
+      { action: "consent.grant", meta_json: JSON.stringify({ kind: "scoring", version: "v1" }) },
+      { action: "consent.grant", meta_json: JSON.stringify({ kind: "visibility", version: "welcome.v1" }) },
+      { action: "consent.grant", meta_json: JSON.stringify({ kind: "contact", version: "welcome.v1" }) },
+    ]);
+  });
+
+  it("only after I approve each company: visible, contact after approval", async () => {
+    await signInAt("u", "consent", '["engineer"]');
+    await run(finishAction({}, form({ agree: "yes", sharing: "yes", visible: "yes", approval_only: "yes" })));
+    expect(sharing()).toEqual([{ visible: 1, contact_mode: "approval" }]);
+    expect(events()).toEqual([
+      { kind: "visibility", granted: 1, text_version: "welcome.v1" },
+      { kind: "contact", granted: 0, text_version: "welcome.v1" },
+    ]);
+  });
+
+  it("unticked: hidden, no direct contact, and the refusal is in the history too", async () => {
+    await signInAt("u", "consent", '["engineer"]');
+    await run(finishAction({}, form({ agree: "yes", sharing: "yes" })));
+    expect(sharing()).toEqual([{ visible: 0, contact_mode: "approval" }]);
+    expect(events()).toEqual([
+      { kind: "visibility", granted: 0, text_version: "welcome.v1" },
+      { kind: "contact", granted: 0, text_version: "welcome.v1" },
+    ]);
+  });
+
+  it("without scoring consent nothing about companies is written", async () => {
+    await signInAt("u", "consent", '["engineer"]');
+    await run(finishAction({}, form({ sharing: "yes", visible: "yes" })));
+    expect(sharing()).toEqual([{ visible: 0, contact_mode: "approval" }]);
+    expect(events()).toEqual([]);
+  });
+
+  it("existing people keep their settings: editing the step after the brief, or a form without the block, changes nothing", async () => {
+    await signInAt("u", "done", '["engineer"]');
+    await expect(run(finishAction({}, form({ agree: "yes", sharing: "yes", visible: "yes" })))).resolves.toBe("/jobs");
+    expect(sharing()).toEqual([{ visible: 0, contact_mode: "approval" }]);
+
+    exec("INSERT INTO users (id, email, onboarding_step, roles) VALUES ('v', 'v@example.com', 'consent', '[\"engineer\"]')");
+    harness.jar = fakeCookieJar();
+    await createSession("v", null);
+    await run(finishAction({}, form({ agree: "yes" })));
+    expect(rows("SELECT visible_to_companies AS visible, contact_mode FROM users WHERE id = 'v'")).toEqual([
+      { visible: 0, contact_mode: "approval" },
+    ]);
+    expect(events()).toEqual([]);
+  });
+});

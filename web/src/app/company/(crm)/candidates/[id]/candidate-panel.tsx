@@ -338,7 +338,7 @@ function IntroSection(
             Intro requested. {expiresInText(pendingIntro.expires_at, at)}.
           </p>
           {state.introNotice ? <Notice tone="warning">{state.introNotice}</Notice> : null}
-          <p className={HINT}>The candidate sees your request and decides. If they accept, you get their Telegram here.</p>
+          <p className={HINT}>The candidate decides. If they accept, you get their Telegram here.</p>
           {props.demo ? (
             <div className="grid gap-2 rounded-lg border border-dashed border-line-strong bg-wash p-3" data-demo-answer="">
               <p className="text-sm text-ink">
@@ -384,8 +384,8 @@ function IntroSection(
           )}
           <p className={HINT} data-contact-rule={props.contactMode}>
             {props.contactMode === "direct"
-              ? "This candidate chose \u201cTelegram handle directly\u201d: you see their Telegram at once, and they are told you viewed it."
-              : "The candidate sees your request and decides. If they accept, you get their Telegram (or email, if they have no Telegram)."}
+              ? "This candidate shares their Telegram: message them directly. You see the handle at once, and they are told you viewed it."
+              : "The candidate decides. They see your request, and if they accept, you get their Telegram (or email, if they have no Telegram)."}
           </p>
         </div>
       )}
@@ -439,11 +439,11 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
           </h2>
           {direct ? (
             <Notice tone="info">
-              This candidate chose &ldquo;Telegram handle directly&rdquo;: the handle appears here at once. They will be told
-              that {companyName} viewed it.
+              This candidate shares their Telegram: message them directly. The handle appears here at once. They will be
+              told that {companyName} viewed it.
             </Notice>
           ) : (
-            <Notice tone="info">The candidate sees your request and decides. If they accept, you get their Telegram.</Notice>
+            <Notice tone="info">The candidate decides. They see your request, and if they accept, you get their Telegram.</Notice>
           )}
           {state.op === "intro" && state.error ? <Notice tone="error">{state.error}</Notice> : null}
           <div className="grid gap-1.5">

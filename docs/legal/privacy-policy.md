@@ -12,7 +12,7 @@ information required by articles 13 and 14 of the GDPR
 ## 1. Summary
 
 - Candidates never pay. Companies pay.
-- Your profile is private. Companies see you only if you switch on "Show me to companies". It is off by default.
+- When you finish setting up, "Show me to companies" and "Show my Telegram directly" are on, unless you untick them. Companies with access can then find you and see your score and Telegram handle. You can turn either off at any time in Settings.
 - We compute a score from public data about the accounts and wallets you connect. We do this only with your consent.
 - The formula is written by people and is the same for everyone. A language model writes explanation text only. It does not set your score.
 - Companies never see your wallet addresses or raw data.
@@ -107,8 +107,8 @@ tags, and, for x402 payments, the paying wallet address and the transaction hash
 | Collect public data and compute your score (profiling) | Sections 3.1 to 3.3 | Your consent, art. 6(1)(a) GDPR, and explicit consent under art. 22(2)(c) GDPR <https://gdpr-info.eu/art-22-gdpr/> |
 | Write the plain-language explanation of your score | Score breakdown and counts | Your consent (part of the scoring consent) |
 | Publish your card page | Score, role, level, pattern | Your consent (you choose to publish) [to confirm product behaviour: card page public only after you publish it] |
-| Show your profile to companies | Score, roles, level, networks, badges | Your consent, art. 6(1)(a) |
-| Share your contact with a company | Telegram handle or other contact you choose | Your consent, per request or in "direct" mode, art. 6(1)(a) |
+| Show your profile to companies | Score, roles, level, networks, badges | Your consent, art. 6(1)(a), given on the last setup step (on unless you untick it) and withdrawable in Settings [to confirm with lawyer: since 2026-09-14 the box is pre-ticked for new candidates. A pre-ticked box is not valid consent (GDPR recital 32; CJEU C-673/17 Planet49, <https://curia.europa.eu/juris/liste.jsf?num=C-673/17>). Options: an unticked box, or another legal basis (contract, art. 6(1)(b), since being found by companies is what the service is for; or legitimate interest, art. 6(1)(f)) with an easy opt-out] |
+| Share your contact with a company | Your Telegram handle ("direct" mode, on unless you untick it or choose "Only after I approve each company"); your Telegram handle or email after you accept a request | Your consent, per request or in "direct" mode, art. 6(1)(a). In "direct" mode we never share your email. |
 | Send your daily job digest by email or Telegram | Email or Telegram ID, roles, place, salary | Your consent, art. 6(1)(a). The digest can include jobs posted by paying companies, so we also treat it as covered by art. L34-5 of the French Postal and Electronic Communications Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961/> [to confirm with lawyer: consent or contract basis for the digest] |
 | Review your score by a person when you appeal | Your appeal, score data | Contract, and our duty to offer human review under art. 22(3) GDPR |
 | Answer your rights requests | Identity check data, request | Legal obligation, art. 6(1)(c) GDPR |
@@ -150,7 +150,7 @@ Each score in your account shows its breakdown.
 **The language model.** A language model (Anthropic) writes the plain-language text
 that explains your score. It does not calculate, change or rank your score.
 
-**What it means for you.** If you switch on "Show me to companies", companies can
+**What it means for you.** While "Show me to companies" is on, companies can
 search, sort and filter candidates by score. A low score can mean that fewer companies
 find you. A score does not decide whether you get a job. Our terms forbid companies to
 make hiring or rejection decisions based solely on automated processing, including the
@@ -175,7 +175,7 @@ the formula and publish a new version.
 
 ## 6. Who receives your data
 
-- **Companies**, only if you switch on "Show me to companies". They see your score, roles, level, networks and verification badges. They never see your wallet addresses, links to your accounts, or raw data. They see your contact only after you approve their request, or at once if you chose "show my Telegram handle directly".
+- **Companies**, while "Show me to companies" is on. It is on for new candidates unless they untick it on the last setup step, and you can turn it off at any time. They see your score, roles, level, networks and verification badges. They never see your wallet addresses, links to your accounts, or raw data. They see your Telegram handle at once while "Show my Telegram directly" is on (also on unless you untick it). Otherwise, or if you have no Telegram username, they see your contact only after you approve their request. We never show your email without your approval.
 - **The public**, only for your card page if you publish it. The card shows score, role and level. It shows no wallets and no links. [to confirm product behaviour: whether the card shows your X handle and whether search engines may index it]
 - **Our service providers** (processors), listed in section 7. They act on our instructions.
 - **Data sources.** To collect public data, we send your handle or address to the source (for example your wallet address to Etherscan). We do not send your name or email.
@@ -217,8 +217,8 @@ We transfer data only with a safeguard required by chapter V GDPR
 - For other providers: the standard contractual clauses of the European Commission, decision (EU) 2021/914 (<https://eur-lex.europa.eu/eli/dec_impl/2021/914/oj>), art. 46 GDPR, with a transfer impact assessment as the CNIL recommends (<https://www.cnil.fr/fr/analyse-dimpact-des-transferts-des-donnees-la-cnil-publie-la-version-finale-de-son-guide-aitd>).
 
 **Companies outside the EU.** Some companies that pay for access may be outside the EU.
-If you switch on "Show me to companies", they can see your profile data. If you approve
-their request, they receive your contact. [to confirm with lawyer: safeguard for these
+While "Show me to companies" is on, they can see your profile data. While "Show my Telegram
+directly" is on, or after you approve their request, they receive your contact. [to confirm with lawyer: safeguard for these
 disclosures, for example standard contractual clauses in the company terms, or explicit
 consent under art. 49(1)(a) GDPR, <https://gdpr-info.eu/art-49-gdpr/>]
 

@@ -98,7 +98,7 @@ export async function setVisibilityAction(_prev: SettingsState, form: FormData):
   };
 }
 
-/** «How companies reach you». */
+/** «Show my Telegram directly»: увімкнути або повернутися до «after approval». */
 export async function setContactModeAction(_prev: SettingsState, form: FormData): Promise<SettingsState> {
   const user = await requireUser();
   const d = db();
@@ -114,12 +114,6 @@ export async function setContactModeAction(_prev: SettingsState, form: FormData)
   }
   if (!res.ok) {
     if (res.reason === "no_user") redirect("/login");
-    if (res.reason === "no_telegram") {
-      return {
-        errors: { mode: "Connect Telegram with a username first." },
-        message: { tone: "error", text: "Your Telegram handle is needed for this option." },
-      };
-    }
     return { errors: { mode: "Choose one option." } };
   }
   if (res.changed && (mode === "direct" || res.from === "direct")) {
@@ -129,13 +123,23 @@ export async function setContactModeAction(_prev: SettingsState, form: FormData)
     });
   }
   revalidatePath("/settings");
-  if (mode === "direct") return { message: { tone: "success", text: "Saved. Companies that can see you also see your Telegram handle." } };
+  if (mode === "direct") {
+    const settings = await loadSettings(d, user.id);
+    return {
+      message: {
+        tone: "success",
+        text: settings?.telegramHandle?.trim()
+          ? "Saved. Companies that can see you also see your Telegram handle."
+          : "Saved. Companies will see your Telegram once you set a username in Telegram. Until then they ask you first.",
+      },
+    };
+  }
   return {
     message: {
       tone: "success",
       text:
         res.changed && res.from === "direct"
-          ? "Saved. Companies that already saw your handle keep it under their own responsibility. They may use it only for recruiting."
+          ? "Saved. Companies must ask you first. Companies that already saw your handle keep it under their own responsibility. They may use it only for recruiting."
           : "Saved. Companies must ask you first.",
     },
   };

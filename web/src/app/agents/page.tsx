@@ -91,8 +91,8 @@ export default function AgentsPage() {
           payment.
         </p>
         <p className="text-ink-muted">
-          Only candidates who turned visibility on appear, as anonymous labels with scores and reasons. Never names,
-          handles, wallets or email. Intros always need a key, so the candidate knows who asks.
+          Only visible candidates appear (anyone can hide), as anonymous labels with scores and reasons. Never names,
+          handles, wallets or email. Intros and Telegram handles always need a key, so the candidate knows who asks.
         </p>
       </Block>
 

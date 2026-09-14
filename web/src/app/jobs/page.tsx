@@ -127,7 +127,7 @@ function Improve({ step }: { step: SavedStep }) {
         <h3 className="font-sans text-base font-semibold text-ink">Add your public work</h3>
         <p className={HINT}>
           Connect X, wallets or GitHub and we score your work for your roles. A good score shows up in the reasons
-          under each job. Companies see you only if you turn that on.
+          under each job. Companies with access can find you; you can hide from them in settings.
         </p>
         <Button asChild variant="outline" size="lg" className="w-full">
           <Link href={standoutDone ? "/profile" : "/welcome?step=x"}>

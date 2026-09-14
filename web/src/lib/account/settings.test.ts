@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
 import {
+  applyWelcomeSharing,
   detectTimezone,
   loadSettings,
   saveDailyJobs,
@@ -92,15 +93,11 @@ describe("setVisibility", () => {
 });
 
 describe("setContactMode", () => {
-  it("refuses 'direct' without Telegram", async () => {
-    await expect(setContactMode(t.d1, "a", "direct")).resolves.toEqual({ ok: false, reason: "no_telegram" });
-    expect(one("SELECT contact_mode FROM users")).toEqual({ contact_mode: "approval" });
-    expect(all("SELECT * FROM consents")).toEqual([]);
-  });
-
-  it("refuses 'direct' when Telegram has no username to show", async () => {
-    t.raw.exec("UPDATE users SET telegram_id = '42'");
-    await expect(setContactMode(t.d1, "a", "direct")).resolves.toEqual({ ok: false, reason: "no_telegram" });
+  it("'direct' without a Telegram username is kept: the mode waits for a handle", async () => {
+    await expect(setContactMode(t.d1, "a", "direct")).resolves.toEqual({ ok: true, changed: true, from: "approval" });
+    expect(one("SELECT contact_mode FROM users")).toEqual({ contact_mode: "direct" });
+    expect(all("SELECT kind, granted FROM consents")).toEqual([{ kind: "contact", granted: 1 }]);
+    await expect(setContactMode(t.d1, "a", "direct")).resolves.toEqual({ ok: true, changed: false, from: "direct" });
   });
 
   it("'direct' with Telegram writes the contact consent; back to approval revokes it", async () => {
@@ -211,5 +208,24 @@ describe("detectTimezone", () => {
   it("ignores a zone outside the list", async () => {
     await expect(detectTimezone(t.d1, "a", "Nowhere/Land")).resolves.toBeNull();
     expect(one("SELECT timezone FROM users")).toEqual({ timezone: null });
+  });
+});
+
+describe("applyWelcomeSharing", () => {
+  it("writes both consents, their events and the flags in one batch, then tells the CRM", async () => {
+    const batch = vi.spyOn(t.d1, "batch");
+    await expect(applyWelcomeSharing(t.d1, "a", { visible: true, direct: true })).resolves.toEqual({ visible: true, direct: true });
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(one("SELECT visible_to_companies AS v, contact_mode FROM users")).toEqual({ v: 1, contact_mode: "direct" });
+    expect(hooks.notifyCrmVisibility).toHaveBeenCalledWith("a", true);
+  });
+
+  it("no direct contact without visibility", async () => {
+    await expect(applyWelcomeSharing(t.d1, "a", { visible: false, direct: true })).resolves.toEqual({ visible: false, direct: false });
+    expect(one("SELECT visible_to_companies AS v, contact_mode FROM users")).toEqual({ v: 0, contact_mode: "approval" });
+    expect(all("SELECT kind, granted, text_version FROM consent_events ORDER BY id")).toEqual([
+      { kind: "visibility", granted: 0, text_version: "welcome.v1" },
+      { kind: "contact", granted: 0, text_version: "welcome.v1" },
+    ]);
   });
 });

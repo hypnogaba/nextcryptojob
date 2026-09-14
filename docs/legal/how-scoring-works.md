@@ -123,7 +123,7 @@ changes or when we release a new formula version.
 
 - You.
 - The public, only on your card page if you publish it: score, role and level. No wallets, no links.
-- Paying companies, only if you switch on "Show me to companies". They can filter by score. They never see your wallet addresses or raw data.
+- Paying companies, while "Show me to companies" is on. It is on unless you untick it when you finish setting up, and you can turn it off at any time in Settings. They can filter by score. They never see your wallet addresses or raw data.
 
 Companies must not decide to hire or reject anyone based only on the score. A person
 must decide.

@@ -315,7 +315,7 @@ describe("candidate profile as a company sees it", () => {
     expect(page).toContain("How scores work");
     expect(page).toContain("Not in your pipeline yet.");
     expect(page).toContain("Request intro");
-    expect(page).toContain("The candidate sees your request and decides. If they accept, you get their Telegram");
+    expect(page).toContain("The candidate decides. They see your request, and if they accept, you get their Telegram");
     // Попередній перегляд у діалозі той самий, що отримає кандидат (notify.ts).
     expect(page).toContain("Acme Labs wants to talk to you about an Engineer role.");
     noContact(page);
@@ -435,6 +435,7 @@ describe("candidate profile as a company sees it", () => {
     const x = candidate(81, { contactMode: "direct", contactConsent: true });
     const page = await html(CandidatePage(cand(x)));
     expect(page).toContain("Show Telegram handle");
+    expect(page).toContain("This candidate shares their Telegram: message them directly.");
     expect(page).toContain("They will be told that Acme Labs viewed it.");
     noContact(page);
 
@@ -448,7 +449,7 @@ describe("candidate profile as a company sees it", () => {
     await company("Acme Labs");
     const x = candidate(81);
     const page = await html(CandidatePage(cand(x, { intro: "1" })));
-    expect(page).toContain("The candidate sees your request and decides. If they accept, you get their Telegram.");
+    expect(page).toContain("The candidate decides. They see your request, and if they accept, you get their Telegram.");
     expect(page).toContain('data-contact-rule="approval"');
     noContact(page);
   });

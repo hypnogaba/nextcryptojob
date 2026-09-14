@@ -238,10 +238,11 @@ export default async function WelcomePage({ searchParams }: Props) {
 
     case "consent": {
       const granted = await hasConsent(d, user.id, SCORING_CONSENT.kind);
+      const handle = (await loadSettings(d, user.id))?.telegramHandle?.trim().replace(/^@+/, "") ?? "";
       return shell(
         step,
         "We compute a score only with your consent. Next: your X account, then your score and card.",
-        <ConsentForm granted={granted} editing={editing} />,
+        <ConsentForm granted={granted} editing={editing} telegramHandle={handle ? `@${handle}` : null} />,
       );
     }
   }

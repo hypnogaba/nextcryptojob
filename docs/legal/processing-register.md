@@ -102,7 +102,7 @@ processing is not occasional and includes profiling.
 | Purpose | Show visible candidates to paying companies; handle introduction requests; share contact after approval or in direct mode |
 | Data subjects | Candidates; company users |
 | Data | Profile data (score, roles, level, networks, badges, place); introduction requests and answers; contact shared |
-| Legal basis | Consent, art. 6(1)(a) (`visibility`, `contact.request`, `contact.direct`) |
+| Legal basis | Consent, art. 6(1)(a) (`visibility`, `contact.request`, `contact.direct`). Since 2026-09-14 `visibility` and `contact.direct` are pre-ticked on the last setup step for new candidates (consents.md 2a) [to confirm with lawyer: validity of a pre-ticked box, or another basis with opt-out] |
 | Recipients | Paying companies and approved agencies (profile data; contact only after approval or direct mode) |
 | Transfers | Companies may be outside the EU [to confirm with lawyer: safeguard for disclosure to non-EU companies, for example art. 49(1)(a) explicit consent or SCCs in company terms] |
 | Retention | Profile shown only while visibility is on; introduction records for the life of the candidate account [to confirm] |

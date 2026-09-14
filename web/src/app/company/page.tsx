@@ -7,7 +7,7 @@ import { fnv1a } from "@/lib/card/pattern";
 export const metadata: Metadata = {
   title: "For companies",
   description:
-    "Search anonymous profiles of crypto candidates, scored from what they have shipped. Candidates choose to be visible and share their contact only when they accept your intro.",
+    "Search anonymous profiles of crypto candidates, scored from what they have shipped. Many share their Telegram directly; the rest decide on each intro.",
 };
 
 const POINTS = [
@@ -16,12 +16,12 @@ const POINTS = [
     body: "Each candidate is scored for the roles they chose, from GitHub, X, onchain history and published work, with the reasons behind every number.",
   },
   {
-    title: "Only people who want to be found",
-    body: "Candidates switch visibility on themselves. You see scores, level, location and pay floor. No names, handles or wallets.",
+    title: "People who are open to offers",
+    body: "Candidates are visible unless they hide. You see scores, level, location and pay floor. No names or wallets, and a Telegram handle only if the candidate shares it.",
   },
   {
-    title: "Intros the candidate agrees to",
-    body: "Send a short message about the role. If the candidate accepts within 14 days, you get their Telegram handle or email.",
+    title: "Message them directly, or ask first",
+    body: "If the candidate shares their Telegram, you see it at once and message them. Otherwise send a short message about the role: if they accept within 14 days, you get their Telegram handle or email.",
   },
   {
     title: "A pipeline for your team and your agents",
@@ -115,7 +115,7 @@ export default function CompanyLandingPage() {
           </table>
         </div>
         <p className="mt-6 max-w-[60ch] text-ink-muted">
-          Candidates stay hidden until they turn visibility on. You see scores and reasons, never names or wallets.
+          Candidates who hide their profile never appear. You see scores and reasons, never names or wallets.
           Company plan: $100 a month. Candidates never pay.
         </p>
       </section>

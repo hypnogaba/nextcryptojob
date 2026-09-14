@@ -148,7 +148,7 @@ export const ACTIONS = [
   defineAction({
     name: "search_candidates",
     description:
-      "Search anonymous profiles of candidates who chose to be visible to companies. Returns up to 20 per page, max 10 pages per query. No names, handles, wallets or emails.",
+      "Search anonymous profiles of candidates who are visible to companies (candidates can hide at any time). Returns up to 20 per page, max 10 pages per query. No names, handles, wallets or emails.",
     rest: { method: "POST", path: "/candidates/search", status: 200, operationId: "searchCandidates" },
     mcp: { tool: "search_candidates", annotations: READ },
     input: T.SearchRequest,

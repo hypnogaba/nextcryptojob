@@ -147,12 +147,13 @@ export default function ScoringPage() {
       <section aria-labelledby="visible-h" className={`${WRAP} py-20 sm:py-24`}>
         <div className="grid max-w-[62ch] gap-3">
           <h2 id="visible-h" className="font-sans text-lg font-semibold">
-            You decide who sees it.
+            Companies can find you. You can hide any time.
           </h2>
           <p className="text-ink-muted">
-            Your profile stays hidden until you turn on &quot;Show me to companies&quot; in settings. Companies with access
-            then see your scores, roles, level and verification badges, never your wallet addresses, email or handles.
-            By default, a company gets your contact only when you accept its intro.
+            When you finish setting up, &quot;Show me to companies&quot; is on unless you untick it. Companies with access
+            then see your scores, roles, level and verification badges, and your Telegram handle so they can message you
+            directly. They never see your wallet addresses or email. You can hide your profile, or ask companies to
+            request an intro first, any time in settings.
           </p>
         </div>
       </section>

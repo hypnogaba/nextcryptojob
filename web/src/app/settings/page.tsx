@@ -9,7 +9,6 @@ import { timezoneList } from "@/lib/account/timezones";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { AddEmailForm } from "../account/add-email-form";
-import { ContactForm } from "./contact-form";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
 import { VisibilityForm } from "./visibility-form";
@@ -71,11 +70,11 @@ export default async function SettingsPage() {
         </p>
       </Section>
 
-      <VisibilityForm visible={s.visible} canTurnOn={s.scoringConsent} />
-
-      <Section id="contact" title="How companies reach you">
-        <ContactForm mode={s.contactMode} telegramHandle={s.telegramHandle} telegramLinked={s.telegramLinked} />
-      </Section>
+      <VisibilityForm
+        visible={s.visible}
+        canTurnOn={s.scoringConsent}
+        contact={{ mode: s.contactMode, telegramHandle: s.telegramHandle }}
+      />
 
       <Section id="data" title="Your data">
         <div className="grid gap-3">

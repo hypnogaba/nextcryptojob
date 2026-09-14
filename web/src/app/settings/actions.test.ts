@@ -93,11 +93,28 @@ describe("setVisibilityAction", () => {
 });
 
 describe("setContactModeAction", () => {
-  it("refuses 'direct' without Telegram", async () => {
+  it("'direct' without a Telegram username is saved and says companies ask first until there is one", async () => {
     await expect(run(setContactModeAction({}, form({ mode: "direct" })))).resolves.toMatchObject({
-      errors: { mode: expect.any(String) },
+      message: { tone: "success", text: expect.stringContaining("Until then they ask you first") },
+    });
+    expect(rows("SELECT contact_mode FROM users")).toEqual([{ contact_mode: "direct" }]);
+    expect(rows("SELECT kind, granted FROM consents")).toEqual([{ kind: "contact", granted: 1 }]);
+  });
+
+  it("turning direct off falls back to after-approval and revokes the consent", async () => {
+    exec("UPDATE users SET telegram_id = '42', telegram_username = 'ada'");
+    await run(setContactModeAction({}, form({ mode: "direct" })));
+    await expect(run(setContactModeAction({}, form({ mode: "approval" })))).resolves.toMatchObject({
+      message: { tone: "success", text: expect.stringContaining("Companies must ask you first.") },
     });
     expect(rows("SELECT contact_mode FROM users")).toEqual([{ contact_mode: "approval" }]);
+    expect(rows("SELECT kind, granted FROM consents")).toEqual([{ kind: "contact", granted: 0 }]);
+  });
+
+  it("rejects an unknown mode", async () => {
+    await expect(run(setContactModeAction({}, form({ mode: "public" })))).resolves.toMatchObject({
+      errors: { mode: expect.any(String) },
+    });
     expect(rows("SELECT * FROM consents")).toEqual([]);
   });
 });

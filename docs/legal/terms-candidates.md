@@ -91,11 +91,11 @@ one month.
 
 ## 7. Visibility to companies and contact
 
-- "Show me to companies" is off by default. While it is off, companies cannot find you.
+- On the last setup step, "Show me to companies" is on unless you untick it. While it is off, companies cannot find you.
 - When it is on, paying companies can see your score, roles, level, networks and verification badges. They never see your wallet addresses or raw data.
 - You choose how companies reach you:
-  - "Only after I approve a request" (default): you see each request, with the company and role, and answer yes or no.
-  - "Show my Telegram handle directly": companies that can see your profile also see your Telegram handle.
+  - "Show my Telegram directly" (on unless you untick it or choose the option below): companies that can see your profile also see your Telegram handle and can message you. If you have no Telegram username, they send you an intro request instead. We never show your email in this mode.
+  - "Only after I approve each company": you see each request, with the company and role, and answer yes or no.
 - You can change these choices or switch visibility off at any time. This stops new access. A company that already received your contact holds it under its own responsibility. Our terms require it to use your contact only for recruiting.
 - We do not guarantee that any company will contact you, interview you or hire you.
 

@@ -17,11 +17,28 @@ export const VISIBILITY_CONSENT = {
     "but never my wallet addresses, email or handles.",
 } as const;
 
-/** «Show my Telegram handle directly» у налаштуваннях (docs/legal/consents.md, розділ 3b). */
+/**
+ * «Show my Telegram directly» у налаштуваннях (docs/legal/consents.md, розділ 3b). Без ніка
+ * в Telegram режим чекає: компанія бачить «Request intro», пошту не бачить ніколи.
+ */
 export const CONTACT_CONSENT = {
   kind: "contact",
   version: "v1",
   text: "Show my Telegram handle to every company that can see my profile, without asking me first.",
+} as const;
+
+/**
+ * Крок згоди в анкеті (власник 14.09): видимість і Telegram-нік для компаній увімкнено
+ * наперед, людина може зняти галку або обрати «лише після мого схвалення». Один текст на
+ * обидві згоди, тож обидві події (visibility і contact) пишуться з версією `welcome.v1`
+ * (docs/legal/consents.md, розділ 2a).
+ */
+export const WELCOME_SHARING = {
+  version: "welcome.v1",
+  text:
+    "Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. " +
+    "You can turn this off any time in Settings.",
+  approvalText: "Only after I approve each company",
 } as const;
 
 export type ConsentState = { granted: boolean; version: string };
