@@ -298,7 +298,7 @@ export default async function BillingPage({
   }
 
   const shell = (children: React.ReactNode) => (
-    <section className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+    <section className={`${PAGE} max-w-7xl *:max-w-3xl`}>
       <PageTitle>Billing</PageTitle>
       {children}
     </section>

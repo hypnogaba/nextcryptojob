@@ -29,7 +29,7 @@ async function signIn(u: User, method: SessionMethod | null = null) {
     u.roles ?? "[]",
   );
   if (u.step && ["x", "wallets", "sources", "done"].includes(u.step)) {
-    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'terms', 1, 'terms-0.2')");
   }
   await createSession("u", method);
 }
@@ -75,11 +75,20 @@ describe("roles: our guess from step 1", () => {
     expect(html).not.toContain("Scored now");
   });
 
-  it("says so when nothing is clear, and still lets the person pick", async () => {
+  it("when no role is sure, suggests the closest ones instead of nothing, and says it is a guess", async () => {
     await signIn({ step: "roles", target: "I like cooking" });
     const html = await render();
-    expect(html).toContain("We could not tell your role from your words.");
-    expect(html).toContain("Pick a role to continue");
+    expect(html).toContain("We are not sure of your role. These are the closest to your words:");
+    expect(html).toContain('<input type="hidden" name="role" value="marketing_content"/>');
+    expect(html).toContain("Yes, continue");
+  });
+
+  it("reads a Ukrainian community manager brief as community and marketing", async () => {
+    await signIn({ step: "roles", target: "комуніті менеджерка, Лісабон або віддалено" });
+    const html = await render();
+    expect(html).toContain("We think you are looking for:");
+    expect(html).toContain('<input type="hidden" name="role" value="community"/>');
+    expect(html).toContain('<input type="hidden" name="role" value="marketing_content"/>');
   });
 });
 
@@ -119,9 +128,9 @@ describe("channel step: no dead email option", () => {
     expect(html).toContain("ada@example.com");
     expect(html).not.toContain("Send code");
     await expect(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "UTC" })).catch((e: Error) => e.message)).resolves.toBe(
-      "redirect(/welcome?step=consent)",
+      "redirect(/welcome?step=x)",
     );
-    expect(rows("SELECT channel, onboarding_step FROM users")).toEqual([{ channel: "email", onboarding_step: "consent" }]);
+    expect(rows("SELECT channel, onboarding_step FROM users")).toEqual([{ channel: "email", onboarding_step: "x" }]);
   });
 
   it("with an email and no Telegram, shows only Email and a pointer to connect Telegram later", async () => {
@@ -142,6 +151,17 @@ describe("X step", () => {
     expect(html).toContain("No code and no sign-in with X");
     expect(html).not.toContain("Skip for now");
     expect(html).not.toContain("Copy code");
+  });
+
+  it("never asks to verify, even when another profile already added the same handle (old claim links too)", async () => {
+    await signIn({ step: "x", roles: '["bd"]' });
+    exec("INSERT INTO users (id, email) VALUES ('other', 'other@example.com')");
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('other', 'x', 'ada'), ('other', 'github', 'ada')");
+    for (const step of ["x", "sources"]) {
+      const html = renderToStaticMarkup(await WelcomePage({ searchParams: Promise.resolve({ step, claim: "ada" } as never) }));
+      expect(html).not.toContain("Copy code");
+      expect(html).not.toMatch(/verify|prove it|Is @ada yours/i);
+    }
   });
 
   it("someone who reached wallets without X under the old order is sent to X first", async () => {
@@ -190,31 +210,28 @@ describe("admin", () => {
   });
 });
 
-describe("consent step: companies block (owner 14.09)", () => {
-  it("first pass: a visible, pre-ticked box with the plain text, and the after-approval option unticked", async () => {
+describe("the end of the brief: no consent boxes (owner 14.09, round 3)", () => {
+  it("the last step has one line under the button with links to the terms and privacy, and no checkbox", async () => {
+    await signIn({ step: "delivery", roles: '["engineer"]' });
+    const html = await render();
+    expect(html).toContain('Step 4 <span class="text-ink-muted">of 4</span>');
+    expect(html).toContain('aria-valuemax="4"');
+    expect(html).toContain("grid-cols-4");
+    expect(html).toMatch(/data-terms-line="">By continuing you agree to the <a[^>]*href="\/terms"[^>]*>Terms<\/a> and <a[^>]*href="\/privacy"[^>]*>Privacy<\/a>\.<\/p>/);
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toContain("One last thing");
+  });
+
+  it("editing the step after the brief has no terms line", async () => {
+    await signIn({ step: "done", roles: '["engineer"]' });
+    expect(await render("delivery")).not.toContain("data-terms-line");
+  });
+
+  it("the old consent step address opens the delivery step", async () => {
     await signIn({ step: "consent", roles: '["engineer"]' });
     const html = await render("consent");
-    expect(html).toContain("data-sharing");
-    expect(html).toMatch(/<input type="checkbox"[^>]*name="visible" checked=""/);
-    expect(html).toContain(
-      "Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. You can turn this off any time in Settings.",
-    );
-    expect(html).toContain("Only after I approve each company");
-    expect(html).not.toMatch(/name="approval_only"[^>]*checked=""/);
-    // Без ніка в Telegram: пояснення, що компанія спершу попросить знайомство, пошта прихована.
-    expect(html).toContain("You have no Telegram username yet");
-  });
-
-  it("shows the handle a company will see when there is one", async () => {
-    await signIn({ step: "consent", roles: '["engineer"]', telegram: "42" });
-    exec("UPDATE users SET telegram_username = 'ada_eth' WHERE id = 'u'");
-    expect(await render("consent")).toContain("Companies see @ada_eth.");
-  });
-
-  it("editing after the brief does not show the block and points to Settings", async () => {
-    await signIn({ step: "done", roles: '["engineer"]' });
-    const html = await render("consent");
-    expect(html).not.toContain("data-sharing");
-    expect(html).toContain('href="/settings#companies-title"');
+    expect(html).toContain("How should we send your jobs?");
+    expect(html).toContain("data-terms-line");
   });
 });
+

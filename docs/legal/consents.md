@@ -2,12 +2,14 @@
 
 > **DRAFT. Not in force. For review by a French lawyer before launch.**
 > This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version of this file: 0.2 (draft), 2026-09-14.
+> Version of this file: 0.3 (draft), 2026-09-14.
 
-These are the exact short texts shown in the product. Each one is a separate choice.
-None is pre-ticked, except the "companies" box on the last setup step (section 2a, owner
-decision 2026-09-14). Each can be withdrawn in Settings as easily as it was given
-(art. 7(3) GDPR, <https://gdpr-info.eu/art-7-gdpr/>).
+These are the exact short texts shown in the product. Since 2026-09-14 (owner decision,
+third test round: "signing two documents is too much, using the service means agreeing")
+the setup has no consent boxes at all. The last button of setup accepts the terms
+(section 1). The score and the two "companies" settings come with the terms and can be
+turned off in Settings as easily as they were set (art. 7(3) GDPR,
+<https://gdpr-info.eu/art-7-gdpr/>).
 
 Links point to the public pages. [to confirm product: final URL paths]
 
@@ -17,62 +19,52 @@ Links point to the public pages. [to confirm product: final URL paths]
 - Do not make the account or the job search depend on a consent that is not needed for it (art. 7(4) GDPR).
 - Store a record for each change: `user_id`, `consent_key`, `version`, `text_sha256`, `given` or `withdrawn`, `timestamp`, `channel` (web or Telegram). This lets us show that consent was given (art. 7(1) GDPR).
 - A new version of a text that changes its meaning needs new consent. A pure wording fix does not. [to confirm with lawyer]
-- Candidates can use the account and the job digest without the scoring consent. [to confirm product behaviour]
+- Candidates can use the account and the job digest without adding any source; then there is nothing to score.
 
-## 1. Scoring (profiling)
+## 1. Terms acceptance at the end of setup (since 2026-09-14)
 
-- **Key:** `scoring`
-- **Version:** `scoring.v1`
-- **Where:** first sign-in, before the first score; Settings.
-- **Default:** off.
-- **Legal basis:** consent, art. 6(1)(a) GDPR, and explicit consent under art. 22(2)(c) GDPR (<https://gdpr-info.eu/art-22-gdpr/>).
+- **Key:** `terms`
+- **Version:** `terms-0.2` (the version of the Terms for Candidates; the Privacy Policy is part of them).
+- **Where:** under the last button of setup ("How should we send your jobs?", Continue). No checkbox.
+- **Legal basis:** contract, art. 6(1)(b) GDPR.
 
-> I agree that NextCryptoJob collects public data from the accounts and wallets I connect and uses an automated formula to score me for the roles I choose (profiling). [How scoring works](https://nextcryptojob.xyz/how-scoring-works)
+> By continuing you agree to the [Terms](https://nextcryptojob.xyz/terms) and [Privacy](https://nextcryptojob.xyz/privacy).
 
-**On withdrawal:** stop collection; delete scores and source data; switch off visibility.
+**What is recorded** (one batch, `acceptTerms` in `web/src/lib/account/settings.ts`):
 
-Withdrawal text in Settings:
+- one event in `consent_events`: `terms`, granted, with the terms version;
+- the state rows in `consents`: `terms`, and the two "companies" settings `visibility` and `contact` with the same terms version, both on. These two come with the terms, so they have no events of their own. They are written only if the person has not chosen them in Settings before; a choice made in Settings is kept.
 
-> Stop scoring me. My scores and collected data will be deleted, and companies will no longer see me.
+| | `terms` | `visibility` | `contact` | `users.visible_to_companies` | `users.contact_mode` |
+|---|---|---|---|---|---|
+| Continue at the end of setup | granted 1, event | granted 1 | granted 1 | 1 | `direct` |
 
-## 2a. Companies box on the last setup step (new candidates, since 2026-09-14)
+Pressing Continue again with the same terms version writes nothing. Any later change in
+Settings writes its own event (sections 2 and 3b).
 
-- **Keys:** `visibility` and `contact` (two rows in `consents`, two events in `consent_events`).
-- **Version:** `welcome.v1` for both.
-- **Where:** the consent step at the end of the setup brief, below the scoring consent. First pass only: editing the step later links to Settings and changes nothing.
-- **Default:** ticked (owner decision 2026-09-14). The box and its text are visible next to the scoring box, never hidden behind a link.
-- **Requires:** `scoring` (the same submit gives it; without it nothing about companies is written).
-- **Legal basis:** consent, art. 6(1)(a) GDPR.
+**The score** is part of the service accepted here. It uses only the sources the person
+adds. There is no separate scoring box any more.
 
-> Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. You can turn this off any time in Settings.
+## 1a. Scoring box (until 2026-09-14)
 
-Secondary option under it (unticked by default):
+- **Key:** `scoring`, **version** `v1`. No longer shown. Existing records stay valid: a person with a granted `scoring` record is scored like a person with `terms`.
 
-> Only after I approve each company
+> I agree that NextCryptoJob computes my score from the public data I connected.
 
-Help text (not part of the consent): with a Telegram username, "Companies see @handle. Never your wallet addresses or email."; without one, "You have no Telegram username yet, so companies send you an intro request first. We never show your email without your yes."
+## 2a. Companies box on the last setup step (2026-09-14, before the third test round)
 
-**What is recorded** (one batch, `applyWelcomeSharing` in `web/src/lib/account/settings.ts`):
-
-| Choice | `visibility` | `contact` | `users.visible_to_companies` | `users.contact_mode` |
-|---|---|---|---|---|
-| Box ticked (default) | granted 1 | granted 1 | 1 | `direct` |
-| Box ticked + "Only after I approve each company" | granted 1 | granted 0 | 1 | `approval` |
-| Box unticked | granted 0 | granted 0 | 0 | `approval` |
-
-A refusal is recorded as a `granted = 0` event too, so the history shows that the choice was offered.
-Existing candidates are not changed: their current settings stay as they are.
+- **Keys:** `visibility` and `contact`, **version** `welcome.v1`. No longer shown: the defaults now come with the terms (section 1). Records made with `welcome.v1` stay as they are.
 
 ## 2. Visibility to companies
 
 - **Key:** `visibility`
 - **Version:** `visibility.v1`
 - **Where:** the "Show me to companies" switch in Settings and on the score page.
-- **Default:** on for new candidates (section 2a); off for candidates who signed up before 2026-09-14 and never switched it on.
-- **Requires:** `scoring` (no score, nothing to show).
-- **Legal basis:** consent, art. 6(1)(a) GDPR.
+- **Default:** on for new candidates (section 1); off for candidates who signed up before 2026-09-14 and never switched it on.
+- **Requires:** `terms` or an older `scoring` record (no score, nothing to show).
+- **Legal basis:** contract, art. 6(1)(b) GDPR, with an opt-out at any time.
 
-> Show me to paying companies: they can see and filter by my score, roles, level, networks and verification badges, but never my wallet addresses or raw data. [What companies see](https://nextcryptojob.xyz/privacy#companies)
+> Show me to paying companies: they can see and filter by my score, roles, level, networks and verification badges, and, while Show my Telegram directly is also on, my Telegram, X, GitHub, YouTube, website and wallet addresses. They never see my raw data. [What companies see](https://nextcryptojob.xyz/privacy#companies)
 
 **Help text under the switch (not part of the consent):**
 
@@ -81,7 +73,7 @@ Existing candidates are not changed: their current settings stay as they are.
 ## 3. Contact sharing
 
 Two modes. The candidate picks one. Since 2026-09-14 "direct" is the default for new
-candidates (section 2a); before that it was "Only after I approve".
+candidates (section 1); before that it was "Only after I approve".
 
 ### 3a. Per request
 
@@ -98,11 +90,11 @@ Buttons: `Yes, share` and `No`. "No" sends no data to the company.
 ### 3b. Direct mode
 
 - **Key:** `contact.direct` (stored as `contact`)
-- **Version:** `contact.direct.v1` (stored as `v1`; `welcome.v1` when given on the setup step)
+- **Version:** `contact.direct.v1` (stored as `v1`; `welcome.v1` or the terms version when it came with setup)
 - **Where:** Settings, the "Show my Telegram directly" switch in the "Show me to companies" panel. Turning it off falls back to 3a.
-- **Default:** on for new candidates (section 2a).
+- **Default:** on for new candidates (section 1).
 - **Requires:** `visibility`, and a Telegram username. Without a username the mode waits: companies see "Request intro" (3a), and the email is never shown in this mode.
-- **Legal basis:** consent, art. 6(1)(a) GDPR.
+- **Legal basis:** contract, art. 6(1)(b) GDPR, with an opt-out at any time.
 
 > Show my Telegram handle to every paying company that can see my profile, without asking me first. [What happens next](https://nextcryptojob.xyz/privacy#contact)
 
@@ -148,7 +140,7 @@ Every digest message has a "Stop" button.
 
 These are not consent texts and must not be shown as consent checkboxes:
 
-- **Terms acceptance.** "By continuing you accept the [Terms](https://nextcryptojob.xyz/terms) and have read the [Privacy Policy](https://nextcryptojob.xyz/privacy)." Legal basis for the account is the contract, art. 6(1)(b) GDPR.
+- **Terms acceptance.** See section 1: a line under the button, not a checkbox.
 - **Age.** "I am 18 or older." [to confirm with lawyer]
 - **Wallet signature.** Signing a message to verify a wallet is an action, not a consent. Text: "Sign a message to prove this wallet is yours. This does not move funds or give any permission."
 
@@ -158,3 +150,4 @@ These are not consent texts and must not be shown as consent checkboxes:
 |---|---|---|
 | all `.v1` | 2026-09-12 | First draft |
 | `welcome.v1` | 2026-09-14 | Companies box on the last setup step, pre-ticked (section 2a) |
+| `terms-0.2` | 2026-09-14 | No boxes: the last button accepts the terms; score and companies settings come with them (section 1) |

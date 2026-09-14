@@ -80,8 +80,11 @@ export type VerifyCodeResult =
 export type AddEmailResult =
   | { ok: true; email: string }
   | CodeFailure
-  /** Ця пошта вже належить іншому профілю (злиття профілів у першому релізі немає). */
-  | { ok: false; reason: "taken" }
+  /**
+   * Ця пошта вже належить іншому профілю: код довів, що пошта людини, тож можна запропонувати
+   * злиття (lib/account/merge.ts). otherId = той профіль (null, якщо його вже немає).
+   */
+  | { ok: false; reason: "taken"; otherId: string | null }
   /** У профілю вже є пошта. */
   | { ok: false; reason: "has_email" }
   | { ok: false; reason: "no_user" };
@@ -307,9 +310,14 @@ export async function verifyAddEmailCode(userId: string, rawEmail: unknown, rawC
       return { ok: true, email };
     case "already":
       return { ok: true, email };
-    case "taken":
+    case "taken": {
       await audit(userId, "account.email_conflict", userId);
-      return { ok: false, reason: "taken" };
+      const other = await db()
+        .prepare("SELECT id FROM users WHERE lower(email) = ? AND id <> ? LIMIT 1")
+        .bind(email, userId)
+        .first<{ id: string }>();
+      return { ok: false, reason: "taken", otherId: other?.id ?? null };
+    }
     default:
       return { ok: false, reason: result };
   }

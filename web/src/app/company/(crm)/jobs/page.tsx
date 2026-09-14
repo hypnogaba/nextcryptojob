@@ -25,7 +25,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+      <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
         <PageTitle>Jobs</PageTitle>
         <NoAccess />
       </div>
@@ -41,7 +41,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const limit = openJobLimit(company);
 
   return (
-    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+    <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
       <PageTitle aside={limit ? `${openNow} of ${limit} open` : undefined}>Jobs</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}

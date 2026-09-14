@@ -1275,7 +1275,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/CandidateSummary"
         - type: object
-          required: [roles_detailed, intro, contact]
+          required: [roles_detailed, intro, contact, links]
           properties:
             roles_detailed:
               type: array
@@ -1285,6 +1285,11 @@ components:
               oneOf: [{ $ref: "#/components/schemas/Intro" }, { type: "null" }]
             contact:
               oneOf: [{ $ref: "#/components/schemas/Contact" }, { type: "null" }]
+            links:
+              description: >-
+                Public accounts and wallet explorer links. null while the candidate has opted out of
+                "Show my Telegram directly" in Settings; email is never included here, only via contact.
+              oneOf: [{ $ref: "#/components/schemas/CandidateLinks" }, { type: "null" }]
     HiddenCandidate:
       type: object
       description: The candidate is in your pipeline but no longer visible to you. Your own notes stay; no new data.
@@ -1311,6 +1316,24 @@ components:
         value: { type: string, examples: ["@alice_eth"] }
         shared_at: { type: string, format: date-time }
         via: { type: string, enum: [intro, direct] }
+    CandidateLinks:
+      type: object
+      required: [telegram, x, github, youtube, website, wallets]
+      properties:
+        telegram: { type: [string, "null"], examples: ["@alice_eth"] }
+        x: { type: [string, "null"], format: uri }
+        github: { type: [string, "null"], format: uri }
+        youtube: { type: [string, "null"], format: uri }
+        website: { type: [string, "null"], format: uri }
+        wallets:
+          type: array
+          items:
+            type: object
+            required: [chain, address, explorer_url]
+            properties:
+              chain: { type: string, enum: [evm, solana] }
+              address: { type: string }
+              explorer_url: { type: string, format: uri }
 
     PipelineAdd:
       type: object

@@ -127,7 +127,7 @@ export default async function DevelopersPage({
   const curl = [`curl ${origin}/api/v1/me \\`, '  -H "Authorization: Bearer $NCJ_API_KEY"'].join("\n");
 
   return (
-    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+    <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
       <PageTitle>Developers</PageTitle>
       <nav aria-label="Developer sections" className="-my-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
         {[

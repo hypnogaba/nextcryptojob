@@ -90,7 +90,7 @@ export default function ScoringPage() {
               Companies can find you. You can hide any time.
             </h2>
             <p className="text-ink-muted">
-              When you finish setting up, &quot;Show me to companies&quot; is on unless you untick it. Companies with access
+              When you finish setting up, &quot;Show me to companies&quot; is on. Companies with access
               then see your scores, roles and level, your Telegram and your public links so they can message you directly.
               They never see your email unless you allow it. You can hide your profile any time in{" "}
               <Link href="/settings" className={LINK}>

@@ -38,11 +38,11 @@ processing is not occasional and includes profiling.
 
 | Field | Value |
 |---|---|
-| Purpose | Link X, wallets, GitHub, YouTube, website to the account; verify X by code in bio or post; optional wallet signature; one address per account |
+| Purpose | Link X, wallets, GitHub, YouTube, website to the account; self-reported, no code in the bio; the same source can be on more than one account |
 | Data subjects | Candidates |
 | Data | X handle; EVM and Solana addresses; GitHub login; YouTube channel; website URL; verification method and date |
 | Legal basis | Contract, art. 6(1)(b); legitimate interest in preventing impersonation, art. 6(1)(f) |
-| Recipients | Operator; 6551 (reads X bio or post); Cloudflare |
+| Recipients | Operator; Cloudflare |
 | Transfers | 6551 [to confirm country and safeguard] |
 | Retention | Active account |
 
@@ -51,12 +51,12 @@ processing is not occasional and includes profiling.
 | Field | Value |
 |---|---|
 | Purpose | Collect public data from connected sources; compute a deterministic 0 to 100 score per chosen role, level and coverage; weekly refresh |
-| Data subjects | Candidates who gave the `scoring` consent |
+| Data subjects | Candidates who accepted the terms and added at least one source |
 | Data | Counts and dates per source (see privacy policy 3.2); gap reasons; scores; breakdowns; formula version |
-| Legal basis | Consent, art. 6(1)(a), and explicit consent, art. 22(2)(c) |
+| Legal basis | Contract, art. 6(1)(b): the score is part of the service accepted at the end of setup (`terms` record). Older accounts also hold a `scoring` consent record. |
 | Recipients | Operator; Contabo (engine server, Germany); 6551; GitHub; Etherscan; Blockscout; Helius; Hyperliquid; Google (YouTube Data API); Cloudflare (D1) |
 | Transfers | Several sources outside the EU; see section 3 |
-| Retention | Source counts replaced at each weekly refresh; all deleted on consent withdrawal or account deletion |
+| Retention | Source counts replaced at each weekly refresh; deleted when the source is removed or the account is deleted |
 | Notes | No special category data. No inference of protected traits. Missing data is left out, never set to zero. Formula is human-written, public, versioned. |
 
 ### T4. Explanation text
@@ -66,7 +66,7 @@ processing is not occasional and includes profiling.
 | Purpose | Write a plain-language explanation of each score |
 | Data subjects | Scored candidates |
 | Data | Score breakdown and counts. No email, Telegram ID or wallet address [to confirm in implementation] |
-| Legal basis | Consent (part of `scoring`) |
+| Legal basis | Contract, art. 6(1)(b) (part of the score) |
 | Recipients | Anthropic |
 | Transfers | USA under DPF or SCCs [to confirm] |
 | Retention | Text stored with the score; deleted with it |
@@ -102,7 +102,7 @@ processing is not occasional and includes profiling.
 | Purpose | Show visible candidates to paying companies; handle introduction requests; share contact after approval or in direct mode |
 | Data subjects | Candidates; company users |
 | Data | Profile data (score, roles, level, networks, badges, place); introduction requests and answers; contact shared |
-| Legal basis | Consent, art. 6(1)(a) (`visibility`, `contact.request`, `contact.direct`). Since 2026-09-14 `visibility` and `contact.direct` are pre-ticked on the last setup step for new candidates (consents.md 2a) [to confirm with lawyer: validity of a pre-ticked box, or another basis with opt-out] |
+| Legal basis | Contract, art. 6(1)(b): being found by companies is what the service is for. `visibility` and `contact.direct` are on when a new candidate finishes setup (recorded with the `terms` version, consents.md 1) and can be turned off in Settings at any time. `contact.request`: consent, art. 6(1)(a), per request. |
 | Recipients | Paying companies and approved agencies (profile data; contact only after approval or direct mode) |
 | Transfers | Companies may be outside the EU [to confirm with lawyer: safeguard for disclosure to non-EU companies, for example art. 49(1)(a) explicit consent or SCCs in company terms] |
 | Retention | Profile shown only while visibility is on; introduction records for the life of the candidate account [to confirm] |
@@ -221,7 +221,7 @@ processing is not occasional and includes profiling.
 - Rate limits per email, per IP and per API key.
 - Telegram webhook protected by a secret header.
 - Companies isolated from each other at query level; tests check cross-company access.
-- Companies never receive wallet addresses or raw source data.
+- Companies receive wallet addresses and public account links only while the candidate has "Show my Telegram directly" on (opt-out in Settings); they never receive raw source data.
 - Secrets kept in Worker secrets and in a root-only environment file on the engine server; never in the repository.
 - Admin access limited to the operator, with strong authentication.
 - Audit log for consent changes, exports, deletions, contact sharing and admin actions.

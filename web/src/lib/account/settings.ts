@@ -1,4 +1,4 @@
-import { consentChange, CONTACT_CONSENT, SCORING_CONSENT, VISIBILITY_CONSENT, WELCOME_SHARING } from "@/lib/consent";
+import { consentChange, consentState, CONTACT_CONSENT, SCORING_BASIS_SQL, TERMS_ACCEPTANCE, VISIBILITY_CONSENT } from "@/lib/consent";
 import type { Channel } from "@/lib/telegram/channel";
 import { notifyCrmVisibility } from "./hooks";
 import { canonicalTimezone } from "./timezones";
@@ -47,10 +47,10 @@ async function loadRow(d: D1Database, userId: string): Promise<Row | null> {
       `SELECT u.email, u.telegram_id, u.telegram_username, u.channel, u.digest_hour, u.timezone,
               u.digest_paused, u.visible_to_companies, u.contact_mode,
               (SELECT granted FROM consents WHERE user_id = u.id AND kind = ?2) AS visibility,
-              (SELECT granted FROM consents WHERE user_id = u.id AND kind = ?3) AS scoring
+              (SELECT MAX(granted) FROM consents WHERE user_id = u.id AND kind IN ${SCORING_BASIS_SQL}) AS scoring
          FROM users u WHERE u.id = ?1`,
     )
-    .bind(userId, VISIBILITY_CONSENT.kind, SCORING_CONSENT.kind)
+    .bind(userId, VISIBILITY_CONSENT.kind)
     .first<Row>();
 }
 
@@ -139,18 +139,18 @@ export type VisibilityResult =
  * «Show me to companies». Увімкнення: згода visibility (v1) + подія + прапор
  * одним пакетом. Вимкнення: прапор 0 і подія відкликання в тому ж пакеті.
  * Після запису кажемо CRM (hooks.ts), щоб вона позначила картки воронки.
- * Без балу показувати нічого, тож без згоди на бал увімкнути не можна
- * (docs/legal/consents.md, розділ 2: «Requires: scoring»).
+ * Без балу показувати нічого, тож без прийнятих умов (або старої згоди на бал) увімкнути
+ * не можна (docs/legal/consents.md, розділ 2).
  */
 export async function setVisibility(d: D1Database, userId: string, on: boolean): Promise<VisibilityResult> {
   const row = await d
     .prepare(
       `SELECT u.visible_to_companies AS flag, c.granted, c.text_version,
-              (SELECT granted FROM consents WHERE user_id = u.id AND kind = ?3) AS scoring
+              (SELECT MAX(granted) FROM consents WHERE user_id = u.id AND kind IN ${SCORING_BASIS_SQL}) AS scoring
          FROM users u LEFT JOIN consents c ON c.user_id = u.id AND c.kind = ?2
         WHERE u.id = ?1`,
     )
-    .bind(userId, VISIBILITY_CONSENT.kind, SCORING_CONSENT.kind)
+    .bind(userId, VISIBILITY_CONSENT.kind)
     .first<{ flag: number; granted: number | null; text_version: string | null; scoring: number | null }>();
   if (!row) return { ok: false, reason: "no_user" };
 
@@ -221,32 +221,41 @@ export async function setContactMode(d: D1Database, userId: string, mode: unknow
   return { ok: true, changed: true, from };
 }
 
-// --- Вибір на кроці згоди анкети ---------------------------------------------
+// --- Умови в кінці анкети -------------------------------------------------------
 
-export type WelcomeSharing = { visible: boolean; direct: boolean };
+export type TermsResult = { visible: boolean; direct: boolean; accepted: boolean };
 
 /**
- * Вибір із кроку згоди анкети (власник 14.09: видимий і нік напряму за замовчуванням,
- * людина може відмовитись). Одним пакетом: згода visibility і згода contact з версією
- * тексту кроку (WELCOME_SHARING) і подіями в історії, прапор і режим у users. Пишемо
- * обидві події, навіть «ні»: так історія показує, що вибір було запропоновано і що
- * людина обрала. Нік без видимості не має сенсу, тож direct лише разом з visible.
- * Кличе лише перший прохід анкети: наявних людей не змінює (їхній вибір уже в налаштуваннях).
+ * Людина натиснула останню кнопку анкети під рядком «By continuing you agree to the Terms and
+ * Privacy.» (власник 14.09, раунд 3: без галок). Одним пакетом:
+ * - одна подія згоди: умови (TERMS_ACCEPTANCE) з їх версією; бал іде з умовами;
+ * - налаштування за замовчуванням з умов: видимий для компаній і Telegram-нік напряму. Вони
+ *   пишуться лише як стан (consents з версією умов, без окремих подій: їх запис це подія умов)
+ *   і лише якщо людина ще не обирала їх сама в налаштуваннях. Вимкнути можна будь-коли там же.
+ * Повторне натискання з тією самою версією умов нічого не пише.
  */
-export async function applyWelcomeSharing(
-  d: D1Database,
-  userId: string,
-  choice: WelcomeSharing,
-): Promise<WelcomeSharing> {
-  const visible = choice.visible;
-  const direct = visible && choice.direct;
-  await d.batch([
-    ...consentChange(d, userId, VISIBILITY_CONSENT.kind, visible, WELCOME_SHARING.version),
-    ...consentChange(d, userId, CONTACT_CONSENT.kind, direct, WELCOME_SHARING.version),
+export async function acceptTerms(d: D1Database, userId: string): Promise<TermsResult> {
+  const [current, before] = await Promise.all([consentState(d, userId, TERMS_ACCEPTANCE.kind), loadSettings(d, userId)]);
+  const fresh = !(current?.granted && current.version === TERMS_ACCEPTANCE.version);
+  const defaults = (kind: string, set: string) => [
+    // Спершу прапор (поки рядка згоди ще немає), потім сам рядок.
     d
-      .prepare("UPDATE users SET visible_to_companies = ?, contact_mode = ? WHERE id = ?")
-      .bind(visible ? 1 : 0, direct ? "direct" : "approval", userId),
+      .prepare(`UPDATE users SET ${set} WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM consents WHERE user_id = ?1 AND kind = ?2)`)
+      .bind(userId, kind),
+    d
+      .prepare(
+        `INSERT INTO consents (user_id, kind, granted, text_version, at) VALUES (?, ?, 1, ?, datetime('now'))
+         ON CONFLICT(user_id, kind) DO NOTHING`,
+      )
+      .bind(userId, kind, TERMS_ACCEPTANCE.version),
+  ];
+  await d.batch([
+    ...defaults(VISIBILITY_CONSENT.kind, "visible_to_companies = 1"),
+    ...defaults(CONTACT_CONSENT.kind, "contact_mode = 'direct'"),
+    ...(fresh ? consentChange(d, userId, TERMS_ACCEPTANCE.kind, true, TERMS_ACCEPTANCE.version) : []),
   ]);
-  await notifyCrmVisibility(userId, visible);
-  return { visible, direct };
+  const settings = await loadSettings(d, userId);
+  const visible = settings?.visible ?? false;
+  if (visible && !before?.visible) await notifyCrmVisibility(userId, true);
+  return { visible, direct: settings?.contactMode === "direct", accepted: fresh };
 }

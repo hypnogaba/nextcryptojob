@@ -47,7 +47,7 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
 
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-5xl *:max-w-4xl`}>
+      <div className={`${PAGE} max-w-7xl *:max-w-4xl`}>
         <PageTitle>Intros</PageTitle>
         <NoAccess />
       </div>
@@ -65,7 +65,7 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
   }
 
   return (
-    <div className={`${PAGE} max-w-5xl *:max-w-4xl`}>
+    <div className={`${PAGE} max-w-7xl *:max-w-4xl`}>
       <PageTitle>Intros</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}

@@ -1,3 +1,4 @@
+import { SCORING_BASIS_SQL } from "@/lib/consent";
 import type { Notifier, OutgoingMessage } from "@/lib/crm/notify";
 import type { JobsDb } from "@/lib/jobs-db";
 import { escapeHtml } from "@/lib/telegram/send";
@@ -77,7 +78,7 @@ export async function loadWeeklyReport(db: D1Database, jobs: JobsDb | null, now:
           (SELECT COUNT(*) FROM users WHERE created_at >= ?2 AND created_at < ?1 AND is_demo = 0) AS prev_new_users,
           (SELECT COUNT(*) FROM users u WHERE u.created_at >= ?1 AND u.is_demo = 0
               AND u.onboarding_step IN ('x', 'wallets', 'sources', 'done')
-              AND EXISTS (SELECT 1 FROM consents c WHERE c.user_id = u.id AND c.kind = 'scoring' AND c.granted = 1)) AS brief_done,
+              AND EXISTS (SELECT 1 FROM consents c WHERE c.user_id = u.id AND c.kind IN ${SCORING_BASIS_SQL} AND c.granted = 1)) AS brief_done,
           (SELECT COUNT(*) FROM users WHERE is_demo = 0) AS total_users,
           (SELECT json_object('sent', COALESCE(SUM(status = 'sent'), 0), 'failed', COALESCE(SUM(status = 'failed'), 0),
                               'empty', COALESCE(SUM(status = 'empty'), 0))

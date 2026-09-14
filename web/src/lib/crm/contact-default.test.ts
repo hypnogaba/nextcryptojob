@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyWelcomeSharing } from "@/lib/account/settings";
+import { acceptTerms, setContactMode, setVisibility } from "@/lib/account/settings";
 import { crmDb, publishFormula, run } from "@/test/crm-fixtures";
 import { addCandidate, addTestCompany, ask, stubNetwork, type Network, type TestCompany } from "@/test/intro-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
@@ -7,8 +7,9 @@ import { runAction } from "./actions";
 import type { CandidateSummary } from "./types";
 
 // Власник 14.09: нові люди видимі й показують Telegram-нік напряму за замовчуванням.
-// Людей тут створюємо тим самим записом, що й крок згоди анкети (applyWelcomeSharing),
-// і перевіряємо, що пошук, профіль і знайомство кажуть те саме, а пошта не витікає.
+// Людей тут створюємо тим самим записом, що й остання кнопка анкети (acceptTerms), а відмову
+// тим, що й перемикачі в налаштуваннях, і перевіряємо, що пошук, профіль і знайомство кажуть
+// те саме, а пошта не витікає.
 
 vi.mock("@/lib/account/hooks", () => ({ notifyCrmVisibility: async () => {} }));
 
@@ -28,14 +29,17 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Людина, що пройшла крок згоди з вибором `choice` (до нього прихована, як нова). */
+/** Людина, що пройшла анкету (до неї прихована, як нова) і потім, можливо, щось вимкнула в налаштуваннях. */
 async function welcomed(
   choice: { visible: boolean; direct: boolean },
   o: { telegram?: string | null; telegramId?: string | null; email?: string | null } = {},
 ) {
   const who = addCandidate(db, { visible: false, consent: false, ...o });
-  run(db.raw, "INSERT INTO consents (user_id, kind, granted, text_version) VALUES (?, 'scoring', 1, 'v1')", who.id);
-  await applyWelcomeSharing(db.d1, who.id, choice);
+  // Нова людина: жодного вибору щодо компаній ще немає.
+  run(db.raw, "DELETE FROM consents WHERE user_id = ?", who.id);
+  await acceptTerms(db.d1, who.id);
+  if (!choice.visible) await setVisibility(db.d1, who.id, false);
+  if (!choice.direct) await setContactMode(db.d1, who.id, "approval");
   return who;
 }
 
@@ -71,7 +75,7 @@ describe("new candidates with the defaults (visible, Telegram directly)", () => 
   });
 });
 
-describe("opting out at the consent step", () => {
+describe("opting out in Settings after the brief", () => {
   it("hidden: not in search, and the profile is not found", async () => {
     const carol = await welcomed({ visible: false, direct: true }, { telegram: "carol" });
     expect(await searchRow(carol.id)).toBeUndefined();

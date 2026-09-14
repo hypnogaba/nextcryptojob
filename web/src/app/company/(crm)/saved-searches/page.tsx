@@ -31,7 +31,7 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
 
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+      <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
         <PageTitle>Saved searches</PageTitle>
         <NoAccess />
       </div>
@@ -42,7 +42,7 @@ export default async function SavedSearchesPage({ searchParams }: { searchParams
   const limit = savedSearchLimit(company);
 
   return (
-    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+    <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
       <PageTitle aside={limit ? `${data.length} of ${limit}` : undefined}>Saved searches</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}

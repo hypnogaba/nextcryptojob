@@ -47,6 +47,8 @@ export const APPLIED_AFTER_CRM = [
   "0020_role_text.sql",
   // Доріжка web (інструменти власника): відвідування, сповіщення власнику, демо. Ще НЕ накочено.
   "0021_owner_tools.sql",
+  // Раунд 3 власника: той самий нік чи адреса в кількох профілях. Ще НЕ накочено.
+  "0022_identities_shared.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

@@ -22,7 +22,7 @@ export default async function ApplyPage() {
   const formOpen = canEdit && (!application || application.status === "needs_info");
 
   return (
-    <section className={`${PAGE} max-w-5xl *:max-w-2xl`}>
+    <section className={`${PAGE} max-w-7xl *:max-w-2xl`}>
       <PageTitle>Agency application</PageTitle>
 
       {application?.status === "pending" ? (

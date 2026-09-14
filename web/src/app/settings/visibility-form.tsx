@@ -9,14 +9,16 @@ import { cn } from "@/lib/utils";
 import { setContactModeAction, setVisibilityAction, type SettingsState } from "./actions";
 
 // Те, що віддає lib/crm/project.ts: ролі й бали, мережі й роки ончейн, які джерела підключено, де й за скільки.
+// Власник 14.09 (C4): поки «Show my Telegram directly» увімкнено, компанія бачить не лише нік, а й
+// самі посилання (X, GitHub, YouTube, сайт) і адреси гаманців (lib/crm/project.ts, linksOf).
 const SEE = [
   "Your roles, scores and levels",
   "Which chains you use and for how long",
-  "Which sources you connected, not the accounts",
+  "Which sources you connected, as a checkmark",
   "Remote or a city, and the pay you want",
-  "Your Telegram handle, if “Show my Telegram directly” is on",
+  "Your Telegram, X, GitHub, YouTube, website and wallet addresses, if “Show my Telegram directly” is on",
 ];
-const NEVER = ["Your wallet addresses", "Your email, unless you say yes to a request", "Your X, GitHub or YouTube accounts"];
+const NEVER = ["Your email, unless you say yes to a request"];
 
 const ROW = "flex items-center justify-between gap-4 rounded-xl border border-line bg-surface p-3 sm:p-4";
 const STATE = "flex items-start gap-2 text-lg leading-snug font-semibold text-ink";

@@ -15,7 +15,7 @@ describe("Show me to companies panel", () => {
     expect(html).toContain("You are hidden from companies");
     expect(html).toContain("When you are visible, companies see");
     expect(html).toContain("They never see");
-    expect(html).toContain("Your wallet addresses");
+    expect(html).toContain("Your Telegram, X, GitHub, YouTube, website and wallet addresses");
     expect(html).toMatch(/type="submit"[^>]*>Show me to companies</);
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
 import { ERROR, FIELD, HINT, LABEL } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
@@ -24,6 +24,8 @@ type Props = {
    * Telegram і поруч «Add email», а не вимкнений варіант, який нікуди не веде.
    */
   hideUnavailable?: boolean;
+  /** Рядок під кнопкою (анкета: «By continuing you agree to the Terms and Privacy.»). */
+  footnote?: ReactNode;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -61,6 +63,7 @@ export function DailyJobsForm({
   showPause = true,
   submitLabel = "Save",
   hideUnavailable = false,
+  footnote = null,
 }: Props) {
   const [state, action] = useActionState(submit, {} as SettingsState);
   const zoneRef = useRef<HTMLSelectElement>(null);
@@ -215,6 +218,7 @@ export function DailyJobsForm({
         <SubmitButton pendingLabel="Saving..." className="h-11 w-full px-5 text-base sm:w-fit">
           {submitLabel}
         </SubmitButton>
+        {footnote}
         <FormMessageLine message={state.message} />
       </div>
     </form>

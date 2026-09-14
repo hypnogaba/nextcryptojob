@@ -1,3 +1,4 @@
+import { SCORING_BASIS_SQL } from "@/lib/consent";
 import { parseDbTime, SCAN_TIME_UTC, type JobSourcesReport } from "@/lib/admin/job-sources";
 import { CRONS, SCHEDULE } from "@/lib/cron";
 import { sqlTime, startOfUtcDay } from "@/lib/time";
@@ -193,7 +194,7 @@ export const CANDIDATES_SQL = `SELECT
   COALESCE(SUM(u.email IS NOT NULL AND u.telegram_id IS NOT NULL), 0) AS both_methods,
   COALESCE(SUM(u.onboarding_step IS NOT NULL), 0) AS brief_started,
   COALESCE(SUM(u.onboarding_step IN ('x', 'wallets', 'sources', 'done')
-    AND EXISTS (SELECT 1 FROM consents c WHERE c.user_id = u.id AND c.kind = 'scoring' AND c.granted = 1)), 0) AS brief_done,
+    AND EXISTS (SELECT 1 FROM consents c WHERE c.user_id = u.id AND c.kind IN ${SCORING_BASIS_SQL} AND c.granted = 1)), 0) AS brief_done,
   COALESCE(SUM(u.visible_to_companies = 1), 0) AS visible,
   COALESCE(SUM(u.channel = 'telegram'), 0) AS channel_telegram,
   COALESCE(SUM(u.channel = 'email'), 0) AS channel_email,

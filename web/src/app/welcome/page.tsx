@@ -4,19 +4,16 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { isAdminSession } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/session";
-import { hasConsent, SCORING_CONSENT } from "@/lib/consent";
 import { appEnv, db } from "@/lib/db";
 import { loadSettings } from "@/lib/account/settings";
 import { timezoneList } from "@/lib/account/timezones";
-import { normalizeGithub, normalizeX } from "@/lib/identity/normalize";
 import { listIdentities, type Identity } from "@/lib/identity/store";
 import { MAX_WALLETS } from "@/lib/identity/wallets";
 import { placeFromText, whereFromMode } from "@/lib/onboarding/place";
 import { BRIEF_COOKIE, readBriefCookie } from "@/lib/onboarding/brief-cookie";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { briefDone, isBriefStep, stepToShow, type Step } from "@/lib/onboarding/steps";
-import { inferRoles } from "@/lib/roles/infer";
-import { claimCode, holderOf } from "@/lib/verify/claim";
+import { guessRoles } from "@/lib/roles/infer";
 import { AddEmailForm } from "../account/add-email-form";
 import { DailyJobsForm } from "../settings/daily-jobs-form";
 import { saveDeliveryAction } from "./actions/delivery";
@@ -24,8 +21,6 @@ import { continueSourcesAction } from "./actions/sources";
 import { skipWalletsAction } from "./actions/wallets";
 import { parseWait } from "./flow";
 import { StepShell } from "./step-shell";
-import { ClaimPanel } from "./steps/claim-panel";
-import { ConsentForm } from "./steps/consent-form";
 import { PlaceForm } from "./steps/place-form";
 import { RolesForm } from "./steps/roles-form";
 import { SkipForNow } from "./steps/skip-for-now";
@@ -37,29 +32,16 @@ import { XForm } from "./steps/x-form";
 export const metadata: Metadata = { title: "Set up your profile", robots: { index: false } };
 
 type Param = string | string[] | undefined;
-type Props = { searchParams: Promise<{ step?: Param; claim?: Param; wait?: Param }> };
+type Props = { searchParams: Promise<{ step?: Param; wait?: Param }> };
 
 const LINK = "font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
-
-/**
- * Код заявки на нік, який тримає інший профіль без підтвердження, або null
- * (нік вільний, уже свій, підтверджений кимось, хибний, або немає секрету).
- */
-async function claimFor(d: D1Database, userId: string, kind: "x" | "github", raw: Param) {
-  if (typeof raw !== "string" || !raw) return null;
-  const parsed = kind === "x" ? normalizeX(raw) : normalizeGithub(raw);
-  const secret = appEnv().SESSION_SECRET;
-  if (!parsed.ok || !secret) return null;
-  if ((await holderOf(d, userId, kind, parsed.value)) !== "pending") return null;
-  return { value: parsed.value, code: await claimCode(secret, kind, parsed.value, userId) };
-}
 
 /**
  * Анкета першого входу. Досягнутий крок у users.onboarding_step: після
  * перезавантаження людина продовжує звідти ж. ?step= відкриває пройдений
  * крок (Back, «Edit» з профілю чи /jobs); далі досягнутого не пускає.
- * Спершу анкета (5 кроків), далі кроки балу: X обов'язковий, гаманці й джерела
- * необов'язкові; після них /welcome/score з балом і карткою.
+ * Спершу анкета (4 кроки; остання кнопка приймає умови рядком під нею, без галок), далі кроки
+ * балу: X обов'язковий, гаманці й джерела необов'язкові; після них /welcome/score з балом і карткою.
  */
 export default async function WelcomePage({ searchParams }: Props) {
   const user = await requireUser();
@@ -72,7 +54,7 @@ export default async function WelcomePage({ searchParams }: Props) {
   if ((step === "wallets" || step === "sources") && answers.step !== "done" && !identities.some((i) => i.kind === "x")) {
     step = "x";
   }
-  // Анкету правують після згоди; кроки «Stand out» лише тоді, коли пройдено й їх.
+  // Анкету правують після умов; кроки «Stand out» лише тоді, коли пройдено й їх.
   const editing = isBriefStep(step) ? briefDone(answers.step) : answers.step === "done";
   const one = (kind: Identity["kind"]) => identities.find((i) => i.kind === kind) ?? null;
   const wait = parseWait(sp.wait);
@@ -110,11 +92,17 @@ export default async function WelcomePage({ searchParams }: Props) {
       );
 
     case "roles": {
-      const inferred = inferRoles(answers.targetText);
+      // Певні ролі зі слів, а якщо певних немає, три найближчі (власник 14.09: «треба щось запропонувати»).
+      const guess = guessRoles(answers.targetText);
       return shell(
         step,
         "We read your role from what you wrote. Check it and fix it if we got it wrong.",
-        <RolesForm initial={answers.roles.length > 0 ? answers.roles : inferred} inferred={inferred} roleText={answers.roleText} />,
+        <RolesForm
+          initial={answers.roles.length > 0 ? answers.roles : guess.roles}
+          inferred={guess.roles}
+          closest={!guess.confident}
+          roleText={answers.roleText}
+        />,
       );
     }
 
@@ -161,6 +149,22 @@ export default async function WelcomePage({ searchParams }: Props) {
             showPause={false}
             submitLabel={editing ? "Save" : "Continue"}
             hideUnavailable
+            footnote={
+              editing ? null : (
+                // Власник 14.09, раунд 3: без галок, користування сервісом і є згодою.
+                <p className="text-sm text-ink-muted" data-terms-line="">
+                  By continuing you agree to the{" "}
+                  <Link href="/terms" className={LINK}>
+                    Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className={LINK}>
+                    Privacy
+                  </Link>
+                  .
+                </p>
+              )
+            }
           />
           {s.email ? null : (
             // Вхід через Telegram без пошти: Email не показуємо вимкненим, а даємо додати тут же.
@@ -186,20 +190,15 @@ export default async function WelcomePage({ searchParams }: Props) {
       );
     }
 
-    case "x": {
-      const claim = await claimFor(d, user.id, "x", sp.claim);
+    case "x":
+      // Без коду в біо й без перевірки, навіть коли той самий нік уже вписав хтось інший (раунд 3).
       return shell(
         step,
         editing
           ? "We read your public profile and posts to score you."
           : "Required to continue. We read your public profile and posts to score you: followers, known crypto accounts that follow you and reactions to your posts. One X account per profile.",
-        claim ? (
-          <ClaimPanel kind="x" value={claim.value} code={claim.code} backHref="/welcome?step=x" />
-        ) : (
-          <XForm initial={one("x")?.value ?? ""} editing={editing} />
-        ),
+        <XForm initial={one("x")?.value ?? ""} editing={editing} />,
       );
-    }
 
     case "wallets":
       return shell(
@@ -217,13 +216,11 @@ export default async function WelcomePage({ searchParams }: Props) {
         </div>,
       );
 
-    case "sources": {
-      const claim = await claimFor(d, user.id, "github", sp.claim);
+    case "sources":
       return shell(
         step,
         "Optional, and each one raises your score. Add what shows your work.",
         <div className="grid gap-10">
-          {claim ? <ClaimPanel kind="github" value={claim.value} code={claim.code} backHref="/welcome?step=sources" /> : null}
           <SourcesForm
             editing={editing}
             initial={{
@@ -237,16 +234,5 @@ export default async function WelcomePage({ searchParams }: Props) {
           )}
         </div>,
       );
-    }
-
-    case "consent": {
-      const granted = await hasConsent(d, user.id, SCORING_CONSENT.kind);
-      const handle = (await loadSettings(d, user.id))?.telegramHandle?.trim().replace(/^@+/, "") ?? "";
-      return shell(
-        step,
-        "We compute a score only with your consent. Next: your X account, then your score and card.",
-        <ConsentForm granted={granted} editing={editing} telegramHandle={handle ? `@${handle}` : null} />,
-      );
-    }
   }
 }

@@ -17,18 +17,22 @@ const CHIP =
 
 /**
  * Крок ролей як підтвердження здогаду: ролі, які ми прочитали з першого кроку, стоять вибраними
- * (прибрати хрестиком), решту можна додати одним натисканням, до трьох. Якщо роботи людини в
+ * (прибрати хрестиком), решту можна додати одним натисканням, до трьох. Якщо певної ролі в словах
+ * немає, стоять три найближчі (closest), і заголовок каже, що це лише здогад. Якщо роботи людини в
  * списку немає, вона пише її своїми словами: ми шукаємо вакансії з цими словами в назві.
  */
 export function RolesForm({
   initial,
   inferred,
+  closest = false,
   roleText,
 }: {
   /** Вибрані на початку: збережені ролі або здогад зі слів. */
   initial: RoleKey[];
-  /** Що ми прочитали з першого кроку (може бути порожньо). */
+  /** Що ми прочитали з першого кроку (порожньо лише для порожнього тексту). */
   inferred: RoleKey[];
+  /** Певної ролі в словах немає: inferred це найближчі ролі, не певні. */
+  closest?: boolean;
   roleText: string;
 }) {
   const [state, action] = useActionState(saveRolesAction, {} as StepState);
@@ -46,7 +50,11 @@ export function RolesForm({
     <form action={action} className="grid gap-8">
       <section aria-labelledby="picked-h" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
         <h2 id="picked-h" className="font-sans text-base font-semibold text-ink">
-          {inferred.length > 0 ? "We think you are looking for:" : "We could not tell your role from your words."}
+          {inferred.length === 0
+            ? "We could not tell your role from your words."
+            : closest
+              ? "We are not sure of your role. These are the closest to your words:"
+              : "We think you are looking for:"}
         </h2>
         {selected.length > 0 ? (
           <ul className="flex flex-wrap gap-2" aria-label="Your roles">

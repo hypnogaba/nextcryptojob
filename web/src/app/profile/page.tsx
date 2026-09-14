@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { suggestDisplayName } from "@/lib/card/display-name";
 import { cardEligibility } from "@/lib/card/eligibility";
-import { hasConsent, SCORING_CONSENT } from "@/lib/consent";
+import { hasScoringBasis } from "@/lib/consent";
 import { db } from "@/lib/db";
 import { listIdentities } from "@/lib/identity/store";
 import { briefDone } from "@/lib/onboarding/steps";
@@ -34,10 +34,10 @@ export default async function ProfilePage({ searchParams }: Props) {
     listIdentities(d, user.id),
     profileStatus(d, user.id),
     loadScores(d, user.id),
-    hasConsent(d, user.id, SCORING_CONSENT.kind),
+    hasScoringBasis(d, user.id),
     listActiveCards(d, user.id),
   ]);
-  // Анкету пройдено й згоду дано: бал уже рахується, навіть якщо «Stand out» ще попереду.
+  // Анкету пройдено й умови прийнято: бал уже рахується, навіть якщо «Stand out» ще попереду.
   const done = briefDone(answers.step);
   const state = sourceState(identities);
   const x = identities.find((i) => i.kind === "x") ?? null;
