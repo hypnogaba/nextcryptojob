@@ -7,7 +7,7 @@ import { jobId } from "../ids.js";
 import { prepare } from "../prepare.js";
 import {
   extractJobs, fetchWeb3Career, hideToken, parseWeb3Career, WEB3CAREER_QUERIES, WEB3CAREER_SOURCE, WEB3CAREER_TAGS,
-  web3CareerPay, web3CareerUrl, type Web3CareerJob, type Web3CareerUsage,
+  web3CareerEstimate, web3CareerPay, web3CareerUrl, type Web3CareerJob, type Web3CareerUsage,
 } from "./web3career.js";
 
 const BODY = readFileSync(new URL("./fixtures/web3career-api.json", import.meta.url), "utf8");
@@ -71,6 +71,19 @@ describe("відповідь API", () => {
     expect(by(154039)).toEqual({ salaryMin: null, salaryMax: null, salaryCurrency: null }); // лише estimated_*
     // Без одиниці сума береться річною лише правдоподібна: «4 500» це місяць, а не річна зарплата.
     expect(web3CareerPay({ salary_min_value: "4500.0", salary_max_value: null })).toEqual({ salaryMin: null, salaryMax: null, salaryCurrency: null });
+  });
+
+  it("оцінка web3.career окремо від вилки: лише без вилки роботодавця, лише правдоподібна", () => {
+    const by = (id: number) => JOBS.find((j) => j.id === id)!;
+    expect(web3CareerEstimate(by(154039))).toEqual({ min: 180_000, max: 225_000, currency: "USD" });
+    expect(web3CareerEstimate(by(151770))).toBeNull(); // є вилка роботодавця
+    expect(web3CareerEstimate({ estimated_min_salary: 900, estimated_max_salary: 1200 })).toBeNull();
+    const [raw] = parseWeb3Career([by(154039)], BOARD);
+    const { rows } = prepare([raw!], 30, NOW);
+    expect(rows[0]).toMatchObject({ salaryMin: null, salaryMax: null, salaryCurrency: null,
+      salaryEstMin: 180_000, salaryEstMax: 225_000, salaryEstCurrency: "USD" });
+    const paid = prepare(parseWeb3Career([by(154034)], BOARD), 30, NOW).rows[0]!;
+    expect(paid).toMatchObject({ salaryMin: 99_815, salaryEstMin: null, salaryEstMax: null });
   });
 
   it("prepare: адреса web3.career з мітками лишається байт у байт, id з номера", () => {

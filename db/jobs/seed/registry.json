@@ -381,6 +381,15 @@
    "note": null
   },
   {
+   "slug": "bcb-group",
+   "name": "BCB Group",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bcbgroup",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "board name 'BCB Group' on the EU Greenhouse host (1 open on 2026-09-14; bcbgroup.com/careers lists the same role); crypto payments"
+  },
+  {
    "slug": "biconomy",
    "name": "Biconomy",
    "ats_provider": "lever",
@@ -505,6 +514,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "blue-cube-services",
+   "name": "Blue Cube Services",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bluecubeservices",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "board name 'Blue Cube Services', customer and user operations for crypto partners (8 open on 2026-09-14); listed by web3.career"
   },
   {
    "slug": "bluenote",
@@ -991,6 +1009,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "dv-trading",
+   "name": "DV Trading",
+   "ats_provider": "greenhouse",
+   "ats_slug": "dvtrading",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "board name 'DV Trading' (67 open, 18 posted within 30 days on 2026-09-14); proprietary trading firm with the crypto desk DV Chain, all roles also listed by web3.career"
   },
   {
    "slug": "eclipse",
@@ -1738,6 +1765,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "localcoin",
+   "name": "Localcoin",
+   "ats_provider": "greenhouse",
+   "ats_slug": "localcoin",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "localcoinatm.com/careers links boards.greenhouse.io/localcoin (5 open on 2026-09-14); Bitcoin ATM operator"
   },
   {
    "slug": "logos",
@@ -2872,6 +2908,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "tastylive",
+   "name": "tastylive",
+   "ats_provider": "greenhouse",
+   "ats_slug": "tastylive",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "tastylive.com/careers links boards.greenhouse.io/tastylive (15 open on 2026-09-14); listed by web3.career"
   },
   {
    "slug": "taxbit",

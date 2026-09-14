@@ -5,6 +5,7 @@
  *   CF_ACCOUNT_ID=… CF_API_TOKEN=… npx tsx scripts/jobs-seed.ts export --database <id> [--out <file>]
  *   npx tsx scripts/jobs-seed.ts build [--export <file>]      # → db/jobs/seed/registry.json
  *   npx tsx scripts/jobs-seed.ts sql                          # → db/jobs/seed/seed.sql
+ *   npx tsx scripts/jobs-seed.ts update                       # → db/jobs/seed/update-2026-09-14-web3career.sql
  *
  * `export` один раз (14.09.2026) прочитав з бази NextRole (D1 `crypto-jobs-agent`, той самий власник)
  * лише публічні дані: роботодавців з тегом web3 (назва, ATS, слаг), глобальні дошки (назва, адреса
@@ -23,13 +24,25 @@ import { D1Client } from "../src/d1.js";
 import { companyKey, isNonCryptoCompany } from "../src/digest/clean.js";
 import { assertReadOnlySql, readOnlyJobsDb, type JobsDb } from "../src/digest/jobs-db.js";
 import { hostSlug } from "../src/jobs/sources/ats.js";
-import { type SeedCompany, type SeedGetro, type SeedRegistry, type SeedSource, seedProblems, seedSql } from "../src/jobs/seed.js";
+import { registryUpdateSql, type SeedCompany, type SeedGetro, type SeedRegistry, type SeedSource, seedProblems, seedSql } from "../src/jobs/seed.js";
 import { isAtsProvider } from "../src/jobs/types.js";
 
 const SEED_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../db/jobs/seed");
 export const EXPORT_FILE = resolve(SEED_DIR, "nextrole-export-2026-09-14.json");
 export const REGISTRY_FILE = resolve(SEED_DIR, "registry.json");
 export const SQL_FILE = resolve(SEED_DIR, "seed.sql");
+
+/**
+ * Доповнення живої бази 14.09.2026 (web3.career через API): п'ять роботодавців, чиї вакансії API не
+ * віддає, і нові feed_url/terms_note дошки web3.career. Файл робить `update`; тест звіряє.
+ */
+export const UPDATE_2026_09_14 = {
+  name: "registry_2026_09_14_web3career",
+  note: "web3.career через офіційний API: 5 роботодавців з їхніми дошками Greenhouse і нові умови дошки web3.career",
+  companies: ["bcb-group", "blue-cube-services", "dv-trading", "localcoin", "tastylive"],
+  sources: ["board:web3career"],
+  file: resolve(SEED_DIR, "update-2026-09-14-web3career.sql"),
+} as const;
 
 /** Запити експорту: лише публічні стовпці. Звіряє тест (жодних інших полів у файлі). */
 export const EXPORT_QUERIES = {
@@ -97,10 +110,25 @@ export const DEAD_AT_SEED: ReadonlySet<string> = new Set([
 /**
  * Руками перевірені роботодавці, яких у експорті немає (ATS, що NextRole не читає).
  * Crossmint: crossmint.com/careers веде на crossmint.na.teamtailor.com, 14.09 5 вакансій.
+ *
+ * 14.09.2026, після переходу web3.career на офіційний API: роботодавці, чиї вакансії web3.career
+ * показував на сайті, але API не віддає (3 і більше таких вакансій). Із 22 таких роботодавців 17 уже в
+ * реєстрі; ці п'ять додано. Кожну дошку перевірено живою відповіддю Greenhouse Job Board API (публічний
+ * API для показу вакансій на чужих сайтах) і посиланням з сайту самої компанії або назвою дошки.
  */
 export const CURATED: readonly SeedCompany[] = [
   { slug: "crossmint", name: "Crossmint", ats_provider: "teamtailor", ats_slug: "crossmint.na", discovered_via: "curated", enabled: 1,
     note: "crossmint.com/careers links crossmint.na.teamtailor.com (jobs.rss, 5 open on 2026-09-14)" },
+  { slug: "dv-trading", name: "DV Trading", ats_provider: "greenhouse", ats_slug: "dvtrading", discovered_via: "curated", enabled: 1,
+    note: "board name 'DV Trading' (67 open, 18 posted within 30 days on 2026-09-14); proprietary trading firm with the crypto desk DV Chain, all roles also listed by web3.career" },
+  { slug: "tastylive", name: "tastylive", ats_provider: "greenhouse", ats_slug: "tastylive", discovered_via: "curated", enabled: 1,
+    note: "tastylive.com/careers links boards.greenhouse.io/tastylive (15 open on 2026-09-14); listed by web3.career" },
+  { slug: "localcoin", name: "Localcoin", ats_provider: "greenhouse", ats_slug: "localcoin", discovered_via: "curated", enabled: 1,
+    note: "localcoinatm.com/careers links boards.greenhouse.io/localcoin (5 open on 2026-09-14); Bitcoin ATM operator" },
+  { slug: "blue-cube-services", name: "Blue Cube Services", ats_provider: "greenhouse", ats_slug: "bluecubeservices", discovered_via: "curated", enabled: 1,
+    note: "board name 'Blue Cube Services', customer and user operations for crypto partners (8 open on 2026-09-14); listed by web3.career" },
+  { slug: "bcb-group", name: "BCB Group", ats_provider: "greenhouse", ats_slug: "bcbgroup", discovered_via: "curated", enabled: 1,
+    note: "board name 'BCB Group' on the EU Greenhouse host (1 open on 2026-09-14; bcbgroup.com/careers lists the same role); crypto payments" },
 ];
 
 /**
@@ -262,7 +290,13 @@ async function main(argv: string[]): Promise<void> {
     console.log(`sql: ${SQL_FILE}`);
     return;
   }
-  throw new Error("команда: export | build | sql");
+  if (cmd === "update") {
+    const registry = JSON.parse(readFileSync(REGISTRY_FILE, "utf8")) as SeedRegistry;
+    writeFileSync(UPDATE_2026_09_14.file, registryUpdateSql(registry, UPDATE_2026_09_14));
+    console.log(`update: ${UPDATE_2026_09_14.file}`);
+    return;
+  }
+  throw new Error("команда: export | build | sql | update");
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

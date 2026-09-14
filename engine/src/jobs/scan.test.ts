@@ -170,6 +170,10 @@ describe("jobs-scan: web3.career лише через офіційний API", ()
     const fresh = api.filter((j) => NOW.getTime() - j.date_epoch * 1000 <= 30 * DAY);
     expect(rows.map((x) => x.url).sort()).toEqual(fresh.map((j) => j.apply_url).sort());
     for (const x of rows) expect(x.id).toBe(jobId(`web3career:${api.find((j) => j.apply_url === x.url)!.id}`));
+    // Оцінка web3.career лише в salary_est_*, вилка роботодавця лишається порожньою.
+    expect(db.get(`SELECT salary_min, salary_max, salary_est_min, salary_est_max, salary_est_currency FROM jobs_cache WHERE id = '${jobId("web3career:154039")}'`))
+      .toEqual({ salary_min: null, salary_max: null, salary_est_min: 180_000, salary_est_max: 225_000, salary_est_currency: "USD" });
+    expect(r.pool.withEstimateOnly).toBeGreaterThan(0);
   });
 
   it("без WEB3CAREER_TOKEN джерело падає з ясною причиною і нікуди не ходить", async () => {
@@ -192,8 +196,9 @@ describe("jobs-scan: web3.career лише через офіційний API", ()
 });
 
 describe("upsert вакансії", () => {
-  const params = (id: string, salary: [number | null, number | null, string | null], fetched: string) =>
-    [id, `https://x.example/${id}`, "Acme", "acme", "Engineer", null, 1, ...salary, "board:x", '["web3"]', "acme|engineer", null, fetched, fetched, null];
+  const params = (id: string, salary: [number | null, number | null, string | null], fetched: string,
+                  est: [number | null, number | null, string | null] = [null, null, null]) =>
+    [id, `https://x.example/${id}`, "Acme", "acme", "Engineer", null, 1, ...salary, "board:x", '["web3"]', "acme|engineer", null, fetched, fetched, null, ...est];
 
   it("порожня вилка не стирає відому, нова замінює всю трійку", () => {
     db.sqlite.prepare(upsertJobsSql(1)).run(...params("j1", [100_000, 150_000, "USD"], "2026-09-13T00:00:00.000Z"));
@@ -202,6 +207,13 @@ describe("upsert вакансії", () => {
       salary_min: 100_000, salary_max: 150_000, salary_currency: "USD", fetched_at: "2026-09-14T00:00:00.000Z", first_seen_at: "2026-09-13T00:00:00.000Z" });
     db.sqlite.prepare(upsertJobsSql(1)).run(...params("j1", [90_000, null, "EUR"], "2026-09-15T00:00:00.000Z"));
     expect(db.get("SELECT salary_min, salary_max, salary_currency FROM jobs_cache")).toEqual({ salary_min: 90_000, salary_max: null, salary_currency: "EUR" });
+  });
+
+  it("оцінка дошки окремою трійкою: не стирається порожньою й вилки не чіпає", () => {
+    db.sqlite.prepare(upsertJobsSql(1)).run(...params("j2", [null, null, null], "2026-09-13T00:00:00.000Z", [180_000, 225_000, "USD"]));
+    db.sqlite.prepare(upsertJobsSql(1)).run(...params("j2", [null, null, null], "2026-09-14T00:00:00.000Z"));
+    expect(db.get("SELECT salary_min, salary_max, salary_est_min, salary_est_max, salary_est_currency FROM jobs_cache WHERE id = 'j2'")).toEqual({
+      salary_min: null, salary_max: null, salary_est_min: 180_000, salary_est_max: 225_000, salary_est_currency: "USD" });
   });
 });
 

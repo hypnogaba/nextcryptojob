@@ -8,7 +8,7 @@
 import type { Db } from "../pipeline/db.js";
 import { companyKey, isNonCryptoCompany } from "./clean.js";
 import type { JobsDb } from "./jobs-db.js";
-import { type DigestJob, isRemoteLocation, type JobSalary } from "./match.js";
+import { annualRange, type DigestJob, formatSalary, isRemoteLocation, type JobSalary } from "./match.js";
 import { parseRoles, titleRoles } from "./roles.js";
 
 /**
@@ -29,7 +29,8 @@ const DAY_MS = 86_400_000;
  * рядку; умова лишається запобіжником. Час сканер пише як ISO з 'T' і 'Z', тому межі теж ISO.
  */
 export const POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
-       salary_currency, tags, posted_at, fetched_at, country, dedupe_key
+       salary_currency, tags, posted_at, fetched_at, country, dedupe_key, salary_est_min, salary_est_max, salary_est_currency,
+       source
   FROM jobs_cache
  WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
 
@@ -38,6 +39,10 @@ export type PoolRow = {
   id: string; url: string; company: string; company_key: string; title: string; location: string | null;
   remote: number; salary_min: number | null; salary_max: number | null; salary_currency: string | null;
   tags: string; posted_at: string | null; fetched_at: string; country: string | null; dedupe_key: string | null;
+  /** Оцінка дошки (db/jobs/0002), не вилка: у DigestJob не йде, лише в текст добірки (salaryEstimateOf). */
+  salary_est_min?: number | null; salary_est_max?: number | null; salary_est_currency?: string | null;
+  /** jobs_cache.source: чия оцінка (підпис «web3.career estimate») і рядок джерел на головній сайту. */
+  source?: string | null;
 };
 
 type CompanyRow = {
@@ -96,18 +101,46 @@ export function crawlJob(r: PoolRow): { job: DigestJob } | { drop: "tag" | "comp
   };
 }
 
-export async function loadCrawlPool(jobs: JobsDb, now: Date): Promise<{ jobs: DigestJob[]; stats: PoolStats }> {
+/**
+ * Оцінка зарплати від дошки (web3.career), річна. Навмисно поза DigestJob: підбір, лічильники й
+ * «Salary listed» у поясненні її не бачать. Лише для вакансії без вилки роботодавця.
+ */
+export function salaryEstimateOf(r: PoolRow): JobSalary | null {
+  if (r.salary_min !== null || r.salary_max !== null) return null;
+  const s = salaryOf(r.salary_est_min ?? null, r.salary_est_max ?? null, r.salary_est_currency ?? null, null);
+  return s && annualRange(s) ? s : null;
+}
+
+/** Хто оцінив: назва дошки для підпису «(web3.career estimate)». */
+export function estimateSourceOf(source: string | null | undefined): string {
+  return source === "board:web3career" ? "web3.career" : (source ?? "board").replace(/^(board|aggregator):/, "");
+}
+
+/** Оцінка дошки для вакансії пулу: суми й хто оцінив. */
+export type SalaryEstimate = { salary: JobSalary; by: string };
+
+/** «est. $180k to $225k (web3.career estimate)»; null, якщо показати нічого. */
+export function estimateText(e: SalaryEstimate | null | undefined): string | null {
+  const money = e ? formatSalary(e.salary) : null;
+  return e && money ? `est. ${money} (${e.by} estimate)` : null;
+}
+
+export async function loadCrawlPool(jobs: JobsDb, now: Date): Promise<{ jobs: DigestJob[]; stats: PoolStats; estimates: Map<string, SalaryEstimate> }> {
   const live = new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString();
   const posted = new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString();
   const res = await jobs.select<PoolRow>(POOL_SQL, [live, posted]);
   const out: DigestJob[] = [];
+  const estimates = new Map<string, SalaryEstimate>();
   const dropped = { tag: 0, company: 0, title: 0 };
   for (const r of res.rows) {
     const x = crawlJob(r);
-    if ("job" in x) out.push(x.job); else dropped[x.drop]++;
+    if (!("job" in x)) { dropped[x.drop]++; continue; }
+    out.push(x.job);
+    const est = salaryEstimateOf(r);
+    if (est) estimates.set(x.job.ref, { salary: est, by: estimateSourceOf(r.source) });
   }
   return {
-    jobs: out,
+    jobs: out, estimates,
     stats: { fetched: res.rows.length, kept: out.length, dropped, rowsRead: res.meta.rowsRead, d1Ms: res.meta.durationMs, wallMs: res.wallMs },
   };
 }

@@ -3,9 +3,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { assertReadOnlySql } from "../src/digest/jobs-db.js";
-import { seedProblems, type SeedRegistry, seedSql } from "../src/jobs/seed.js";
+import { registryUpdateSql, seedProblems, type SeedRegistry, seedSql } from "../src/jobs/seed.js";
 import { FakeJobsDb } from "../src/testing/jobs-fake.js";
-import { buildRegistry, CURATED, DEAD_AT_SEED, EXPORT_FILE, EXPORT_QUERIES, type ExportFile, REGISTRY_FILE, SEED_DISABLED, SQL_FILE } from "./jobs-seed.js";
+import { buildRegistry, CURATED, DEAD_AT_SEED, EXPORT_FILE, EXPORT_QUERIES, type ExportFile, REGISTRY_FILE, SEED_DISABLED, SQL_FILE, UPDATE_2026_09_14 } from "./jobs-seed.js";
 
 const exported = JSON.parse(readFileSync(EXPORT_FILE, "utf8")) as ExportFile;
 const registry = JSON.parse(readFileSync(REGISTRY_FILE, "utf8")) as SeedRegistry;
@@ -68,10 +68,39 @@ describe("реєстр з експорту", () => {
   });
 
   it("числа реєстру (14.09.2026)", () => {
-    expect(registry.companies.length).toBe(364);
-    expect(registry.companies.filter((c) => c.enabled === 1).length).toBe(320);
+    expect(registry.companies.length).toBe(369);
+    expect(registry.companies.filter((c) => c.enabled === 1).length).toBe(325);
     expect(registry.companies.filter((c) => c.enabled === 0).length).toBe(Object.keys(SEED_DISABLED).length + DEAD_AT_SEED.size);
     expect(registry.getro_collections.length).toBe(22);
+  });
+});
+
+describe("доповнення живої бази 14.09 (web3.career через API)", () => {
+  it("файл збігається з registryUpdateSql(registry.json)", () => {
+    expect(readFileSync(UPDATE_2026_09_14.file, "utf8")).toBe(registryUpdateSql(registry, UPDATE_2026_09_14));
+  });
+
+  it("на базі зі старим засівом додає п'ять роботодавців і нові умови web3.career; вдруге нічого не міняє", () => {
+    const db = new FakeJobsDb();
+    const old: SeedRegistry = {
+      ...registry,
+      companies: registry.companies.filter((c) => !(UPDATE_2026_09_14.companies as readonly string[]).includes(c.slug)),
+      sources: registry.sources.map((s) => (s.name === "board:web3career" ? { ...s, feed_url: "https://web3.career/", terms_note: "old" } : s)),
+    };
+    db.sqlite.exec(seedSql(old));
+    db.exec("UPDATE companies SET enabled = 0 WHERE slug = ?", old.companies[0]!.slug);
+    for (let i = 0; i < 2; i++) db.sqlite.exec(readFileSync(UPDATE_2026_09_14.file, "utf8"));
+    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies")?.n).toBe(registry.companies.length);
+    expect(db.all("SELECT slug, ats_provider, ats_slug, enabled FROM companies WHERE discovered_via = 'curated' AND slug <> 'crossmint' ORDER BY slug")).toEqual(
+      UPDATE_2026_09_14.companies.map((slug) => {
+        const c = registry.companies.find((x) => x.slug === slug)!;
+        return { slug, ats_provider: c.ats_provider, ats_slug: c.ats_slug, enabled: 1 };
+      }));
+    // Наявний рядок доповнення не чіпає (вимкнене лишається вимкненим).
+    expect(db.get<{ enabled: number }>("SELECT enabled FROM companies WHERE slug = ?", old.companies[0]!.slug)?.enabled).toBe(0);
+    const w3 = registry.sources.find((s) => s.name === "board:web3career")!;
+    expect(db.get("SELECT feed_url, terms_note, kind FROM sources WHERE name = 'board:web3career'")).toEqual({ feed_url: w3.feed_url, terms_note: w3.terms_note, kind: "jsonld" });
+    db.close();
   });
 });
 
@@ -86,7 +115,7 @@ describe("seed.sql", () => {
     db.exec("UPDATE companies SET enabled = 0 WHERE slug = ?", registry.companies[0]!.slug);
     db.sqlite.exec(readFileSync(SQL_FILE, "utf8"));
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies")?.n).toBe(registry.companies.length);
-    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies WHERE enabled = 1")?.n).toBe(319);
+    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies WHERE enabled = 1")?.n).toBe(324);
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM sources")?.n).toBe(registry.sources.length);
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM getro_collections")?.n).toBe(22);
     db.close();

@@ -85,13 +85,16 @@ Application») і назва мусить мапитись на нашу рол�
       "why": "Matches your Engineer role. Remote. Salary listed: $120k to $150k.",
       "url": "https://paying.example/apply",
       "posted_by": "Paying Labs",
-      "source": "company"
+      "source": "company",
+      "salary_estimate": null
     }
   ]
 }
 ```
 
-`location`, `salary`, `posted_by` можуть бути `null`. `posted_by` не `null` лише для вакансій компаній
+`location`, `salary`, `posted_by`, `salary_estimate` можуть бути `null`. `salary_estimate` (з 14.09.2026,
+необов'язкове): оцінка дошки, напр. «est. $180k to $225k (web3.career estimate)», лише коли `salary` `null`;
+сайт показує її приглушено, окремо від зарплати. `posted_by` не `null` лише для вакансій компаній
 (показати "Posted by {Company} on NextCryptoJob"). `url` вакансії компанії: її сторінка на сайті
 `${SITE_URL}/jobs/<id>` (без `SITE_URL` домен), звідки "Apply" веде на `apply_url` компанії й рахує перехід.
 `ts` ставиться під час кожної спроби відправки, а не на початку прогону. Адреси пошти в тілі немає: сайт бере `users.email`

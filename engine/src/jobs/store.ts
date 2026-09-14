@@ -47,20 +47,23 @@ export interface NewCompany { slug: string; name: string; provider: AtsProvider;
  */
 export const WRITE_COST = { job: 1, runStart: 2, runFinish: 1, sourceState: 1, company: 2 } as const;
 
-/** Рядків в одній інструкції вставки вакансій: 17 стовпців × 5 = 85 параметрів (D1 дозволяє 100). */
+/** Рядків в одній інструкції вставки вакансій: 20 стовпців × 5 = 100 параметрів (D1 дозволяє 100). */
 export const JOBS_PER_STATEMENT = 5;
 
 const JOB_COLUMNS = "id, url, company, company_key, title, location, remote, salary_min, salary_max, salary_currency, " +
-  "source, tags, dedupe_key, posted_at, fetched_at, first_seen_at, country";
+  "source, tags, dedupe_key, posted_at, fetched_at, first_seen_at, country, salary_est_min, salary_est_max, salary_est_currency";
+export const JOB_PARAMS = 20;
 
 /**
  * Upsert вакансій. first_seen_at лише при вставці. Вилка: нова, якщо джерело її дало, інакше стара
  * (джерело могло цього разу не віддати текст); три поля разом, щоб не змішати мінімум з однієї
- * вилки з валютою іншої. Дату публікації теж не стираємо порожньою.
+ * вилки з валютою іншої. Дату публікації теж не стираємо порожньою. Оцінка дошки (salary_est_*)
+ * так само окремою трійкою; вилки роботодавця вона не чіпає.
  */
 export function upsertJobsSql(n: number): string {
-  const row = `(${Array.from({ length: 17 }, () => "?").join(", ")})`;
+  const row = `(${Array.from({ length: JOB_PARAMS }, () => "?").join(", ")})`;
   const keep = "excluded.salary_min IS NULL AND excluded.salary_max IS NULL";
+  const keepEst = "excluded.salary_est_min IS NULL AND excluded.salary_est_max IS NULL";
   return `INSERT INTO jobs_cache (${JOB_COLUMNS})
 VALUES ${Array.from({ length: n }, () => row).join(", ")}
 ON CONFLICT(id) DO UPDATE SET
@@ -70,12 +73,16 @@ ON CONFLICT(id) DO UPDATE SET
   posted_at = COALESCE(excluded.posted_at, jobs_cache.posted_at),
   salary_min = CASE WHEN ${keep} THEN jobs_cache.salary_min ELSE excluded.salary_min END,
   salary_max = CASE WHEN ${keep} THEN jobs_cache.salary_max ELSE excluded.salary_max END,
-  salary_currency = CASE WHEN ${keep} THEN jobs_cache.salary_currency ELSE excluded.salary_currency END`;
+  salary_currency = CASE WHEN ${keep} THEN jobs_cache.salary_currency ELSE excluded.salary_currency END,
+  salary_est_min = CASE WHEN ${keepEst} THEN jobs_cache.salary_est_min ELSE excluded.salary_est_min END,
+  salary_est_max = CASE WHEN ${keepEst} THEN jobs_cache.salary_est_max ELSE excluded.salary_est_max END,
+  salary_est_currency = CASE WHEN ${keepEst} THEN jobs_cache.salary_est_currency ELSE excluded.salary_est_currency END`;
 }
 
 const jobParams = (j: JobRow): unknown[] => [
   j.id, j.url, j.company, j.companyKey, j.title, j.location, j.remote ? 1 : 0, j.salaryMin, j.salaryMax, j.salaryCurrency,
   j.source, JSON.stringify(j.tags), j.dedupeKey, j.postedAt, j.fetchedAt, j.fetchedAt, null,
+  j.salaryEstMin, j.salaryEstMax, j.salaryEstCurrency,
 ];
 
 const SOURCE_KINDS: readonly SourceKind[] = ["jsonld", "nextjs", "rss", "speedrun"];

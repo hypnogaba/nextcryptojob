@@ -2,13 +2,51 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
 import { D1Client } from "../d1.js";
 import { __resetLimiters } from "../limits.js";
-import { companyJob, loadCrawlPool, parseDbTime } from "./jobs.js";
+import { companyJob, estimateText, loadCrawlPool, parseDbTime } from "./jobs.js";
+import { selectJobs } from "./match.js";
+import { deliveryJobs } from "./schedule.js";
+import { emailPayload, telegramText } from "./deliver.js";
 import { assertReadOnlySql, readOnlyJobsDb, ReadOnlySqlError } from "./jobs-db.js";
 
 const NOW = new Date("2026-09-12T10:00:00Z");
 let fake: FakeJobsDb;
 beforeEach(() => { fake = new FakeJobsDb(NOW); });
 afterEach(() => fake.close());
+
+describe("оцінка зарплати від дошки (web3.career): лише підпис, ніколи не зарплата", () => {
+  const add = () => {
+    fake.add({ id: "est", title: "Community Manager", company: "Koinly", source: "board:web3career", estimate: [180_000, 225_000, "USD"] });
+    fake.add({ id: "paid", title: "Community Lead", company: "Paid Co", salaryMin: 90_000, salaryMax: 100_000, salaryCurrency: "USD",
+      estimate: [300_000, 400_000, "USD"] });
+  };
+
+  it("пул: у DigestJob вилки немає, оцінка окремо й лише там, де роботодавець вилки не дав", async () => {
+    add();
+    const pool = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
+    const est = pool.jobs.find((j) => j.id === "est")!;
+    expect(est.salary).toBeNull();
+    expect(JSON.stringify(est)).not.toMatch(/180000|estimate/);
+    expect([...pool.estimates.keys()]).toEqual(["nr:est"]);
+    expect(estimateText(pool.estimates.get("nr:est"))).toBe("est. $180k to $225k (web3.career estimate)");
+  });
+
+  it("підбір за зарплатою її не бачить: людина з мінімумом 150k не отримує «Salary listed» і не відсіює за нею", async () => {
+    add();
+    const pool = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
+    const picks = selectJobs({ crawl: pool.jobs, company: [] },
+      { roles: ["community"], remoteMode: "remote", city: null, salaryMin: 150_000, salaryCurrency: "USD" }, { now: NOW, exclude: new Set() });
+    const est = picks.find((p) => p.job.id === "est")!;
+    expect(est.why).not.toMatch(/Salary|180|225/);
+    const [a, b] = deliveryJobs(picks, pool.estimates).sort((x, y) => x.title.localeCompare(y.title));
+    expect(a).toMatchObject({ title: "Community Lead", salary: "$90k to $100k", salaryEstimate: null });
+    expect(b).toMatchObject({ title: "Community Manager", salary: null, salaryEstimate: "est. $180k to $225k (web3.career estimate)" });
+    const msg = { digestId: "dg_1", userId: "u", localDate: "2026-09-12", jobs: [a!, b!] };
+    const tg = telegramText(msg, "https://nextcryptojob.xyz");
+    expect(tg.match(/est\. \$180k to \$225k \(web3\.career estimate\)/g)).toHaveLength(1);
+    expect(tg).not.toContain("$300k");
+    expect(emailPayload(msg, NOW).jobs.map((j) => j.salary_estimate)).toEqual([null, "est. $180k to $225k (web3.career estimate)"]);
+  });
+});
 
 describe("база вакансій лише для читання", () => {
   it.each([

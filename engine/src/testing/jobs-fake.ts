@@ -29,6 +29,8 @@ export interface FakeJob {
   country?: string | null;
   dedupeKey?: string;
   source?: string;
+  /** Оцінка дошки (db/jobs/0002): [мін, макс, валюта]. */
+  estimate?: [number | null, number | null, string | null];
 }
 
 /** SQLite зі схемою db/jobs. Лічить усі інструкції, що дійшли до бази, щоб тест бачив, що запис не пройшов. */
@@ -47,12 +49,14 @@ export class FakeJobsDb extends SqliteD1 {
     const fetched = j.fetchedAt ?? iso(1);
     this.exec(
       `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, salary_min, salary_max,
-         salary_currency, source, tags, dedupe_key, posted_at, fetched_at, first_seen_at, country)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         salary_currency, source, tags, dedupe_key, posted_at, fetched_at, first_seen_at, country,
+         salary_est_min, salary_est_max, salary_est_currency)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       j.id, `https://jobs.example/${j.id}`, company, j.companyKey ?? company.toLowerCase(), j.title,
       j.location === undefined ? "Remote" : j.location, j.remote === false ? 0 : 1,
       j.salaryMin ?? null, j.salaryMax ?? null, j.salaryCurrency ?? null, j.source ?? "board:test",
       JSON.stringify(j.tags ?? ["web3"]), j.dedupeKey ?? `${company.toLowerCase()}|${j.title.toLowerCase()}`,
-      j.postedAt === undefined ? iso(2) : j.postedAt, fetched, fetched, j.country ?? null);
+      j.postedAt === undefined ? iso(2) : j.postedAt, fetched, fetched, j.country ?? null,
+      ...(j.estimate ?? [null, null, null]));
   }
 }

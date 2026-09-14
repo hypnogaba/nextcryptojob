@@ -323,7 +323,7 @@ quality gate: PASSED (within-one >= 85%)
 
 | Джерело | Як | Вимикач | Умови |
 |---|---|---|---|
-| Роботодавці з реєстру (`companies`, 320 увімкнених з 364) | публічні API ATS: Greenhouse (з `pay_transparency`), Lever і Lever EU, Ashby (з `includeCompensation`), Workable, SmartRecruiters, Recruitee, Teamtailor (RSS), Breezy, BambooHR, Rippling, Personio | `companies.enabled` | API існують, щоб вакансії читали й показували |
+| Роботодавці з реєстру (`companies`, 325 увімкнених з 369 після доповнення 14.09) | публічні API ATS: Greenhouse (з `pay_transparency`), Lever і Lever EU, Ashby (з `includeCompensation`), Workable, SmartRecruiters, Recruitee, Teamtailor (RSS), Breezy, BambooHR, Rippling, Personio | `companies.enabled` | API існують, щоб вакансії читали й показували |
 | web3.career (`board:web3career`) | лише офіційний Web3 Jobs API з токеном `WEB3CAREER_TOKEN` (`src/jobs/sources/web3career.ts`), з 14.09 | `sources.enabled` | умови API обов'язкові, див. «web3.career: офіційний API» нижче. Сторінки сайту скан не читає (`fetchBoard` відмовляє будь-якій адресі web3.career) |
 | JobStash (`board:jobstash`) | потік Next.js головної; лише вакансії, які дошка сама позначила крипто | `sources.enabled` | умов немає, robots `Allow: /`. 14.09 їхній бекенд відповідав 503, і головна віддавала каркас: 0 вакансій, скан це переживає |
 | Remote3 (`board:remote3`) | їхній RSS `/api/rss` | `sources.enabled` | умови забороняють автоматичні запити до сайту, тому лише їхня стрічка |
@@ -390,17 +390,68 @@ Operations 30 (9), Finance 30 (10), Legal 41 (13), HR 8 (6). Тег developer-re
 Проти бази того ж дня (живий пул 1 439, з них web3.career 577, лише SELECT): з 336 вакансій API 320 уже
 є в пулі як ті самі вакансії web3.career, 14 є під іншою адресою (той самий ключ «компанія + назва»),
 нових 2. 274 з 620 вакансій, що сканер брав зі сторінок, API не віддає жодним зі 147 перевірених зрізів
-(Bitpanda 38, Alpaca 32, DV Trading 19, Binance 17, BitGo 15, OKX 13 …). Вилка: зі сторінок web3.career
-ми брали їхню оцінку зарплати як вилку (215 з 217 вакансій, де роботодавець вилки не дав, збіглися з
-`estimated_*` API); API віддає оцінку окремо, і скан її не пише. Тому після переходу пул близько 1 186
-(-18%), вилок 345 замість 779; Trader 60 → 35, Engineer 540 → 435. Показувати оцінку web3.career окремо,
-з позначкою «estimate», вирішує власник.
+(Bitpanda 38, Alpaca 32, DV Trading 19, Binance 17, Blockchain.com 16, BitGo 15, OKX 13 …). Вилка: зі
+сторінок web3.career ми брали їхню оцінку зарплати як вилку (215 з 217 вакансій, де роботодавець вилки не
+дав, збіглися з `estimated_*` API). Тому 779 «з зарплатою» в живому пулі містять 555 оцінок web3.career.
+
+### Оцінка зарплати web3.career (db/jobs/0002)
+
+API віддає оцінку дошки окремо (`estimated_min_salary`/`max`); скан пише її в `salary_est_min`,
+`salary_est_max`, `salary_est_currency` (міграція `db/jobs/0002_salary_estimate.sql`) і лише для вакансії
+без вилки роботодавця (ні полем, ні в тексті). У `salary_min`/`salary_max` вона не йде ніколи, тож підбір
+добірки за зарплатою, фільтр `salary_min` у `search_jobs`, лічильник «з зарплатою» на головній, «Salary
+listed» у поясненні й розмітка JobPosting її не бачать (у добірці вона навіть не в `DigestJob`, а окремою
+мапою `estimates` з `loadCrawlPool`). Показ лише приглушеним підписом «est. $180k to $225k (web3.career
+estimate)»: `/jobs`, «Jobs for you now», стрічка головної (після всіх вакансій із зарплатою роботодавця у
+своїй ролі), лист (поле контракту `salary_estimate`), Telegram (окремий рядок). `search_jobs` віддає окреме
+поле `salary_estimate` з `source: "web3.career"`.
+
+### Роботодавці, чиїх вакансій API не віддає
+
+Усі 22 роботодавці з трьома й більше такими вакансіями мають публічну дошку ATS, живу 14.09. 17 уже були в
+реєстрі (Bitpanda, Alpaca, Binance, Blockchain.com, BitGo, OKX, FalconX, Figure Markets, Copper, TaxBit,
+GSR, B2C2, Tether, Brave, LayerZero, Ondo Finance, Grayscale); їхні вакансії не доходили до бази, бо
+дублікат з web3.career перемагав (оцінку ми тоді рахували вилкою). П'ять додано (`CURATED` у
+`scripts/jobs-seed.ts`, Greenhouse Job Board API, публічний API для показу вакансій на чужих сайтах):
+DV Trading (`dvtrading`), tastylive (`tastylive`), Localcoin (`localcoin`), Blue Cube Services
+(`bluecubeservices`), BCB Group (`bcbgroup`, хост EU). Жодного не пропущено за умовами чи через брак ATS.
+
+Із 230 «зниклих» вакансій цих 22 роботодавців: 88 відкриті й опубліковані за 30 днів (тепер у пулі з
+дошки роботодавця), 73 відкриті, але роботодавець опублікував їх понад 30 днів тому (web3.career показував
+їх зі своєю, пізнішою датою; вікно скану рахує дату роботодавця), 69 на дошці роботодавця немає (закриті або
+копії однієї вакансії під різні міста, як 25 з 38 у Bitpanda).
+
+### Сухий прогін усіх джерел 14.09.2026 (після обох правок)
+
+`env -u CF_JOBS_D1_DATABASE_ID WEB3CAREER_TOKEN=… npx tsx src/cli.ts jobs-scan --dry` з Mac, реєстр засіву
+(325 роботодавців): 329 джерел, 0 збоїв, прочитано 7 938, записано б 1 420 (web3.career 348).
+
+| Що | Живий пул 14.09 | Після переходу |
+|---|---|---|
+| Пул добірки | 1 439 | 1 272 (-12%) |
+| З вилкою роботодавця | 779 (54%, з них 555 оцінок web3.career) | 368 (29%) |
+| Лише з оцінкою web3.career (підпис «estimate») | 0 | 188 |
+| З вилкою або оцінкою | 779 | 556 (44%) |
+
+За ролями, пул (з вилкою роботодавця) [+ лише з оцінкою]: Engineer 540 → 464 (143) [+55], Security 69 → 59
+(16) [+8], DevRel 0 → 0, Data 102 → 93 (26) [+16], PM 104 → 98 (35) [+15], BD 133 → 118 (26) [+21],
+Marketing 102 → 93 (30) [+20], Creator/KOL 11 → 11 (2) [+4], Community 10 → 10 (2) [+5], Trader 60 → 48 (5)
+[+6], Designer 32 → 30 (8) [+4], Operations 163 → 140 (33) [+17], Finance 130 → 113 (36) [+17], Legal
+122 → 109 (27) [+21], HR 42 → 40 (19) [+2]. Нові роботодавці в пулі: DV Trading 16, tastylive 8, Blue Cube 3,
+Localcoin 2, BCB 0; з реєстру зросли Alpaca 11 → 25, Binance 13 → 25, Bitpanda 0 → 6, FalconX 0 → 7, BitGo 1 → 4.
+
+### Порядок накочування (controller)
+
+1. `npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0002_salary_estimate.sql`
+   (до нового engine і сайту: обидва читають і пишуть нові стовпці; без них пул сайту не прочитається).
+2. `npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/seed/update-2026-09-14-web3career.sql`
+   (п'ять роботодавців і нові feed_url/terms_note web3.career; повторне накочування нічого не міняє).
+3. `WEB3CAREER_TOKEN` у `/etc/nextcryptojob-engine.env` (уже є), новий `dist` engine.
+4. Деплой сайту зі свіжого main. Старий engine поля `salary_estimate` у листі не шле; сайт його не вимагає.
 
 Перехід: старі рядки web3.career (адреси сторінок) скан більше не оновлює, за 3 доби вони випадуть з
 пулу, `jobs-prune` прибере їх за 30 днів; до того дубль відсікає ключ «компанія + назва». Рядок
 `sources` у базі лишається (`kind` 'jsonld', бо так велить CHECK; скан бере цю дошку за назвою).
-Засів (`db/jobs/seed`) оновлено; у живій базі примітку можна поправити руками:
-`UPDATE sources SET feed_url = 'https://web3.career/api/v1', terms_note = '<з registry.json>' WHERE name = 'board:web3career'`.
 
 ### Скільки це коштує в D1
 
@@ -420,12 +471,13 @@ Operations 30 (9), Finance 30 (10), Legal 41 (13), HR 8 (6). Тег developer-re
 ```sh
 npx wrangler d1 create nextcryptojob-jobs                       # записати database_id
 npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0001_schema.sql
+npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0002_salary_estimate.sql
 npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/seed/seed.sql
 npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
   (SELECT COUNT(*) FROM companies) AS companies, (SELECT COUNT(*) FROM companies WHERE enabled = 1) AS enabled,
   (SELECT COUNT(*) FROM sources) AS sources, (SELECT COUNT(*) FROM getro_collections) AS getro,
   (SELECT group_concat(name) FROM schema_migrations) AS migrations"
-# очікуємо: 364, 320, 4, 22, 0001_schema,seed_registry
+# очікуємо: 369, 325, 4, 22, 0001_schema,0002_salary_estimate,seed_registry (свіжа база з новим seed.sql)
 ```
 
 2. Токен. `CF_API_TOKEN` у `/etc/nextcryptojob-engine.env` має право D1 Edit на `nextcryptojob-jobs`.

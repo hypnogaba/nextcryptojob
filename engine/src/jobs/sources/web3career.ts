@@ -20,8 +20,8 @@
 //   - ліміт запитів не названо, лише 429 при надмірі: запити по одному, пауза бюджету web3career
 //     (limits.ts), 429 перечікуємо зростаючою паузою до 10 с, 401 і 403 не повторюємо.
 import { fetchJson, type FetchOptions, SourceUnavailableError } from "../../http.js";
-import { currencyCode, payFor, payPeriod, type Pay } from "../pay.js";
-import type { BoardSource, RawJob } from "../types.js";
+import { currencyCode, payFor, payPeriod, plausibleSalary, type Pay, yearly } from "../pay.js";
+import type { BoardSource, RawJob, SalaryEstimate } from "../types.js";
 import { isJunk } from "./boards.js";
 
 export const WEB3CAREER_SOURCE = "board:web3career";
@@ -158,6 +158,21 @@ export function web3CareerPay(j: Web3CareerJob): Pay {
   return payFor(lo, hi, currency, payPeriod(j.salary_unit));
 }
 
+/**
+ * Оцінка web3.career (`estimated_min_salary`/`max`), річна, у доларах (так її показує їхній сайт).
+ * Лише для вакансії без вилки роботодавця і лише правдоподібна як річна; інакше null. Іде в
+ * salary_est_* окремо від вилки й показується з підписом «web3.career estimate».
+ */
+export function web3CareerEstimate(j: Web3CareerJob): SalaryEstimate | null {
+  const pay = web3CareerPay(j);
+  if (pay.salaryMin !== null || pay.salaryMax !== null) return null;
+  const min = yearly(num(j.estimated_min_salary), "year");
+  const max = yearly(num(j.estimated_max_salary), "year");
+  if (min === null && max === null) return null;
+  const currency = currencyCode(j.salary_currency) ?? "USD";
+  return plausibleSalary(min, max, currency) ? { min, max, currency } : null;
+}
+
 function postedAt(j: Web3CareerJob): string | null {
   if (typeof j.date_epoch === "number" && Number.isFinite(j.date_epoch) && j.date_epoch > 0) {
     return new Date(j.date_epoch * 1000).toISOString();
@@ -190,6 +205,7 @@ export function parseWeb3Career(jobs: readonly Web3CareerJob[], board: Pick<Boar
       source: board.name,
       crypto: board.cryptoOnly,
       ...web3CareerPay(j),
+      salaryEstimate: web3CareerEstimate(j),
       boardTags: tags,
       // Опис лише для вилки з тексту (salary-text.ts), у базу не йде. Обірваний тег у кінці теж геть.
       description: typeof j.description === "string"

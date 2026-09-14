@@ -17,7 +17,7 @@ import {
   type ChannelPlan, DEFAULT_SITE_URL, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
   type DigestMessage, planChannel, siteUrlOf,
 } from "./deliver.js";
-import { loadCompanyPool, loadCrawlPool, type PoolStats } from "./jobs.js";
+import { estimateText, loadCompanyPool, loadCrawlPool, type PoolStats, type SalaryEstimate } from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
 import { type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
 import { parseRoles } from "./roles.js";
@@ -197,11 +197,15 @@ export interface DigestSummary {
 
 const who = (id: string) => id.slice(0, 8);
 
-/** Вибір → те, що бачить людина. */
-export function deliveryJobs(picks: readonly DigestPick[]): DeliveryJob[] {
+/**
+ * Вибір → те, що бачить людина. Оцінка дошки (estimates) лише підписом поруч, коли вилки роботодавця
+ * немає: сам вибір її не бачив (DigestJob її не має).
+ */
+export function deliveryJobs(picks: readonly DigestPick[], estimates: ReadonlyMap<string, SalaryEstimate> = new Map()): DeliveryJob[] {
   return picks.map((p, i) => ({
     position: i + 1, title: p.job.title, company: p.job.company, location: p.job.location,
     salary: formatSalary(p.job.salary), why: p.why, url: p.job.url,
+    salaryEstimate: formatSalary(p.job.salary) ? null : estimateText(estimates.get(p.job.ref)),
     postedBy: p.job.source === "company" ? p.job.company : null, source: p.job.source,
   }));
 }
@@ -280,7 +284,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       }
       const row = p.row!;
       const plan = p.plan as Exclude<ChannelPlan, { skip: string }>;
-      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), log);
+      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), log, crawl.estimates);
       if (outcome === "empty") summary.empty++;
       else if (outcome === "already") summary.already++;
       else if (outcome.status === "sent") summary.sent++;
@@ -302,6 +306,7 @@ function deliveryUser(row: DigestUserRow): DeliveryUser {
 async function buildAndDeliver(
   db: Db, deps: DigestDeps, row: DigestUserRow, localDate: string, picks: DigestPick[],
   plan: { primary: "telegram" | "email"; emailFallback: boolean }, digestId: string, log: (l: string) => void,
+  estimates: ReadonlyMap<string, SalaryEstimate> = new Map(),
 ): Promise<DeliveryOutcome | "empty" | "already"> {
   if (picks.length === 0) {
     // Запис, щоб наступна година (запас isDueHour) не шукала вдруге того самого дня.
@@ -329,7 +334,7 @@ async function buildAndDeliver(
     throw e;
   }
 
-  const message: DigestMessage = { digestId, userId: row.id, localDate, jobs: deliveryJobs(picks) };
+  const message: DigestMessage = { digestId, userId: row.id, localDate, jobs: deliveryJobs(picks, estimates) };
   const outcome = await deliverDigest(deliveryUser(row), message, plan,
     // Годинник, а не мить початку прогону: `ts` листа ставиться під час відправки. Прогін
     // з паузами Telegram (429) може тривати довше за 5 хвилин, і сайт відкинув би старий ts.

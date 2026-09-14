@@ -88,6 +88,33 @@ const q = (v: string | number | null | undefined): string =>
  * SQL засіву. ON CONFLICT DO NOTHING: повторне накочування не стирає того, що змінили руками
  * чи розвідка (вимкнену компанію не вмикає, назву не повертає).
  */
+/**
+ * Доповнення живої бази до нового реєстру без повного засіву: нові компанії (ON CONFLICT DO NOTHING,
+ * наявний рядок не чіпається) і нові feed_url/terms_note дошок (UPDATE лише цих полів). Повторне
+ * накочування нічого не міняє. Мітка в schema_migrations каже, що доповнення лягло.
+ */
+export function registryUpdateSql(reg: SeedRegistry, u: { name: string; note: string; companies: readonly string[]; sources: readonly string[] }): string {
+  const out = [
+    `-- Доповнення реєстру живої бази nextcryptojob-jobs (${u.name}). ЗГЕНЕРОВАНО з db/jobs/seed/registry.json:`,
+    "--   cd engine && npx tsx scripts/jobs-seed.ts update",
+    `-- ${u.note}`,
+    "-- Накочує controller: wrangler d1 execute nextcryptojob-jobs --remote --file db/jobs/seed/<цей файл>",
+  ];
+  for (const name of u.sources) {
+    const s = reg.sources.find((x) => x.name === name);
+    if (!s) throw new Error(`немає дошки ${name} у реєстрі`);
+    out.push(`UPDATE sources SET feed_url = ${q(s.feed_url)}, terms_note = ${q(s.terms_note)} WHERE name = ${q(s.name)};`);
+  }
+  const rows = u.companies.map((slug) => {
+    const c = reg.companies.find((x) => x.slug === slug);
+    if (!c) throw new Error(`немає компанії ${slug} у реєстрі`);
+    return `(${[c.slug, c.name, c.ats_provider, c.ats_slug, c.enabled, c.discovered_via, c.note].map(q).join(", ")})`;
+  });
+  if (rows.length) out.push(`INSERT INTO companies (slug, name, ats_provider, ats_slug, enabled, discovered_via, note) VALUES\n  ${rows.join(",\n  ")}\n  ON CONFLICT DO NOTHING;`);
+  out.push(`INSERT OR IGNORE INTO schema_migrations(name) VALUES (${q(u.name)});`);
+  return `${out.join("\n")}\n`;
+}
+
 export function seedSql(reg: SeedRegistry): string {
   const out = [
     "-- Засів бази вакансій NextCryptoJob. ЗГЕНЕРОВАНО з db/jobs/seed/registry.json командою",

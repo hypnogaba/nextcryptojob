@@ -48,6 +48,8 @@ export interface PoolStats {
   /** Унікальні за ключем змісту (компанія + назва). */
   unique: number;
   withSalary: number;
+  /** Без вилки роботодавця, але з оцінкою дошки (web3.career): у withSalary НЕ входить. */
+  withEstimateOnly: number;
   remote: number;
   companies: number;
   byRole: Record<RoleKey, number>;
@@ -120,7 +122,7 @@ export function poolStats(rows: readonly JobRow[], now: Date): PoolStats {
   const byRoleSalary = emptyRoles();
   const unique = new Set<string>();
   const companies = new Set<string>();
-  let pool = 0, withSalary = 0, remote = 0;
+  let pool = 0, withSalary = 0, withEstimateOnly = 0, remote = 0;
   for (const r of rows) {
     const row: PoolRow = {
       id: r.id, url: r.url, company: r.company, company_key: r.companyKey, title: r.title, location: r.location,
@@ -135,13 +137,14 @@ export function poolStats(rows: readonly JobRow[], now: Date): PoolStats {
     companies.add(job.companyKey);
     const paid = annualRange(job.salary) !== null;
     if (paid) withSalary++;
+    else if (r.salaryEstMin !== null || r.salaryEstMax !== null) withEstimateOnly++;
     if (job.remote) remote++;
     for (const role of job.roles) {
       byRole[role]++;
       if (paid) byRoleSalary[role]++;
     }
   }
-  return { pool, unique: unique.size, withSalary, remote, companies: companies.size, byRole, byRoleSalary };
+  return { pool, unique: unique.size, withSalary, withEstimateOnly, remote, companies: companies.size, byRole, byRoleSalary };
 }
 
 function tasks(reg: Registry, env: EngineEnv, windowDays: number, now: Date, o: FetchOptions,
@@ -246,7 +249,8 @@ export function formatScanReport(r: ScanReport): string[] {
       `non-crypto company ${r.dropped.company}, older than ${r.windowDays} d ${r.dropped.old}, broken ${r.dropped.broken}, ` +
       `duplicate ${r.dropped.duplicate}`,
     `  live pool (digest sieve, posted within ${POSTED_WINDOW_DAYS} d): ${r.pool.pool} jobs, ${r.pool.unique} unique, ` +
-      `${r.pool.companies} companies, ${r.pool.withSalary} with salary (${pct(r.pool.withSalary, r.pool.pool)}), ${r.pool.remote} remote`,
+      `${r.pool.companies} companies, ${r.pool.withSalary} with salary (${pct(r.pool.withSalary, r.pool.pool)}), ` +
+      `${r.pool.withEstimateOnly} with a board estimate only, ${r.pool.remote} remote`,
     `  by role (with salary): ${ROLE_ORDER.filter((k) => r.pool.byRole[k] > 0).map((k) => `${k} ${r.pool.byRole[k]} (${r.pool.byRoleSalary[k]})`).join(", ")}`,
     r.dry
       ? `  D1 rows written if this ran for real: ${r.rowsWritten.estimated} (estimate: 1 per job row, scan_runs 3, source_state 1 per change)`

@@ -32,7 +32,14 @@ export interface RawJob {
   idKey?: string | null;
   /** Теги самої дошки (web3.career): з них лише сфери для підказки ролі (tags.ts boardSpheres). */
   boardTags?: readonly string[];
+  /**
+   * Оцінка зарплати від самої дошки (web3.career `estimated_*`), річна. НЕ вилка роботодавця: іде
+   * лише в salary_est_* (db/jobs/0002), ніколи в salary_min/max, підбір чи лічильник «з зарплатою».
+   */
+  salaryEstimate?: SalaryEstimate | null;
 }
+
+export interface SalaryEstimate { min: number | null; max: number | null; currency: string | null }
 
 /** Рядок jobs_cache, готовий до запису. */
 export interface JobRow {
@@ -46,6 +53,10 @@ export interface JobRow {
   salaryMin: number | null;
   salaryMax: number | null;
   salaryCurrency: string | null;
+  /** Оцінка дошки (RawJob.salaryEstimate), окремо від вилки; null, якщо її немає. */
+  salaryEstMin: number | null;
+  salaryEstMax: number | null;
+  salaryEstCurrency: string | null;
   source: string;
   tags: string[];
   dedupeKey: string;

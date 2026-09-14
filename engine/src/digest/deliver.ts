@@ -33,6 +33,8 @@ export interface DeliveryJob {
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
   source: "nextrole" | "company";
+  /** «est. $180k to $225k (web3.career estimate)», лише коли вилки роботодавця немає; оцінка, не зарплата. */
+  salaryEstimate?: string | null;
 }
 
 export interface DigestMessage {
@@ -140,6 +142,8 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
     const lines = [
       linked ? `${j.position}. <a href="${escapeHtml(j.url)}">${title}</a>` : `${j.position}. ${title}`,
       escapeHtml(meta),
+      // Оцінка дошки окремим рядком, не в рядку зарплати: це не пропозиція роботодавця.
+      ...(j.salaryEstimate && !j.salary ? [escapeHtml(j.salaryEstimate)] : []),
       `<i>${escapeHtml(j.why)}</i>`,
     ];
     if (!linked && /^mailto:/i.test(j.url)) lines.push(`Apply: ${escapeHtml(j.url.replace(/^mailto:/i, "").split("?")[0]!)}`);
@@ -224,6 +228,8 @@ export interface EmailPayload {
   jobs: Array<{
     position: number; title: string; company: string; location: string | null; salary: string | null;
     why: string; url: string; posted_by: string | null; source: "nextrole" | "company";
+    /** Оцінка дошки підписом (DeliveryJob.salaryEstimate); сайт показує її приглушено. */
+    salary_estimate: string | null;
   }>;
 }
 
@@ -233,7 +239,7 @@ export function emailPayload(m: DigestMessage, now: Date): EmailPayload {
     jobs: m.jobs.map((j) => ({
       position: j.position, title: cleanText(j.title, 200), company: cleanText(j.company, 100),
       location: j.location ? cleanText(j.location, 100) : null, salary: j.salary, why: j.why, url: j.url,
-      posted_by: j.postedBy, source: j.source,
+      posted_by: j.postedBy, source: j.source, salary_estimate: j.salary ? null : j.salaryEstimate ?? null,
     })),
   };
 }

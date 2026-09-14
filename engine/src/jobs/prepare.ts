@@ -44,6 +44,7 @@ export function officeOnly(location: string | null | undefined): boolean {
  * те, що знає більше: зарплата важить найбільше, бо саме за нею підбір відсіює найчастіше.
  */
 function richness(j: RawJob): number {
+  // Оцінка дошки (salaryEstimate) сюди не входить: вона не вилка й не має перемагати запис роботодавця.
   return (j.salaryMin != null || j.salaryMax != null ? 4 : 0)
        + (j.description?.trim() ? 2 : 0)
        + (j.postedAt ? 1 : 0)
@@ -74,6 +75,14 @@ export interface Prepared {
  * Усі правила за один прохід: крипто → живий URL → компанія → вікно → вилка → дедуп.
  * Сортування стійке: рівні за повнотою лишаються в порядку надходження.
  */
+function estimate(e: RawJob["salaryEstimate"]): Pick<JobRow, "salaryEstMin" | "salaryEstMax" | "salaryEstCurrency"> {
+  const int = (v: number | null | undefined): number | null => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null);
+  const min = int(e?.min);
+  const max = int(e?.max);
+  if (min === null && max === null) return { salaryEstMin: null, salaryEstMax: null, salaryEstCurrency: null };
+  return { salaryEstMin: min, salaryEstMax: max, salaryEstCurrency: e?.currency?.trim().toUpperCase() || null };
+}
+
 export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date): Prepared {
   const dropped: Dropped = { notCrypto: 0, company: 0, old: 0, broken: 0, duplicate: 0 };
   const nonCrypto: Record<string, number> = {};
@@ -110,6 +119,8 @@ export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date):
       salaryMin: hasPay ? int(j.salaryMin) : parsed?.min ?? null,
       salaryMax: hasPay ? int(j.salaryMax) : parsed?.max ?? null,
       salaryCurrency: hasPay ? (j.salaryCurrency?.trim().toUpperCase() || null) : parsed?.currency ?? null,
+      // Оцінка дошки окремо й лише там, де вилки роботодавця немає (ні полем, ні в тексті).
+      ...estimate(hasPay || parsed ? null : j.salaryEstimate),
       source: j.source,
       tags: jobTags(title, remote, j.boardTags),
       dedupeKey: dk,
