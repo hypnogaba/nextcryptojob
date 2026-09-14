@@ -430,7 +430,7 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
       <dialog
         ref={ref}
         aria-labelledby="intro-dialog-title"
-        className="m-auto w-[min(40rem,calc(100vw-2rem))] rounded-xl border-2 border-ink bg-surface p-0 text-ink shadow-lift backdrop:bg-ink/40"
+        className="m-auto w-[min(40rem,calc(100vw-2rem))] rounded-xl border-[1.5px] border-line bg-surface p-0 text-ink shadow-lift backdrop:bg-ink/40"
       >
         <form action={action} className="grid gap-4 p-4 sm:p-6">
           <Hidden companyId={props.companyId} candidateId={props.candidateId} op="intro" />

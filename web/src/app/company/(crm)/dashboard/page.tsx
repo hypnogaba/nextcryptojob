@@ -73,21 +73,21 @@ export default async function DashboardPage() {
             Get started
           </h2>
           <ol className="grid gap-3 sm:grid-cols-3">
-            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+            <li className="grid content-start gap-1 border-t border-line pt-3">
               <p className="font-semibold text-ink">1. Find candidates</p>
               <p className="text-sm text-ink-muted">Search anonymous profiles by role, score, chains and work mode.</p>
               <Link href="/company/search" className={`${LINK} text-sm`}>
                 Open Search
               </Link>
             </li>
-            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+            <li className="grid content-start gap-1 border-t border-line pt-3">
               <p className="font-semibold text-ink">2. Save a search</p>
               <p className="text-sm text-ink-muted">Get a daily email when new candidates match your filters.</p>
               <Link href="/company/saved-searches" className={`${LINK} text-sm`}>
                 Saved searches
               </Link>
             </li>
-            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+            <li className="grid content-start gap-1 border-t border-line pt-3">
               <p className="font-semibold text-ink">3. Post a job</p>
               <p className="text-sm text-ink-muted">Jobs you publish appear in daily digests of matching candidates.</p>
               <Link href="/company/jobs/new" className={`${LINK} text-sm`}>

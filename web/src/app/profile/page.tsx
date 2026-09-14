@@ -91,7 +91,7 @@ export default async function ProfilePage({ searchParams }: Props) {
       ) : null}
 
       {done && !x ? (
-        <div className="grid gap-2 rounded-xl border-2 border-ink bg-surface p-4 sm:p-5">
+        <div className="grid gap-2 rounded-xl border-[1.5px] border-line bg-surface p-4 sm:p-5">
           <p className="text-sm text-ink">
             Add your X account. Most roles are scored from X, and your score and card need it. Just type your handle.
           </p>

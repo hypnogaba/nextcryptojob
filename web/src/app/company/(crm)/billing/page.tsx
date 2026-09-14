@@ -219,7 +219,7 @@ function CardSection({ state, cardsEnabled, isOwner }: { state: BillingState; ca
 /** Три шляхи після реєстрації компанії (6.1). */
 function Welcome({ cardsEnabled, trial }: { cardsEnabled: boolean; trial: boolean }) {
   return (
-    <section aria-labelledby="welcome-heading" className="grid gap-4 rounded-xl border-2 border-ink bg-surface p-4 sm:p-6">
+    <section aria-labelledby="welcome-heading" className="grid gap-4 rounded-xl border-[1.5px] border-line bg-surface p-4 sm:p-6">
       <h2 id="welcome-heading" className={H2}>
         Your company is ready. Choose how to start.
       </h2>

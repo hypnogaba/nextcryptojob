@@ -613,3 +613,11 @@
   .ncj-brief textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: 18px; line-height: 28px; min-height: 56px; }
   .ncj-brief textarea::placeholder { color: var(--ink-faint); }
 }
+
+@layer components {
+  /* Малий жетон (рядки CRM, дошка): розетка лише як обідок, число більше, щоб читалось на 44 px. */
+  @container (max-width: 72px) {
+    .ncj-badge-core { width: 62%; }
+    .ncj-badge-core b { font-size: 30cqw; }
+  }
+}

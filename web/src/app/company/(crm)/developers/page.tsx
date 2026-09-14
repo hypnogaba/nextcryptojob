@@ -260,7 +260,7 @@ export default async function DevelopersPage({
         {perAction.size === 0 ? (
           <p className={HINT}>No calls yet.</p>
         ) : (
-          <div className="relative min-w-0 overflow-x-auto rounded-[10px] border-2 border-ink">
+          <div className="relative min-w-0 overflow-x-auto rounded-[10px] border-[1.5px] border-line">
             <table className={TABLE}>
               <thead>
                 <tr>

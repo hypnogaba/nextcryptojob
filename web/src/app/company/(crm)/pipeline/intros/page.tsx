@@ -101,7 +101,7 @@ export default async function IntrosPage({ searchParams }: { searchParams: Promi
           and press Request intro.
         </EmptyState>
       ) : (
-        <ol className="overflow-hidden rounded-[10px] border-2 border-ink bg-surface">
+        <ol className="overflow-hidden rounded-[10px] border-[1.5px] border-line bg-surface">
           {intros.data.map((i) => {
             const notice = companyIntroNotice(i);
             return (
