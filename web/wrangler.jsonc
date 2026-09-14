@@ -23,7 +23,7 @@
       // (engine/deploy/README.md §8, крок 8); з заглушкою деплоїти не можна.
       "binding": "JOBS_DB",
       "database_name": "nextcryptojob-jobs",
-      "database_id": "REPLACE_WITH_NEW_DB_ID"
+      "database_id": "c6a80527-a05a-4e3d-a0ad-4bd4737b2c21"
     }
   ],
   "services": [
