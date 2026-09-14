@@ -106,7 +106,7 @@ export function badgeTexts(b: Badges): string[] {
 }
 
 export function contactModeText(mode: "approval" | "direct"): string {
-  return mode === "direct" ? "Telegram handle available" : "Contact after approval";
+  return mode === "direct" ? "Telegram handle directly" : "Contact after approval";
 }
 
 /** Порожній пошук завжди називає причину (5.2). */

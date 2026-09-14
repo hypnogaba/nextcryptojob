@@ -66,9 +66,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function render(): Promise<string> {
-  return renderToStaticMarkup(await AdminOverviewPage()).replaceAll("&#x27;", "'");
+async function render(query: Record<string, string> = {}): Promise<string> {
+  return renderToStaticMarkup(await AdminOverviewPage({ searchParams: Promise.resolve(query) })).replaceAll("&#x27;", "'");
 }
+
+/**
+ * Поза пакетом головної: відвідування (пакет з 4), демо (пакет з 2 і версія формули),
+ * останні сповіщення власнику.
+ */
+const OWNER_BATCHES = [4, 2];
+const OWNER_STATEMENTS = 4 + 2 + 1 + 1;
 
 describe("/admin access", () => {
   it("is not found for someone who is not an admin, and reads no numbers", async () => {
@@ -141,17 +148,17 @@ describe("/admin for an admin", () => {
   it("reads the database in one batch of 7 statements plus the session, settings and cached job report", async () => {
     countCalls();
     await render();
-    expect(calls.batches).toEqual([OVERVIEW_STATEMENTS]);
+    expect([...calls.batches].sort()).toEqual([OVERVIEW_STATEMENTS, ...OWNER_BATCHES].sort());
     // Поза пакетом: сесія, налаштування (кеш холодний) і підсумок вакансій компаній звіту джерел.
-    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + 3);
+    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + OWNER_STATEMENTS + 3);
     expect(calls.prepared.some((sql) => sql.includes("FROM sessions"))).toBe(true);
     expect(calls.prepared.some((sql) => sql.includes("FROM app_settings"))).toBe(true);
 
     // Другий показ: налаштування й звіт з кешу, пакет той самий.
     calls = { prepared: [], batches: [] };
     await render();
-    expect(calls.batches).toEqual([OVERVIEW_STATEMENTS]);
-    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + 1);
+    expect([...calls.batches].sort()).toEqual([OVERVIEW_STATEMENTS, ...OWNER_BATCHES].sort());
+    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + OWNER_STATEMENTS + 1);
     expect(jobs.reads).toBe(1);
   });
 
@@ -162,5 +169,31 @@ describe("/admin for an admin", () => {
     expect(html).toMatch(/Candidate sign-ups: <b[^>]*>closed<\/b>/);
     expect(html).toMatch(/Company sign-ups: <b[^>]*>open<\/b>/);
     expect(html).toContain("Could not read the job sources");
+  });
+
+  it("shows visitors for 30 days: unique visitors, views, sign-ups and the visit to sign-up rate", async () => {
+    exec(`INSERT INTO visit_days (day, path_group, ref_host, views, uniques) VALUES
+      ('2026-09-13', 'home', 'google.com', 30, 20), ('2026-09-13', 'jobs', '', 12, 0), ('2026-09-12', 'card', 'x.com', 9, 5)`);
+    const html = await render();
+    expect(html).toContain(">Visitors, 30 days</h2>");
+    expect(html).toMatch(/Unique visitors<\/dt><dd[^>]*>25<\/dd>/);
+    expect(html).toMatch(/Page views<\/dt><dd[^>]*>51<\/dd>/);
+    // Реєстрації за 30 днів з users (адмін з червня не рахується): u1 13.09, u2 10.09, u3 20.08.
+    expect(html).toMatch(/New sign-ups<\/dt><dd[^>]*>3<\/dd>/);
+    expect(html).toMatch(/Visit to sign-up<\/dt><dd[^>]*>12%<\/dd>/);
+    expect(html).toContain("google.com");
+    expect(html).toContain("Shared cards");
+    expect(html).toContain("no third-party scripts, no cookies");
+  });
+
+  it("has the weekly report button, the alerts list and the demo company block", async () => {
+    exec(`INSERT INTO owner_alerts (key, kind, sent_at, summary, channel) VALUES
+      ('agency:app_1', 'agency', '2026-09-13 10:00:00', 'New agency application: Hire3', 'telegram')`);
+    const html = await render({ done: "weekly", ch: "telegram,email" });
+    expect(html).toContain("Send this week's report now");
+    expect(html).toContain("Report sent by telegram and email.");
+    expect(html).toContain("New agency application: Hire3");
+    expect(html).toContain("Create demo company");
+    expect(html).not.toContain("Delete demo data");
   });
 });

@@ -6,6 +6,7 @@ import { assertFormCompany, userFacingError } from "@/lib/crm/company";
 import { crmActionActor } from "@/lib/crm/context";
 import type { PipelineCard } from "@/lib/crm/pipeline";
 import { paramsFromQuery, parseSearchParams } from "@/lib/crm/search-params";
+import { signalItems, topSignals, type Signal } from "@/lib/crm/signals";
 import { CandidateId, type SearchResponse, type Stage } from "@/lib/crm/types";
 
 /**
@@ -16,7 +17,7 @@ import { CandidateId, type SearchResponse, type Stage } from "@/lib/crm/types";
  * витратив би ще одну сторінку квоти пошуку.
  */
 
-export type LoadMoreResult = { ok: true; page: SearchResponse } | { ok: false; error: string };
+export type LoadMoreResult = { ok: true; page: SearchResponse; signals: Record<string, Signal[]> } | { ok: false; error: string };
 
 const BAD_REQUEST = "This request is not valid. Reload the page and try again.";
 
@@ -40,7 +41,8 @@ export async function loadMoreAction(input: { companyId: string; query: string; 
       { filters: parsed.filters, sort: parsed.sort, cursor: input.cursor },
       ctx,
     );
-    return { ok: true, page: res.output as SearchResponse };
+    const page = res.output as SearchResponse;
+    return { ok: true, page, signals: await topSignals(ctx.db, signalItems(page)) };
   } catch (err) {
     const known = userFacingError(err);
     if (!known) throw err;

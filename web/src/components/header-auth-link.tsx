@@ -8,6 +8,10 @@ const LINK =
 // «Jobs» з 768 px, решта з 1024 px: разом з назвою сайту на планшеті вони не вміщаються.
 const NAV_LINK = "hidden min-h-11 items-center px-2 text-[0.9375rem] text-ink-muted transition-colors hover:text-ink";
 
+// Видно на будь-якій ширині: адміну адмінка потрібна й з телефона.
+const ADMIN_LINK =
+  "min-h-11 items-center rounded-md border border-line-strong px-2.5 text-[0.875rem] font-semibold text-ink transition-colors hover:border-brand";
+
 const NAV = [
   { href: "/scoring", label: "How scoring works" },
   { href: "/company", label: "For companies" },
@@ -15,14 +19,15 @@ const NAV = [
 ] as const;
 
 /**
- * Пункти шапки й «Sign in» або «Account». Шапка в спільному layout, і перевірка
+ * Пункти шапки, «Admin» для адміна й «Sign in» або «Account». Шапка в спільному layout, і перевірка
  * сесії на сервері зробила б динамічними всі сторінки. Тому стан питаємо в /api/me
  * з браузера (components/site-state.tsx), заново після кожного переходу: вхід і
  * вихід закінчуються переходом (/welcome, /). «Jobs» веде на свої вакансії, якщо
  * людина ввійшла, інакше на приклад сьогоднішнього списку на головній.
  */
 export function HeaderNav() {
-  const signedIn = useSiteState()?.signedIn === true;
+  const state = useSiteState();
+  const signedIn = state?.signedIn === true;
 
   return (
     <>
@@ -34,6 +39,12 @@ export function HeaderNav() {
           {item.label}
         </Link>
       ))}
+      {state?.admin ? (
+        // Адмін (пошта з ADMIN_EMAILS, вхід поштою): адмінка одним кліком з будь-якої сторінки.
+        <Link href="/admin" className={`${ADMIN_LINK} inline-flex`}>
+          Admin
+        </Link>
+      ) : null}
       {signedIn ? (
         <Link href="/account" className={LINK}>
           Account

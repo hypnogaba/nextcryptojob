@@ -55,6 +55,8 @@ export interface CompanyInfo {
   latestStatus: string | null;
   /** Вебхук компанії не прийняв подію за 6 спроб (час SQLite); плашка "Your webhook is failing". */
   webhookFailingSince?: string | null;
+  /** Демо-компанія (companies.is_demo, 0020): бачить лише синтетичних кандидатів (lib/admin/demo.ts). */
+  isDemo?: boolean;
 }
 
 export type Actor =
@@ -144,6 +146,7 @@ type CompanyRow = {
   current_period_start: string | null;
   current_period_end: string | null;
   webhook_failing_since: string | null;
+  is_demo: number;
 };
 
 /** Компанія з доступом і чинною підпискою; null, якщо такої немає. */
@@ -151,7 +154,7 @@ export async function loadCompany(db: D1Database, companyId: string): Promise<Co
   const row = await db
     .prepare(
       `SELECT c.id, c.name, c.kind, c.status, (c.domain_verified_at IS NOT NULL) AS domain_verified,
-              c.webhook_failing_since, a.access, a.latest_status,
+              c.webhook_failing_since, c.is_demo, a.access, a.latest_status,
               s.id AS sub_id, s.provider, s.status AS sub_status, s.current_period_start, s.current_period_end
          FROM companies c
          JOIN company_access a ON a.company_id = c.id
@@ -190,6 +193,7 @@ export async function loadCompany(db: D1Database, companyId: string): Promise<Co
     subscription,
     latestStatus: row.latest_status,
     webhookFailingSince: row.webhook_failing_since,
+    isDemo: row.is_demo === 1,
   };
 }
 

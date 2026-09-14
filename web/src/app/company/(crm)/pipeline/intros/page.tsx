@@ -6,11 +6,12 @@ import { EmptyState, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/component
 import { readAction } from "@/lib/crm/actions";
 import { userFacingError } from "@/lib/crm/company";
 import { expiresInText, INTRO_STATUS_TEXT, roleText } from "@/lib/crm/labels";
-import { companyIntroNotice } from "@/lib/crm/notify";
+import { companyIntroNotice, notifierFromEnv } from "@/lib/crm/notify";
 import { candidateLabel } from "@/lib/crm/project";
 import type { Intro, IntroStatus } from "@/lib/crm/types";
 import { cn } from "@/lib/utils";
 import { crmPage } from "../../crm";
+import { settleDemoIntros } from "@/lib/admin/demo";
 import { withdrawIntroAction } from "../actions";
 import { PipelineTabs, TAB, TAB_OFF, TAB_ON } from "../pipeline-tabs";
 
@@ -34,6 +35,8 @@ const FILTERS: { key: IntroStatus | "all"; label: string }[] = [
  */
 export default async function IntrosPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { ctx, company } = await crmPage("pipeline");
+  // Демо-компанія: демо-кандидати «відповідають» самі за кілька секунд (lib/admin/demo.ts).
+  if (company.isDemo) await settleDemoIntros(ctx.db, company.id, notifierFromEnv(ctx.env), ctx.now);
   const params = await searchParams;
   const statusParam = first(params.status);
   const status = FILTERS.some((f) => f.key === statusParam && f.key !== "all") ? (statusParam as IntroStatus) : undefined;

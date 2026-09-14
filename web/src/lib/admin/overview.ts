@@ -182,7 +182,7 @@ function times(now: Date): Times {
   };
 }
 
-/** Кандидати: один прохід по users і три підрахунки по малих індексах. */
+/** Кандидати: один прохід по users і три підрахунки по малих індексах. Демо (is_demo, 0020) не рахуємо ніде. */
 export const CANDIDATES_SQL = `SELECT
   COUNT(*) AS total,
   COALESCE(SUM(u.created_at >= ?1), 0) AS today,
@@ -198,10 +198,11 @@ export const CANDIDATES_SQL = `SELECT
   COALESCE(SUM(u.channel = 'telegram'), 0) AS channel_telegram,
   COALESCE(SUM(u.channel = 'email'), 0) AS channel_email,
   COALESCE(SUM(u.digest_paused = 1), 0) AS paused,
-  (SELECT COUNT(DISTINCT user_id) FROM identities WHERE kind = 'x' AND verified_at IS NOT NULL) AS x_verified,
+  (SELECT COUNT(DISTINCT user_id) FROM identities WHERE kind = 'x' AND verified_at IS NOT NULL
+      AND user_id NOT IN (SELECT id FROM users WHERE is_demo = 1)) AS x_verified,
   (SELECT COUNT(DISTINCT user_id) FROM identities WHERE kind IN ('evm', 'solana')) AS wallets,
   (SELECT COUNT(DISTINCT user_id) FROM cards WHERE revoked_at IS NULL) AS cards
-FROM users u`;
+FROM users u WHERE u.is_demo = 0`;
 
 /**
  * Бал і черга. Черга йде індексом (status, queued_at); завершені за добу обмежено ще й
@@ -209,7 +210,7 @@ FROM users u`;
  * найсвіжіше з балу, 50 останніх завершених задач і задач, які він зараз рахує.
  */
 export const SCORES_SQL = `SELECT
-  (SELECT COUNT(DISTINCT user_id) FROM scores) AS users_scored,
+  (SELECT COUNT(DISTINCT user_id) FROM scores WHERE user_id NOT IN (SELECT id FROM users WHERE is_demo = 1)) AS users_scored,
   (SELECT COUNT(*) FROM score_jobs WHERE status = 'queued') AS queued,
   (SELECT COUNT(*) FROM score_jobs WHERE status = 'running') AS running,
   (SELECT MIN(queued_at) FROM score_jobs WHERE status = 'queued') AS oldest_queued,
@@ -217,11 +218,12 @@ export const SCORES_SQL = `SELECT
   (SELECT COUNT(*) FROM score_jobs WHERE status = 'done' AND queued_at >= ?1 AND finished_at >= ?2) AS done_24h,
   (SELECT MAX(finished_at) FROM (SELECT finished_at FROM score_jobs WHERE status IN ('done', 'failed') ORDER BY id DESC LIMIT 50)) AS last_finished,
   (SELECT MAX(started_at) FROM score_jobs WHERE status = 'running') AS last_started,
-  (SELECT MAX(computed_at) FROM scores) AS last_score,
+  (SELECT MAX(computed_at) FROM scores WHERE user_id NOT IN (SELECT id FROM users WHERE is_demo = 1)) AS last_score,
   (SELECT json_group_array(json_array(formula_version, n, published)) FROM (
      SELECT s.formula_version, COUNT(DISTINCT s.user_id) AS n,
             EXISTS (SELECT 1 FROM quality_runs q WHERE q.formula_version = s.formula_version AND q.passed = 1) AS published
-       FROM scores s GROUP BY s.formula_version ORDER BY n DESC)) AS versions,
+       FROM scores s WHERE s.user_id NOT IN (SELECT id FROM users WHERE is_demo = 1)
+      GROUP BY s.formula_version ORDER BY n DESC)) AS versions,
   q.formula_version AS q_version, q.near_pct AS q_near, q.exact_pct AS q_exact, q.people AS q_people,
   q.passed AS q_passed, q.run_at AS q_run_at
 FROM (SELECT 1) LEFT JOIN (SELECT * FROM quality_runs ORDER BY id DESC LIMIT 1) q ON 1`;
@@ -253,30 +255,36 @@ export const DIGEST_MISC_SQL = `SELECT
       GROUP BY reason ORDER BY n DESC LIMIT 5)) AS reasons,
   (SELECT json_group_array(json_array(digest_hour, tz, n)) FROM (
      SELECT u.digest_hour, COALESCE(u.timezone, '') AS tz, COUNT(*) AS n FROM users u
-      WHERE u.roles <> '[]' AND COALESCE(u.digest_paused, 0) = 0
+      WHERE u.roles <> '[]' AND COALESCE(u.digest_paused, 0) = 0 AND u.is_demo = 0
         AND EXISTS (SELECT 1 FROM scores s WHERE s.user_id = u.id)
       GROUP BY 1, 2)) AS due_groups`;
 
-/** Компанії й CRM. Використання за 7 днів: діапазон індексом idx_usage_created. */
+/**
+ * Компанії й CRM. Використання за 7 днів: діапазон індексом idx_usage_created.
+ * Демо-компанії (is_demo, 0020) не рахуємо: список їхніх id іде частковим індексом.
+ */
+const DEMO_COMPANIES = "(SELECT id FROM companies WHERE is_demo = 1)";
 export const COMPANIES_SQL = `SELECT
   (SELECT json_group_object(bucket, n) FROM (
      SELECT CASE WHEN c.status <> 'active' THEN c.status
                  WHEN a.access = 'subscription' AND a.latest_status = 'trialing' THEN 'trial'
                  WHEN a.access = 'subscription' THEN 'subscribed'
                  ELSE 'pay_per_request' END AS bucket, COUNT(*) AS n
-       FROM companies c JOIN company_access a ON a.company_id = c.id GROUP BY bucket)) AS buckets,
+       FROM companies c JOIN company_access a ON a.company_id = c.id WHERE c.is_demo = 0 GROUP BY bucket)) AS buckets,
   (SELECT COUNT(*) FROM agency_applications WHERE status IN ('pending', 'needs_info')) AS agencies_pending,
-  (SELECT COUNT(*) FROM company_members WHERE user_id IS NOT NULL) AS members,
+  (SELECT COUNT(*) FROM company_members WHERE user_id IS NOT NULL AND company_id NOT IN ${DEMO_COMPANIES}) AS members,
   (SELECT COUNT(*) FROM company_members WHERE user_id IS NULL AND invited_at >= ?1) AS invites_open,
   (SELECT json_object('searches', COALESCE(SUM(action = 'search_candidates'), 0),
                       'views', COALESCE(SUM(action = 'get_candidate'), 0))
-     FROM usage_events WHERE created_at >= ?1 AND status BETWEEN 200 AND 299) AS usage,
-  (SELECT COUNT(*) FROM intros WHERE created_at >= ?1) AS intros_7d,
-  (SELECT json_group_object(status, n) FROM (SELECT status, COUNT(*) AS n FROM intros GROUP BY status)) AS intros,
-  (SELECT COUNT(*) FROM company_jobs WHERE status = 'open') AS open_jobs,
+     FROM usage_events WHERE created_at >= ?1 AND status BETWEEN 200 AND 299
+      AND (company_id IS NULL OR company_id NOT IN ${DEMO_COMPANIES})) AS usage,
+  (SELECT COUNT(*) FROM intros WHERE created_at >= ?1 AND company_id NOT IN ${DEMO_COMPANIES}) AS intros_7d,
+  (SELECT json_group_object(status, n) FROM (SELECT status, COUNT(*) AS n FROM intros
+     WHERE company_id NOT IN ${DEMO_COMPANIES} GROUP BY status)) AS intros,
+  (SELECT COUNT(*) FROM company_jobs WHERE status = 'open' AND company_id NOT IN ${DEMO_COMPANIES}) AS open_jobs,
   (SELECT COUNT(*) FROM company_jobs_live) AS live_jobs,
   (SELECT COALESCE(SUM(apply_clicks), 0) FROM company_jobs) AS apply_clicks,
-  (SELECT COUNT(*) FROM company_jobs WHERE x_post_state = 'queued') AS x_queue`;
+  (SELECT COUNT(*) FROM company_jobs WHERE x_post_state = 'queued' AND company_id NOT IN ${DEMO_COMPANIES}) AS x_queue`;
 
 /** Оплати: x402 за статусами, «Paid without result», завислі (як findStalePayments), Stripe. */
 export const PAYMENTS_SQL = `SELECT

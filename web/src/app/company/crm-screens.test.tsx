@@ -20,6 +20,7 @@ import { deleteSavedSearchAction, toggleAlertAction } from "./(crm)/saved-search
 import SavedSearchesPage from "./(crm)/saved-searches/page";
 import { addFromSearchAction, loadMoreAction, saveSearchAction } from "./(crm)/search/actions";
 import SearchPage from "./(crm)/search/page";
+import { createDemo } from "@/lib/admin/demo";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
@@ -179,7 +180,7 @@ describe("search", () => {
     await company("Acme Labs");
     candidate();
     const page = await html(SearchPage(sp({ role: "engineer" })));
-    expect(page).toContain("Choose filters and press Search.");
+    expect(page).toContain("choose filters and press Search.");
     expect(rows("SELECT * FROM usage_events")).toEqual([]);
   });
 
@@ -201,6 +202,43 @@ describe("search", () => {
       { action: "search_candidates", channel: "web", company_id: a.co },
     ]);
     expect(rows<{ action: string }>("SELECT action FROM audit_log WHERE action = 'candidate.search'")).toHaveLength(1);
+  });
+
+  it("role picker: one click on a role runs the search at once, spends exactly one search, best score first", async () => {
+    await company("Acme Labs");
+    const low = candidate(55);
+    const high = candidate(91);
+    const before = await html(SearchPage(sp()));
+    // Кожна роль веде на пошук, що запускається одразу (q=1), без попереднього завантаження.
+    expect(before).toContain('aria-label="I\'m hiring"');
+    expect(before).toContain('href="/company/search?role=engineer&q=1"');
+    expect(before).toContain('href="/company/search?role=bd&q=1"');
+    expect(rows("SELECT * FROM usage_events")).toEqual([]);
+
+    const page = await html(SearchPage(sp({ role: "engineer", q: "1" })));
+    expect(rows("SELECT action FROM usage_events")).toEqual([{ action: "search_candidates" }]);
+    expect(page).toContain("Best matches: Engineer");
+    expect(page).toMatch(/aria-current="true"[^>]*>Engineer</);
+    expect(page.indexOf(candidateLabel(high))).toBeLessThan(page.indexOf(candidateLabel(low)));
+    // Фішка з балом, рівень, сильні сторони з розкладу балу, кнопка знайомства.
+    expect(page).toContain("Level 10");
+    expect(page).toMatch(/aria-label="Top signals"[^>]*>.*GitHub <b[^>]*>91<\/b>/);
+    expect(page).toContain(`href="/company/candidates/${high}?role=engineer&intro=1"`);
+    expect(page).toContain("Request intro");
+    expect(page).toContain("if they accept you get their Telegram");
+    noContact(page);
+  });
+
+  it("candidates who chose Telegram handle directly are marked, and their intro button says Show Telegram", async () => {
+    await company("Acme Labs");
+    candidate(70, { contactMode: "direct", contactConsent: true });
+    candidate(60);
+    const page = await html(SearchPage(sp({ role: "engineer", q: "1" })));
+    expect(page.match(/data-contact="direct"/g)).toHaveLength(1);
+    expect(page).toContain("Telegram handle directly");
+    expect(page).toContain("Show Telegram");
+    expect(page.match(/data-contact="approval"/g)).toHaveLength(1);
+    noContact(page);
   });
 
   it("an empty result names the reason", async () => {
@@ -277,7 +315,7 @@ describe("candidate profile as a company sees it", () => {
     expect(page).toContain("How scores work");
     expect(page).toContain("Not in your pipeline yet.");
     expect(page).toContain("Request intro");
-    expect(page).toContain("You see the contact only after the candidate accepts.");
+    expect(page).toContain("The candidate sees your request and decides. If they accept, you get their Telegram");
     // Попередній перегляд у діалозі той самий, що отримає кандидат (notify.ts).
     expect(page).toContain("Acme Labs wants to talk to you about an Engineer role.");
     noContact(page);
@@ -397,13 +435,22 @@ describe("candidate profile as a company sees it", () => {
     const x = candidate(81, { contactMode: "direct", contactConsent: true });
     const page = await html(CandidatePage(cand(x)));
     expect(page).toContain("Show Telegram handle");
-    expect(page).toContain("The candidate will be told that Acme Labs viewed their handle.");
+    expect(page).toContain("They will be told that Acme Labs viewed it.");
     noContact(page);
 
     const s = await panel(a.co, x, "intro", { message: "Hi, we found your profile on NextCryptoJob and would like to talk about a role." });
     expect(s.message).toBe("Here is the Telegram handle. The candidate was told that you viewed it.");
     expect(s.card?.contact?.value).toBe(handles.get(x));
     expect(rows("SELECT action FROM audit_log WHERE action = 'contact.reveal'")).toHaveLength(1);
+  });
+
+  it("the intro dialog says the candidate decides and you get their Telegram on yes; ?intro=1 opens it", async () => {
+    await company("Acme Labs");
+    const x = candidate(81);
+    const page = await html(CandidatePage(cand(x, { intro: "1" })));
+    expect(page).toContain("The candidate sees your request and decides. If they accept, you get their Telegram.");
+    expect(page).toContain('data-contact-rule="approval"');
+    noContact(page);
   });
 
   it("a hidden candidate keeps only own notes, history and a shared contact", async () => {
@@ -630,5 +677,50 @@ describe("tenant isolation", () => {
     // Та сама вкладка з B працює і пише в B.
     expect((await panel(b, x, "add")).card?.stage).toBe("found");
     expect(rows("SELECT company_id FROM pipeline")).toEqual([{ company_id: b }]);
+  });
+});
+
+describe("demo company", () => {
+  async function demo() {
+    const admin = addUser(harness.raw, { email: "boss@example.com", visible: false });
+    const { companyId } = await createDemo(harness.env.DB, admin);
+    await signIn(admin, companyId);
+    const ids = rows<{ id: string }>("SELECT id FROM users WHERE is_demo = 1 ORDER BY id").map((r) => r.id);
+    return { admin, companyId, ids, idOf: (n: number) => ids.find((id) => id.startsWith(`de00${String(n).padStart(2, "0")}`))! };
+  }
+
+  it("says it is a demo in the CRM shell, and its search shows only synthetic candidates", async () => {
+    const real = candidate(99);
+    const d = await demo();
+    const shell = await html(CrmLayout({ children: null }));
+    expect(shell).toContain("data-demo-banner");
+    expect(shell).toContain("Every candidate here is synthetic");
+    const page = await html(SearchPage(sp({ role: "engineer", q: "1" })));
+    expect(page).toContain("#DE0001");
+    expect(page).not.toContain(candidateLabel(real));
+    expect(d.ids).toHaveLength(12);
+  });
+
+  it("an intro to a demo candidate waits, then Simulate accept shows the demo Telegram handle", async () => {
+    const d = await demo();
+    const x = d.idOf(2);
+    const sent = await panel(d.companyId, x, "intro", { message: MESSAGE });
+    expect(sent.error).toBeUndefined();
+    expect(sent.intro?.status).toBe("pending");
+    const page = await html(CandidatePage(cand(x)));
+    expect(page).toContain("Simulate accept");
+    expect(page).toContain("Simulate decline");
+    const answered = await panel(d.companyId, x, "demo_accept", { intro_id: sent.intro!.intro_id });
+    expect(answered.message).toBe("Demo: the candidate accepted. Their Telegram handle is below.");
+    expect(answered.card?.contact?.value).toBe("@ncj-demo-02");
+  });
+
+  it("a real company cannot use the demo answer", async () => {
+    const a = await company("Acme Labs");
+    const x = candidate(81);
+    const sent = await panel(a.co, x, "intro", { message: MESSAGE });
+    const refused = await panel(a.co, x, "demo_accept", { intro_id: sent.intro!.intro_id });
+    expect(refused.error).toBe("Only a demo company can answer for a demo candidate.");
+    expect(rows("SELECT status FROM intros")).toEqual([{ status: "pending" }]);
   });
 });

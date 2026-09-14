@@ -94,13 +94,31 @@ const USER_COLUMNS = "u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.sala
 
 /**
  * Люди, яким добірка може піти. Колонку digest_paused додає 0011 (доріжка web), і її може
- * ще не бути: тоді запит без неї, а в журналі видно, що пауза поки не діє.
+ * ще не бути: тоді запит без неї, а в журналі видно, що пауза поки не діє. Демо-кандидатів
+ * (users.is_demo, 0020, доріжка web: синтетичні люди для перевірки CRM) не беремо ніколи;
+ * поки 0020 не накочено, колонки немає, і демо теж немає.
  */
 export async function loadDigestUsers(db: Db, log: (l: string) => void, onlyUserId?: string): Promise<DigestUserRow[]> {
   const byId = onlyUserId ? " AND u.id = ?" : "";
   const params = onlyUserId ? [onlyUserId] : [];
   const base = `SELECT ${USER_COLUMNS} FROM users u WHERE u.roles <> '[]'` +
     " AND EXISTS (SELECT 1 FROM scores s WHERE s.user_id = u.id)";
+  try {
+    return await db.query<DigestUserRow>(`${base} AND COALESCE(u.digest_paused, 0) = 0 AND u.is_demo = 0${byId}`, params);
+  } catch (e) {
+    if (!(e instanceof Error)) throw e;
+    if (/no such column:?\s*(u\.)?is_demo/i.test(e.message)) {
+      return loadDigestUsersWithoutDemo(db, log, base, byId, params);
+    }
+    if (!/no such column:?\s*(u\.)?digest_paused/i.test(e.message)) throw e;
+    log("digest: users.digest_paused missing (migration 0011 not applied), pause is not honoured yet");
+    return db.query<DigestUserRow>(`${base}${byId}`, params);
+  }
+}
+
+/** До 0020: без умови на is_demo (демо-рядків тоді ще немає). */
+async function loadDigestUsersWithoutDemo(db: Db, log: (l: string) => void, base: string, byId: string,
+                                          params: string[]): Promise<DigestUserRow[]> {
   try {
     return await db.query<DigestUserRow>(`${base} AND COALESCE(u.digest_paused, 0) = 0${byId}`, params);
   } catch (e) {

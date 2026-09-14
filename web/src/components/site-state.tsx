@@ -13,16 +13,37 @@ import { cn } from "@/lib/utils";
 
 export type SiteState = {
   signedIn: boolean;
+  /** Адмін у сесії, відкритій поштою: пункт «Admin» у шапці. */
+  admin: boolean;
   notice: { message: string; level: "info" | "warning" } | null;
 };
 
 let last: { key: string; promise: Promise<SiteState | null> } | null = null;
+/** Перший запит документа несе referrer; далі це переходи всередині сайту. */
+let firstView = true;
 
-function fetchState(key: string): Promise<SiteState | null> {
+/**
+ * Адреса запиту стану. Той самий запит рахує перегляд (lib/analytics/visits.ts): шлях без
+ * параметрів, referrer лише першого завантаження, для решти `n=1`. Жодних сторонніх скриптів.
+ */
+function stateUrl(pathname: string): string {
+  const q = new URLSearchParams({ v: pathname });
+  if (firstView) {
+    if (document.referrer) q.set("r", document.referrer.slice(0, 500));
+  } else {
+    q.set("n", "1");
+  }
+  firstView = false;
+  return `/api/me?${q.toString()}`;
+}
+
+function fetchState(key: string, pathname: string): Promise<SiteState | null> {
   if (last?.key === key) return last.promise;
-  const promise = fetch("/api/me", { cache: "no-store" })
+  const promise = fetch(stateUrl(pathname), { cache: "no-store" })
     .then((res) => (res.ok ? (res.json() as Promise<Partial<SiteState>>) : null))
-    .then((body) => (body ? { signedIn: body.signedIn === true, notice: body.notice ?? null } : null))
+    .then((body) =>
+      body ? { signedIn: body.signedIn === true, admin: body.admin === true, notice: body.notice ?? null } : null,
+    )
     // Мережа чи перехід обірвали запит: лишаємо те, що показано.
     .catch(() => null);
   last = { key, promise };
@@ -37,7 +58,7 @@ export function useSiteState(): SiteState | null {
     let alive = true;
     // Ключ: адреса й мить переходу з точністю до секунди. Шапка й повідомлення
     // монтуються в ту саму мить і ділять запит; наступний перехід питає знову.
-    fetchState(`${pathname}@${Math.floor(Date.now() / 1000)}`).then((next) => {
+    fetchState(`${pathname}@${Math.floor(Date.now() / 1000)}`, pathname).then((next) => {
       if (alive && next) setState(next);
     });
     return () => {

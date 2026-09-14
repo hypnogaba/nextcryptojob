@@ -695,6 +695,8 @@ export interface CandidateIntroRow {
   telegram_id: string | null;
   telegram_username: string | null;
   email: string | null;
+  /** Демо-кандидат (users.is_demo, 0020): людини немає, сповіщати нікого. */
+  is_demo: number;
 }
 
 /** Живе знайомство для кандидата (бронь не видно нікому). */
@@ -706,7 +708,7 @@ export async function candidateIntroRow(db: D1Database, introId: string): Promis
               c.name AS company_name, c.status AS company_status, c.domain AS company_domain,
               (c.domain_verified_at IS NOT NULL) AS company_domain_verified, c.about AS company_about,
               j.title AS job_title,
-              u.channel, u.telegram_id, u.telegram_username, u.email
+              u.channel, u.telegram_id, u.telegram_username, u.email, u.is_demo
          FROM intros i
          JOIN companies c ON c.id = i.company_id
          JOIN users u ON u.id = i.user_id
@@ -748,6 +750,13 @@ async function notifyCandidate(db: D1Database, introId: string, token: string | 
   try {
     const row = await candidateIntroRow(db, introId);
     if (!row) return;
+    if (row.is_demo === 1) {
+      // Демо-кандидат (lib/admin/demo.ts): живої людини немає, нікуди не шлемо. Позначаємо
+      // доставленим, щоб компанія не бачила NOT_REACHED_TEXT; відповідь імітує адмінка.
+      await db.prepare("UPDATE intros SET notify_channel = NULL, notified_at = ?, notify_error = NULL WHERE id = ?")
+        .bind(sqlTime(now), introId).run();
+      return;
+    }
     const message: OutgoingMessage =
       row.status === "direct"
         ? directRevealMessage(row.company_name)

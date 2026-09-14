@@ -101,3 +101,11 @@ export function readOnlyJobsDb(binding: D1Database): JobsDb {
 export function jobsDb(): JobsDb {
   return readOnlyJobsDb(getCloudflareContext().env.JOBS_DB);
 }
+
+/**
+ * База вакансій з оточення, яке передали явно (cron у точці входу Worker не має контексту
+ * OpenNext). null, якщо прив'язки немає (тест, розробка без бази вакансій).
+ */
+export function jobsDbFromEnv(env: { JOBS_DB?: D1Database }): JobsDb | null {
+  return env.JOBS_DB ? readOnlyJobsDb(env.JOBS_DB) : null;
+}

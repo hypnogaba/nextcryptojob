@@ -22,6 +22,8 @@ import { companyIntroNotice } from "@/lib/crm/notify";
 import type { PipelineEvent } from "@/lib/crm/pipeline";
 import { CandidateId, type Account, type CandidateView, type RoleKey } from "@/lib/crm/types";
 import { candidatePanel, companyJobs } from "@/lib/crm/views";
+import { settleDemoIntros } from "@/lib/admin/demo";
+import { notifierFromEnv } from "@/lib/crm/notify";
 import { crmPage } from "../../crm";
 import { CandidatePanel } from "./candidate-panel";
 import { RoleTabs } from "./role-tabs";
@@ -87,6 +89,8 @@ export default async function CandidatePage({
   }
 
   const canWrite = company.access === "subscription";
+  // Демо-компанія: демо-кандидати «відповідають» самі за кілька секунд (lib/admin/demo.ts).
+  if (company.isDemo) await settleDemoIntros(ctx.db, company.id, notifierFromEnv(ctx.env), ctx.now);
   const [panel, jobs, account, profileRow] = await Promise.all([
     candidatePanel(ctx, id),
     companyJobs(ctx),
@@ -120,6 +124,8 @@ export default async function CandidatePage({
       siteLine={profileRow?.domain ? `Company site: ${profileRow.domain}${profileRow.domainVerifiedAt ? " (domain verified)" : ""}` : null}
       quotaLine={quotaLine(account.quotas)}
       canWrite={canWrite}
+      demo={company.isDemo === true}
+      openIntro={query.intro === "1"}
       initial={{
         card: panel.card,
         intro: panel.intro,

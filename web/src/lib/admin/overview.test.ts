@@ -144,7 +144,8 @@ describe("loadOverview", () => {
     expect(o.cron.available).toBe(true);
     const byJob = Object.fromEntries(o.cron.jobs.map((j) => [j.job, j]));
     expect(o.cron.jobs.map((j) => j.job)).toEqual([
-      "intros.expire", "webhooks.deliver", "jobs.expire", "saved_searches.alert", "x402.stale", "cleanup.daily",
+      "intros.expire", "webhooks.deliver", "jobs.expire", "saved_searches.alert", "x402.stale", "owner.alerts", "owner.weekly",
+      "cleanup.daily",
     ]);
     expect(byJob["intros.expire"]).toMatchObject({ ok: true, late: false, lastAt: Date.parse("2026-09-13T11:55:00Z"), counts: { expired: 0 } });
     expect(byJob["webhooks.deliver"]).toMatchObject({ ok: false, late: false, failed24h: 2, lastOkAt: null, error: "D1_ERROR: boom", ms: 1200 });
@@ -167,7 +168,8 @@ describe("loadOverview", () => {
   });
 
   it("still loads without migration 0019 and says cron history is missing", async () => {
-    const t = migratedD1(ALL_MIGRATIONS.filter((m) => m < "0019"));
+    // Лише без 0019; 0020 (is_demo) від неї не залежить і накочена.
+    const t = migratedD1(ALL_MIGRATIONS.filter((m) => !m.startsWith("0019")));
     const o = await loadOverview(t.d1, OVERVIEW_NOW);
     expect(o.cron.available).toBe(false);
     expect(o.cron.error).toContain("0019");
@@ -194,6 +196,8 @@ describe("overviewFlags", () => {
     const text = flags.map((f) => `${f.level}: ${f.text}`);
     expect(text).toEqual([
       "alert: Cron x402.stale (0 * * * *): no run recorded yet.",
+      "alert: Cron owner.alerts (0 * * * *): no run recorded yet.",
+      "alert: Cron owner.weekly (0 * * * *): no run recorded yet.",
       "alert: Cron cleanup.daily (0 3 * * *) is late: last run 33 h ago.",
       "alert: Cron webhooks.deliver: the last run failed: D1_ERROR: boom",
       "alert: Formula v5 has no passed quality run: companies do not see the scores of 1 person.",

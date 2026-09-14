@@ -18,8 +18,9 @@ vi.mock("next/navigation", async () => ({
   },
 }));
 
-// База вакансій: справжній SQLite, і лічильник запитів до неї.
-const jobs = vi.hoisted(() => ({ d1: null as unknown as D1Database, reads: 0 }));
+// База вакансій: справжній SQLite, і лічильники запитів до неї: reads = звіт джерел (jobs_cache),
+// any = будь-який запит (дошки й збої джерел читаються щоразу, звіт джерел кешується).
+const jobs = vi.hoisted(() => ({ d1: null as unknown as D1Database, reads: 0, any: 0 }));
 vi.mock("@/lib/jobs-db", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/lib/jobs-db")>();
   return {
@@ -29,7 +30,8 @@ vi.mock("@/lib/jobs-db", async (importOriginal) => {
       return {
         ...db,
         all: (sql: string, ...params: unknown[]) => {
-          jobs.reads++;
+          jobs.any++;
+          if (/FROM jobs_cache/.test(sql)) jobs.reads++;
           return db.all(sql, ...params);
         },
       };
@@ -55,6 +57,7 @@ beforeEach(() => {
   addScanRun(t.raw, { id: "s1", startedAt: "2026-09-12T04:30:00.000Z" });
   jobs.d1 = t.d1;
   jobs.reads = 0;
+  jobs.any = 0;
 });
 
 afterEach(() => {
@@ -69,13 +72,13 @@ describe("/admin/sources access", () => {
   it("is not found for someone who is not an admin, and never reads the jobs DB", async () => {
     await createSession("ada", "email");
     await expect(render()).rejects.toBeInstanceOf(NotFoundCalled);
-    expect(jobs.reads).toBe(0);
+    expect(jobs.any).toBe(0);
   });
 
   it("is not found for an admin who signed in through Telegram", async () => {
     await createSession("boss", "telegram");
     await expect(render()).rejects.toBeInstanceOf(NotFoundCalled);
-    expect(jobs.reads).toBe(0);
+    expect(jobs.any).toBe(0);
   });
 
   it("is not found without a session", async () => {
@@ -116,6 +119,75 @@ describe("/admin/sources for an admin", () => {
     const fresh = await render();
     expect(jobs.reads).toBe(2);
     expect(fresh).toContain("Updated just now");
+  });
+
+  it("folds sources with fewer than 20 live jobs behind a toggle and keeps the big ones in view", async () => {
+    const t = jobsTestDb();
+    for (let i = 0; i < 25; i++) addCachedJob(t.raw, { source: "ashby:kraken", company: "Kraken", fetchedAt: "2026-09-12T04:40:00.000Z" });
+    addCachedJob(t.raw, { source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: "2026-09-12T04:40:00.000Z" });
+    addCachedJob(t.raw, { source: "lever:moonpay", company: "MoonPay", fetchedAt: "2026-09-12T04:40:00.000Z" });
+    addScanRun(t.raw, { id: "s1", startedAt: "2026-09-12T04:30:00.000Z" });
+    jobs.d1 = t.d1;
+    await createSession("boss", "email");
+    const html = await render();
+    const big = html.slice(html.indexOf('data-table="big-sources"'), html.indexOf("data-small-sources"));
+    expect(big).toContain(">Kraken</a>");
+    expect(big).not.toContain("Coinbase");
+    expect(html).toContain('data-small-sources="2"');
+    expect(html).toContain("Show 2 small sources");
+    const small = html.slice(html.indexOf('data-table="small-sources"'));
+    expect(small).toContain(">Coinbase</a>");
+    expect(small).toContain(">MoonPay</a>");
+  });
+
+  it("lists the ecosystem and fund boards with platform, decision, companies found, last discovery and employers added", async () => {
+    const t = jobsTestDb();
+    addScanRun(t.raw, { id: "s1", startedAt: "2026-09-12T04:30:00.000Z" });
+    t.raw.exec(`INSERT INTO job_boards (slug, label, kind, url, platform, platform_id, companies, decision, reason, checked_at) VALUES
+      ('solana', 'Solana', 'ecosystem', 'https://jobs.solana.com/jobs', 'getro', '858', 251, 'discover', 'weekly', '2026-09-14'),
+      ('paradigm', 'Paradigm', 'fund', 'https://www.paradigm.xyz/portfolio', 'consider', NULL, 80, 'manual', 'Consider forbids reading', '2026-09-14'),
+      ('a16z', 'a16z crypto', 'fund', 'https://a16zcrypto.com/jobs', 'custom', NULL, NULL, 'skip', 'Mixed portfolio, mostly not crypto', '2026-09-14')`);
+    t.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via) VALUES
+      ('jito', 'Jito', 'ashby', 'jito', 'getro:858'), ('drift', 'Drift', 'ashby', 'drift', 'getro:858'),
+      ('eigen', 'Eigen', 'greenhouse', 'eigen', 'portfolio:paradigm'), ('coinbase', 'Coinbase', 'greenhouse', 'coinbase', 'seed')`);
+    t.raw.exec(`INSERT INTO scan_runs (id, kind, started_at, status, jobs_new, notes) VALUES ('d1', 'discover', '2026-09-06T05:30:00.000Z', 'ok', 2,
+      '{"getro":[{"board":"solana","id":858,"label":"Solana","companies":251,"withJobs":120,"known":90,"added":2,"hostedOnly":5}]}')`);
+    jobs.d1 = t.d1;
+    await createSession("boss", "email");
+    const html = await render();
+    expect(html).toContain("We do not copy jobs from these boards");
+    const row = (slug: string) => html.slice(html.indexOf(`data-board="${slug}"`), html.indexOf("</tr>", html.indexOf(`data-board="${slug}"`)));
+    expect(row("solana")).toContain('href="https://jobs.solana.com/jobs"');
+    expect(row("solana")).toContain("Getro");
+    expect(row("solana")).toContain("Discover");
+    expect(row("solana")).toContain("251");
+    expect(row("solana")).toContain("120 hiring");
+    expect(row("solana")).toContain("90 already known, 2 new");
+    expect(row("solana")).toMatch(/>2(<|\s)/);
+    expect(row("paradigm")).toContain("Manual");
+    expect(row("paradigm")).toContain("Consider");
+    expect(row("paradigm")).toMatch(/>1(<|\s)/);
+    expect(row("a16z")).toContain("Skip");
+    expect(row("a16z")).toContain("Mixed portfolio, mostly not crypto");
+    expect(html).toContain("Board reading");
+  });
+
+  it("shows failing and dead sources with what to do", async () => {
+    const t = jobsTestDb();
+    addScanRun(t.raw, { id: "s1", startedAt: "2026-09-12T04:30:00.000Z" });
+    t.raw.exec(`INSERT INTO source_state (source, status, fail_days, last_error, failed_at, checked_at) VALUES
+      ('lever:gone', 'dead', 8, 'HTTP 404', '2026-09-12T04:31:00.000Z', '2026-09-12T04:31:00.000Z'),
+      ('ashby:slow', 'failing', 2, 'timeout after 15000 ms', '2026-09-12T04:31:00.000Z', '2026-09-12T04:31:00.000Z'),
+      ('greenhouse:blip', 'failing', 1, 'HTTP 502', '2026-09-12T04:31:00.000Z', '2026-09-12T04:31:00.000Z')`);
+    jobs.d1 = t.d1;
+    await createSession("boss", "email");
+    const html = await render();
+    expect(html).toContain('id="problems"');
+    expect(html).toContain("2</b> need a look");
+    expect(html).toContain("lever:gone");
+    expect(html).toContain("Dead: read once a week only");
+    expect(html).toContain("Failing 2 scans");
+    expect(html).toContain("usually heals by itself");
   });
 
   it("says so when the jobs DB cannot be read", async () => {

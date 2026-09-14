@@ -30,6 +30,10 @@ export interface PanelProps {
   /** "Intros left …" для діалогу; null, коли межі немає. */
   quotaLine: string | null;
   canWrite: boolean;
+  /** Демо-компанія (lib/admin/demo.ts): кнопки «відповісти за кандидата». */
+  demo?: boolean;
+  /** Відкрити діалог знайомства одразу (кнопка «Intro» з пошуку). */
+  openIntro?: boolean;
   initial: PanelState;
 }
 
@@ -334,6 +338,25 @@ function IntroSection(
             Intro requested. {expiresInText(pendingIntro.expires_at, at)}.
           </p>
           {state.introNotice ? <Notice tone="warning">{state.introNotice}</Notice> : null}
+          <p className={HINT}>The candidate sees your request and decides. If they accept, you get their Telegram here.</p>
+          {props.demo ? (
+            <div className="grid gap-2 rounded-lg border border-dashed border-line-strong bg-wash p-3" data-demo-answer="">
+              <p className="text-sm text-ink">
+                Demo candidate: they answer by themselves a few seconds after the request (reload the page), or answer for them now.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(["demo_accept", "demo_decline"] as const).map((op) => (
+                  <form key={op} action={action}>
+                    <Hidden companyId={companyId} candidateId={candidateId} op={op} />
+                    <input type="hidden" name="intro_id" value={pendingIntro.intro_id} />
+                    <SubmitButton pendingLabel="Answering..." variant={op === "demo_accept" ? "default" : "outline"} className="h-11 px-4 text-base">
+                      {op === "demo_accept" ? "Simulate accept" : "Simulate decline"}
+                    </SubmitButton>
+                  </form>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {canWrite ? (
             <form action={action}>
               <Hidden companyId={companyId} candidateId={candidateId} op="withdraw" />
@@ -359,8 +382,10 @@ function IntroSection(
           ) : (
             <p className={HINT}>Read-only: no active subscription.</p>
           )}
-          <p className={HINT}>
-            {props.contactMode === "direct" ? "Telegram handle available." : "You see the contact only after the candidate accepts."}
+          <p className={HINT} data-contact-rule={props.contactMode}>
+            {props.contactMode === "direct"
+              ? "This candidate chose \u201cTelegram handle directly\u201d: you see their Telegram at once, and they are told you viewed it."
+              : "The candidate sees your request and decides. If they accept, you get their Telegram (or email, if they have no Telegram)."}
           </p>
         </div>
       )}
@@ -386,6 +411,12 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
     if (state.op === "intro" && !state.error) ref.current?.close();
   }, [state]);
 
+  // «Intro» з рядка пошуку: діалог відкритий одразу.
+  const { openIntro } = props;
+  useEffect(() => {
+    if (openIntro && !ref.current?.open) ref.current?.showModal();
+  }, [openIntro]);
+
   const len = message.trim().length;
   const expires = new Date(at.getTime() + 14 * 86_400_000);
   const job = jobs.find((j) => j.id === jobId);
@@ -407,8 +438,13 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
             {direct ? `Show the Telegram handle of ${label}` : `Request intro with ${label}`}
           </h2>
           {direct ? (
-            <Notice tone="info">The candidate will be told that {companyName} viewed their handle.</Notice>
-          ) : null}
+            <Notice tone="info">
+              This candidate chose &ldquo;Telegram handle directly&rdquo;: the handle appears here at once. They will be told
+              that {companyName} viewed it.
+            </Notice>
+          ) : (
+            <Notice tone="info">The candidate sees your request and decides. If they accept, you get their Telegram.</Notice>
+          )}
           {state.op === "intro" && state.error ? <Notice tone="error">{state.error}</Notice> : null}
           <div className="grid gap-1.5">
             <label htmlFor="intro-message" className={LABEL}>
@@ -505,8 +541,8 @@ function IntroDialog(props: PanelProps & { state: PanelState; action: (f: FormDa
           ) : null}
           <p className={HINT}>
             {direct
-              ? "The handle appears here at once."
-              : "The candidate has 14 days to answer. If they accept, you see their Telegram handle (or email)."}
+              ? "No request and no waiting: the candidate turned this on in their settings."
+              : "They have 14 days to answer. Without Telegram on their account you get their email instead. Until they accept, you never see a contact."}
             {props.quotaLine ? ` ${props.quotaLine}` : ""}
           </p>
           <div className="flex flex-wrap justify-end gap-2">

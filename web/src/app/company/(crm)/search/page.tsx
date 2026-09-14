@@ -9,6 +9,9 @@ import { readAction, runAction } from "@/lib/crm/actions";
 import { userFacingError } from "@/lib/crm/company";
 import { CHAIN_TEXT, emptyReasonText, roleText } from "@/lib/crm/labels";
 import { describeFilters, parseSearchParams, searchQuery } from "@/lib/crm/search-params";
+import { signalItems, topSignals, type Signal } from "@/lib/crm/signals";
+import { SCORED_ROLE_KEYS } from "@/lib/roles/recipes";
+import { cn } from "@/lib/utils";
 import { CHAINS, type Account, type SearchResponse } from "@/lib/crm/types";
 import { crmPage } from "../crm";
 import { SaveSearchForm } from "./save-search-form";
@@ -49,6 +52,41 @@ function Check({ name, label, checked }: { name: string; label: string; checked:
 }
 
 /**
+ * «I'm hiring»: роль одним натисканням. Посилання одразу запускає пошук за цією роллю,
+ * найвищий бал першим (q=1, sort за замовчуванням score), тобто рівно один пошук з денної
+ * квоти на вибір ролі. Без попереднього завантаження: prefetch витратив би квоту за кожну
+ * роль, повз яку пройшла миша.
+ */
+function RolePicker({ active }: { active: string | undefined }) {
+  return (
+    <nav aria-label="I'm hiring" className="grid gap-2" data-role-picker="">
+      <p className="font-display text-[1.25rem] leading-none font-extrabold tracking-[0.02em] uppercase">I&apos;m hiring</p>
+      <ul className="flex flex-wrap gap-2">
+        {SCORED_ROLE_KEYS.map((key) => {
+          const on = key === active;
+          return (
+            <li key={key}>
+              <Link
+                href={`/company/search?role=${key}&q=1`}
+                prefetch={false}
+                aria-current={on ? "true" : undefined}
+                className={cn(
+                  "inline-flex min-h-11 items-center rounded-full border-2 px-4 text-sm font-semibold transition-colors",
+                  on ? "border-ink bg-ink text-surface" : "border-line-strong bg-surface text-ink hover:border-ink",
+                )}
+              >
+                {ROLES[key].name}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      <p className={HINT}>Pick a role: we show who fits it best, highest score first. Each pick is one search from your daily limit.</p>
+    </nav>
+  );
+}
+
+/**
  * Пошук кандидатів (специфікація 5.2, 10.2 W2). Фільтри в адресі (GET), пошук
  * лише після "Search" (`q=1`), бо кожна сторінка витрачає денну квоту й пишеться
  * в журнал. Далі "Load more" додає сторінки, "Add to pipeline" з рядка,
@@ -62,6 +100,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const query = searchQuery(parsed.filters, parsed.sort, false);
 
   let result: SearchResponse | null = null;
+  let signals: Record<string, Signal[]> = {};
   let error: string | null = null;
   if (company.access === "none") {
     // Сторінка нижче покаже, що доступу немає.
@@ -70,6 +109,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   } else if (parsed.run) {
     try {
       result = (await runAction("search_candidates", { filters: parsed.filters, sort: parsed.sort }, ctx)).output as SearchResponse;
+      signals = await topSignals(ctx.db, signalItems(result));
     } catch (err) {
       const known = userFacingError(err);
       if (!known) throw err;
@@ -185,7 +225,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       <div className="grid gap-0">
         <Check name="x_verified" label="X verified" checked={one(params, "x_verified") === "1"} />
         <Check name="wallet_verified" label="Wallet verified by signature" checked={one(params, "wallet_verified") === "1"} />
-        <Check name="contact_direct" label="Telegram handle available" checked={one(params, "contact_direct") === "1"} />
+        <Check name="contact_direct" label="Telegram handle directly" checked={one(params, "contact_direct") === "1"} />
         <Check name="hide_pipeline" label="Hide my pipeline" checked={one(params, "hide_pipeline") === "1"} />
       </div>
       <Field id="min_coverage" label="Min coverage, %" error={e.min_coverage}>
@@ -227,12 +267,14 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       {company.access === "none" ? (
         <NoAccess />
       ) : (
+        <>
+        {company.access === "subscription" ? <RolePicker active={parsed.run ? parsed.filters.role : undefined} /> : null}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
           <div className={result ? "order-last lg:order-none" : undefined}>{filtersForm}</div>
           <section aria-labelledby="results-title" className="grid content-start gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 id="results-title" className={H2}>
-                Results
+                {result && parsed.filters.role ? `Best matches: ${roleText(parsed.filters.role)}` : "Results"}
               </h2>
               {result ? (
                 <a href="#filters" className={`${LINK} text-sm lg:hidden`}>
@@ -242,7 +284,16 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             </div>
             {error ? <Notice tone="error">{error}</Notice> : null}
             {!result && !error ? (
-              <p className={HINT}>Choose filters and press Search. Each page of results counts toward your daily search limit.</p>
+              <p className={HINT}>
+                Pick a role above, or choose filters and press Search. Each page of results counts toward your daily search limit.
+              </p>
+            ) : null}
+            {result && !empty ? (
+              <p className={HINT} data-contact-rule="">
+                The chip shows the score and its level. To reach someone, request an intro: the candidate sees your request and
+                decides, and if they accept you get their Telegram. Candidates marked &ldquo;Telegram handle directly&rdquo;
+                chose to show it at once.
+              </p>
             ) : null}
             {result && empty ? (
               <Notice tone="info">
@@ -268,6 +319,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                 initial={result}
                 role={parsed.filters.role}
                 canWrite={canWrite}
+                signals={signals}
               />
             ) : null}
             {result && canWrite ? (
@@ -285,6 +337,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             ) : null}
           </section>
         </div>
+        </>
       )}
     </div>
   );

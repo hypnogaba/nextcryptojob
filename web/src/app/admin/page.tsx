@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { AdminNav } from "@/components/admin-nav";
 import { Ago, CLOCK, LINK, NUM, Panel, pct, Stat, Stats, SubHead } from "@/components/admin-ui";
 import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
@@ -12,12 +13,18 @@ import {
   STALE_AFTER_SCANS,
   type JobSourcesReport,
 } from "@/lib/admin/job-sources";
+import { recentAlerts, type RecentAlert } from "@/lib/admin/alerts";
+import { DEMO_CANDIDATES, DEMO_COMPANY_NAME, demoState, type DemoState } from "@/lib/admin/demo";
 import { loadOverview, overviewFlags, type Flag, type Overview } from "@/lib/admin/overview";
 import { getSettings, type AppSettings } from "@/lib/admin/settings";
+import { WEEKLY_HOUR_UTC } from "@/lib/admin/weekly";
+import { conversion, GROUP_LABELS, loadVisits, type VisitReport } from "@/lib/analytics/visits";
 import { currentAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { jobsDb } from "@/lib/jobs-db";
 import { cn } from "@/lib/utils";
+import { SubmitButton } from "@/components/form/submit-button";
+import { createDemoAction, deleteDemoAction, openDemoAction, sendWeeklyNowAction } from "./actions";
 
 export const metadata: Metadata = { title: "Admin overview", robots: { index: false } };
 
@@ -481,17 +488,261 @@ function Health({ o, report }: { o: Overview; report: JobSourcesReport | null })
   );
 }
 
-export default async function AdminOverviewPage() {
-  if (!(await currentAdmin())) notFound();
+const SHORT_DAY = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+
+function Visitors({ v }: { v: VisitReport }) {
+  const today = v.days[0];
+  const max = Math.max(1, ...v.days.map((d) => d.uniques));
+  return (
+    <Panel id="visitors" title="Visitors, 30 days" className="lg:col-span-2">
+      {!v.available ? (
+        <p role="status" className="text-sm text-ink-muted">
+          {v.error ?? "No visit data yet."}
+        </p>
+      ) : null}
+      <Stats className="sm:grid-cols-5">
+        <Stat label="Unique visitors" value={NUM.format(v.totals.uniques)} note={`Today ${NUM.format(today?.uniques ?? 0)}`} />
+        <Stat label="Page views" value={NUM.format(v.totals.views)} note={`Today ${NUM.format(today?.views ?? 0)}`} />
+        <Stat label="New sign-ups" value={NUM.format(v.totals.signups)} note={`Today ${NUM.format(today?.signups ?? 0)}`} />
+        <Stat label="Visit to sign-up" value={conversion(v.totals.signups, v.totals.uniques)} note="Sign-ups per unique visitor" />
+        <Stat
+          label="Just looked"
+          value={NUM.format(Math.max(0, v.totals.uniques - v.totals.signups))}
+          note="Visited, did not sign up"
+        />
+      </Stats>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className={`${BOARD} max-h-[26rem] overflow-y-auto`}>
+          <table className={`${TABLE} min-w-[440px]`} data-table="visits">
+            <caption className="px-3 pt-2.5 text-left text-xs text-ink-muted">By day, UTC, newest first.</caption>
+            <thead>
+              <tr>
+                <th scope="col" className={TH_TIGHT}>Day</th>
+                <th scope="col" className={TH_TIGHT}>Unique visitors</th>
+                <th scope="col" className={TH_NUM}>Views</th>
+                <th scope="col" className={TH_NUM}>Sign-ups</th>
+                <th scope="col" className={TH_NUM}>Conv.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.days.map((d) => (
+                <tr key={d.day} className={TR} data-day={d.day}>
+                  <th scope="row" className={`${TD} font-normal whitespace-nowrap`}>{SHORT_DAY.format(Date.parse(`${d.day}T12:00:00Z`))}</th>
+                  <td className={TD}>
+                    <span className="flex items-center gap-2">
+                      <span aria-hidden="true" className="h-2.5 rounded-sm bg-brand" style={{ width: `${Math.max(d.uniques ? 4 : 0, (d.uniques / max) * 100)}%`, maxWidth: "7rem" }} />
+                      <span className="tabular-nums">{NUM.format(d.uniques)}</span>
+                    </span>
+                  </td>
+                  <td className={TD_NUM}>{NUM.format(d.views)}</td>
+                  <td className={cn(TD_NUM, d.signups > 0 && "font-semibold")}>{NUM.format(d.signups)}</td>
+                  <td className={`${TD_NUM} text-ink-muted`}>{d.uniques || d.signups ? conversion(d.signups, d.uniques) : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid content-start gap-5">
+          <div className="grid gap-2">
+            <SubHead>Where visitors land</SubHead>
+            {v.pages.length === 0 ? (
+              <p className="text-sm text-ink-muted">Nothing yet.</p>
+            ) : (
+              <ul className="grid gap-1 text-sm" data-list="pages">
+                {v.pages.map((p) => (
+                  <li key={p.key} className="flex justify-between gap-3">
+                    <span className="min-w-0 break-words">{GROUP_LABELS[p.key] ?? p.key}</span>
+                    <span className="shrink-0 tabular-nums text-ink-muted">
+                      <b className="text-ink">{NUM.format(p.uniques)}</b> new, {NUM.format(p.views)} views
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="grid gap-2">
+            <SubHead>Where they come from</SubHead>
+            {v.referrers.length === 0 ? (
+              <p className="text-sm text-ink-muted">Nothing yet.</p>
+            ) : (
+              <ul className="grid gap-1 text-sm" data-list="referrers">
+                {v.referrers.map((r) => (
+                  <li key={r.key} className="flex justify-between gap-3">
+                    <span className="min-w-0 font-mono text-xs break-all">{r.key === "direct" ? "Direct or unknown" : r.key}</span>
+                    <span className="shrink-0 tabular-nums text-ink-muted">
+                      <b className="text-ink">{NUM.format(r.uniques)}</b> visitors
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="text-xs text-ink-muted" data-hint="visits">
+        Counted by the site itself: no third-party scripts, no cookies. A unique visitor is the same IP and browser on
+        one UTC day, kept only as a salted hash until the next day, never as an IP. Bots and your own visits are not
+        counted. Sign-ups are new accounts (email or Telegram). Cost: one database write per page view, plus one per
+        new visitor a day.
+      </p>
+    </Panel>
+  );
+}
+
+const KIND_LABELS: Record<string, string> = {
+  agency: "Agency",
+  cron: "Cron",
+  payments: "Payments",
+  digest: "Digest",
+  scan: "Scanner",
+  source: "Sources",
+  discover: "Discovery",
+  weekly: "Weekly report",
+};
+
+function Owner({ alerts, now, status }: { alerts: RecentAlert[]; now: number; status: ReactNode }) {
+  return (
+    <Panel id="owner" title="Alerts to you">
+      <p className="text-sm text-ink">
+        You get a Telegram message from the bot (or an email, if your account has no Telegram) when an agency applies, a
+        job source or a scan fails, a scheduled job fails, a payment needs a refund, or digests start failing. Each
+        message says what happened, why it matters and what to do. The same alert comes at most once a day.
+      </p>
+      <div className="grid gap-2">
+        <SubHead>Weekly report</SubHead>
+        <p className="text-sm text-ink-muted">
+          Every Monday at {String(WEEKLY_HOUR_UTC).padStart(2, "0")}:00 UTC, by Telegram and email: visitors, new people,
+          brief completion, digests, companies and intros, what waits for you, and problems.
+        </p>
+        <form action={sendWeeklyNowAction} className="flex flex-wrap items-center gap-3">
+          <SubmitButton variant="outline" className="h-11 px-4" pendingLabel="Sending...">
+            Send this week&apos;s report now
+          </SubmitButton>
+        </form>
+        {status}
+      </div>
+      <div className="grid gap-2">
+        <SubHead>Last alerts</SubHead>
+        {alerts.length === 0 ? (
+          <p className="text-sm text-ink-muted">No alerts sent yet.</p>
+        ) : (
+          <ul className="grid gap-1.5 text-sm" data-list="alerts">
+            {alerts.map((a) => (
+              <li key={a.key} className="grid gap-0.5">
+                <span className="min-w-0 break-words">
+                  <span className="mr-2 text-xs font-semibold text-ink-muted uppercase">{KIND_LABELS[a.kind] ?? a.kind}</span>
+                  {a.summary ?? a.key}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  <Ago at={a.sentAt} now={now} />
+                  {a.times > 1 ? `, ${a.times} times` : ""}
+                  {a.channel ? `, by ${a.channel.replace(",", " and ")}` : ""}
+                  {a.error ? <span className="text-danger">, not delivered: {a.error}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function Demo({ demo, status }: { demo: DemoState; status: ReactNode }) {
+  const mine = demo.companies.find((c) => c.ownerIsYou);
+  return (
+    <Panel id="demo" title="Demo company">
+      <p className="text-sm text-ink">
+        Test the company side without a real company. {DEMO_COMPANY_NAME} is owned by you, has a free trial, and sees{" "}
+        {DEMO_CANDIDATES.length} synthetic candidates with different roles, scores and levels.
+        Real companies never see them, they get no digests and are not counted anywhere. Intros to them are answered
+        by themselves a few seconds later, or you answer for them with a button on the candidate page.
+      </p>
+      {!demo.formula.published ? (
+        <p role="status" className="text-sm text-danger">
+          No formula has passed the quality check yet, so demo scores show as not published, like real ones.
+        </p>
+      ) : null}
+      <p className="text-sm text-ink-muted" data-demo="">
+        {demo.companies.length === 0
+          ? "No demo company yet."
+          : `${demo.companies.map((c) => c.name).join(", ")}: ${NUM.format(demo.candidates)} demo candidates, ${NUM.format(demo.intros)} intros.`}
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        {mine ? (
+          <form action={openDemoAction}>
+            <input type="hidden" name="company_id" value={mine.id} />
+            <SubmitButton className="h-11 px-4" pendingLabel="Opening...">
+              Open {DEMO_COMPANY_NAME}
+            </SubmitButton>
+          </form>
+        ) : (
+          <form action={createDemoAction}>
+            <SubmitButton className="h-11 px-4" pendingLabel="Creating...">
+              Create demo company
+            </SubmitButton>
+          </form>
+        )}
+        {demo.companies.length > 0 || demo.candidates > 0 ? (
+          <form action={deleteDemoAction}>
+            <SubmitButton variant="outline" className="h-11 px-4 text-danger" pendingLabel="Deleting...">
+              Delete demo data
+            </SubmitButton>
+          </form>
+        ) : null}
+      </div>
+      {status}
+    </Panel>
+  );
+}
+
+type Search = { [key: string]: string | string[] | undefined };
+
+/** Рядок про результат дії з адреси (?done=… або ?error=…). */
+function statusFor(q: Search, area: "owner" | "demo"): ReactNode {
+  const one = (k: string) => (Array.isArray(q[k]) ? q[k][0] : q[k]) ?? "";
+  const done = one("done");
+  const error = one("error");
+  let text: string | null = null;
+  let bad = false;
+  if (area === "owner" && done === "weekly") {
+    const ch = one("ch");
+    text = `Report sent${ch ? ` by ${ch.replace(",", " and ")}` : ""}.${one("why") ? ` Not delivered everywhere: ${one("why")}` : ""}`;
+  } else if (area === "owner" && error === "weekly") {
+    bad = true;
+    text = `Report not sent: ${one("why") || "unknown reason"}.`;
+  } else if (area === "demo" && done === "demo_created") {
+    text = one("existing") ? `Your demo company already exists; ${one("n")} demo candidates.` : `Demo company created with ${one("n")} demo candidates.`;
+  } else if (area === "demo" && done === "demo_deleted") {
+    text = `Deleted ${one("c")} demo companies and ${one("n")} demo candidates.`;
+  } else if (area === "demo" && error === "demo_missing") {
+    bad = true;
+    text = "That demo company is gone. Create it again.";
+  }
+  if (!text) return null;
+  return (
+    <p role={bad ? "alert" : "status"} className={cn("text-sm", bad ? "text-danger" : "text-brand")}>
+      {text}
+    </p>
+  );
+}
+
+export default async function AdminOverviewPage({ searchParams }: { searchParams: Promise<Search> }) {
+  const admin = await currentAdmin();
+  if (!admin) notFound();
+  const query = await searchParams;
 
   const main = db();
-  const [overview, settings, jobs] = await Promise.all([
+  const [overview, settings, jobs, visits, alerts, demo] = await Promise.all([
     loadOverview(main),
     getSettings(main),
     cachedJobSourcesReport((now) => loadJobSourcesReport(jobsDb(), main, now)).then(
       (report): JobsResult => ({ report, error: null }),
       (e: unknown): JobsResult => ({ report: null, error: e instanceof Error ? e.message : String(e) }),
     ),
+    loadVisits(main),
+    recentAlerts(main),
+    demoState(main, admin.id),
   ]);
   const { report, error: jobsError } = jobs;
   const flags = overviewFlags(overview, jobs);
@@ -508,6 +759,7 @@ export default async function AdminOverviewPage() {
       <Flags flags={flags} />
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+        <Visitors v={visits} />
         <Candidates o={overview} />
         <div className="grid gap-6">
           <Scores o={overview} />
@@ -517,6 +769,8 @@ export default async function AdminOverviewPage() {
         <Companies o={overview} />
         <Payments o={overview} />
         <Health o={overview} report={report} />
+        <Owner alerts={alerts} now={now} status={statusFor(query, "owner")} />
+        <Demo demo={demo} status={statusFor(query, "demo")} />
       </div>
 
       <p className="mt-8 text-xs text-ink-muted" data-cost="">

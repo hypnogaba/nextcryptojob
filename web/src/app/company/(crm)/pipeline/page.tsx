@@ -15,6 +15,8 @@ import { HIDDEN_NOTICE, type Stage } from "@/lib/crm/types";
 import { companyJobs } from "@/lib/crm/views";
 import { isId } from "@/lib/ids";
 import { crmPage } from "../crm";
+import { settleDemoIntros } from "@/lib/admin/demo";
+import { notifierFromEnv } from "@/lib/crm/notify";
 import { BoardCard, MoveForm, WithdrawForm } from "./pipeline-card";
 import { PipelineTabs } from "./pipeline-tabs";
 
@@ -31,6 +33,8 @@ const PER_STAGE = 50;
  */
 export default async function PipelinePage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { ctx, company } = await crmPage("pipeline");
+  // Демо-компанія: демо-кандидати «відповідають» самі за кілька секунд (lib/admin/demo.ts).
+  if (company.isDemo) await settleDemoIntros(ctx.db, company.id, notifierFromEnv(ctx.env), ctx.now);
   const params = await searchParams;
   const view = first(params.view) === "list" ? "list" : "board";
   const jobParam = first(params.job);

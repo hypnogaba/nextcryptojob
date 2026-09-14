@@ -6,7 +6,8 @@ import { CRON_RUNS_KEEP_DAYS } from "./runs";
  * стирає старі коди й лічильники, нова сесія стирає прострочені сесії тієї самої
  * людини, вебхук бота зрідка чистить свої update_id); тут те, що ліниво ніколи
  * не зникне: сесії людей, що більше не входили, коди без нового входу, старий
- * облік використання (специфікація 3.6: purgeUsage, 400 днів), журнал запусків cron (30 днів).
+ * облік використання (специфікація 3.6: purgeUsage, 400 днів), журнал запусків cron (30 днів),
+ * хеші відвідувачів (до вчора) і сповіщення власнику (60 днів).
  *
  * Кожна таблиця шматками по CHUNK рядків (DELETE … WHERE rowid IN (SELECT … LIMIT)),
  * не більше MAX_CHUNKS шматків за запуск: великий хвіст добере наступна ніч.
@@ -21,6 +22,8 @@ interface Rule {
   table: string;
   where: string;
   params: (now: Date) => (string | number)[];
+  /** Ключ рядка для шматків: rowid, а в таблиць WITHOUT ROWID їхній первинний ключ. */
+  key?: string;
 }
 
 const RULES: Rule[] = [
@@ -45,6 +48,16 @@ const RULES: Rule[] = [
     where: "started_at < ?",
     params: (now) => [sqlTime(new Date(now.getTime() - CRON_RUNS_KEEP_DAYS * DAY_MS))],
   },
+  // Хеші відвідувачів (0020) потрібні лише сьогодні: день, старший за вчора, стираємо, і
+  // тоді відвідувача не впізнати навіть із секретом (lib/analytics/visits.ts).
+  {
+    table: "visit_visitors",
+    key: "day, hash",
+    where: "day < ?",
+    params: (now) => [new Date(now.getTime() - DAY_MS).toISOString().slice(0, 10)],
+  },
+  // Сповіщення власнику (0020): 60 днів вистачає і для дедуплікації, і для списку в адмінці.
+  { table: "owner_alerts", key: "key", where: "sent_at < ?", params: (now) => [sqlTime(new Date(now.getTime() - 60 * DAY_MS))] },
 ];
 
 export type CleanupResult = Record<string, number>;
@@ -63,7 +76,9 @@ export async function dailyCleanup(
     let deleted = 0;
     for (let i = 0; i < maxChunks && !late(); i++) {
       const res = await db
-        .prepare(`DELETE FROM ${rule.table} WHERE rowid IN (SELECT rowid FROM ${rule.table} WHERE ${rule.where} LIMIT ?)`)
+        .prepare(
+          `DELETE FROM ${rule.table} WHERE (${rule.key ?? "rowid"}) IN (SELECT ${rule.key ?? "rowid"} FROM ${rule.table} WHERE ${rule.where} LIMIT ?)`,
+        )
         .bind(...rule.params(now), chunk)
         .run();
       const n = res.meta.changes ?? 0;

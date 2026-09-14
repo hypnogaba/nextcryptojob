@@ -44,6 +44,12 @@ export default async function CrmLayout({ children }: { children: ReactNode }) {
               {company.kind === "agency" ? "Recruiting agency" : "Company"}, {view.role === "owner" ? "owner" : "member"}
             </span>
           </div>
+          {company.isDemo ? (
+            <p role="status" data-demo-banner="" className="rounded-lg border border-dashed border-brand bg-brand-soft px-3 py-2 text-sm text-ink">
+              <b>Demo company.</b> Every candidate here is synthetic and visible only to demo companies. Intros are
+              answered by the demo candidates themselves; nothing is sent to real people.
+            </p>
+          ) : null}
           <StatusBanner company={company} application={application} />
           <AccessNotice banner={accessBannerText(company, view.ctx.now)} />
           <WebhookFailingBanner company={company} />

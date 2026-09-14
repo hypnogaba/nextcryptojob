@@ -36,32 +36,42 @@ const KNOWN_ROLES = Object.keys(ROLES)
   })
   .join(", ");
 
-/** Базова видимість (гість x402 і будь-яка компанія). `u` = псевдонім таблиці users. */
-export function visibleSql(u = "u"): SqlFragment {
-  return {
-    sql: `${u}.visible_to_companies = 1
+/** Прапор, згода, роль: спільне для гостя й компанії, без правила демо. */
+function consentedSql(u: string): string {
+  return `${u}.visible_to_companies = 1
       AND EXISTS (SELECT 1 FROM consents vc
                    WHERE vc.user_id = ${u}.id AND vc.kind = 'visibility' AND vc.granted = 1)
       AND CASE WHEN json_valid(${u}.roles)
                THEN EXISTS (SELECT 1 FROM json_each(${u}.roles) vr WHERE vr.value IN (${KNOWN_ROLES}))
-               ELSE 0 END`,
-    params: [],
-  };
+               ELSE 0 END`;
+}
+
+/**
+ * Базова видимість (гість x402, будь-хто без компанії). `u` = псевдонім таблиці users.
+ * Демо-кандидатів (users.is_demo, 0020) гість не бачить ніколи.
+ */
+export function visibleSql(u = "u"): SqlFragment {
+  return { sql: `${consentedSql(u)}\n      AND ${u}.is_demo = 0`, params: [] };
 }
 
 /** Видимість для конкретної компанії (або базова, якщо компанії немає). */
 export function visibleToSql(companyId: string | null, u = "u"): SqlFragment {
   if (!companyId) return visibleSql(u);
-  return { sql: visibleToCompanyExpr("?", u), params: [companyId, companyId] };
+  return { sql: visibleToCompanyExpr("?", u), params: [companyId, companyId, companyId] };
 }
 
 /**
  * Те саме правило, де компанія це SQL-вираз (напр. колонка `p.company_id`), а
  * не параметр: так один запит перевіряє видимість кожної картки для її компанії.
  * `company` вставляється в SQL як є, тож лише вирази з коду, ніколи ввід.
+ *
+ * Демо-світ замкнений (0020): демо-кандидата бачить лише демо-компанія, а демо-компанія
+ * бачить лише демо-кандидатів. Реальна компанія демо не побачить, а запит на знайомство
+ * з демо-компанії ніколи не дійде до живої людини.
  */
 export function visibleToCompanyExpr(company: string, u = "u"): string {
-  return `${visibleSql(u).sql}
+  return `${consentedSql(u)}
+      AND ${u}.is_demo = COALESCE((SELECT vd.is_demo FROM companies vd WHERE vd.id = ${company}), 0)
       AND NOT EXISTS (SELECT 1 FROM intros vb
                        WHERE vb.company_id = ${company} AND vb.user_id = ${u}.id AND vb.candidate_blocked = 1)
       AND NOT EXISTS (SELECT 1 FROM company_members vm

@@ -11,6 +11,7 @@ import {
   unscoredText,
   workText,
 } from "@/lib/crm/labels";
+import type { Signal } from "@/lib/crm/signals";
 import type { CandidateSummary } from "@/lib/crm/types";
 import { POSITION_CODE } from "@/lib/roles/recipes";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,18 @@ export function EmptyChip({ className }: { className?: string }) {
  * попереднього завантаження: кожен перегляд профілю витрачає квоту get_candidate
  * і пишеться в журнал.
  */
-export function CandidateRow({ c, action, roleParam }: { c: CandidateSummary; action?: ReactNode; roleParam?: string }) {
+export function CandidateRow({
+  c,
+  action,
+  roleParam,
+  signals,
+}: {
+  c: CandidateSummary;
+  action?: ReactNode;
+  roleParam?: string;
+  /** Сильні сторони для ролі рядка (lib/crm/signals.ts): «GitHub 94», «X 71». */
+  signals?: Signal[];
+}) {
   const h = c.headline;
   const others = c.roles.filter((r) => r.role !== h.role);
   const place = [workText(c.work), c.chains.map((x) => CHAIN_TEXT[x]).join(", "), onchainYearsText(c.onchain_years)].filter(Boolean);
@@ -69,10 +81,29 @@ export function CandidateRow({ c, action, roleParam }: { c: CandidateSummary; ac
         ) : (
           <p className="text-sm text-ink-muted">{unscoredText(h.role, h.unscored_reason)}</p>
         )}
+        {signals?.length ? (
+          <ul aria-label="Top signals" className="mt-1 flex flex-wrap gap-1.5" data-signals="">
+            {signals.map((s) => (
+              <li key={s.label} className="rounded border border-line bg-wash px-1.5 py-0.5 text-xs text-ink">
+                {s.label} <b className="tabular-nums">{s.value}</b>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {others.length ? <p className="text-sm text-ink-muted">Also: {others.map(roleScoreText).join(", ")}</p> : null}
         <p className="mt-1 text-sm text-ink">{place.join(" · ")}</p>
         {badges.length ? <p className="text-sm text-ink-muted">{badges.join(" · ")}</p> : null}
-        <p className="text-sm text-ink-muted">{[salary, contactModeText(c.contact_mode)].filter(Boolean).join(" · ")}</p>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+          {salary ? <span>{salary}</span> : null}
+          {c.contact_mode === "direct" ? (
+            // Кандидат сам увімкнув «Telegram handle directly»: компанія бачить нік одразу, без запиту.
+            <span data-contact="direct" className="rounded border border-brand px-1.5 py-0.5 text-xs font-semibold text-ink">
+              {contactModeText("direct")}
+            </span>
+          ) : (
+            <span data-contact="approval">{contactModeText("approval")}</span>
+          )}
+        </p>
       </div>
       {action ? <div className="col-start-2 sm:col-start-3 sm:row-start-1 sm:self-center">{action}</div> : null}
     </article>

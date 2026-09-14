@@ -16,7 +16,7 @@ beforeEach(() => {
 const count = (table: string) => Number(all<{ n: number }>(db.raw, `SELECT COUNT(*) AS n FROM ${table}`)[0].n);
 
 describe("dailyCleanup", () => {
-  it("removes expired sessions, old login codes, stale rate counters, old bot updates and usage older than 400 days, and keeps the rest", async () => {
+  it("removes expired sessions, old login codes, stale rate counters, old bot updates, usage older than 400 days, yesterday's visitor hashes and old owner alerts, and keeps the rest", async () => {
     const user = addUser(db.raw);
     run(db.raw, "INSERT INTO sessions (id, user_id, expires_at) VALUES ('dead', ?, '2026-09-11 00:00:00'), ('live', ?, '2026-10-01 00:00:00')", user, user);
     run(
@@ -43,6 +43,15 @@ describe("dailyCleanup", () => {
          ('intros.expire', '*/5 * * * *', '2026-08-14 03:00:00', 12, 1)`,
     );
 
+    // Хеші відвідувачів (0020) живуть до вчора: 10.09 стирається, 11.09 і 12.09 ні.
+    run(db.raw, "INSERT INTO visit_visitors (day, hash) VALUES ('2026-09-10', 'a'), ('2026-09-11', 'b'), ('2026-09-12', 'c')");
+    // Сповіщення власнику (0020) живуть 60 днів.
+    run(
+      db.raw,
+      `INSERT INTO owner_alerts (key, kind, sent_at) VALUES ('cron:old', 'cron', '2026-07-01 00:00:00'),
+         ('cron:new', 'cron', '2026-09-01 00:00:00')`,
+    );
+
     expect(await dailyCleanup(db.d1, { now: NOW })).toEqual({
       sessions: 1,
       login_codes: 1,
@@ -50,7 +59,11 @@ describe("dailyCleanup", () => {
       webhook_updates: 1,
       usage_events: 3,
       cron_runs: 1,
+      visit_visitors: 1,
+      owner_alerts: 1,
     });
+    expect(all(db.raw, "SELECT day FROM visit_visitors ORDER BY day")).toEqual([{ day: "2026-09-11" }, { day: "2026-09-12" }]);
+    expect(all(db.raw, "SELECT key FROM owner_alerts")).toEqual([{ key: "cron:new" }]);
     expect(all(db.raw, "SELECT started_at FROM cron_runs")).toEqual([{ started_at: "2026-08-14 03:00:00" }]);
     expect(all(db.raw, "SELECT id FROM sessions")).toEqual([{ id: "live" }]);
     expect(all(db.raw, "SELECT email FROM login_codes ORDER BY email")).toEqual([{ email: "b@x.io" }, { email: "c@x.io" }]);

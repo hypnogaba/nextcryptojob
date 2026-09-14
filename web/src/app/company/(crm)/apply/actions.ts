@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
+import { agencyAlert, sendOwnerAlert } from "@/lib/admin/alerts";
 import { parseApplication, submitApplication } from "@/lib/crm/agency";
 import { assertFormCompany, userFacingError, type Fields } from "@/lib/crm/company";
 import { crmActionActor } from "@/lib/crm/context";
+import { notifierFromEnv } from "@/lib/crm/notify";
 
 export type ApplyState = { message?: FormMessage; errors?: Fields; values?: Fields };
 
@@ -19,7 +21,20 @@ export async function submitApplicationAction(_prev: ApplyState, form: FormData)
   try {
     const ctx = await crmActionActor();
     assertFormCompany(ctx, form.get("company_id"));
-    await submitApplication(ctx, parsed.value);
+    const res = await submitApplication(ctx, parsed.value);
+    // Власнику одразу (Telegram або пошта), не чекаючи щогодинної перевірки. Той самий ключ
+    // дедуплікації, тож cron удруге не надішле. Збій сповіщення заявку не зупиняє.
+    if (ctx.company) {
+      try {
+        await sendOwnerAlert(
+          ctx.db,
+          agencyAlert({ id: res.applicationId, company: ctx.company.name, country: parsed.value.country, resubmitted: res.resubmitted }),
+          { notifier: notifierFromEnv(ctx.env), adminEmails: (ctx.env as { ADMIN_EMAILS?: string }).ADMIN_EMAILS },
+        );
+      } catch (error) {
+        console.error("agency application: owner not notified", error instanceof Error ? error.message : String(error));
+      }
+    }
   } catch (err) {
     const known = userFacingError(err);
     if (!known) throw err;

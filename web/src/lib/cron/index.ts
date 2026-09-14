@@ -1,4 +1,7 @@
-import type { NotifyEnv } from "@/lib/crm/notify";
+import { runOwnerAlerts } from "@/lib/admin/alerts";
+import { runWeeklyReport } from "@/lib/admin/weekly";
+import { notifierFromEnv, type NotifyEnv } from "@/lib/crm/notify";
+import { jobsDbFromEnv } from "@/lib/jobs-db";
 import { DELIVER_BUDGET_MS, deliverWebhooks } from "@/lib/crm/webhooks";
 import { savedSearchAlerts } from "./alerts";
 import { countStalePayments, dailyCleanup } from "./cleanup";
@@ -13,7 +16,7 @@ import { recordCronRun } from "./runs";
  * | Тригер          | Задачі                                                            |
  * |-----------------|-------------------------------------------------------------------|
  * | кожні 5 хв      | прострочення знайомств і мертві броні, потім доставка вебхуків    |
- * | щогодини        | прострочені вакансії компаній, сповіщення збережених пошуків, завислі платежі x402 (лише підрахунок) |
+ * | щогодини        | прострочені вакансії компаній, сповіщення збережених пошуків, завислі платежі x402 (лише підрахунок), сповіщення власнику, щотижневий звіт (понеділок 08:00 UTC) |
  * | щодня 03:00 UTC | прибирання: сесії, коди входу, лічильники, апдейти бота, облік 400 днів, журнал cron 30 днів |
  *
  * Кожна задача обмежена пачкою і часом (CRON_BUDGET_MS, budgetMs) і добирає
@@ -46,6 +49,10 @@ const DEFAULT_BUDGET_MS = 60_000;
 export type CronEnv = NotifyEnv & {
   DB: D1Database;
   WEBHOOK_SIGNING_KEY?: string;
+  /** База вакансій (лише читання, lib/jobs-db.ts): сповіщення власнику про сканер. */
+  JOBS_DB?: D1Database;
+  /** Кому сповіщення власнику й щотижневий звіт (lib/auth/admin.ts). */
+  ADMIN_EMAILS?: string;
 };
 
 export interface CronTime {
@@ -98,6 +105,36 @@ export const JOBS = {
       return counts;
     },
   },
+  ownerAlerts: {
+    name: "owner.alerts",
+    budgetMs: 120_000,
+    run: async (env, { now }) => {
+      // Розклад читаємо тут, а не при завантаженні модуля: SCHEDULE оголошено нижче.
+      const cronJobs = Object.entries(SCHEDULE).flatMap(([cron, jobs]) => jobs.map((j) => ({ job: j.name, cron })));
+      return {
+        ...(await runOwnerAlerts(env.DB, {
+          jobs: jobsDbFromEnv(env),
+          cronJobs,
+          notifier: notifierFromEnv(env),
+          adminEmails: env.ADMIN_EMAILS,
+          now,
+        })),
+      };
+    },
+  },
+  weeklyReport: {
+    name: "owner.weekly",
+    budgetMs: 60_000,
+    run: async (env, { scheduled }) => {
+      const res = await runWeeklyReport(env.DB, {
+        jobs: jobsDbFromEnv(env),
+        notifier: notifierFromEnv(env),
+        adminEmails: env.ADMIN_EMAILS,
+        now: scheduled,
+      });
+      return { sent: res.sent ? 1 : 0, channels: res.channels.length, errors: res.errors.length };
+    },
+  },
   dailyCleanup: {
     name: "cleanup.daily",
     run: async (env, { now, clock, deadline }) => dailyCleanup(env.DB, { now, clock, deadline }),
@@ -106,7 +143,7 @@ export const JOBS = {
 
 export const SCHEDULE: Record<string, readonly CronJob[]> = {
   [CRONS.every5Minutes]: [JOBS.expireIntros, JOBS.deliverWebhooks],
-  [CRONS.hourly]: [JOBS.closeExpiredJobs, JOBS.savedSearchAlerts, JOBS.stalePayments],
+  [CRONS.hourly]: [JOBS.closeExpiredJobs, JOBS.savedSearchAlerts, JOBS.stalePayments, JOBS.ownerAlerts, JOBS.weeklyReport],
   [CRONS.daily]: [JOBS.dailyCleanup],
 };
 

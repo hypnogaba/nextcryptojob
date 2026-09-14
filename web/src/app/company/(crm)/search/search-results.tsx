@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CandidateRow } from "@/components/crm/candidate-row";
 import { LINK, StageText } from "@/components/crm/ui";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { Signal } from "@/lib/crm/signals";
 import type { CandidateSummary, SearchResponse } from "@/lib/crm/types";
 import { addFromSearchAction, loadMoreAction } from "./actions";
 
@@ -18,6 +20,7 @@ export function SearchResults({
   initial,
   role,
   canWrite,
+  signals: initialSignals = {},
 }: {
   companyId: string;
   /** Рядок адреси пошуку (фільтри + сортування), для наступних сторінок. */
@@ -25,8 +28,11 @@ export function SearchResults({
   initial: SearchResponse;
   role?: string;
   canWrite: boolean;
+  /** Сильні сторони за `${id}:${роль}` (lib/crm/signals.ts). */
+  signals?: Record<string, Signal[]>;
 }) {
   const [items, setItems] = useState<CandidateSummary[]>(initial.data);
+  const [signals, setSignals] = useState<Record<string, Signal[]>>(initialSignals);
   const [cursor, setCursor] = useState<string | null>(initial.next_cursor);
   const [capReached, setCapReached] = useState(Boolean(initial.page_cap_reached));
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +48,7 @@ export function SearchResults({
         return;
       }
       setItems((prev) => [...prev, ...res.page.data.filter((d) => !prev.some((p) => p.candidate_id === d.candidate_id))]);
+      setSignals((prev) => ({ ...prev, ...res.signals }));
       setCursor(res.page.next_cursor);
       setCapReached(Boolean(res.page.page_cap_reached));
     });
@@ -62,14 +69,18 @@ export function SearchResults({
             <CandidateRow
               c={c}
               roleParam={role}
+              signals={signals[`${c.candidate_id}:${c.headline.role}`]}
               action={
-                c.pipeline ? (
-                  <Link href="/company/pipeline" className="inline-flex min-h-11 items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
-                    In pipeline: <StageText stage={c.pipeline.stage} />
-                  </Link>
-                ) : canWrite ? (
-                  <AddButton companyId={companyId} candidate={c} role={role} onAdded={(p) => setStage(c.candidate_id, p)} />
-                ) : null
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
+                  {canWrite ? <IntroLink c={c} role={role} /> : null}
+                  {c.pipeline ? (
+                    <Link href="/company/pipeline" className="inline-flex min-h-11 items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
+                      In pipeline: <StageText stage={c.pipeline.stage} />
+                    </Link>
+                  ) : canWrite ? (
+                    <AddButton companyId={companyId} candidate={c} role={role} onAdded={(p) => setStage(c.candidate_id, p)} />
+                  ) : null}
+                </div>
               }
             />
           </li>
@@ -100,6 +111,27 @@ export function SearchResults({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * «Intro» з рядка: профіль кандидата з відкритим діалогом знайомства. Для «Telegram handle
+ * directly» кнопка каже, що нік видно одразу. Без попереднього завантаження: показ профілю
+ * витрачає перегляд з денної квоти.
+ */
+function IntroLink({ c, role }: { c: CandidateSummary; role?: string }) {
+  const direct = c.contact_mode === "direct";
+  const stage = c.pipeline?.stage;
+  if (stage === "intro_requested" || stage === "contact_shared" || stage === "interview" || stage === "hired") return null;
+  const href = `/company/candidates/${c.candidate_id}?${role ? `role=${role}&` : ""}intro=1`;
+  return (
+    <Link
+      href={href}
+      prefetch={false}
+      className={cn(buttonVariants({ variant: "default" }), "h-11 px-4 text-sm")}
+    >
+      {direct ? "Show Telegram" : "Request intro"}
+    </Link>
   );
 }
 
