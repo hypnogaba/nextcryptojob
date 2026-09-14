@@ -39,7 +39,7 @@ export function ConsentForm({ granted, editing = false }: { granted: boolean; ed
       ) : null}
       <FormMessageLine message={state.message} />
       <SubmitButton pendingLabel="Finishing..." className="h-11 text-base">
-        {editing ? "Save" : "See my jobs"}
+        {editing ? "Save" : "Continue"}
       </SubmitButton>
     </form>
   );

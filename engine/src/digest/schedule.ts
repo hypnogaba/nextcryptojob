@@ -93,51 +93,54 @@ export interface DigestUserRow {
   telegram_id: string | null;
   /** Що людина шукає своїми словами: для пояснення «чому» (fit.ts), не для підбору. */
   target_text?: string | null;
+  /** Своя роль словами (0020); undefined, якщо міграції ще немає. */
+  role_text?: string | null;
 }
 
 const USER_COLUMNS = "u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.salary_currency, u.digest_hour, " +
   "u.timezone, u.channel, u.email, u.telegram_id, u.target_text";
+/** Своя роль словами (0020_role_text). Без міграції запит іде без неї, і збіг за словами поки не діє. */
+const ROLE_TEXT_COLUMN = ", u.role_text";
 
 /**
- * Люди, яким добірка може піти. Колонку digest_paused додає 0011 (доріжка web), і її може
- * ще не бути: тоді запит без неї, а в журналі видно, що пауза поки не діє. Демо-кандидатів
- * (users.is_demo, 0021, доріжка web: синтетичні люди для перевірки CRM) не беремо ніколи;
- * поки 0021 не накочено, колонки немає, і демо теж немає.
+ * Люди, яким добірка може піти. Колонки digest_paused (0011), role_text (0020) і is_demo (0021)
+ * додає web, і їх може ще не бути: тоді запит без них, а в журналі видно, що пауза чи збіг за
+ * словами поки не діє. Демо-кандидатів (users.is_demo: синтетичні люди для перевірки CRM) не
+ * беремо ніколи; поки 0021 не накочено, колонки немає, і демо теж немає.
  */
 export async function loadDigestUsers(db: Db, log: (l: string) => void, onlyUserId?: string): Promise<DigestUserRow[]> {
   const byId = onlyUserId ? " AND u.id = ?" : "";
   const params = onlyUserId ? [onlyUserId] : [];
-  const base = `SELECT ${USER_COLUMNS} FROM users u WHERE u.roles <> '[]'` +
+  const base = (extra: string) => `SELECT ${USER_COLUMNS}${extra} FROM users u WHERE u.roles <> '[]'` +
     " AND EXISTS (SELECT 1 FROM scores s WHERE s.user_id = u.id)";
-  try {
-    return await db.query<DigestUserRow>(`${base} AND COALESCE(u.digest_paused, 0) = 0 AND u.is_demo = 0${byId}`, params);
-  } catch (e) {
-    if (!(e instanceof Error)) throw e;
-    if (/no such column:?\s*(u\.)?is_demo/i.test(e.message)) {
-      return loadDigestUsersWithoutDemo(db, log, base, byId, params);
+  const missing = (e: unknown, column: string) =>
+    e instanceof Error && new RegExp(`no such column:?\\s*(u\\.)?${column}`, "i").test(e.message);
+  let extra = ROLE_TEXT_COLUMN;
+  let paused = " AND COALESCE(u.digest_paused, 0) = 0";
+  let demo = " AND u.is_demo = 0";
+  // Кожна відсутня колонка знімається раз: не більше чотирьох спроб.
+  for (;;) {
+    try {
+      return await db.query<DigestUserRow>(`${base(extra)}${paused}${demo}${byId}`, params);
+    } catch (e) {
+      if (extra && missing(e, "role_text")) {
+        log("digest: users.role_text missing (migration 0020 not applied), own-words matching is off");
+        extra = "";
+      } else if (paused && missing(e, "digest_paused")) {
+        log("digest: users.digest_paused missing (migration 0011 not applied), pause is not honoured yet");
+        paused = "";
+      } else if (demo && missing(e, "is_demo")) {
+        // До 0021 демо-рядків ще немає, тож фільтр просто не потрібен.
+        demo = "";
+      } else throw e;
     }
-    if (!/no such column:?\s*(u\.)?digest_paused/i.test(e.message)) throw e;
-    log("digest: users.digest_paused missing (migration 0011 not applied), pause is not honoured yet");
-    return db.query<DigestUserRow>(`${base}${byId}`, params);
   }
 }
 
-/** До 0021: без умови на is_demo (демо-рядків тоді ще немає). */
-async function loadDigestUsersWithoutDemo(db: Db, log: (l: string) => void, base: string, byId: string,
-                                          params: string[]): Promise<DigestUserRow[]> {
-  try {
-    return await db.query<DigestUserRow>(`${base} AND COALESCE(u.digest_paused, 0) = 0${byId}`, params);
-  } catch (e) {
-    if (!(e instanceof Error) || !/no such column:?\s*(u\.)?digest_paused/i.test(e.message)) throw e;
-    log("digest: users.digest_paused missing (migration 0011 not applied), pause is not honoured yet");
-    return db.query<DigestUserRow>(`${base}${byId}`, params);
-  }
-}
-
-export function profileOf(u: Pick<DigestUserRow, "roles" | "remote_mode" | "city" | "salary_min" | "salary_currency">): DigestProfile {
+export function profileOf(u: Pick<DigestUserRow, "roles" | "remote_mode" | "city" | "salary_min" | "salary_currency" | "role_text">): DigestProfile {
   return {
     roles: parseRoles(u.roles), remoteMode: u.remote_mode, city: u.city?.trim() || null,
-    salaryMin: u.salary_min, salaryCurrency: u.salary_currency,
+    salaryMin: u.salary_min, salaryCurrency: u.salary_currency, roleText: u.role_text?.trim() || null,
   };
 }
 

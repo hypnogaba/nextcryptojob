@@ -14,6 +14,7 @@ export function StepShell({
   editing,
   lead,
   notice,
+  banner,
   children,
 }: {
   step: Step;
@@ -22,18 +23,20 @@ export function StepShell({
   lead?: ReactNode;
   /** Короткий рядок над кроком, наприклад, коли можна буде оновити бал. */
   notice?: string | null;
+  /** Панель над кроком (адмін: анкета необов'язкова). */
+  banner?: ReactNode;
   children: ReactNode;
 }) {
   const { part, n, of } = stepPosition(step);
   const brief = part === "brief";
   const back = prevStep(step);
-  // Правка анкети веде до вакансій, правка джерел до профілю з балом.
+  // Правка анкети веде до вакансій, правка джерел до профілю з балом і карткою.
   const home = brief ? { href: "/jobs", label: "Back to your jobs" } : { href: "/profile", label: "Back to profile" };
   return (
     <section className="mx-auto max-w-xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
       <div className="flex items-center justify-between gap-4">
         <p className="font-display text-lg font-extrabold tracking-[0.04em] text-ink uppercase">
-          {brief ? "Step" : "Stand out"} {n} <span className="text-ink-muted">of {of}</span>
+          {brief ? "Step" : "Your score, step"} {n} <span className="text-ink-muted">of {of}</span>
         </p>
         {editing ? (
           <Link href={home.href} className={TOP_LINK}>
@@ -45,7 +48,7 @@ export function StepShell({
         // Класи повністю, щоб Tailwind їх побачив: 5 кроків анкети, 3 кроки «Stand out».
         className={`mt-3 grid gap-1.5 ${brief ? "grid-cols-5" : "grid-cols-3"}`}
         role="progressbar"
-        aria-label={brief ? "Brief progress" : "Stand out progress"}
+        aria-label={brief ? "Brief progress" : "Score steps progress"}
         aria-valuemin={1}
         aria-valuemax={of}
         aria-valuenow={n}
@@ -55,6 +58,7 @@ export function StepShell({
         ))}
       </div>
 
+      {banner ? <div className="mt-6">{banner}</div> : null}
       {notice ? (
         <p role="status" className="mt-6 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink">
           {notice}

@@ -71,9 +71,7 @@ export default async function SettingsPage() {
         </p>
       </Section>
 
-      <Section id="companies" title="Companies">
-        <VisibilityForm visible={s.visible} canTurnOn={s.scoringConsent} />
-      </Section>
+      <VisibilityForm visible={s.visible} canTurnOn={s.scoringConsent} />
 
       <Section id="contact" title="How companies reach you">
         <ContactForm mode={s.contactMode} telegramHandle={s.telegramHandle} telegramLinked={s.telegramLinked} />

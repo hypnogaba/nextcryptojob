@@ -12,11 +12,14 @@ Live: https://nextcryptojob.xyz
 
 **Candidates (always free)**
 1. Sign in with email (6-digit code) or Telegram. No wallet login.
-2. Describe the job you want in your own words; we suggest matching roles.
-3. Verify X with a code in your bio or a post, paste EVM and Solana wallets, and optionally add GitHub,
-   YouTube, a site or a Sherlock profile.
-4. Get a score per role with a full breakdown, a card to share on X, and a daily job digest by email
-   or Telegram. The profile is private; companies see you only if you turn "Show me to companies" on.
+2. Describe the job you want in your own words; we read your roles from it and you confirm them. A role
+   that is not in our list can be written in your own words, and we match job titles by those words.
+3. Type your X handle (required), paste up to 10 EVM and Solana wallets, and optionally add GitHub,
+   YouTube and a site. We trust what you type: no codes in your bio; the public card says the sources
+   are self-reported, and anyone can report a card.
+4. Right away get a score per role with a full breakdown, a card to download and share on X, and a daily
+   job digest by email or Telegram. The profile is private; companies see you only if you turn "Show me
+   to companies" on.
 
 **Companies (about $100 per month)**
 - Search candidates by role, score and level; a pipeline with notes and tags; job posts.
@@ -40,7 +43,7 @@ an anchor source it cannot be scored without. Sources:
 | GitHub | merged PRs to other people's repos, stars, recent activity; Spellbook PRs for data roles |
 | Wallets | EVM (Ethereum, Arbitrum, Base, Optimism), Solana, Hyperliquid: age, chains, trades, volume |
 | YouTube, site | audience, views, articles |
-| Sherlock | audit contest earnings, only through a verified GitHub or X |
+| Sherlock | audit contest earnings, only through a verified GitHub or X (no longer asked during setup) |
 
 Missing data is shown as a gap with a reason, never hidden. The formula (v5) is written by hand and
 documented in `docs/contracts.md` §4. It was checked against a reference set of 49 known crypto people

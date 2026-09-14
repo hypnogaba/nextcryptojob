@@ -3,7 +3,6 @@
 import type { IdentityKind } from "@/lib/identity/normalize";
 import { POSITION_CODE } from "@/lib/roles/recipes";
 import { cardBack, frontStats, type CardBack } from "./back";
-import { walletMarker } from "./eligibility";
 import { ROLES, type RoleKey } from "./roles";
 import { sealSeed } from "./seal";
 import type { PublicCard } from "./store";
@@ -30,7 +29,7 @@ export type CardFace = {
   stats: { code: string; value: number | null }[];
   /** «No. aB3_-x9QzK» або null. */
   number: string | null;
-  /** «Wallets not verified» для трейдера або null. */
+  /** Позначка на лицьовому боці або null. До 13.09 «Wallets not verified» у трейдера; тепер завжди null. */
   marker: string | null;
   /** Одним реченням для alt і aria-label. */
   summary: string;
@@ -50,6 +49,8 @@ export type CardView = CardFace & {
   back: CardBack | null;
   /** Чому звороту немає (бал змінився після видачі) або null. */
   backMissing: string | null;
+  /** Джерела власник вписав сам (модель довіри 13.09): тихий рядок на публічній сторінці. */
+  selfReported: boolean;
 };
 
 /** Рядок scores власника картки й те, що рахується з його підключень. */
@@ -61,6 +62,8 @@ export type CardEvidence = {
   wallet: string | null;
   /** Підключення, які рахуються (для причин прогалин). */
   connected: IdentityKind[];
+  /** Серед джерел є самозаявлені (людина вписала сама, ніхто не перевіряв). */
+  selfReported?: boolean;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -88,7 +91,8 @@ export function cardView(card: PublicCard, evidence?: CardEvidence | null): Card
   const tier = tierFor(card.level);
   const roleName = ROLES[card.role].name;
   const score = displayScore(card.score);
-  const marker = walletMarker(card.role);
+  // Модель довіри 13.09: позначки «Wallets not verified» більше немає (docs/DECISIONS.md).
+  const marker = null;
   const current =
     evidence &&
     evidence.score !== null &&
@@ -120,6 +124,8 @@ export function cardView(card: PublicCard, evidence?: CardEvidence | null): Card
     formulaVersion: card.formulaVersion,
     issuedOn,
     back,
+    // Без відомостей (картка без рядка людини) теж «self-reported»: інакше тиша читалась би як перевірка.
+    selfReported: evidence?.selfReported ?? true,
     backMissing: back
       ? null
       : evidence

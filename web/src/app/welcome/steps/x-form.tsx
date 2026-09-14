@@ -2,18 +2,19 @@
 
 import { useActionState } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
-import { ERROR, FIELD, LABEL } from "@/components/form/styles";
+import { ERROR, FIELD, HINT, LABEL } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
-import { claimXAction } from "../actions/x";
+import { saveXAction } from "../actions/x";
 import type { StepState } from "../flow";
 
-export function ClaimXForm() {
-  const [state, action] = useActionState(claimXAction, {} as StepState);
+/** Нік X: обов'язкове поле, «@handle» чи посилання x.com/handle; зберігаємо без «@» у нижньому регістрі. */
+export function XForm({ initial, editing }: { initial: string; editing: boolean }) {
+  const [state, action] = useActionState(saveXAction, {} as StepState);
   const error = state.errors?.handle;
   return (
     <form action={action} className="grid gap-3">
       <label htmlFor="handle" className={LABEL}>
-        X handle
+        Your X handle
       </label>
       <div className="relative">
         <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink-muted">
@@ -27,13 +28,16 @@ export function ClaimXForm() {
           autoCapitalize="none"
           spellCheck={false}
           required
-          defaultValue={state.values?.handle ?? ""}
+          defaultValue={state.values?.handle ?? initial}
           placeholder="yourhandle"
           aria-invalid={error ? true : undefined}
-          aria-describedby="handle-error"
+          aria-describedby="handle-hint handle-error"
           className={`${FIELD} pl-8`}
         />
       </div>
+      <p id="handle-hint" className={HINT}>
+        Your handle or a link like x.com/yourhandle. No code and no sign-in with X: we take your word for it.
+      </p>
       {error ? (
         <p id="handle-error" role="alert" className={ERROR}>
           {error}
@@ -41,7 +45,7 @@ export function ClaimXForm() {
       ) : null}
       <FormMessageLine message={state.message} />
       <SubmitButton pendingLabel="Saving..." className="h-11 text-base">
-        Get my code
+        {editing ? "Save" : "Save and continue"}
       </SubmitButton>
     </form>
   );

@@ -66,12 +66,16 @@ export interface DigestProfile {
   city: string | null;
   salaryMin: number | null;
   salaryCurrency: string | null;
+  /** users.role_text: своя роль словами людини; вакансія з усіма словами однієї фрази в назві теж підходить. */
+  roleText?: string | null;
 }
 
 export interface DigestPick {
   job: DigestJob;
-  /** Роль людини, за якою вакансія потрапила в добірку. */
+  /** Роль людини, за якою вакансія потрапила в добірку; для збігу за словами перша роль вакансії. */
   role: RoleKey;
+  /** Фраза своєї ролі людини, за якою вакансія підійшла (лише коли не підійшла за роллю). */
+  keyword?: string;
   place: "remote" | "city";
   /** true дотягує до мінімуму, false нижче, null невідомо (немає зарплати або мінімуму). */
   meetsSalary: boolean | null;
@@ -156,6 +160,42 @@ export function placeMatch(job: DigestJob, modes: ReadonlyArray<"remote" | "city
   // Національна дошка (country не null) = «віддалено в межах цієї країни»; країни людини ми не знаємо.
   if (modes.includes("remote") && job.remote && !(job.source === "nextrole" && job.country)) return "remote";
   return null;
+}
+
+// ---------------- своя роль словами ----------------
+
+/** Слова, що не кажуть, яка це робота: рівень, «роль», сфера, службові. */
+const KEYWORD_STOP = new Set([
+  "a", "an", "the", "and", "or", "of", "in", "at", "for", "to", "with", "on", "my", "i", "am", "as", "any", "some",
+  "role", "roles", "job", "jobs", "position", "work", "remote", "senior", "sr", "junior", "jr", "mid", "middle",
+  "lead", "head", "principal", "staff", "intern", "crypto", "web3", "blockchain", "defi", "nft", "dao", "onchain",
+]);
+const MAX_PHRASES = 3;
+const MAX_PHRASE_WORDS = 4;
+
+/**
+ * Фрази своєї ролі: «Tokenomics designer, governance lead» → [["tokenomics", "designer"], ["governance"]].
+ * Фрази ділять кома, крапка з комою, «/», новий рядок і слово «or»; рівень і службові слова відкидаються.
+ */
+export function roleKeywords(text: string | null | undefined): string[][] {
+  const out: string[][] = [];
+  for (const part of (text ?? "").split(/[,;/\n|]+|\s+or\s+/i)) {
+    const words = foldText(part).split(" ").filter((w) => w.length >= 2 && !KEYWORD_STOP.has(w));
+    if (words.length > 0) out.push([...new Set(words)].slice(0, MAX_PHRASE_WORDS));
+    if (out.length >= MAX_PHRASES) break;
+  }
+  return out;
+}
+
+/**
+ * Фраза, усі слова якої є в назві вакансії, або null. Слово з 4+ літер збігається з початком слова
+ * назви («design» у «Designer»), коротше лише цілим словом («ux», «zk»).
+ */
+export function keywordHit(title: string, phrases: readonly string[][]): string | null {
+  const words = foldText(title).split(" ");
+  const has = (k: string) => words.some((w) => (k.length >= 4 ? w.startsWith(k) : w === k));
+  const hit = phrases.find((p) => p.length > 0 && p.every(has));
+  return hit ? hit.join(" ") : null;
 }
 
 // ---------------- зарплата ----------------
@@ -259,7 +299,7 @@ export function stillOpenNote(job: DigestJob, now: Date): string | null {
  * З `now` давніша за FRESH_DAYS вакансія ще й каже, що вона досі відкрита і коли опублікована.
  */
 export function whyLine(pick: Omit<DigestPick, "why">, profile: DigestProfile, now?: Date): string {
-  const parts = [`Matches your ${ROLE_NAMES[pick.role]} role.`];
+  const parts = [pick.keyword ? `Matches "${pick.keyword}" from your own words.` : `Matches your ${ROLE_NAMES[pick.role]} role.`];
   parts.push(pick.place === "city" && profile.city ? `In ${cityLabel(profile.city)}.` : "Remote.");
   const salary = formatSalary(pick.job.salary);
   if (salary) parts.push(pick.meetsSalary ? `Salary listed: ${salary}, meets your minimum.` : `Salary listed: ${salary}.`);
@@ -284,7 +324,8 @@ function compareKeys(a: Candidate["key"], b: Candidate["key"]): number {
   return a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || (a[4] < b[4] ? -1 : a[4] > b[4] ? 1 : 0);
 }
 
-function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: SelectOptions, excludedDedupe: ReadonlySet<string>): Candidate[] {
+function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: SelectOptions, excludedDedupe: ReadonlySet<string>,
+  phrases: readonly string[][]): Candidate[] {
   const modes = workModes(profile.remoteMode);
   // Місце не задано: віддалено, бо лише це не вимагає міста.
   const effectiveModes: ReadonlyArray<"remote" | "city"> = modes.length ? modes : ["remote"];
@@ -293,7 +334,10 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
   for (const job of pool) {
     if (o.exclude.has(job.ref)) continue;
     if (job.dedupeKey && excludedDedupe.has(job.dedupeKey)) continue;
-    const role = profile.roles.find((r) => job.roles.includes(r));
+    const own = profile.roles.find((r) => job.roles.includes(r));
+    // Не наша роль, але в назві слова своєї ролі людини: вакансія підходить під першою роллю вакансії.
+    const keyword = own ? null : keywordHit(job.title, phrases);
+    const role = own ?? (keyword ? job.roles[0] : undefined);
     if (!role) continue;
     const place = placeMatch(job, effectiveModes, profile.city);
     if (!place) continue;
@@ -301,7 +345,7 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
     // Вакансії компаній живуть, поки відкриті й оплачені (company_jobs_live), і завжди свіжі.
     const fresh = job.source !== "nextrole" || isFresh(job, o.now);
     const meets = meetsFloor(job, profile.salaryMin, profile.salaryCurrency);
-    out.push({ job, role, place, meetsSalary: meets, fresh, key: rankKey(place, meets, job, both, fresh) });
+    out.push({ job, role, ...(keyword ? { keyword } : {}), place, meetsSalary: meets, fresh, key: rankKey(place, meets, job, both, fresh) });
   }
   return out.sort((a, b) => compareKeys(a.key, b.key));
 }
@@ -319,7 +363,8 @@ export function selectJobs(
   o: SelectOptions,
 ): DigestPick[] {
   const limit = o.limit ?? DIGEST_SIZE;
-  if (profile.roles.length === 0 || limit <= 0) return [];
+  const phrases = roleKeywords(profile.roleText);
+  if ((profile.roles.length === 0 && phrases.length === 0) || limit <= 0) return [];
 
   // Та сама вакансія під новою адресою: ключ змісту вже надісланої, якщо вона ще в пулі.
   const excludedDedupe = new Set(
@@ -338,7 +383,7 @@ export function selectJobs(
     return true;
   };
 
-  const company = candidatesFor(pool.company, profile, o, excludedDedupe).filter((c) => c.job.source === "company");
+  const company = candidatesFor(pool.company, profile, o, excludedDedupe, phrases).filter((c) => c.job.source === "company");
   let companyTaken = 0;
   for (const c of company) {
     if (companyTaken >= MAX_COMPANY_JOBS || chosen.length >= limit) break;
@@ -346,9 +391,10 @@ export function selectJobs(
   }
   const companyPicks = [...chosen];
 
-  const crawl = candidatesFor(pool.crawl, profile, o, excludedDedupe).filter((c) => c.job.source === "nextrole");
+  const crawl = candidatesFor(pool.crawl, profile, o, excludedDedupe, phrases).filter((c) => c.job.source === "nextrole");
+  // Черга на кожну роль людини і ще одна для збігів за словами своєї ролі.
   const byRoles = (list: Candidate[]): void => {
-    const queues = profile.roles.map((r) => list.filter((c) => c.role === r));
+    const queues = [...profile.roles.map((r) => list.filter((c) => !c.keyword && c.role === r)), list.filter((c) => c.keyword)];
     const cursor = queues.map(() => 0);
     while (chosen.length < limit) {
       let progressed = false;

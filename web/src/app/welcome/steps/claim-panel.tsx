@@ -3,7 +3,8 @@ import { VerifyPanel } from "./verify-panel";
 
 /**
  * Нік тримає інший профіль без підтвердження. Людина доводить, що нік її,
- * власним кодом заявки, і тоді нік переходить до неї вже перевіреним.
+ * власним кодом заявки, і тоді нік переходить до неї вже перевіреним. Після 13.09
+ * (модель довіри) це єдине місце, де ще є код: спір за чужий нік.
  */
 export function ClaimPanel({
   kind,
@@ -24,8 +25,8 @@ export function ClaimPanel({
         Is {shown} yours?
       </h2>
       <p className="text-sm text-ink-muted">
-        Another profile added this {name} account but never proved it. If it is yours, prove it with the code below and
-        it moves to your profile.
+        Another profile already added this {name} account. We usually take people at their word, so if it is yours,
+        prove it once with the code below and it moves to your profile.
       </p>
       <VerifyPanel kind={kind} code={code} claim={value}>
         {kind === "x"

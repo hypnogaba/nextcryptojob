@@ -4,24 +4,23 @@ import { redirect } from "next/navigation";
 import { NORMALIZERS } from "@/lib/identity/normalize";
 import { listIdentities, removeIdentities, setSingleIdentity, type SingleKind } from "@/lib/identity/store";
 import { saveStep } from "@/lib/onboarding/store";
-import { newVerifyCode } from "@/lib/verify/code";
 import { field, goNext, identityWriteGuard, recordChange, stepContext, withWait, type StepState } from "../flow";
 
-// «More sources»: GitHub, YouTube, сайт, Sherlock. Кожне поле необов'язкове;
-// порожнє поле прибирає джерело.
+// «More sources»: GitHub, YouTube, сайт. Кожне поле необов'язкове; порожнє поле прибирає джерело.
+// Свої джерела не перевіряємо (модель довіри 13.09). Sherlock з анкети прибрано (власник 13.09):
+// наявний рядок sherlock не чіпаємо, рушій звіряє його лише з підтвердженими GitHub або X.
 
-const FIELDS = ["github", "youtube", "site", "sherlock"] as const satisfies readonly SingleKind[];
+const FIELDS = ["github", "youtube", "site"] as const satisfies readonly SingleKind[];
 type Field = (typeof FIELDS)[number];
 
 const TAKEN: Record<Field, string> = {
   github: "This GitHub account is already linked to another profile.",
   youtube: "This YouTube channel is already linked to another profile.",
   site: "This website is already linked to another profile.",
-  sherlock: "This Sherlock profile is already linked to another profile.",
 };
 
 const GITHUB_PENDING =
-  "This GitHub account is waiting for verification on another profile. Fix the other fields and save again to prove it is yours.";
+  "This GitHub account is already linked to another profile. Fix the other fields and save again to prove it is yours.";
 
 export async function saveSourcesAction(_prev: StepState, form: FormData): Promise<StepState> {
   const ctx = await stepContext("sources");
@@ -55,8 +54,7 @@ export async function saveSourcesAction(_prev: StepState, form: FormData): Promi
       saved.push(kind);
       continue;
     }
-    // GitHub можна підтвердити кодом у біо, тож код одразу.
-    const res = await setSingleIdentity(ctx.d, ctx.user.id, kind, value, kind === "github" ? newVerifyCode() : null);
+    const res = await setSingleIdentity(ctx.d, ctx.user.id, kind, value);
     if (res.ok) saved.push(kind);
     else if (kind === "github" && res.reason === "pending") githubPending = true;
     else errors[kind] = TAKEN[kind];
@@ -68,14 +66,12 @@ export async function saveSourcesAction(_prev: StepState, form: FormData): Promi
   }
 
   await saveStep(ctx.d, ctx.user.id, "sources", {}, ctx.answers.step);
-  // GitHub в іншого неперевіреного профілю: показуємо код заявки.
+  // GitHub в іншого профілю без підтвердження: показуємо код заявки (спір за нік).
   if (githubPending) redirect(withWait(`/welcome?step=sources&claim=${encodeURIComponent(normalized.github!)}`, wait));
-  // Щойно доданий GitHub: лишаємось на кроці, щоб людина побачила, як його підтвердити.
-  if (saved.includes("github") && normalized.github) redirect(withWait("/welcome?step=sources&added=github", wait));
   return goNext(ctx, "sources");
 }
 
-/** «Continue» з панелі підтвердження GitHub. */
+/** «Skip for now»: джерела необов'язкові, далі бал. Нічого не зберігає й не прибирає. */
 export async function continueSourcesAction(): Promise<void> {
   const ctx = await stepContext("sources");
   await saveStep(ctx.d, ctx.user.id, "sources", {}, ctx.answers.step);

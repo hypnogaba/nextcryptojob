@@ -9,6 +9,7 @@ import { ROLES } from "@/lib/card/roles";
 import { cardPath, xShareUrl } from "@/lib/card/share";
 import { isScoredRoleKey, recipeBonus, recipeCore } from "@/lib/roles/recipes";
 import { loadCardView, loadIsOwner, requestOrigin } from "./card-data";
+import { ReportForm } from "./report-form";
 
 // Публічна сторінка картки: єдине, що видно без входу. Бал, роль, рівень, ім'я
 // для показу і розклад балу на звороті; ні гаманців, ні посилань, ні того, чий це акаунт.
@@ -87,6 +88,12 @@ export default async function CardPage({ params }: Props) {
             Issued on {view.issuedOn}, formula {view.formulaVersion}. The seal belongs to this card and gains a layer
             with every level.
           </p>
+          {view.selfReported ? (
+            <p className="text-xs text-ink-muted" data-self-reported>
+              Self-reported: the card owner added their X, GitHub and wallets themselves. We score public activity, we
+              do not check who owns an account.
+            </p>
+          ) : null}
         </div>
         {shareUrl ? (
           <div className="grid gap-4 border-t border-line pt-6">
@@ -116,10 +123,11 @@ export default async function CardPage({ params }: Props) {
             </Link>
           </div>
         ) : (
-          <div className="border-t border-line pt-6">
-            <Button asChild size="lg">
+          <div className="grid gap-4 border-t border-line pt-6">
+            <Button asChild size="lg" className="w-fit">
               <Link href="/login">Get your own card</Link>
             </Button>
+            <ReportForm slug={slug} />
           </div>
         )}
       </div>

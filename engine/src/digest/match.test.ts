@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  type DigestJob, type DigestProfile, formatSalary, isFresh, isRemoteLocation, meetsFloor, mentionsCity, selectJobs,
-  stillOpenNote, whyLine,
+  type DigestJob, type DigestProfile, formatSalary, isFresh, isRemoteLocation, keywordHit, meetsFloor, mentionsCity,
+  roleKeywords, selectJobs, stillOpenNote, whyLine,
 } from "./match.js";
 
 const NOW = new Date("2026-09-12T10:00:00Z");
@@ -43,6 +43,41 @@ describe("selectJobs: роль", () => {
     ];
     const out = pick(pool, profile({ roles: ["trader", "product_manager"] }));
     expect(out.map((p) => p.role)).toContain("product_manager");
+  });
+});
+
+describe("своя роль словами (users.role_text)", () => {
+  it("ділить текст на фрази й відкидає рівень і службові слова", () => {
+    expect(roleKeywords("Senior Tokenomics Designer, governance lead / ZK researcher")).toEqual([
+      ["tokenomics", "designer"], ["governance"], ["zk", "researcher"],
+    ]);
+    expect(roleKeywords("tokenomics or incentives design")).toEqual([["tokenomics"], ["incentives", "design"]]);
+    expect(roleKeywords("  ")).toEqual([]);
+    expect(roleKeywords(null)).toEqual([]);
+  });
+
+  it("усі слова фрази мають бути в назві; довге слово збігається з початком, коротке лише цілим", () => {
+    const phrases = roleKeywords("tokenomics design, zk");
+    expect(keywordHit("Senior Tokenomics Designer (Remote)", phrases)).toBe("tokenomics design");
+    expect(keywordHit("Tokenomics Analyst", phrases)).toBeNull();
+    expect(keywordHit("ZK Circuit Engineer", phrases)).toBe("zk");
+    expect(keywordHit("zkSync Engineer", phrases)).toBeNull();
+  });
+
+  it("вакансія не нашої ролі, але зі словами людини в назві, теж іде, з поясненням її словами", () => {
+    const own = job({ title: "Tokenomics Designer", roles: ["designer"] });
+    const other = job({ title: "Brand Designer", roles: ["designer"] });
+    const out = pick([own, other, job()], profile({ roles: ["engineer"], roleText: "Tokenomics designer" }));
+    expect(out.map((p) => p.job.id).sort()).toEqual([own.id, out.find((p) => p.job.roles.includes("engineer"))!.job.id].sort());
+    const hit = out.find((p) => p.job.id === own.id)!;
+    expect(hit).toMatchObject({ role: "designer", keyword: "tokenomics designer" });
+    expect(hit.why).toBe('Matches "tokenomics designer" from your own words. Remote.');
+  });
+
+  it("без ролей, але зі своєю роллю словами, добірка не порожня; без обох порожня", () => {
+    const own = job({ title: "Governance Lead", roles: ["operations_support"] });
+    expect(pick([own], profile({ roles: [], roleText: "governance" })).map((p) => p.job.id)).toEqual([own.id]);
+    expect(pick([own], profile({ roles: [], roleText: null }))).toEqual([]);
   });
 });
 

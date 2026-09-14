@@ -67,6 +67,14 @@ describe("fitReasons", () => {
       .toBe('Matches your Engineer role, and the title has your words "solidity".');
   });
 
+  it("a job matched by the person's own-words role (users.role_text) says that phrase, not a role or its score", () => {
+    const tok = pick({ job: job({ title: "Tokenomics Designer", roles: ["designer"] }), role: "designer", keyword: "tokenomics designer" });
+    const r = fitReasons(tok, profile(), ctx({ words: "tokenomics design", scores: { designer: 80 } }));
+    expect(r[0]).toBe('Matches "tokenomics designer" from your own words.');
+    expect(r.join(" ")).not.toMatch(/Designer role|score is/);
+    expect(r).toContain("Remote, as you asked.");
+  });
+
   it("salary only when it meets the person's minimum, with both amounts", () => {
     const paid = job({ salary: { min: 120_000, max: 150_000, currency: "USD", period: "year" } });
     const r = fitReasons(pick({ job: paid, meetsSalary: true }), profile({ salaryMin: 100_000, salaryCurrency: "USD" }), ctx());

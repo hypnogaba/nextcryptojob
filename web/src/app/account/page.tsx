@@ -34,16 +34,16 @@ export default async function AccountPage() {
         </div>
       )}
       <nav aria-label="Your account" className="mt-8 grid max-w-md border-t border-line">
+        <Link href="/profile" className={LINK}>
+          Your card and score
+          <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
+        </Link>
         <Link href="/jobs" className={LINK}>
           Your jobs
           <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
         </Link>
-        <Link href="/profile" className={LINK}>
-          Your score and sources
-          <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
-        </Link>
         <Link href="/welcome" className={LINK}>
-          {step === "done" ? "Edit your answers" : briefDone(step) ? "Stand out to companies" : "Finish your brief"}
+          {step === "done" ? "Edit your answers" : briefDone(step) ? "Finish your score setup" : "Finish your brief"}
           <span aria-hidden className="font-display text-xl text-ink-muted">&rarr;</span>
         </Link>
         <Link href="/settings" className={LINK}>

@@ -243,6 +243,27 @@ describe("runDigestDue", () => {
     expect((await runDigestDue(deps())).sent).toBe(1);
   });
 
+  it("своя роль словами (role_text): вакансія не нашої ролі з цими словами в назві теж іде в добірку", async () => {
+    addUser("u1");
+    db.exec("UPDATE users SET role_text = 'Tokenomics designer' WHERE id = 'u1'");
+    jobs.add({ id: "tok", title: "Tokenomics Designer", company: "Token Co" });
+    addJobs(2);
+    expect((await runDigestDue(deps())).sent).toBe(1);
+    const rows = sent();
+    expect(rows.map((r) => r.job_ref)).toContain("nr:tok");
+    expect(rows.find((r) => r.job_ref === "nr:tok")!.why).toBe('Matches "tokenomics designer" from your own words. Remote, as you asked.');
+  });
+
+  it("база без 0020 і без 0011: добірка йде, у журналі видно, що не діє", async () => {
+    db.close();
+    db = new SqliteD1(DIGEST_MIGRATIONS.filter((m) => m !== "0020_role_text.sql" && m !== "0011_user_settings.sql"));
+    addUser("u1");
+    addJobs(5);
+    expect((await runDigestDue(deps())).sent).toBe(1);
+    expect(log.join("\n")).toMatch(/role_text missing/);
+    expect(log.join("\n")).toMatch(/digest_paused missing/);
+  });
+
   it("вакансія компанії: не більше однієї, перша, job_ref co:, лічильник digest_shown", async () => {
     addUser("u1");
     addJobs(6);

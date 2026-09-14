@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import type { CardBack } from "@/lib/card/back";
 import { frontStats } from "@/lib/card/back";
 import type { Eligibility } from "@/lib/card/eligibility";
-import { walletMarker } from "@/lib/card/eligibility";
 import { cardPath } from "@/lib/card/share";
 import type { ActiveCard } from "@/lib/card/store";
 import { displayScore, tierFor } from "@/lib/card/tiers";
@@ -38,7 +37,7 @@ const EDIT_SOURCES = (
 
 type Scored = Extract<RoleView, { state: "scored" }>;
 
-/** Картка лише з підтвердженим головним джерелом; інакше вимкнена кнопка й пояснення. */
+/** Картка для будь-якої ролі з балом (модель довіри 13.09); для ролі без балу вимкнена кнопка й пояснення. */
 function CardArea({
   view,
   defaultName,
@@ -78,11 +77,6 @@ function CardArea({
   return (
     <div className="grid gap-3 border-t border-line pt-4">
       {issued}
-      {eligibility.walletsUnverified ? (
-        <p className="text-sm text-ink-muted">
-          Your card will say Wallets not verified until you can prove your wallets with a signature.
-        </p>
-      ) : null}
       <CreateCardForm role={view.role} defaultName={active?.displayName ?? defaultName} />
     </div>
   );
@@ -102,7 +96,7 @@ function faceFor(view: Scored, back: CardBack | null, active: ActiveCard | null,
     sealSeed: active ? seal : null,
     stats: frontStats(back),
     number: active ? `No. ${active.slug}` : null,
-    marker: walletMarker(view.role),
+    marker: null,
     summary: "",
   };
   face.summary = summaryOf(face);

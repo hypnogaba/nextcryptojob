@@ -21,7 +21,7 @@ export interface FitContext {
   scores: Partial<Record<RoleKey, number | null>>;
 }
 
-export type FitPick = Pick<DigestPick, "job" | "role" | "place" | "meetsSalary">;
+export type FitPick = Pick<DigestPick, "job" | "role" | "place" | "meetsSalary" | "keyword">;
 
 /** Слова, які нічого не кажуть про вакансію: службові, загальні для крипто, місце, рівень. */
 const STOP = new Set([
@@ -118,10 +118,13 @@ const quoted = (words: readonly string[]): string =>
 /** До MAX_REASONS причин, кожна окремим реченням з крапкою. Перша завжди про роль. */
 export function fitReasons(pick: FitPick, profile: DigestProfile, ctx: FitContext): string[] {
   const role = ROLE_NAMES[pick.role];
-  const words = wordsInTitle(ctx.words, pick.job.title, pick.role);
-  const first = words.length
-    ? `Matches your ${role} role, and the title has your words ${quoted(words)}.`
-    : `Matches your ${role} role.`;
+  const words = pick.keyword ? [] : wordsInTitle(ctx.words, pick.job.title, pick.role);
+  // Підійшла за своєю роллю словами (не за роллю зі списку): кажемо саме це.
+  const first = pick.keyword
+    ? `Matches "${pick.keyword}" from your own words.`
+    : words.length
+      ? `Matches your ${role} role, and the title has your words ${quoted(words)}.`
+      : `Matches your ${role} role.`;
 
   const extra: string[] = [];
   const salary = formatSalary(pick.job.salary);
@@ -137,7 +140,8 @@ export function fitReasons(pick: FitPick, profile: DigestProfile, ctx: FitContex
   } else if (pick.place === "remote") {
     extra.push(workModes(profile.remoteMode).includes("remote") ? "Remote, as you asked." : "Remote.");
   }
-  const score = ctx.scores[pick.role];
+  // Для збігу за словами роль вакансії не роль людини, тож її бал тут ні до чого.
+  const score = pick.keyword ? undefined : ctx.scores[pick.role];
   if (typeof score === "number" && score >= SCORE_REASON_MIN) {
     extra.push(`Your ${role} score is ${Math.round(score)}, from your public work.`);
   }

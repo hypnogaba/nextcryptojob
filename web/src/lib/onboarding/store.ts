@@ -6,10 +6,14 @@ import type { Place } from "./place";
 import { advance, normalizeSavedStep, parseSavedStep, type SavedStep, type Step } from "./steps";
 
 export const TARGET_MAX = 600;
+/** «My role is not in the list»: коротка назва ролі своїми словами. */
+export const ROLE_TEXT_MAX = 80;
 
 export type Answers = {
   targetText: string;
   roles: RoleKey[];
+  /** Своя роль словами (users.role_text) або порожньо. */
+  roleText: string;
   remoteMode: string | null;
   city: string | null;
   salaryMin: number | null;
@@ -20,6 +24,7 @@ export type Answers = {
 type UserRow = {
   target_text: string | null;
   roles: string | null;
+  role_text: string | null;
   remote_mode: string | null;
   city: string | null;
   salary_min: number | null;
@@ -31,7 +36,7 @@ type UserRow = {
 export async function loadAnswers(db: D1Database, userId: string): Promise<Answers> {
   const row = await db
     .prepare(
-      `SELECT target_text, roles, remote_mode, city, salary_min, salary_currency, onboarding_step,
+      `SELECT target_text, roles, role_text, remote_mode, city, salary_min, salary_currency, onboarding_step,
               (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
          FROM users WHERE id = ?`,
     )
@@ -40,6 +45,7 @@ export async function loadAnswers(db: D1Database, userId: string): Promise<Answe
   return {
     targetText: row?.target_text ?? "",
     roles: parseRoles(row?.roles),
+    roleText: row?.role_text ?? "",
     remoteMode: row?.remote_mode ?? null,
     city: row?.city ?? null,
     salaryMin: row?.salary_min ?? null,
@@ -53,6 +59,7 @@ export async function loadAnswers(db: D1Database, userId: string): Promise<Answe
 type Fields = {
   target_text?: string;
   roles?: string;
+  role_text?: string | null;
   remote_mode?: string;
   city?: string | null;
   salary_min?: number | null;
@@ -84,8 +91,8 @@ export function targetFields(text: string): Fields {
   return { target_text: text };
 }
 
-export function rolesFields(roles: RoleKey[]): Fields {
-  return { roles: JSON.stringify(roles) };
+export function rolesFields(roles: RoleKey[], roleText: string | null = null): Fields {
+  return { roles: JSON.stringify(roles), role_text: roleText };
 }
 
 export function placeFields(place: Place): Fields {

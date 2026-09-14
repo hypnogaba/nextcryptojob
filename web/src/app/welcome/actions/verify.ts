@@ -5,15 +5,14 @@ import type { FormMessage } from "@/components/form/form-message";
 import { audit } from "@/lib/audit";
 import { appEnv } from "@/lib/db";
 import { normalizeGithub, normalizeX } from "@/lib/identity/normalize";
-import { getIdentity } from "@/lib/identity/store";
-import { checkIdentity, type CheckOutcome, type VerifiableKind } from "@/lib/verify/check";
+import type { CheckOutcome, VerifiableKind } from "@/lib/verify/check";
 import { checkClaim, claimCode } from "@/lib/verify/claim";
 import { sourceTokens } from "@/lib/verify/tokens";
 import { field, GENERIC_ERROR, recordChange, stepContext, withWait, type StepState } from "../flow";
 
-// «Check»: шукає код у біо X чи GitHub (або у власному пості X) і позначає
-// джерело перевіреним. З полем claim перевіряє код заявки на нік, який
-// тримає інший неперевірений профіль (lib/verify/claim.ts).
+// «Check» у спорі за нік: з модели довіри 13.09 свої X і GitHub ми не перевіряємо, код лишився лише
+// тут. Нік, який уже тримає інший профіль, людина забирає, поставивши код заявки в біо X чи GitHub
+// (або у власний пост X); тоді нік переходить до неї перевіреним (lib/verify/claim.ts).
 
 const STEP_OF: Record<VerifiableKind, "x" | "sources"> = { x: "x", github: "sources" };
 
@@ -63,31 +62,24 @@ export async function checkCodeAction(_prev: StepState, form: FormData): Promise
   const ctx = await stepContext(STEP_OF[kind]);
   const claimRaw = field(form, "claim");
   const claim = claimRaw ? (kind === "x" ? normalizeX(claimRaw) : normalizeGithub(claimRaw)) : null;
-  if (claim && !claim.ok) return { message: GENERIC_ERROR };
+  // Лише спір за нік: свої джерела ми більше не перевіряємо кодом.
+  if (!claim?.ok) return { message: GENERIC_ERROR };
   const secret = appEnv().SESSION_SECRET;
+  if (!secret) return { message: { tone: "info", text: `${kind === "x" ? "X" : "GitHub"} verification is not available yet.` } };
 
   let outcome: CheckOutcome;
-  let value = "";
+  const value = claim.value;
   let code = "";
   try {
-    if (claim?.ok) {
-      if (!secret) return { message: { tone: "info", text: `${kind === "x" ? "X" : "GitHub"} verification is not available yet.` } };
-      value = claim.value;
-      code = await claimCode(secret, kind, value, ctx.user.id);
-      outcome = await checkClaim(ctx.d, ctx.user.id, kind, value, { ...sourceTokens(), secret });
-    } else {
-      const identity = await getIdentity(ctx.d, ctx.user.id, kind);
-      value = identity?.value ?? "";
-      code = identity?.verifyCode ?? "";
-      outcome = await checkIdentity(ctx.d, ctx.user.id, kind, sourceTokens());
-    }
+    code = await claimCode(secret, kind, value, ctx.user.id);
+    outcome = await checkClaim(ctx.d, ctx.user.id, kind, value, { ...sourceTokens(), secret });
   } catch (err) {
     console.error("verification failed:", err instanceof Error ? err.message : String(err));
     return { message: GENERIC_ERROR };
   }
 
   if (outcome.status === "verified") {
-    await audit(ctx.user.id, claim ? "identity.claim" : "identity.verify", ctx.user.id, { kind, via: outcome.via });
+    await audit(ctx.user.id, "identity.claim", ctx.user.id, { kind, via: outcome.via });
     const wait = await recordChange(ctx, "verify");
     redirect(withWait(`/welcome?step=${STEP_OF[kind]}`, wait));
   }

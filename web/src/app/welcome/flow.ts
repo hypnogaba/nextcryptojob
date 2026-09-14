@@ -66,7 +66,8 @@ export function withWait(url: string, wait: number | null): string {
  * Після збереження кроку.
  * - Анкета: на наступний крок; якщо її вже пройдено, на /jobs, де видно нові вакансії.
  *   Слова й ролі йдуть парою: після слів завжди крок ролей.
- * - «Stand out»: на наступний крок; після останнього (або при редагуванні з профілю)
+ * - Кроки балу (X, гаманці, джерела): на наступний крок; після останнього в першому проході
+ *   на /welcome/score, яка ставить бал у чергу й чекає на нього; при редагуванні з профілю
  *   у профіль, і якщо після останнього перерахунку щось змінилось, бал іде в чергу.
  */
 export async function goNext(ctx: StepContext, completed: Step): Promise<never> {
@@ -74,12 +75,16 @@ export async function goNext(ctx: StepContext, completed: Step): Promise<never> 
   if (isBriefStep(completed)) {
     redirect(ctx.briefDone && completed !== "target" ? "/jobs" : `/welcome?step=${next}`);
   }
-  if (ctx.wasDone || next === "done") {
+  if (!ctx.wasDone && next === "done") redirect(SCORE_PATH);
+  if (ctx.wasDone) {
     const status = await profileStatus(ctx.d, ctx.user.id);
     redirect(withWait("/profile", status.sourcesChanged ? await rescoreNow(ctx) : null));
   }
   redirect(`/welcome?step=${next}`);
 }
+
+/** Сторінка «Scoring your work…» і результату одразу після кроків балу. */
+export const SCORE_PATH = "/welcome/score";
 
 /** Секунди очікування з адреси (?wait=), лише розумне ціле. */
 export function parseWait(raw: unknown): number | null {

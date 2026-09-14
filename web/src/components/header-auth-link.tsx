@@ -46,9 +46,15 @@ export function HeaderNav() {
         </Link>
       ) : null}
       {signedIn ? (
-        <Link href="/account" className={LINK}>
-          Account
-        </Link>
+        <>
+          {/* «Your card» з будь-якої ширини: власник 14.09 не знайшов /profile. */}
+          <Link href="/profile" className="inline-flex min-h-11 items-center px-2 text-[0.9375rem] whitespace-nowrap text-ink-muted transition-colors hover:text-ink">
+            Your card
+          </Link>
+          <Link href="/account" className={LINK}>
+            Account
+          </Link>
+        </>
       ) : (
         <Link href="/login" className={LINK}>
           Sign in

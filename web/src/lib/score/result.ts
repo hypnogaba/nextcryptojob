@@ -1,0 +1,75 @@
+// Сторінка «Scoring your work…» одразу після кроків балу (/welcome/score): чи чекати, чи ставити
+// бал у чергу, чи показувати результат, і яку роль показати на картці. Чисті функції, без бази.
+import type { RoleKey } from "@/lib/card/roles";
+import { displayScore, levelFor } from "@/lib/card/tiers";
+import { MAX_WALLETS } from "@/lib/identity/wallets";
+import type { IdentityKind } from "@/lib/identity/normalize";
+import { isScoredRoleKey } from "@/lib/roles/recipes";
+import type { ScoreRow } from "./explain";
+import { isActive, type ProfileStatus } from "./status";
+
+/**
+ * Що робити зараз:
+ * - enqueue: завдання ще не було, або джерела змінились після останнього (крок X, гаманці, джерела
+ *   могли прийти, поки черга тримала правило 60 с): поставити бал у чергу;
+ * - wait: завдання чекає чи рахується;
+ * - failed: останнє завдання впало, а нового нема з чим ставити;
+ * - done: бал свіжий, показати результат.
+ */
+export type PollStep = "enqueue" | "wait" | "failed" | "done";
+
+export function nextPollStep(status: ProfileStatus): PollStep {
+  if (isActive(status)) return "wait";
+  if (!status.job || status.sourcesChanged) return "enqueue";
+  if (status.job.status === "failed") return "failed";
+  return "done";
+}
+
+/** Скільки чекати перед наступним опитуванням, мс: частіше в перші секунди, далі рідше. */
+export function pollDelayMs(elapsedMs: number): number {
+  return elapsedMs < 30_000 ? 2_000 : elapsedMs < 120_000 ? 4_000 : 8_000;
+}
+
+export type RoleScore = { role: RoleKey; score: number; level: number };
+
+/**
+ * Бали ролей людини, найвищий спершу (лише ролі, що рахуються, і з балом). Перша роль іде на
+ * картку; за рівного балу порядок, у якому людина обрала ролі.
+ */
+export function rankRoles(roles: readonly RoleKey[], scores: ReadonlyMap<string, ScoreRow>): RoleScore[] {
+  return roles
+    .map((role, i) => ({ role, i, row: scores.get(role) }))
+    .filter((r): r is { role: RoleKey; i: number; row: ScoreRow } =>
+      isScoredRoleKey(r.role) && r.row !== undefined && typeof r.row.score === "number" && Number.isFinite(r.row.score),
+    )
+    .sort((a, b) => b.row.score! - a.row.score! || a.i - b.i)
+    .map(({ role, row }) => ({ role, score: displayScore(row.score!), level: levelFor(row.score!) }));
+}
+
+export type Improvement = { key: string; text: string; href: string };
+
+/**
+ * «Improve your score»: що ще додати. Гаманці до 10, по одному X (він уже є), GitHub, YouTube, сайт.
+ * Порядок: гаманці, GitHub, сайт, YouTube.
+ */
+export function improvements(identities: readonly { kind: IdentityKind }[]): Improvement[] {
+  const has = (k: IdentityKind) => identities.some((i) => i.kind === k);
+  const wallets = identities.filter((i) => i.kind === "evm" || i.kind === "solana").length;
+  const out: Improvement[] = [];
+  if (wallets < MAX_WALLETS) {
+    out.push({
+      key: "wallets",
+      text:
+        wallets === 0
+          ? `Add your wallets, up to ${MAX_WALLETS}. Onchain history counts for every role and is the Trader score.`
+          : `Add more wallets: you have ${wallets} of ${MAX_WALLETS}. Each one adds its history.`,
+      href: "/welcome?step=wallets",
+    });
+  }
+  if (!has("github")) {
+    out.push({ key: "github", text: "Add GitHub: the main source for Engineer, Security auditor and DevRel.", href: "/welcome?step=sources" });
+  }
+  if (!has("site")) out.push({ key: "site", text: "Add your website or blog: it adds points to every score.", href: "/welcome?step=sources" });
+  if (!has("youtube")) out.push({ key: "youtube", text: "Add YouTube: it counts for Creator and Marketing.", href: "/welcome?step=sources" });
+  return out;
+}

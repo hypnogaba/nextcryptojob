@@ -69,7 +69,7 @@ export async function runWorker(o: WorkerOptions): Promise<WorkerStats> {
         const recorded = await queue.complete(job);
         stats.done++;
         log(`${who} done ${s.totalMs}ms gaps=${s.gaps.length}${s.gaps.length ? `(${s.gaps.join(",")})` : ""} ` +
-          `scored=${s.scored}${recorded ? "" : " (job row already moved on)"}`);
+          `scored=${s.scored} self-reported=${s.selfReported.join(",") || "none"}${recorded ? "" : " (job row already moved on)"}`);
       } catch (e) {
         if (abort.signal.aborted) {
           const back = await queue.requeue(job).catch(() => false);

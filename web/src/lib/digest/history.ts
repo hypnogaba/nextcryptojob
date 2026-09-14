@@ -294,7 +294,7 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     d
       .prepare(
         `SELECT email, telegram_id, channel, digest_hour, timezone, digest_paused, target_text,
-                roles, remote_mode, city, salary_min, salary_currency, onboarding_step,
+                roles, remote_mode, city, salary_min, salary_currency, role_text, onboarding_step,
                 (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
            FROM users WHERE id = ?`,
       )
@@ -340,6 +340,7 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     city: user.city,
     salary_min: user.salary_min,
     salary_currency: user.salary_currency,
+    role_text: user.role_text ?? null,
   };
   const step = normalizeSavedStep(parseSavedStep(user.onboarding_step), user.scoring === 1);
   const fit: FitContext = { words: user.target_text?.trim() || null, scores };

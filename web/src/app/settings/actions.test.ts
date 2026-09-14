@@ -77,9 +77,13 @@ describe("setVisibilityAction", () => {
 
   it("turns visibility on and off and logs both in the audit log", async () => {
     exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
-    await run(setVisibilityAction({}, form({ visible: "on" })));
+    await expect(run(setVisibilityAction({}, form({ visible: "on" })))).resolves.toEqual({
+      message: { tone: "success", text: "Saved. You are visible: companies with access can now find you." },
+    });
     expect(rows("SELECT visible_to_companies AS v FROM users")).toEqual([{ v: 1 }]);
-    await run(setVisibilityAction({}, form({ visible: "off" })));
+    await expect(run(setVisibilityAction({}, form({ visible: "off" })))).resolves.toEqual({
+      message: { tone: "success", text: "Saved. You are hidden: companies cannot find you." },
+    });
     expect(rows("SELECT visible_to_companies AS v FROM users")).toEqual([{ v: 0 }]);
     expect(rows("SELECT action, meta_json FROM audit_log ORDER BY id")).toEqual([
       { action: "consent.grant", meta_json: JSON.stringify({ kind: "visibility", version: "v1" }) },

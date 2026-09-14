@@ -4,7 +4,7 @@ import { FORMULA_VERSION, scorePerson } from "../formula/score.js";
 import type { RoleKey, SourceKey } from "../types.js";
 import { collectPerson, DEFAULT_DEADLINE_MS, type Outcomes, partialReason, toPersonFacts } from "./collect.js";
 import type { Db } from "./db.js";
-import { groupIdentities, loadIdentities, plannedSources } from "./identities.js";
+import { groupIdentities, loadIdentities, plannedSources, selfReportedSources } from "./identities.js";
 import type { CollectorRegistry, EngineEnv } from "./registry.js";
 
 export interface ScoreUserOptions {
@@ -29,6 +29,8 @@ export type ScoreSummary = {
   gaps: SourceKey[];
   /** Ролі з балом (не null). */
   scored: number;
+  /** Джерела, які людина вписала сама, без підтвердження (модель довіри 13.09). */
+  selfReported: SourceKey[];
 };
 
 const UPSERT_FACTS =
@@ -81,10 +83,11 @@ export async function scoreUser(userId: string, o: ScoreUserOptions): Promise<Sc
   await o.db.batch(statements, { idempotent: true });
 
   return summarize(userId, outcomes, collectMs, Math.round(performance.now() - t0),
-    Object.values(result.roles).filter((r) => r.score !== null).length);
+    Object.values(result.roles).filter((r) => r.score !== null).length, selfReportedSources(inputs));
 }
 
-function summarize(userId: string, outcomes: Outcomes, collectMs: number, totalMs: number, scored: number): ScoreSummary {
+function summarize(userId: string, outcomes: Outcomes, collectMs: number, totalMs: number, scored: number,
+  selfReported: SourceKey[]): ScoreSummary {
   const sources: ScoreSummary["sources"] = {};
   const gaps: SourceKey[] = [];
   for (const [source, out] of Object.entries(outcomes) as Array<[SourceKey, NonNullable<Outcomes[SourceKey]>]>) {
@@ -95,5 +98,5 @@ function summarize(userId: string, outcomes: Outcomes, collectMs: number, totalM
     };
     if (!out.result.ok) gaps.push(source);
   }
-  return { userId, formula: FORMULA_VERSION, totalMs, collectMs, sources, gaps, scored };
+  return { userId, formula: FORMULA_VERSION, totalMs, collectMs, sources, gaps, scored, selfReported };
 }
