@@ -75,11 +75,20 @@ describe("roles: our guess from step 1", () => {
     expect(html).not.toContain("Scored now");
   });
 
-  it("says so when nothing is clear, and still lets the person pick", async () => {
+  it("when no role is sure, suggests the closest ones instead of nothing, and says it is a guess", async () => {
     await signIn({ step: "roles", target: "I like cooking" });
     const html = await render();
-    expect(html).toContain("We could not tell your role from your words.");
-    expect(html).toContain("Pick a role to continue");
+    expect(html).toContain("We are not sure of your role. These are the closest to your words:");
+    expect(html).toContain('<input type="hidden" name="role" value="marketing_content"/>');
+    expect(html).toContain("Yes, continue");
+  });
+
+  it("reads a Ukrainian community manager brief as community and marketing", async () => {
+    await signIn({ step: "roles", target: "комуніті менеджерка, Лісабон або віддалено" });
+    const html = await render();
+    expect(html).toContain("We think you are looking for:");
+    expect(html).toContain('<input type="hidden" name="role" value="community"/>');
+    expect(html).toContain('<input type="hidden" name="role" value="marketing_content"/>');
   });
 });
 

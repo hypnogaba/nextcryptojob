@@ -13,7 +13,7 @@ import { MAX_WALLETS } from "@/lib/identity/wallets";
 import { placeFromText, whereFromMode } from "@/lib/onboarding/place";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { briefDone, isBriefStep, stepToShow, type Step } from "@/lib/onboarding/steps";
-import { inferRoles } from "@/lib/roles/infer";
+import { guessRoles } from "@/lib/roles/infer";
 import { claimCode, holderOf } from "@/lib/verify/claim";
 import { AddEmailForm } from "../account/add-email-form";
 import { DailyJobsForm } from "../settings/daily-jobs-form";
@@ -107,11 +107,17 @@ export default async function WelcomePage({ searchParams }: Props) {
       );
 
     case "roles": {
-      const inferred = inferRoles(answers.targetText);
+      // Певні ролі зі слів, а якщо певних немає, три найближчі (власник 14.09: «треба щось запропонувати»).
+      const guess = guessRoles(answers.targetText);
       return shell(
         step,
         "We read your role from what you wrote. Check it and fix it if we got it wrong.",
-        <RolesForm initial={answers.roles.length > 0 ? answers.roles : inferred} inferred={inferred} roleText={answers.roleText} />,
+        <RolesForm
+          initial={answers.roles.length > 0 ? answers.roles : guess.roles}
+          inferred={guess.roles}
+          closest={!guess.confident}
+          roleText={answers.roleText}
+        />,
       );
     }
 
