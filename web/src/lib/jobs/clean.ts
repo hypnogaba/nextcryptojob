@@ -16,6 +16,8 @@ export const NON_CRYPTO_COMPANIES: ReadonlySet<string> = new Set([
   "branch", "cross river", "auxmoney", "clue", "masterclass", "axiom", "launchpadtechnologiesinc", "stash",
   "transmit security", "sift", "cls", "groma", "webai", "hyperbolic", "hyperbolic labs", "wealthsimple",
   "bcg attorney search",
+  // 14.09: дошка Bitkraft на Getro каже «крипто», але вакансії Highrise без жодного слова про крипту.
+  "pocket worlds",
 ]);
 
 /** Ключ компанії для порівнянь: нижній регістр, лише літери й цифри через пробіл. */

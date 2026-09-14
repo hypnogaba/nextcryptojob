@@ -2,7 +2,7 @@
 // підставна (fixtures з sources/). Та сама база, яку потім читає добірка (loadCrawlPool).
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadCrawlPool } from "../digest/jobs.js";
+import { loadCrawlPool, POOL_SQL, poolParams } from "../digest/jobs.js";
 import { readOnlyJobsDb } from "../digest/jobs-db.js";
 import { __resetLimiters, __setLimiter } from "../limits.js";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
@@ -61,6 +61,10 @@ let db: FakeJobsDb;
 let urls: string[];
 let deadAnswers: 404 | 200;
 let web3careerStatus: 200 | 401;
+/** Вакансії Coinbase (gh_jid), яких цього разу немає у фіді: роботодавець зняв їх. */
+let coinbaseClosed: Set<string>;
+/** Kraken (Ashby) відповідає 500: джерело не прочиталось. */
+let krakenDown: boolean;
 
 /** Підставна мережа: адреса → файл знімка; дошка deadco відповідає 404 (або порожнім списком). */
 const fetchImpl = (async (input: string, init?: RequestInit) => {
@@ -69,8 +73,12 @@ const fetchImpl = (async (input: string, init?: RequestInit) => {
   const getro = getroFake("getro-1625-page.json", "getro-1625-companies.json")(url, init);
   if (getro) return getro;
   const json = (file: string) => new Response(fixture(file), { status: 200, headers: { "content-type": "application/json" } });
-  if (url.includes("boards-api.greenhouse.io")) return json("greenhouse-coinbase-pay.json");
-  if (url.includes("api.ashbyhq.com")) return json("ashby-kraken-comp.json");
+  if (url.includes("boards-api.greenhouse.io")) {
+    const feed = JSON.parse(fixture("greenhouse-coinbase-pay.json")) as { jobs: Array<{ absolute_url: string }> };
+    feed.jobs = feed.jobs.filter((j) => ![...coinbaseClosed].some((id) => j.absolute_url.includes(id)));
+    return new Response(JSON.stringify(feed), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (url.includes("api.ashbyhq.com")) return krakenDown ? new Response("upstream error", { status: 500 }) : json("ashby-kraken-comp.json");
   if (url.includes("teamtailor.com")) return new Response(fixture("teamtailor-crossmint.rss"), { status: 200 });
   if (url.includes("remote3.co")) return new Response(fixture("remote3.rss"), { status: 200 });
   if (url.includes("api.lever.co/v0/postings/deadco")) return deadAnswers === 404 ? new Response("not found", { status: 404 }) : json("lever-crypto-salary.json");
@@ -95,6 +103,8 @@ beforeEach(() => {
   urls = [];
   deadAnswers = 404;
   web3careerStatus = 200;
+  coinbaseClosed = new Set();
+  krakenDown = false;
   db.seen.length = 0;
   __setLimiter("web3.career", { concurrency: 1, minIntervalMs: 0 });
   __setLimiter("api.getro.com", { concurrency: 1, minIntervalMs: 0 });
@@ -114,10 +124,14 @@ describe("jobs-scan", () => {
     expect(r.newJobs).toBe(r.kept);
     expect(rows.every((x) => x.id === jobId(x.url) && x.fetched_at === NOW.toISOString() && x.first_seen_at === x.fetched_at)).toBe(true);
     expect(rows.every((x) => (JSON.parse(x.tags) as string[])[0] === "web3")).toBe(true);
-    // Старше за 30 днів не йде: Coinbase 29.07, Kraken 13.02, усі ролі Anchorage (29.07 до 12.08).
-    expect(rows.some((x) => x.url.includes("8093264"))).toBe(false);
+    // Власний фід роботодавця до 90 днів: Coinbase 28.07 і 20.06 ідуть, Kraken 13.02 ні.
+    // Агрегатор (speedrun) до 30 днів: усі ролі Anchorage (29.07 до 12.08) ні.
+    expect(rows.some((x) => x.url.includes("8093264"))).toBe(true);
+    expect(rows.some((x) => x.url.includes("8013889"))).toBe(true);
+    expect(rows.some((x) => x.url.includes("8f237e3a"))).toBe(false);
+    expect(rows.some((x) => x.source === "aggregator:speedrun")).toBe(false);
     expect(new Set(rows.map((x) => x.source))).toEqual(new Set(["greenhouse:coinbase", "ashby:kraken.com", "teamtailor:crossmint.na", "board:remote3"]));
-    expect(r.dropped.old).toBeGreaterThan(0); // speedrun ріже вікно ще в запиті компанії
+    expect(r.dropped.old).toBeGreaterThan(0); // Kraken 13.02; speedrun ріже вікно ще в запиті компанії
     expect(db.all("SELECT source, status, fail_days FROM source_state")).toEqual([{ source: "lever:deadco", status: "failing", fail_days: 1 }]);
     const run = db.get<{ kind: string; status: string; jobs_found: number; jobs_new: number; rows_written: number | null; sources_failed: number }>(
       "SELECT kind, status, jobs_found, jobs_new, rows_written, sources_failed FROM scan_runs");
@@ -175,6 +189,55 @@ describe("jobs-scan", () => {
     expect(stats.fetched).toBe(r.kept);
     expect(jobs.length).toBe(r.pool.pool);
     expect(jobs.every((j) => j.ref.startsWith("nr:j") && j.source === "nextrole")).toBe(true);
+  });
+});
+
+describe("жива вакансія: є в останньому вдалому скані свого джерела", () => {
+  /** id рядків, які зараз узяв би пул добірки (до сита ролей). */
+  const live = (at: Date): Set<string> => new Set(db.all<{ id: string }>(POOL_SQL, ...poolParams(at)).map((x) => x.id));
+  const idOf = (gh: string) => db.get<{ id: string }>(`SELECT id FROM jobs_cache WHERE url LIKE '%${gh}%'`)!.id;
+  const krakenIds = () => db.all<{ id: string }>("SELECT id FROM jobs_cache WHERE source = 'ashby:kraken.com'").map((x) => x.id);
+
+  it("знята з фіду роботодавця не жива з того самого скану; джерело впало: вакансії живі 3 доби від останнього вдалого", async () => {
+    await scan(new JobsStore(db, false));
+    const closed = idOf("8093264");
+    const kraken = krakenIds();
+    expect(kraken.length).toBeGreaterThan(0);
+    expect(live(NOW)).toContain(closed);
+
+    // Наступного дня Coinbase зняла вакансію, Kraken не відповів.
+    coinbaseClosed = new Set(["8093264"]);
+    krakenDown = true;
+    const day2 = new Date(NOW.getTime() + DAY);
+    const r2 = await scan(new JobsStore(db, false), day2);
+    expect(r2.bySource.find((s) => s.source === "ashby:kraken.com")!.error).toMatch(/500/);
+    const after = live(new Date(day2.getTime() + 60_000));
+    expect(after.has(closed)).toBe(false); // рядок у базі є (fetched_at учорашній), але не живий
+    expect(count(`SELECT COUNT(*) AS n FROM jobs_cache WHERE id = '${closed}'`)).toBe(1);
+    expect(after.has(idOf("8175363"))).toBe(true); // решта Coinbase жива
+    for (const id of kraken) expect(after.has(id)).toBe(true); // збій джерела нічого не знімає
+
+    // Kraken не читається й далі: на четверту добу після останнього вдалого скану його вакансій немає.
+    const day4 = new Date(NOW.getTime() + 3 * DAY + 60_000);
+    await scan(new JobsStore(db, false), day4);
+    for (const id of kraken) expect(live(new Date(day4.getTime() + 60_000)).has(id)).toBe(false);
+  });
+
+  it("вік: ATS до 90 днів від публікації, дошка до 30; без дати від first_seen_at", async () => {
+    const iso = (d: number) => new Date(NOW.getTime() - d * DAY).toISOString();
+    const add = (id: string, source: string, posted: string | null, firstSeen: string) => db.exec(
+      `INSERT INTO jobs_cache (id, url, company, company_key, title, source, tags, dedupe_key, posted_at, fetched_at, first_seen_at)
+       VALUES (?, ?, 'Acme', 'acme', 'Engineer', ?, '["web3"]', ?, ?, ?, ?)`, id, `https://x.example/${id}`, source, id, posted, iso(0.1), firstSeen);
+    add("ats80", "greenhouse:acme", iso(80), iso(1));
+    add("ats95", "ashby:acme", iso(95), iso(1));
+    add("board40", "board:web3career", iso(40), iso(1));
+    add("board20", "board:jobstash", iso(20), iso(1));
+    add("speedrun40", "aggregator:speedrun", iso(40), iso(1));
+    add("atsUndated100", "rippling:acme", null, iso(100));
+    add("atsUndated60", "bamboohr:acme", null, iso(60));
+    add("boardUndated40", "aggregator:superteam", null, iso(40));
+    add("unknown40", "careers:acme", iso(40), iso(1));
+    expect([...live(NOW)].sort()).toEqual(["ats80", "atsUndated60", "board20"]);
   });
 });
 

@@ -28,7 +28,10 @@ let ours: TestDb;
 let reads: number;
 let jobs: () => JobsDb;
 
-/** Живий пул з тими пастками, які добірка обходить: одна компанія двічі, «Hybrid», нац. дошка, старе, не наша роль. */
+/**
+ * Живий пул з тими пастками, які добірка обходить: одна компанія двічі, «Hybrid», нац. дошка, не наша роль,
+ * старе: з фіду роботодавця (ATS) 40 днів ще відкрите й лише добирає, з дошки 40 днів і з ATS 100 днів не живі.
+ */
 function seed(raw: DatabaseSync) {
   const f = ago(2);
   addPoolJob(raw, { id: "e1", title: "Senior Solidity Engineer", company: "Aave", postedAt: ago(24), fetchedAt: f, salaryMin: 150_000, salaryMax: 180_000, currency: "USD" });
@@ -41,6 +44,8 @@ function seed(raw: DatabaseSync) {
   addPoolJob(raw, { id: "b1", title: "BD Lead", company: "Phantom", postedAt: ago(20), fetchedAt: f, salaryMin: 1000, currency: "USD" });
   addPoolJob(raw, { id: "d1", title: "Product Designer", company: "Lido", location: "Lisbon", remote: false, postedAt: ago(8), fetchedAt: f, source: "ashby:lido" });
   addPoolJob(raw, { id: "old", title: "Solidity Engineer", company: "Old Co", postedAt: ago(24 * 40), fetchedAt: f });
+  addPoolJob(raw, { id: "oldboard", title: "Solidity Engineer", company: "Board Co", postedAt: ago(24 * 40), fetchedAt: f, source: "board:web3career" });
+  addPoolJob(raw, { id: "ancient", title: "Solidity Engineer", company: "Ancient Co", postedAt: ago(24 * 100), fetchedAt: f });
   addPoolJob(raw, { id: "chef", title: "Head Chef", company: "Food Co", postedAt: ago(4), fetchedAt: f });
 }
 
@@ -88,9 +93,7 @@ const deps = () => ({ db: ours.d1, env: {}, jobs, now: NOW });
 
 /** Що вибрала б добірка engine: її власний пул з тих самих рядків і її selectJobs. */
 function engineChoice(b: BriefRow, exclude: Set<string>) {
-  const live = new Date(NOW.getTime() - engineJobs.LIVE_WINDOW_DAYS * 86_400_000).toISOString();
-  const posted = new Date(NOW.getTime() - engineJobs.POSTED_WINDOW_DAYS * 86_400_000).toISOString();
-  const rows = nr.raw.prepare(engineJobs.POOL_SQL).all(live, posted) as never[];
+  const rows = nr.raw.prepare(engineJobs.POOL_SQL).all(...engineJobs.poolParams(NOW)) as never[];
   const crawl = rows.flatMap((r) => {
     const x = engineJobs.crawlJob(r);
     return "job" in x ? [x.job] : [];
@@ -128,9 +131,12 @@ describe("Jobs for you now", () => {
     if (now.state !== "ok") return;
     const refs = now.jobs.map((j) => j.ref);
     // Вакансія компанії першою (не більше однієї), далі скановані за свіжістю (без дати публікації
-    // рахується, коли скан бачив: e6 2 год тому); Aave лише раз, і не надіслана e2. «Hybrid» (e4)
-    // і національна дошка (e5) не віддалені, Lisbon (e3) не для віддаленої анкети.
-    expect(refs).toEqual(["co:job_acme", "nr:e6", "nr:e1"]);
+    // рахується, коли скан уперше побачив: e6 2 год тому); Aave лише раз, і не надіслана e2. «Hybrid» (e4)
+    // і національна дошка (e5) не віддалені, Lisbon (e3) не для віддаленої анкети. Свіжих лише три,
+    // тож добирає ще відкрита вакансія з фіду роботодавця (old, 40 днів), і пояснення це каже;
+    // та сама давнина з дошки (oldboard) і 100 днів з ATS (ancient) не живі.
+    expect(refs).toEqual(["co:job_acme", "nr:e6", "nr:e1", "nr:old"]);
+    expect(now.jobs[3]!.why).toBe("Matches your Engineer role. Remote. Still open, posted 5 weeks ago.");
     expect(now.jobs[0]).toMatchObject({ url: "/jobs/job_acme", postedBy: "Acme Labs", location: "Remote or Lisbon" });
     expect(now.jobs[2]).toMatchObject({ company: "Aave", salary: "$150k to $180k", url: "https://boards.example.com/e1" });
     expect(now.jobs.every((j) => j.why.startsWith("Matches your Engineer role."))).toBe(true);
@@ -153,7 +159,7 @@ describe("Jobs for you now", () => {
     expect(await reason(brief({ roles: ["engineer"], remote_mode: "city", city: "Berlin" }))).toEqual({
       kind: "city_only",
       city: "Berlin",
-      remote: 4,
+      remote: 5,
     });
     expect(await reason(brief({ roles: ["trader"] }), new Set(["nr:t1"]))).toEqual({ kind: "all_sent" });
   });

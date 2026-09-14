@@ -282,7 +282,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   const company = db ? await loadCompanyPool(db, log, siteUrlOf(deps.env) ?? DEFAULT_SITE_URL) : [];
   summary.companyJobs = company.length;
   const pool = { crawl: crawl.jobs, company };
-  log(`digest: pool ${crawl.stats.kept} jobs (fetched ${crawl.stats.fetched}, dropped tag ${crawl.stats.dropped.tag} ` +
+  log(`digest: pool ${crawl.stats.kept} jobs, ${crawl.stats.older} of them posted over 30 d ago (fetched ${crawl.stats.fetched}, dropped tag ${crawl.stats.dropped.tag} ` +
     `company ${crawl.stats.dropped.company} title ${crawl.stats.dropped.title}; rows_read ${crawl.stats.rowsRead ?? "n/a"}, ` +
     `D1 ${crawl.stats.d1Ms === null ? "n/a" : `${Math.round(crawl.stats.d1Ms)} ms`}, wall ${crawl.stats.wallMs} ms); company jobs ${company.length}`);
 

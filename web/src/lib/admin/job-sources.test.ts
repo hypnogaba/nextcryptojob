@@ -74,14 +74,34 @@ describe("the aggregate query", () => {
     expect(rows[0]!.source).toBe("greenhouse:coinbase");
   });
 
+  it("live = in the source's latest scan; employer ATS up to 90 days from posting, boards 30", async () => {
+    const t = jobsTestDb();
+    const add = (j: Parameters<typeof addCachedJob>[1]) => addCachedJob(t.raw, j);
+    const YESTERDAY = "2026-09-11T04:35:00.000Z";
+    // ATS: опублікована 60 днів тому, але є в сьогоднішньому скані: жива.
+    add({ source: "greenhouse:kraken", company: "Kraken", fetchedAt: FRESH, postedAt: "2026-07-14T00:00:00Z" });
+    // ATS: 100 днів: ні. Учорашня, якої сьогоднішній скан уже не бачив (знята): ні, хоч і в 3 днях.
+    add({ source: "greenhouse:kraken", company: "Kraken", fetchedAt: FRESH, postedAt: "2026-06-04T00:00:00Z" });
+    add({ source: "greenhouse:kraken", company: "Kraken", fetchedAt: YESTERDAY, postedAt: "2026-09-01T00:00:00Z" });
+    // Дошка: 40 днів ні, 20 днів так.
+    add({ source: "board:jobstash", fetchedAt: FRESH, postedAt: "2026-08-03T00:00:00Z" });
+    add({ source: "board:jobstash", fetchedAt: FRESH, postedAt: "2026-08-23T00:00:00Z" });
+    // Джерело сьогодні не прочиталось: учорашній скан ще в запасі, вакансія жива.
+    add({ source: "lever:safe", company: "Safe", fetchedAt: YESTERDAY, postedAt: "2026-08-01T00:00:00Z" });
+    const rows = await readOnlyJobsDb(t.d1).all<SourceAggRow>(SOURCES_SQL, ...sourcesParams(NOW));
+    const live = Object.fromEntries(rows.map((r) => [r.source, [r.web3_jobs, r.live_jobs]]));
+    expect(live).toEqual({ "greenhouse:kraken": [3, 1], "board:jobstash": [2, 1], "lever:safe": [1, 1] });
+  });
+
   it("is a single read the jobs DB guard lets through", () => {
     const calls: unknown[][] = [];
     const binding = { prepare: (sql: string) => ({ bind: (...p: unknown[]) => (calls.push([sql, ...p]), { all: async () => ({ results: [] }) }) }) };
     return readOnlyJobsDb(binding as unknown as D1Database).all(SOURCES_SQL, ...sourcesParams(NOW)).then(() => {
       expect(calls).toHaveLength(1);
       expect(calls[0]!.slice(1)).toEqual([
-        expect.stringMatching(/^\|perle\|crusoe\|.*\|bcg attorney search\|$/),
+        expect.stringMatching(/^\|perle\|crusoe\|.*\|bcg attorney search\|pocket worlds\|$/),
         "2026-09-09T12:00:00.000Z",
+        "2026-06-14T12:00:00.000Z",
         "2026-08-13T12:00:00.000Z",
       ]);
     });
