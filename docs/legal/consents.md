@@ -42,7 +42,7 @@ Withdrawal text in Settings:
 - **Where:** the consent step at the end of the setup brief, below the scoring consent. First pass only: editing the step later links to Settings and changes nothing.
 - **Default:** ticked (owner decision 2026-09-14). The box and its text are visible next to the scoring box, never hidden behind a link.
 - **Requires:** `scoring` (the same submit gives it; without it nothing about companies is written).
-- **Legal basis:** consent, art. 6(1)(a) GDPR. [to confirm with lawyer: a pre-ticked box is not valid consent (GDPR recital 32; CJEU C-673/17 Planet49). Options: an unticked box, or contract (art. 6(1)(b)) or legitimate interest (art. 6(1)(f)) with an easy opt-out]
+- **Legal basis:** consent, art. 6(1)(a) GDPR.
 
 > Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. You can turn this off any time in Settings.
 
