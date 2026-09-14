@@ -42,8 +42,18 @@ Application») і назва мусить мапитись на нашу рол�
 діакритики, `remote,city` обидва, місто спершу); зарплата м'яко (дотягує до мінімуму > невідомо >
 нижче; USD/EUR/GBP грубо в долари, решта валют = невідомо); свіжіші спершу; одна на компанію; нічого з
 `sent` цієї людини, і та сама вакансія під новою адресою (`dedupe_key`) теж. Кілька ролей людини
-набираються по колу, щоб друга роль не зникала за першою. Рядок «чому» англійською, без довгого тире:
-`Matches your Security auditor role. Remote. Salary listed: $120k to $150k.`
+набираються по колу, щоб друга роль не зникала за першою.
+
+Рядок «чому» (з 14.09.2026, `fit.ts`; сайт має дослівну копію `web/src/lib/jobs/fit.ts`): одна-три причини
+англійською, без довгого тире, у порядку ваги. Перша завжди роль і слова людини з її «що шукаю»
+(`users.target_text`), які є в назві вакансії; далі зарплата, що дотягує до мінімуму людини, рівень
+(senior, entry), якщо людина його назвала і назва каже те саме, місце (її місто або «віддалено, як
+просили»), її бал за цю роль від 50. Давніша за 30 днів вакансія ще й каже «Still open, posted N weeks ago.».
+Вибору пояснення не міняє. Приклад:
+`Matches your Engineer role, and the title has your words "solidity" and "defi". Pays $150k to $180k, meets your $120k minimum. A senior role, the level you asked for.`
+Рядок іде в `sent.why`, у Telegram і в лист. Поруч, коли знаємо, одне-два речення про компанію
+(`companies.about` у базі вакансій, db/jobs 0005, заповнює `jobs-about`), і над списком «We checked N live
+crypto jobs. These 5 fit you best.» (N = увесь пул прогону). Без 0005 добірка йде без речень про компанію.
 
 ## Запис і доставка
 
@@ -55,7 +65,8 @@ Application») і назва мусить мапитись на нашу рол�
 Нічого не підійшло: `digest_runs.status = 'empty'`.
 
 Канал: `users.channel`; якщо ним нема чим слати, другий, що є в людини.
-- Telegram: Bot API `sendMessage`, HTML, одне повідомлення на 5 вакансій, `TELEGRAM_BOT_TOKEN`.
+- Telegram: Bot API `sendMessage`, HTML, одне повідомлення на 5 вакансій, `TELEGRAM_BOT_TOKEN`. Унизу
+  підказка: давніші вакансії команда `/jobs` у боті (сайт, `web/src/lib/telegram/bot.ts`) і сторінка `/jobs`.
   Без токена людину пропускаємо (у базу нічого, вакансії не згорають), у журналі причина.
   429: чекаємо `retry_after` (до 60 с), до 3 спроб. 403 (бота заблоковано) або 400 `chat not found`:
   Telegram `failed`, і якщо є пошта, лист (у `digest_runs.error` примітка `sent by email instead`).
@@ -80,6 +91,7 @@ Application») і назва мусить мапитись на нашу рол�
   "user_id": "<users.id>",
   "local_date": "2026-09-12",
   "ts": 1789196700,
+  "pool_jobs": 1437,
   "jobs": [
     {
       "position": 1,
@@ -87,17 +99,20 @@ Application») і назва мусить мапитись на нашу рол�
       "company": "Paying Labs",
       "location": "Remote",
       "salary": "$120k to $150k",
-      "why": "Matches your Engineer role. Remote. Salary listed: $120k to $150k.",
+      "why": "Matches your Engineer role. Pays $120k to $150k, meets your $100k minimum. Remote, as you asked.",
       "url": "https://paying.example/apply",
       "posted_by": "Paying Labs",
       "source": "company",
-      "salary_estimate": null
+      "salary_estimate": null,
+      "about": null
     }
   ]
 }
 ```
 
-`location`, `salary`, `posted_by`, `salary_estimate` можуть бути `null`. `salary_estimate` (з 14.09.2026,
+`location`, `salary`, `posted_by`, `salary_estimate`, `about` можуть бути `null`. `pool_jobs` і `about` (з
+14.09.2026, необов'язкові): скільки живих вакансій переглянув підбір (рядок «We checked …» у листі) і одне-два
+речення про компанію; старий сайт їх ігнорує, старий engine не шле. `salary_estimate` (з 14.09.2026,
 необов'язкове): оцінка дошки, напр. «est. $180k to $225k (web3.career estimate)», лише коли `salary` `null`;
 сайт показує її приглушено, окремо від зарплати. `posted_by` не `null` лише для вакансій компаній
 (показати "Posted by {Company} on NextCryptoJob"). `url` вакансії компанії: її сторінка на сайті

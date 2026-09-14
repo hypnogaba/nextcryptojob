@@ -124,7 +124,36 @@ describe("runDigestDue", () => {
     const rows = sent();
     expect(rows.map((r) => r.position)).toEqual([1, 2, 3, 4, 5]);
     expect(rows.every((r) => r.status === "sent" && r.channel === "telegram" && r.source === "nextrole" && r.job_ref.startsWith("nr:"))).toBe(true);
-    expect(rows[0]!.why).toBe("Matches your Engineer role. Remote.");
+    // Причини словами людини (fit.ts): роль, «як просили», бал 50 за цю роль.
+    expect(rows[0]!.why).toBe("Matches your Engineer role. Remote, as you asked. Your Engineer score is 50, from your public work.");
+    // Telegram каже, скільки живих вакансій переглянуто.
+    expect(tgCalls[0]).toContain("We checked 7 live crypto jobs. These 5 fit you best.");
+  });
+
+  it("причини словами людини в sent.why і Telegram, речення про компанію з реєстру (db/jobs 0005)", async () => {
+    addUser("words-user");
+    db.exec("UPDATE users SET target_text = 'I write Solidity for DeFi lending' WHERE id = 'words-user'");
+    jobs.add({ id: "s1", title: "Solidity Engineer, DeFi", company: "Lend Labs" });
+    jobs.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, about)
+               VALUES ('lendlabs', 'Lend Labs', 'ashby', 'lendlabs', 'manual', 'lendlabs.example', 'Lend Labs runs lending markets on Base.')`);
+    await runDigestDue(deps());
+    expect(sent()[0]!.why).toBe('Matches your Engineer role, and the title has your words "solidity" and "defi". Remote, as you asked. ' +
+      "Your Engineer score is 50, from your public work.");
+    expect(tgCalls[0]).toContain("Lend Labs runs lending markets on Base.");
+    expect(tgCalls[0]).toContain("This one fits you best.");
+  });
+
+  it("база вакансій без 0005: добірка йде без речень про компанію, у журналі видно чому", async () => {
+    addUser("old-db");
+    addJobs(2);
+    const old: FakeJobsDb = jobs;
+    const failing = { select: async (sql: string, params?: unknown[]) => {
+      if (sql.includes("FROM companies")) throw new Error("D1_ERROR: no such column: domain");
+      return readOnlyJobsDb(old).select(sql, params);
+    } };
+    const s = await runDigestDue(deps({ jobs: failing as never }));
+    expect(s.sent).toBe(1);
+    expect(log.join("\n")).toContain("db/jobs 0005 not applied");
   });
 
   it("ідемпотентно на дату людини: той самий і наступний запуск того дня нічого не шлють", async () => {
