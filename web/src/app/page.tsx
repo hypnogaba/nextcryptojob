@@ -24,8 +24,8 @@ const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
 const LINK =
   "font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand";
 
-/** Анкета коротко, як ланцюжок: що людина дає і що в кінці. */
-const BRIEF = ["X", "Wallets", "Roles", "Where", "Done"] as const;
+/** Анкета коротко, як ланцюжок, у тому самому порядку, що /welcome: бриф (слова, де, зарплата), ролі, X, гаманці. */
+const BRIEF = ["Brief", "Roles", "X", "Wallets", "Done"] as const;
 
 /** Що ми читаємо: те, що вже показує роботу людини. Лише публічне. */
 const SOURCES = [
