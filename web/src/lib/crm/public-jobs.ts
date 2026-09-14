@@ -1,9 +1,9 @@
 import type { z } from "zod";
 import { cleanText, companyJobLocation } from "@/lib/digest/format";
 import { jobsDb, type JobsDb } from "@/lib/jobs-db";
-import { companyKey } from "@/lib/jobs/nextrole-clean";
-import { nextrolePool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/nextrole-pool";
-import { foldText, mentionsCity } from "@/lib/jobs/nextrole-place";
+import { companyKey } from "@/lib/jobs/clean";
+import { crawlPool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/pool";
+import { foldText, mentionsCity } from "@/lib/jobs/place";
 import { isoTime, sqlTime } from "@/lib/time";
 import type { ActionContext } from "./context";
 import { applyUrlOf, publicJobUrl, rolesOf, workModesOf } from "./jobs";
@@ -16,10 +16,10 @@ import { ActionError, type PublicJobList as PublicJobListSchema, type RoleKey } 
  * search_jobs шукає у двох пулах:
  * - живі вакансії компаній (подання company_jobs_live, 0012): одне читання на пошук,
  *   не більше COMPANY_POOL_CAP рядків (відкритих у компанії щонайбільше 10);
- * - вакансії NextRole (JOBS_DB, лише читання) з тими самими вікном свіжості, тегом web3
- *   і ситами, що в добірці engine (lib/jobs/nextrole-pool.ts); пул тримається в пам'яті
- *   ізолята POOL_TTL_MS, тож пошук між читаннями базу NextRole не чіпає.
- * База NextRole не відповіла: пошук віддає вакансії компаній (у журнал попередження).
+ * - вакансії зі сканування (база вакансій JOBS_DB, лише читання) з тими самими вікном свіжості, тегом web3
+ *   і ситами, що в добірці engine (lib/jobs/pool.ts); пул тримається в пам'яті
+ *   ізолята POOL_TTL_MS, тож пошук між читаннями базу вакансій не чіпає.
+ * База вакансій не відповіла: пошук віддає вакансії компаній (у журнал попередження).
  *
  * Порядок: новіші за датою публікації спершу; без дати в кінці (відсутнє значення не
  * випереджає справжнє), далі за job_id. Курсор = позиція останньої відданої вакансії.
@@ -157,7 +157,7 @@ function matches(job: PoolJob, input: SearchJobsInput): boolean {
   return true;
 }
 
-/** Новіші спершу, без дати в кінці, далі компанії перед NextRole і за job_id. */
+/** Новіші спершу, без дати в кінці, далі компанії перед сканованими і за job_id. */
 function compare(a: PoolJob, b: PoolJob): number {
   if (a.postedMs !== b.postedMs) {
     if (a.postedMs === null) return 1;
@@ -208,7 +208,7 @@ function toPublic(job: PoolJob): PublicJob {
   };
 }
 
-/** search_jobs: одна сторінка живих вакансій компаній і NextRole за фільтрами. */
+/** search_jobs: одна сторінка живих вакансій компаній і зі сканування за фільтрами. */
 export async function searchJobs(
   ctx: ActionContext,
   input: SearchJobsInput,
@@ -216,7 +216,7 @@ export async function searchJobs(
 ): Promise<PublicJobList> {
   const after = input.cursor ? openCursor(input.cursor) : null;
   const limit = input.limit ?? DEFAULT_LIMIT;
-  const [company, crawl] = await Promise.all([companyPool(ctx), nextrolePool(deps.jobs ?? jobsDb, ctx.now)]);
+  const [company, crawl] = await Promise.all([companyPool(ctx), crawlPool(deps.jobs ?? jobsDb, ctx.now)]);
   const found = [...company, ...(crawl ?? [])].filter((j) => matches(j, input)).sort(compare);
   let start = 0;
   if (after) {

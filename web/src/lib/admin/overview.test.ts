@@ -182,7 +182,7 @@ describe("overviewFlags", () => {
       sources: [],
       company: { openJobs: 0, liveJobs: 0, liveWithSalary: 0, newestAt: null },
       totals: {
-        liveJobs: 0, nextroleLiveJobs: 0, companyLiveJobs: 0, activeSources: 0, staleSources: 0, allNextroleSources: 0,
+        liveJobs: 0, crawlLiveJobs: 0, companyLiveJobs: 0, activeSources: 0, staleSources: 0, allSources: 0,
         lastScan: { at: lastScanAt, status: "ok" }, scannerStale: stale,
       },
       computedAt: lastScanAt,
@@ -207,21 +207,21 @@ describe("overviewFlags", () => {
     expect(flags.find((f) => f.text.includes("agency"))?.href).toBe("/admin/agency-applications");
   });
 
-  it("flags the engine idle for a day with a queue, and a scanner that missed its weekday run", async () => {
+  it("flags the engine idle for a day with a queue, and a scanner that missed its daily run", async () => {
     const { o } = await seeded();
     const later = { ...o, now: Date.parse("2026-09-14T12:30:00Z") }; // понеділок
     const flags = overviewFlags(later, { report: report(Date.parse("2026-09-11T03:00:00Z"), true), error: null });
     expect(flags.map((f) => f.text)).toEqual(
       expect.arrayContaining([
         "Scoring engine idle for 24 h with 2 queued.",
-        "NextRole scanner missed its scheduled weekday run (03:00 UTC); last scan 3 d ago.",
+        "Job scanner missed its scheduled daily run (04:30 UTC); last scan 3 d ago.",
       ]),
     );
-    expect(flags.find((f) => f.text.startsWith("NextRole"))).toMatchObject({ level: "alert", href: "/admin/sources" });
+    expect(flags.find((f) => f.text.startsWith("Job scanner"))).toMatchObject({ level: "alert", href: "/admin/sources" });
 
-    // Звіт каже, що скан на місці (у вихідні після п'ятничного): прапорця немає.
-    const sunday = overviewFlags(o, { report: report(Date.parse("2026-09-11T03:00:00Z"), false), error: null });
-    expect(sunday.find((f) => f.text.startsWith("NextRole"))).toBeUndefined();
+    // Звіт каже, що скан на місці: прапорця немає.
+    const onTime = overviewFlags(o, { report: report(Date.parse("2026-09-11T03:00:00Z"), false), error: null });
+    expect(onTime.find((f) => f.text.startsWith("Job scanner"))).toBeUndefined();
 
     const unread = overviewFlags(o, { report: null, error: "no such table: jobs_cache" });
     expect(unread.find((f) => f.href === "/admin/sources")?.text).toContain("no such table");

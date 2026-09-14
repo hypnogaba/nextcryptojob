@@ -5,7 +5,7 @@ import * as engineMatch from "../../../../engine/src/digest/match";
 import { readFileSync } from "node:fs";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, addSubscription, crmDb, run } from "@/test/crm-fixtures";
-import { addPoolJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import type { TestDb } from "@/test/sqlite-d1";
 import {
   type BriefRow,
@@ -13,7 +13,7 @@ import {
   profileOf,
   roughCount,
 } from "./instant";
-import { NEXTROLE_POOL_SQL, POOL_READ_SQL, resetNextrolePool } from "./nextrole-pool";
+import { POOL_SQL, POOL_READ_SQL, resetCrawlPool } from "./pool";
 
 /**
  * «Jobs for you now»: ті самі вакансії й той самий порядок, що вибрала б щоденна добірка
@@ -57,9 +57,9 @@ function seedCompanyJob(raw: DatabaseSync) {
 }
 
 beforeEach(() => {
-  resetNextrolePool();
+  resetCrawlPool();
   vi.spyOn(console, "log").mockImplementation(() => undefined);
-  nr = nextroleJobsDb();
+  nr = jobsTestDb();
   seed(nr.raw);
   ours = crmDb();
   seedCompanyJob(ours.raw);
@@ -90,16 +90,16 @@ const deps = () => ({ db: ours.d1, env: {}, jobs, now: NOW });
 function engineChoice(b: BriefRow, exclude: Set<string>) {
   const live = new Date(NOW.getTime() - engineJobs.LIVE_WINDOW_DAYS * 86_400_000).toISOString();
   const posted = new Date(NOW.getTime() - engineJobs.POSTED_WINDOW_DAYS * 86_400_000).toISOString();
-  const rows = nr.raw.prepare(engineJobs.NEXTROLE_POOL_SQL).all(live, posted) as never[];
-  const nextrole = rows.flatMap((r) => {
-    const x = engineJobs.nextroleJob(r);
+  const rows = nr.raw.prepare(engineJobs.POOL_SQL).all(live, posted) as never[];
+  const crawl = rows.flatMap((r) => {
+    const x = engineJobs.crawlJob(r);
     return "job" in x ? [x.job] : [];
   });
   const company = (ours.raw.prepare("SELECT * FROM company_jobs_live").all() as never[])
     .map((r) => engineJobs.companyJob(r, "https://nextcryptojob.xyz"))
     .filter((j) => j !== null);
   return engineMatch
-    .selectJobs({ nextrole, company }, profileOf(b), { now: NOW, exclude })
+    .selectJobs({ crawl, company }, profileOf(b), { now: NOW, exclude })
     .map((p) => ({ ref: p.job.ref, why: p.why }));
 }
 
@@ -127,7 +127,7 @@ describe("Jobs for you now", () => {
     expect(now.state).toBe("ok");
     if (now.state !== "ok") return;
     const refs = now.jobs.map((j) => j.ref);
-    // Вакансія компанії першою (не більше однієї), далі NextRole за свіжістю (без дати публікації
+    // Вакансія компанії першою (не більше однієї), далі скановані за свіжістю (без дати публікації
     // рахується, коли скан бачив: e6 2 год тому); Aave лише раз, і не надіслана e2. «Hybrid» (e4)
     // і національна дошка (e5) не віддалені, Lisbon (e3) не для віддаленої анкети.
     expect(refs).toEqual(["co:job_acme", "nr:e6", "nr:e1"]);
@@ -188,9 +188,9 @@ describe("Jobs for you now", () => {
 
 describe("the site pool", () => {
   it("reads the same rows as the engine, plus the source of each", () => {
-    expect(POOL_READ_SQL).toBe(NEXTROLE_POOL_SQL.replace("dedupe_key\n", "dedupe_key, source\n"));
-    expect(POOL_READ_SQL).not.toBe(NEXTROLE_POOL_SQL);
-    expect(POOL_READ_SQL.slice(POOL_READ_SQL.indexOf("FROM"))).toBe(NEXTROLE_POOL_SQL.slice(NEXTROLE_POOL_SQL.indexOf("FROM")));
+    expect(POOL_READ_SQL).toBe(POOL_SQL.replace("dedupe_key\n", "dedupe_key, source\n"));
+    expect(POOL_READ_SQL).not.toBe(POOL_SQL);
+    expect(POOL_READ_SQL.slice(POOL_READ_SQL.indexOf("FROM"))).toBe(POOL_SQL.slice(POOL_SQL.indexOf("FROM")));
   });
 });
 

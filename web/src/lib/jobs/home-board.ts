@@ -1,17 +1,17 @@
 import { loadCompanyJobs } from "@/lib/crm/public-jobs";
 import { cleanText } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
-import { formatSalary } from "./nextrole-match";
-import { FAILURE_BACKOFF_MS, nextrolePool, POOL_TTL_MS, type PoolJob } from "./nextrole-pool";
+import { formatSalary } from "./match";
+import { FAILURE_BACKOFF_MS, crawlPool, POOL_TTL_MS, type PoolJob } from "./pool";
 
 /**
  * Табло головної: лічильники й стрічка вакансій із зарплатою.
  *
  * Жодного власного читання бази: усе рахується в пам'яті з того самого пулу, що бере
- * search_jobs і «Jobs for you now» (nextrole-pool.ts, пам'ять ізолята POOL_TTL_MS), плюс
+ * search_jobs і «Jobs for you now» (pool.ts, пам'ять ізолята POOL_TTL_MS), плюс
  * живі вакансії компаній (одне читання, не більше COMPANY_POOL_CAP рядків). Готове табло
  * теж живе в пам'яті ізолята POOL_TTL_MS, тож головна додає не більше одного читання
- * вакансій компаній на 10 хвилин. База NextRole не відповіла: available: false, і сторінка
+ * вакансій компаній на 10 хвилин. База вакансій не відповіла: available: false, і сторінка
  * показує запасний текст замість чисел (FAILURE_BACKOFF_MS до наступної спроби).
  */
 
@@ -24,7 +24,7 @@ export const TICKER_SIZE = 20;
 export const TICKER_MIN_TO_SCROLL = 8;
 
 export type HomeStats = {
-  /** Живих вакансій у пулі (NextRole після сита + компаній). */
+  /** Живих вакансій у пулі (зі сканування після сита + компаній). */
   live: number;
   /** Опубліковані за NEW_WINDOW_DAYS днів. */
   newThisWeek: number;
@@ -32,9 +32,9 @@ export type HomeStats = {
   companies: number;
   /** З зарплатою, яку ми показали б людині (formatSalary не null). */
   withSalary: number;
-  /** Різних джерел: дошки NextRole (jobs_cache.source) і, якщо є, вакансії компаній у нас. */
+  /** Різних джерел: дошки зі сканування (jobs_cache.source) і, якщо є, вакансії компаній у нас. */
   sources: number;
-  /** Найсвіжіше: коли скан NextRole востаннє бачив вакансію або компанія опублікувала свою (мс). */
+  /** Найсвіжіше: коли скан востаннє бачив вакансію або компанія опублікувала свою (мс). */
   updatedMs: number | null;
 };
 
@@ -45,7 +45,7 @@ export type TickerJob = {
   company: string;
   place: string | null;
   salary: string;
-  /** Вакансія компанії: /jobs/<id> на сайті; NextRole: http(s) адреса дошки. */
+  /** Вакансія компанії: /jobs/<id> на сайті; зі сканування: http(s) адреса дошки. */
   href: string;
   external: boolean;
 };
@@ -92,7 +92,7 @@ export function updatedAgo(ms: number | null, now: number): string | null {
 // ---------------------------------------------------------------------------
 // Стрічка
 
-/** Посилання стрічки: вакансія компанії веде на її сторінку в нас, NextRole лише на http(s). */
+/** Посилання стрічки: вакансія компанії веде на її сторінку в нас, сканована лише на http(s). */
 export function tickerHref(job: PoolJob): { href: string; external: boolean } | null {
   if (job.source === "company") return { href: `/jobs/${encodeURIComponent(job.jobId)}`, external: false };
   try {
@@ -183,7 +183,7 @@ export async function homeBoard(deps: {
   if (board && t - board.at < (board.value.available ? POOL_TTL_MS : FAILURE_BACKOFF_MS)) return board.value;
   let value: HomeBoard;
   try {
-    const crawl = await nextrolePool(deps.jobs, deps.now);
+    const crawl = await crawlPool(deps.jobs, deps.now);
     if (!crawl) {
       value = UNAVAILABLE;
     } else {

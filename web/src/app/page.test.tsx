@@ -2,10 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { resetHomeBoard } from "@/lib/jobs/home-board";
-import { resetNextrolePool } from "@/lib/jobs/nextrole-pool";
+import { resetCrawlPool } from "@/lib/jobs/pool";
 import { crmDb } from "@/test/crm-fixtures";
 import { harness, resetHarness } from "@/test/harness";
-import { addPoolJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import AgentsPage from "./agents/page";
 import CompanyLandingPage from "./company/page";
 import HomePage from "./page";
@@ -13,7 +13,7 @@ import ScoringPage from "./scoring/page";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 
-// База NextRole: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
+// База вакансій: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
 const jobsHolder = vi.hoisted(() => ({ open: null as null | (() => JobsDb) }));
 vi.mock("@/lib/jobs-db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
@@ -24,11 +24,11 @@ const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString
 
 beforeEach(() => {
   resetHarness();
-  resetNextrolePool();
+  resetCrawlPool();
   resetHomeBoard();
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   harness.env.DB = crmDb().d1;
-  const nr = nextroleJobsDb();
+  const nr = jobsTestDb();
   const f = hoursAgo(3);
   addPoolJob(nr.raw, { id: "a", title: "Protocol Engineer", company: "Aave", postedAt: hoursAgo(20), fetchedAt: f, salaryMin: 140_000, salaryMax: 170_000, currency: "USD" });
   addPoolJob(nr.raw, { id: "b", title: "Growth Marketing Lead", company: "Phantom", postedAt: hoursAgo(30), fetchedAt: f, source: "ashby:phantom" });

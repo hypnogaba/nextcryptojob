@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetJobSourcesCache } from "@/lib/admin/job-sources";
 import { createSession } from "@/lib/auth/session";
 import { exec, resetHarness } from "@/test/harness";
-import { addCachedJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addCachedJob, addScanRun, addSource, jobsTestDb } from "@/test/jobs-db";
 import { migratedD1 } from "@/test/sqlite-d1";
 import AdminSourcesPage from "./page";
 
@@ -18,7 +18,7 @@ vi.mock("next/navigation", async () => ({
   },
 }));
 
-// База вакансій NextRole: справжній SQLite, і лічильник запитів до неї.
+// База вакансій: справжній SQLite, і лічильник запитів до неї.
 const jobs = vi.hoisted(() => ({ d1: null as unknown as D1Database, reads: 0 }));
 vi.mock("@/lib/jobs-db", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/lib/jobs-db")>();
@@ -47,10 +47,12 @@ beforeEach(() => {
   exec("INSERT INTO users (id, email, telegram_id) VALUES ('boss', 'boss@example.com', '555')");
   exec("INSERT INTO users (id, email) VALUES ('ada', 'ada@example.com')");
 
-  const t = nextroleJobsDb();
-  addCachedJob(t.raw, { source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: "2026-09-12T03:00:00.000Z" });
-  addCachedJob(t.raw, { source: "lever:moonpay", company: "MoonPay", fetchedAt: "2026-09-08T03:00:00.000Z" });
-  t.raw.exec("INSERT INTO scan_runs (id, started_at, status) VALUES ('s1', '2026-09-12T03:00:00.000Z', 'ok')");
+  const t = jobsTestDb();
+  addCachedJob(t.raw, { source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: "2026-09-12T04:40:00.000Z" });
+  addCachedJob(t.raw, { source: "lever:moonpay", company: "MoonPay", fetchedAt: "2026-09-08T04:40:00.000Z" });
+  addCachedJob(t.raw, { source: "board:web3career", fetchedAt: "2026-09-12T04:40:00.000Z" });
+  addSource(t.raw, { name: "board:web3career", label: "Web3.career", kind: "jsonld", siteUrl: "https://web3.career" });
+  addScanRun(t.raw, { id: "s1", startedAt: "2026-09-12T04:30:00.000Z" });
   jobs.d1 = t.d1;
   jobs.reads = 0;
 });
@@ -95,6 +97,9 @@ describe("/admin/sources for an admin", () => {
     expect(html).toContain("Company jobs (NextCryptoJob)");
     // MoonPay скан не бачив 4 доби: застигла, Coinbase ні.
     expect(html.match(/data-stale=""/g)).toHaveLength(1);
+    expect(html).toContain('href="https://web3.career/"');
+    expect(html).toContain("runs every day, weekends included, at 04:30 UTC");
+    expect(html).not.toContain("NextRole");
     expect(html).toMatch(/<tr[^>]*data-stale=""[^>]*>.*?moonpay/);
     expect(html).toContain("Updated just now");
     expect(html).not.toContain("has not run for over");
@@ -114,7 +119,7 @@ describe("/admin/sources for an admin", () => {
   });
 
   it("says so when the jobs DB cannot be read", async () => {
-    // Порожня база без таблиць NextRole, як локальний JOBS_DB у `next dev`.
+    // Порожня база без таблиць, як локальний JOBS_DB у `next dev` без накочених db/jobs.
     jobs.d1 = migratedD1([]).d1;
     const html = await render();
     expect(html).toContain("Could not read the job sources");

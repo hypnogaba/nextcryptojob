@@ -1,8 +1,8 @@
-// Чистка кешу вакансій NextRole: копія engine/src/digest/clean.ts.
+// Чистка вакансій зі сканування: копія engine/src/digest/clean.ts.
 //
-// Кеш спільний з NextRole, і тег web3 там ставить не лише крипто. search_jobs
-// (lib/crm/public-jobs.ts) відкидає ті самі компанії, що й добірка engine. Код нижче
-// першого export дослівно такий самий, як в engine; тест nextrole-parity.test.ts це звіряє.
+// Сканер engine уже відкидає ці компанії при записі в базу вакансій, а search_jobs
+// (lib/crm/public-jobs.ts) перевіряє ще раз тими самими правилами, що й добірка. Код нижче
+// першого export дослівно такий самий, як в engine; тест parity.test.ts це звіряє.
 
 /**
  * Компанії, що потрапили під тег web3, але не крипто. Ключ = jobs_cache.company_key

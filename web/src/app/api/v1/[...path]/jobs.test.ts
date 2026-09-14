@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
-import { POOL_TTL_MS, resetNextrolePool } from "@/lib/jobs/nextrole-pool";
+import { POOL_TTL_MS, resetCrawlPool } from "@/lib/jobs/pool";
 import { callTool, rest, schemaErrors, setupApi } from "@/test/api-fixtures";
 import { addApiKey, addCompany, addSubscription, all, run } from "@/test/crm-fixtures";
-import { nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { jobsTestDb } from "@/test/jobs-db";
 import type { TestDb } from "@/test/sqlite-d1";
 import { POST as mcpPost } from "../../../mcp/route";
 import { GET, PATCH, POST } from "./route";
@@ -11,7 +11,7 @@ import { GET, PATCH, POST } from "./route";
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
 
-// База NextRole: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
+// База вакансій: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
 const jobsHolder = vi.hoisted(() => ({ db: null as JobsDb | null, reads: 0 }));
 vi.mock("@/lib/jobs-db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
@@ -21,7 +21,7 @@ vi.mock("@/lib/jobs-db", async (importOriginal) => ({
 /**
  * Вакансії компаній (T12) через справжні маршрути REST і MCP: межі компаній, поля,
  * межа відкритих, стани, черга X, жива вакансія в company_jobs_live і search_jobs,
- * пул NextRole з тим самим вікном свіжості й тегом web3, що в добірці.
+ * пул вакансій з тим самим вікном свіжості й тегом web3, що в добірці.
  */
 
 const HANDLERS = { GET, POST, PATCH } as const;
@@ -35,8 +35,8 @@ const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 
 beforeEach(() => {
   ({ db } = setupApi());
-  resetNextrolePool();
-  nr = nextroleJobsDb();
+  resetCrawlPool();
+  nr = jobsTestDb();
   const ro = readOnlyJobsDb(nr.d1);
   jobsHolder.reads = 0;
   jobsHolder.db = {
@@ -85,8 +85,8 @@ function crawlJob(o: {
   run(
     nr.raw,
     `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, salary_min, salary_max, salary_currency,
-                             source, tags, dedupe_key, posted_at, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'greenhouse', ?, ?, ?, ?)`,
+                             source, tags, dedupe_key, posted_at, fetched_at, first_seen_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'greenhouse', ?, ?, ?, ?, ?)`,
     id,
     o.url ?? `https://boards.example.com/${id}`,
     o.company ?? "Chain Labs",
@@ -100,6 +100,7 @@ function crawlJob(o: {
     JSON.stringify(o.tags ?? ["web3"]),
     `${id}-d`,
     o.postedAt === undefined ? iso(2 * DAY) : o.postedAt,
+    o.fetchedAt ?? iso(3_600_000),
     o.fetchedAt ?? iso(3_600_000),
   );
   return id;
@@ -375,7 +376,7 @@ describe("company jobs over MCP", () => {
 });
 
 describe("search_jobs", () => {
-  it("is public over REST and MCP: company jobs and the NextRole crawl, newest first, jobs only", async () => {
+  it("is public over REST and MCP: company jobs and the crawl, newest first, jobs only", async () => {
     const { key } = await company();
     const id = (await call("POST", "/jobs", { key, body: OPEN })).body.job_id as string;
     run(db.raw, "UPDATE company_jobs SET published_at = datetime('now', '-1 day') WHERE id = ?", id);
@@ -395,7 +396,7 @@ describe("search_jobs", () => {
 
   it("uses the digest's freshness window and web3 filter: stale, untagged, non-crypto and roleless jobs stay out", async () => {
     const keep = crawlJob({ title: "Smart Contract Engineer", remote: true });
-    crawlJob({ title: "Backend Engineer", fetchedAt: iso(4 * DAY) }); // NextRole не бачив 4 доби: знято з дошки
+    crawlJob({ title: "Backend Engineer", fetchedAt: iso(4 * DAY) }); // скан не бачив 4 доби: знято з дошки
     crawlJob({ title: "Frontend Engineer", postedAt: iso(31 * DAY) }); // старше 30 днів
     crawlJob({ title: "Data Engineer", tags: ["fintech"] }); // без web3
     crawlJob({ title: "Audio Transcription Engineer" }); // не-крипто назва
@@ -430,13 +431,13 @@ describe("search_jobs", () => {
     expect(await titles("?work_mode=city")).toEqual(["Growth Marketing Manager", "Lending protocol engineer", "Trader"]);
     expect(await titles("?salary_min=180000")).toEqual(["Rust Engineer"]);
     expect(await titles("?salary_min=100000&currency=EUR")).toEqual(["Growth Marketing Manager"]);
-    // 1 000 у кеші NextRole це заглушка: такої зарплати пошук не показує.
+    // 1 000 у вилці це заглушка: такої зарплати пошук не показує.
     const trader = (await call("GET", "/public/jobs?q=trader")).body.data[0];
     expect(trader.salary).toBeNull();
     expect((await call("GET", "/public/jobs?role=nobody")).status).toBe(422);
   });
 
-  it("pages with a cursor and reads the NextRole pool once per isolate, not once per search", async () => {
+  it("pages with a cursor and reads the job pool once per isolate, not once per search", async () => {
     for (let i = 0; i < 5; i++) crawlJob({ title: `Blockchain Engineer ${i}`, remote: true, postedAt: iso((i + 1) * 3_600_000) });
     const first = await call("GET", "/public/jobs?limit=2");
     expect(first.body.data.map((j: { title: string }) => j.title)).toEqual(["Blockchain Engineer 0", "Blockchain Engineer 1"]);
@@ -456,7 +457,7 @@ describe("search_jobs", () => {
     expect(jobsHolder.reads).toBe(2);
   });
 
-  it("when the NextRole database does not answer, company jobs still come back", async () => {
+  it("when the jobs database does not answer, company jobs still come back", async () => {
     const { key } = await company();
     const id = (await call("POST", "/jobs", { key, body: OPEN })).body.job_id as string;
     jobsHolder.db = {

@@ -2,7 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
-// База вакансій NextRole спільна з живим продуктом: лише читання і лише
+// База вакансій (JOBS_DB) належить сканеру engine: сайт лише читає, і лише
 // через src/lib/jobs-db.ts, який пропускає одну інструкцію SELECT/WITH.
 const JOBS_DB_MESSAGE =
   "Use jobsDb() from @/lib/jobs-db: JOBS_DB is read-only and only that module may touch it.";

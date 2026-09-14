@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, addSubscription, crmDb, run } from "@/test/crm-fixtures";
-import { addPoolJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import type { TestDb } from "@/test/sqlite-d1";
 import { roughCount } from "./instant";
 import {
@@ -13,7 +13,7 @@ import {
   tickerJobs,
   updatedAgo,
 } from "./home-board";
-import { resetNextrolePool, type PoolJob } from "./nextrole-pool";
+import { resetCrawlPool, type PoolJob } from "./pool";
 
 /**
  * Табло головної: лічильники чесні (униз, без дати не «нове»), стрічка лише з
@@ -62,7 +62,7 @@ describe("counters", () => {
       job({ companyKey: "lido", postedMs: T - 7.1 * 24 * H, origin: "ashby:lido" }),
       job({ companyKey: "kiln", postedMs: null }),
       job({ companyKey: "zora", postedMs: T + 2 * H }),
-      // 1 000 у кеші NextRole заглушка, а не зарплата: не рахується, як і не показується.
+      // 1 000 у вилці заглушка, а не зарплата: не рахується, як і не показується.
       job({ companyKey: "phantom", salary: usd(1000, null), origin: null }),
     ];
     const company = [job({ source: "company", jobId: "job_acme", companyKey: "acme", postedMs: T - H, salary: usd(90_000, null), origin: null })];
@@ -176,10 +176,10 @@ describe("the board on the home page", () => {
   const ago = (h: number) => new Date(Date.now() - h * H).toISOString();
 
   beforeEach(() => {
-    resetNextrolePool();
+    resetCrawlPool();
     resetHomeBoard();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    nr = nextroleJobsDb();
+    nr = jobsTestDb();
     const f = ago(5);
     addPoolJob(nr.raw, { id: "a", title: "Protocol Engineer", company: "Aave", postedAt: ago(20), fetchedAt: f, salaryMin: 140_000, salaryMax: 170_000, currency: "USD" });
     addPoolJob(nr.raw, { id: "b", title: "Growth Marketing Lead", company: "Phantom", postedAt: ago(24 * 10), fetchedAt: f, source: "ashby:phantom" });
@@ -211,7 +211,7 @@ describe("the board on the home page", () => {
     const b = await board();
     expect(b.available).toBe(true);
     if (!b.available) return;
-    // Два рядки NextRole пройшли сито («Head Chef» ні) + вакансія компанії.
+    // Два скановані рядки пройшли сито («Head Chef» ні) + вакансія компанії.
     expect(b.stats).toMatchObject({ live: 3, newThisWeek: 2, companies: 3, withSalary: 2, sources: 3 });
     // Aave опублікована 20 год тому, Acme добу тому: свіжіша перша.
     expect(b.ticker.map((j) => [j.title, j.href])).toEqual([
@@ -240,7 +240,7 @@ describe("the board on the home page", () => {
     expect(await board(unbound)).toMatchObject({ available: false });
   });
 
-  it("keeps the NextRole numbers when our own database fails", async () => {
+  it("keeps the scanned numbers when our own database fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const b = await homeBoard({
       db: () => {

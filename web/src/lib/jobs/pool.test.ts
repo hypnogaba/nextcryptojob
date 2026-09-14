@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { JobsDb } from "@/lib/jobs-db";
-import { FAILURE_BACKOFF_MS, nextrolePool, POOL_ROW_CAP, POOL_TTL_MS, resetNextrolePool } from "./nextrole-pool";
+import { FAILURE_BACKOFF_MS, crawlPool, POOL_ROW_CAP, POOL_TTL_MS, resetCrawlPool } from "./pool";
 
 /**
- * Пул NextRole для search_jobs: читання не частіше за раз на POOL_TTL_MS, без спільного
+ * Пул вакансій для search_jobs: читання не частіше за раз на POOL_TTL_MS, без спільного
  * незавершеного запиту між запитами, пауза після невдачі з попереднім пулом, найсвіжіші
  * рядки першими й попередження, коли спрацювала межа рядків.
  */
@@ -18,7 +18,7 @@ function row(id: string, title = "Solidity Engineer") {
   };
 }
 
-/** Замінник бази NextRole: пише кожен запит і відповідає рядками або помилкою. */
+/** Замінник бази вакансій: пише кожен запит і відповідає рядками або помилкою. */
 function fakeDb(answer: () => Promise<unknown[]>) {
   const calls: { sql: string; params: unknown[] }[] = [];
   const db: JobsDb = {
@@ -33,33 +33,33 @@ function fakeDb(answer: () => Promise<unknown[]>) {
 
 let clock = 0;
 beforeEach(() => {
-  resetNextrolePool();
+  resetCrawlPool();
   clock = 1_000_000;
   vi.spyOn(Date, "now").mockImplementation(() => clock);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("NextRole pool", () => {
+describe("Job pool", () => {
   it("reads the freshest rows first, at most the cap, and says so when the cap is hit", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { db, calls } = fakeDb(async () => [row("a"), row("b")]);
-    const jobs = await nextrolePool(() => db, NOW, 2);
+    const jobs = await crawlPool(() => db, NOW, 2);
     expect(jobs?.map((j) => j.jobId)).toEqual(["nr_a", "nr_b"]);
     expect(calls[0].sql).toMatch(/ORDER BY fetched_at DESC\s+LIMIT \?$/);
     expect(calls[0].params.at(-1)).toBe(2);
-    expect(warn).toHaveBeenCalledWith("search_jobs: NextRole pool hit the 2-row cap; older jobs are left out");
+    expect(warn).toHaveBeenCalledWith("search_jobs: job pool hit the 2-row cap; older jobs are left out");
     expect(POOL_ROW_CAP).toBe(10_000);
   });
 
   it("keeps a finished pool for 10 minutes, then reads again", async () => {
     const { db, calls } = fakeDb(async () => [row("a")]);
-    await nextrolePool(() => db, NOW);
+    await crawlPool(() => db, NOW);
     clock += POOL_TTL_MS - 1;
-    await nextrolePool(() => db, NOW);
+    await crawlPool(() => db, NOW);
     expect(calls).toHaveLength(1);
     clock += 2;
-    await nextrolePool(() => db, NOW);
+    await crawlPool(() => db, NOW);
     expect(calls).toHaveLength(2);
   });
 
@@ -70,15 +70,15 @@ describe("NextRole pool", () => {
       await gate;
       return [row("a")];
     });
-    const first = nextrolePool(() => db, NOW);
-    const second = nextrolePool(() => db, NOW);
+    const first = crawlPool(() => db, NOW);
+    const second = crawlPool(() => db, NOW);
     await Promise.resolve();
     expect(calls).toHaveLength(2);
     release();
     expect((await first)?.length).toBe(1);
     expect((await second)?.length).toBe(1);
     // Готовий результат уже спільний.
-    await nextrolePool(() => db, NOW);
+    await crawlPool(() => db, NOW);
     expect(calls).toHaveLength(2);
   });
 
@@ -89,21 +89,21 @@ describe("NextRole pool", () => {
       if (fail) throw new Error("D1_ERROR: overloaded");
       return [row("a")];
     });
-    expect((await nextrolePool(() => db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a"]);
+    expect((await crawlPool(() => db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a"]);
 
     fail = true;
     clock += POOL_TTL_MS + 1; // пул застарів
-    expect((await nextrolePool(() => db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a"]);
+    expect((await crawlPool(() => db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a"]);
     expect(calls).toHaveLength(2);
-    expect(warn).toHaveBeenCalledWith("search_jobs: serving the previous NextRole pool while the database does not answer");
+    expect(warn).toHaveBeenCalledWith("search_jobs: serving the previous job pool while the jobs database does not answer");
 
     clock += FAILURE_BACKOFF_MS - 1; // пауза: базу не питаємо
-    expect((await nextrolePool(() => db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a"]);
+    expect((await crawlPool(() => db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a"]);
     expect(calls).toHaveLength(2);
 
     fail = false;
     clock += 2; // пауза минула: читаємо знову
-    await nextrolePool(() => db, NOW);
+    await crawlPool(() => db, NOW);
     expect(calls).toHaveLength(3);
   });
 
@@ -112,12 +112,12 @@ describe("NextRole pool", () => {
     const { db, calls } = fakeDb(async () => {
       throw new Error("D1_ERROR: 429");
     });
-    expect(await nextrolePool(() => db, NOW)).toBeNull();
-    expect(await nextrolePool(() => db, NOW)).toBeNull();
+    expect(await crawlPool(() => db, NOW)).toBeNull();
+    expect(await crawlPool(() => db, NOW)).toBeNull();
     expect(calls).toHaveLength(1);
     const unbound = await (async () => {
-      resetNextrolePool();
-      return nextrolePool(() => {
+      resetCrawlPool();
+      return crawlPool(() => {
         throw new TypeError("Cannot read properties of undefined (reading 'prepare')");
       }, NOW);
     })();

@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomToken, sha256Hex } from "@/lib/auth/hash";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
-import { resetNextrolePool } from "@/lib/jobs/nextrole-pool";
+import { resetCrawlPool } from "@/lib/jobs/pool";
 import { crmDb, run } from "@/test/crm-fixtures";
 import { exec, harness, RedirectCalled, resetHarness } from "@/test/harness";
-import { addPoolJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import { migratedD1 } from "@/test/sqlite-d1";
 import JobsPage from "./page";
 
@@ -14,7 +14,7 @@ vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).c
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
 vi.mock("next/navigation", async () => (await import("@/test/harness")).navigationModule);
 
-// База NextRole: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
+// База вакансій: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
 const jobsHolder = vi.hoisted(() => ({ db: null as JobsDb | null }));
 vi.mock("@/lib/jobs-db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
@@ -23,7 +23,7 @@ vi.mock("@/lib/jobs-db", async (importOriginal) => ({
 
 beforeEach(() => {
   resetHarness();
-  resetNextrolePool();
+  resetCrawlPool();
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   const { raw, d1 } = crmDb();
   harness.raw = raw;
@@ -107,7 +107,7 @@ describe("/jobs: Jobs for you now", () => {
   const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
   beforeEach(() => {
-    const nr = nextroleJobsDb();
+    const nr = jobsTestDb();
     const f = hoursAgo(2);
     addPoolJob(nr.raw, { id: "eng1", title: "Solidity Engineer", company: "Aave", postedAt: hoursAgo(5), fetchedAt: f });
     addPoolJob(nr.raw, { id: "eng2", title: "Rust Engineer", company: "Lido", postedAt: hoursAgo(9), fetchedAt: f, salaryMin: 120_000, salaryMax: 150_000, currency: "USD" });

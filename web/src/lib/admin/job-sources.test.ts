@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, addSubscription, crmDb, run } from "@/test/crm-fixtures";
-import { addCachedJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addCachedJob, addScanRun, addSource, jobsTestDb } from "@/test/jobs-db";
 import {
   ago,
   cachedJobSourcesReport,
@@ -19,65 +19,57 @@ import {
 } from "./job-sources";
 
 const NOW = new Date("2026-09-12T12:00:00.000Z"); // субота
-const FRESH = "2026-09-12T03:00:00.000Z"; // сьогоднішній скан
-const OLD = "2026-09-01T03:00:00.000Z"; // поза вікном у 3 дні
+const FRESH = "2026-09-12T04:35:00.000Z"; // сьогоднішній скан (щодня о 04:30 UTC)
+const OLD = "2026-09-01T04:35:00.000Z"; // поза вікном у 3 дні
 const H = 3_600_000;
 
-/** Кеш NextRole з різними випадками; повертає базу для select. */
-function seedNextrole() {
-  const t = nextroleJobsDb();
+/** База вакансій (схема db/jobs) з різними випадками; повертає базу для select. */
+function seedJobs() {
+  const t = jobsTestDb();
   const add = (j: Parameters<typeof addCachedJob>[1]) => addCachedJob(t.raw, j);
   // Компанія на ATS: дві живі (одна із зарплатою), одна поза вікном скану.
   add({ source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: FRESH, salaryMin: 150_000 });
   add({ source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: FRESH, postedAt: "2026-09-10T00:00:00Z" });
   add({ source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: OLD });
-  // Агрегатор: одна web3, одна ні.
-  add({ source: "aggregator:remoteok", fetchedAt: FRESH, company: "Solana Labs", salaryMax: 200_000 });
-  add({ source: "aggregator:remoteok", fetchedAt: FRESH, tags: ["remote"] });
-  // Без жодної web3: тег лише схожий, у звіт не йде, але рахується серед усіх джерел.
-  add({ source: "aggregator:remotive", fetchedAt: FRESH, tags: ["web3ish", "remote"] });
+  // Агрегатор з таблиці sources: одна web3 із зарплатою.
+  add({ source: "aggregator:speedrun", fetchedAt: FRESH, company: "Anchorage", salaryMax: 200_000 });
+  // Без жодної web3: тег лише схожий (сканер такого не пише, умова лишається запобіжником).
+  add({ source: "board:odd", fetchedAt: FRESH, tags: ["web3ish", "remote"] });
   // Дошка: свіжа, але опублікована давно, тож не жива.
-  add({ source: "board:global-web3career", fetchedAt: FRESH, postedAt: "2026-07-01T00:00:00Z" });
-  // Дошка країни: остання поява до четвергового скану, у п'ятничному й четверговому її не було.
+  add({ source: "board:web3career", fetchedAt: FRESH, postedAt: "2026-07-01T00:00:00Z" });
+  // Дошка, яку востаннє бачив четверговий скан: у п'ятничному й суботньому її не було.
   // Застигла, але ще в 3-денному вікні живих.
-  add({ source: "board:dou-blockchain", fetchedAt: "2026-09-10T00:00:00.000Z" });
-  // Getro: одна крипто, одна від не-крипто компанії з тегом web3.
-  add({ source: "getro:858", company: "Phantom", fetchedAt: FRESH });
-  add({ source: "getro:858", company: "Perle", companyKey: "perle", fetchedAt: FRESH });
-  // Джерело лише з не-крипто компанією: web3 немає.
+  add({ source: "board:remote3", fetchedAt: "2026-09-10T04:40:00.000Z" });
+  // Джерело лише з не-крипто компанією: web3 немає (сканер такі й не пише).
   add({ source: "ashby:perle", company: "Perle", companyKey: "perle", fetchedAt: FRESH });
-  t.raw.exec(`
-    INSERT INTO country_boards (id, country, name, label, feed_url) VALUES
-      ('b1', '*', 'board:global-web3career', 'Web3.career', 'https://web3.career/feed.xml'),
-      ('b2', 'UA', 'board:dou-blockchain', 'DOU · Blockchain', 'https://jobs.dou.ua/vacancies/feeds/?category=Blockchain');
-    INSERT INTO getro_collections (id, collection_id, label, url) VALUES ('g1', 858, 'Solana', 'https://jobs.solana.com/jobs');
-    INSERT INTO scan_runs (id, started_at, status) VALUES
-      ('s1', '2026-09-11T03:00:00.000Z', 'ok'), ('s2', '2026-09-12T03:00:00.000Z', 'short');
-  `);
+  addSource(t.raw, { name: "board:web3career", label: "Web3.career", kind: "jsonld", feedUrl: "https://web3.career/", siteUrl: "https://web3.career" });
+  addSource(t.raw, { name: "board:remote3", label: "Remote3", feedUrl: "https://www.remote3.co/api/rss", siteUrl: null });
+  addSource(t.raw, { name: "aggregator:speedrun", label: "a16z speedrun", kind: "speedrun", feedUrl: "https://speedrun-talent-network.com/api/v1", siteUrl: "https://speedrun-talent-network.com" });
+  addScanRun(t.raw, { id: "s1", startedAt: "2026-09-11T04:30:00.000Z" });
+  addScanRun(t.raw, { id: "s2", startedAt: "2026-09-12T04:30:00.000Z", status: "partial" });
+  // Розвідка пізніше за скан: «останній скан» бере лише kind = 'scan'.
+  addScanRun(t.raw, { id: "d1", startedAt: "2026-09-12T05:30:00.000Z", kind: "discover" });
   return t;
 }
 
 describe("the aggregate query", () => {
   it("counts web3, live and salaried jobs per source with the digest's window and sieve", async () => {
-    const { d1 } = seedNextrole();
+    const { d1 } = seedJobs();
     const rows = await readOnlyJobsDb(d1).all<SourceAggRow>(SOURCES_SQL, ...sourcesParams(NOW));
     const by = Object.fromEntries(rows.map((r) => [r.source, r]));
 
-    expect(Object.keys(by).sort()).toEqual([
-      "aggregator:remoteok", "board:dou-blockchain", "board:global-web3career", "getro:858", "greenhouse:coinbase",
-    ]);
+    expect(Object.keys(by).sort()).toEqual(["aggregator:speedrun", "board:remote3", "board:web3career", "greenhouse:coinbase"]);
     expect(by["greenhouse:coinbase"]).toMatchObject({
-      company: "Coinbase", web3_jobs: 3, live_jobs: 2, live_salary: 1, newest: FRESH,
+      company: "Coinbase", web3_jobs: 3, live_jobs: 2, live_salary: 1, newest: FRESH, board_label: null,
     });
-    expect(by["aggregator:remoteok"]).toMatchObject({ web3_jobs: 1, live_jobs: 1, live_salary: 1 });
-    // Опубліковано понад 30 днів тому: у кеші є, у добірку не йде.
-    expect(by["board:global-web3career"]).toMatchObject({ web3_jobs: 1, live_jobs: 0, board_label: "Web3.career" });
-    expect(by["board:dou-blockchain"]).toMatchObject({ live_jobs: 1, board_country: "UA" });
-    // Perle з тегом web3 відсіяна, як у engine clean.ts.
-    expect(by["getro:858"]).toMatchObject({ web3_jobs: 1, live_jobs: 1, getro_label: "Solana" });
-    // Усі джерела кешу, і ті, що без web3 (remotive, ashby:perle).
-    expect(rows.every((r) => r.all_sources === 7)).toBe(true);
-    expect(rows[0]).toMatchObject({ last_scan_at: "2026-09-12T03:00:00.000Z", last_scan_status: "short" });
+    expect(by["aggregator:speedrun"]).toMatchObject({ web3_jobs: 1, live_jobs: 1, live_salary: 1, board_label: "a16z speedrun" });
+    // Опубліковано понад 30 днів тому: у базі є, у добірку не йде. Сайт дошки з site_url.
+    expect(by["board:web3career"]).toMatchObject({ web3_jobs: 1, live_jobs: 0, board_label: "Web3.career", board_url: "https://web3.career" });
+    // Без site_url лишається адреса стрічки (сторінка покаже її origin).
+    expect(by["board:remote3"]).toMatchObject({ live_jobs: 1, board_url: "https://www.remote3.co/api/rss" });
+    // Усі джерела бази, і ті, що без web3 (board:odd, ashby:perle).
+    expect(rows.every((r) => r.all_sources === 6)).toBe(true);
+    expect(rows[0]).toMatchObject({ last_scan_at: "2026-09-12T04:30:00.000Z", last_scan_status: "partial" });
     // Найбільше живих угорі.
     expect(rows[0]!.source).toBe("greenhouse:coinbase");
   });
@@ -99,95 +91,75 @@ describe("the aggregate query", () => {
 function row(o: Partial<SourceAggRow> & { source: string }): SourceAggRow {
   return {
     company: null, web3_jobs: 1, live_jobs: 1, live_salary: 0, newest: FRESH, all_sources: 1,
-    board_label: null, board_url: null, board_country: null, getro_label: null, getro_url: null,
-    last_scan_at: null, last_scan_status: null, ...o,
+    board_label: null, board_url: null, last_scan_at: null, last_scan_status: null, ...o,
   };
 }
 
 describe("source names and links", () => {
   it("links an ATS company to its job board and names it after the company", () => {
     expect(describeSource(row({ source: "greenhouse:coinbase", company: "Coinbase" }))).toEqual({
-      name: "Coinbase", kind: "ats", via: "Greenhouse", url: "https://job-boards.greenhouse.io/coinbase", country: null,
+      name: "Coinbase", kind: "ats", via: "Greenhouse", url: "https://job-boards.greenhouse.io/coinbase",
     });
     expect(describeSource(row({ source: "breezy:zero-hash", company: null }))).toMatchObject({
       name: "zero-hash", url: "https://zero-hash.breezy.hr/",
     });
-    // Workday без сервера й сайту: назва є, посилання немає.
-    expect(describeSource(row({ source: "workday:acme" })).url).toBeNull();
-  });
-
-  it("links a board to its site, not to its feed, and keeps a country board's country", () => {
-    expect(describeSource(row({
-      source: "board:dou-blockchain", board_label: "DOU · Blockchain", board_country: "UA",
-      board_url: "https://jobs.dou.ua/vacancies/feeds/?category=Blockchain",
-    }))).toEqual({ name: "DOU · Blockchain", kind: "board", via: "Job board", url: "https://jobs.dou.ua/", country: "UA" });
-    expect(describeSource(row({ source: "board:global-jobstash", board_label: "JobStash", board_country: "*", board_url: "https://jobstash.xyz/" })))
-      .toMatchObject({ country: null, url: "https://jobstash.xyz/" });
-  });
-
-  it("names Getro collections and aggregators, and falls back when the directory has no row", () => {
-    expect(describeSource(row({ source: "getro:858", getro_label: "Solana", getro_url: "https://jobs.solana.com/jobs" })))
-      .toMatchObject({ name: "Solana", via: "Getro", url: "https://jobs.solana.com/jobs" });
-    expect(describeSource(row({ source: "getro:1000", getro_label: "Canapi Ventures", getro_url: null })).url)
-      .toBe("https://getro.com");
-    expect(describeSource(row({ source: "getro:77" })).name).toBe("Getro collection 77");
-    expect(describeSource(row({ source: "aggregator:remoteok" }))).toMatchObject({ name: "Remote OK", url: "https://remoteok.com" });
-    expect(describeSource(row({ source: "aggregator:wwr-programming" }))).toMatchObject({
-      name: "We Work Remotely (programming)", url: "https://weworkremotely.com",
+    expect(describeSource(row({ source: "ashby:Sui%20Foundation", company: "Sui Foundation" })).url)
+      .toBe("https://jobs.ashbyhq.com/Sui%20Foundation");
+    expect(describeSource(row({ source: "teamtailor:crossmint.na", company: "Crossmint" }))).toMatchObject({
+      via: "Teamtailor", url: "https://crossmint.na.teamtailor.com/jobs",
     });
+    expect(describeSource(row({ source: "lever_eu:aavelabs" }))).toMatchObject({ via: "Lever EU", url: "https://jobs.eu.lever.co/aavelabs" });
+  });
+
+  it("links a board to its site, not to its feed", () => {
+    expect(describeSource(row({ source: "board:remote3", board_label: "Remote3", board_url: "https://www.remote3.co/api/rss" })))
+      .toEqual({ name: "Remote3", kind: "board", via: "Job board", url: "https://www.remote3.co/" });
+    expect(describeSource(row({ source: "board:jobstash" }))).toMatchObject({ name: "jobstash", url: null });
+  });
+
+  it("names aggregators from the sources table or the built-in list", () => {
+    expect(describeSource(row({ source: "aggregator:speedrun", board_label: "a16z speedrun", board_url: "https://speedrun-talent-network.com" })))
+      .toMatchObject({ name: "a16z speedrun", kind: "aggregator", url: "https://speedrun-talent-network.com/" });
+    expect(describeSource(row({ source: "aggregator:superteam" }))).toMatchObject({ name: "Superteam Earn", url: "https://superteam.fun/earn" });
     expect(describeSource(row({ source: "aggregator:newthing" }))).toMatchObject({ name: "newthing", url: null });
   });
 
-  it("never puts a non-http link from the shared DB into href", () => {
-    expect(describeSource(row({ source: "getro:1", getro_label: "X", getro_url: "javascript:alert(1)" })).url)
-      .toBe("https://getro.com");
+  it("never puts a non-http link from the DB into href", () => {
     expect(describeSource(row({ source: "board:x", board_label: "X", board_url: "data:text/html,hi" })).url).toBeNull();
+    expect(describeSource(row({ source: "aggregator:x", board_label: "X", board_url: "javascript:alert(1)" })).url).toBeNull();
   });
 });
 
 describe("stale flag", () => {
-  it("counts weekday scans (Mon-Fri at 03:00 UTC) that should have run, not hours", () => {
+  it("counts daily scans (04:30 UTC, weekends too) that should have run, not hours", () => {
     const iso = (at: string) => pastScanSlots(new Date(at), 2).map((t) => new Date(t).toISOString());
-    const friThu = ["2026-09-11T03:00:00.000Z", "2026-09-10T03:00:00.000Z"];
-    expect(iso("2026-09-12T12:00:00Z")).toEqual(friThu); // субота
-    expect(iso("2026-09-13T23:00:00Z")).toEqual(friThu); // неділя
-    expect(iso("2026-09-14T05:59:00Z")).toEqual(friThu); // понеділок до 06:00: понеділковий ще в запасі 3 год
-    expect(iso("2026-09-14T06:00:00Z")).toEqual(["2026-09-14T03:00:00.000Z", "2026-09-11T03:00:00.000Z"]);
-    expect(iso("2026-09-11T02:00:00Z")).toEqual(["2026-09-10T03:00:00.000Z", "2026-09-09T03:00:00.000Z"]);
+    expect(iso("2026-09-12T12:00:00Z")).toEqual(["2026-09-12T04:30:00.000Z", "2026-09-11T04:30:00.000Z"]); // субота
+    expect(iso("2026-09-14T07:29:00Z")).toEqual(["2026-09-13T04:30:00.000Z", "2026-09-12T04:30:00.000Z"]); // понеділок, скан ще в запасі 3 год
+    expect(iso("2026-09-14T07:30:00Z")).toEqual(["2026-09-14T04:30:00.000Z", "2026-09-13T04:30:00.000Z"]);
   });
 
-  it("a source from Friday's scan stays active all weekend and on Monday morning; one missing two scans is stale", () => {
-    const friday = Date.parse("2026-09-11T03:20:00Z");
-    const thursday = Date.parse("2026-09-10T03:20:00Z");
-    const wednesday = Date.parse("2026-09-09T03:20:00Z");
-    for (const at of ["2026-09-12T12:00:00Z", "2026-09-13T23:00:00Z", "2026-09-14T05:00:00Z"]) {
-      expect(isStale(friday, new Date(at)), at).toBe(false);
-      // Пропустила лише п'ятничний: ще не застигла.
-      expect(isStale(thursday, new Date(at)), at).toBe(false);
-      expect(isStale(wednesday, new Date(at)), at).toBe(true);
-    }
-    // Понеділок після скану: четвергова пропустила п'ятничний і понеділковий.
-    expect(isStale(thursday, new Date("2026-09-14T07:00:00Z"))).toBe(true);
-    expect(isStale(friday, new Date("2026-09-14T07:00:00Z"))).toBe(false);
+  it("a source seen by yesterday's scan stays active; one missing two scans is stale, weekend or not", () => {
+    const friday = Date.parse("2026-09-11T04:40:00Z");
+    const thursday = Date.parse("2026-09-10T04:40:00Z");
+    expect(isStale(friday, NOW)).toBe(false); // пропустила лише суботній
+    expect(isStale(thursday, NOW)).toBe(true); // пропустила п'ятничний і суботній
+    expect(isStale(Date.parse("2026-09-12T04:40:00Z"), new Date("2026-09-14T12:00:00Z"))).toBe(true); // неділя й понеділок без неї
     expect(isStale(null, NOW)).toBe(true);
   });
 
-  it("calls the scanner late only when a weekday scan is missing 3 h after 03:00 UTC", () => {
-    const fridayScan = Date.parse("2026-09-11T03:00:05Z");
-    expect(scannerMissed(fridayScan, new Date("2026-09-12T12:00:00Z"))).toBe(false); // субота
-    expect(scannerMissed(fridayScan, new Date("2026-09-13T23:59:00Z"))).toBe(false); // неділя
-    expect(scannerMissed(fridayScan, new Date("2026-09-14T05:59:00Z"))).toBe(false); // понеділок, ще в запасі
-    expect(scannerMissed(fridayScan, new Date("2026-09-14T06:00:00Z"))).toBe(true); // понеділкового немає
-    expect(scannerMissed(Date.parse("2026-09-14T03:01:00Z"), new Date("2026-09-14T06:00:00Z"))).toBe(false);
-    // П'ятничного не було: прапорець стоїть усі вихідні.
-    expect(scannerMissed(Date.parse("2026-09-10T03:00:00Z"), new Date("2026-09-12T12:00:00Z"))).toBe(true);
+  it("calls the scanner late when today's scan is missing 3 h after 04:30 UTC, on any day", () => {
+    const saturdayScan = Date.parse("2026-09-12T04:30:05Z");
+    expect(scannerMissed(saturdayScan, new Date("2026-09-12T12:00:00Z"))).toBe(false);
+    expect(scannerMissed(saturdayScan, new Date("2026-09-13T07:29:00Z"))).toBe(false); // неділя, ще в запасі
+    expect(scannerMissed(saturdayScan, new Date("2026-09-13T07:30:00Z"))).toBe(true); // недільного немає
+    expect(scannerMissed(Date.parse("2026-09-13T04:31:00Z"), new Date("2026-09-13T07:30:00Z"))).toBe(false);
     expect(scannerMissed(null, NOW)).toBe(true);
   });
 
-  it("reads NextRole ISO and our SQLite times alike", () => {
-    // У суботу межа: четверговий скан (03:00 UTC, з годиною запасу на ранній старт).
-    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-10T01:00:00.000Z" }), NOW)).toMatchObject({ stale: true });
-    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-10 03:05:00" }), NOW)).toMatchObject({ stale: false });
+  it("reads ISO and SQLite times alike", () => {
+    // У суботу межа: п'ятничний скан (04:30 UTC, з годиною запасу на ранній старт).
+    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-11T03:00:00.000Z" }), NOW)).toMatchObject({ stale: true });
+    expect(toJobSource(row({ source: "lever:safe", newest: "2026-09-11 04:35:00" }), NOW)).toMatchObject({ stale: false });
     expect(toJobSource(row({ source: "lever:safe", newest: null }), NOW)).toMatchObject({ stale: true, newestAt: null });
   });
 
@@ -205,7 +177,7 @@ describe("loadJobSourcesReport", () => {
   let main: ReturnType<typeof crmDb>;
 
   beforeEach(() => {
-    jobs = readOnlyJobsDb(seedNextrole().d1);
+    jobs = readOnlyJobsDb(seedJobs().d1);
     main = crmDb();
     const paid = addCompany(main.raw, { name: "Paid Co" });
     addSubscription(main.raw, paid);
@@ -230,27 +202,26 @@ describe("loadJobSourcesReport", () => {
     });
     expect(report.sources.map((s) => [s.key, s.stale])).toEqual([
       ["greenhouse:coinbase", false],
-      ["aggregator:remoteok", false],
-      ["board:dou-blockchain", true],
-      ["getro:858", false],
-      ["board:global-web3career", false],
+      ["aggregator:speedrun", false],
+      ["board:remote3", true],
+      ["board:web3career", false],
     ]);
     expect(report.totals).toEqual({
-      liveJobs: 5 + 2, nextroleLiveJobs: 5, companyLiveJobs: 2,
-      activeSources: 4, staleSources: 1, allNextroleSources: 7,
-      lastScan: { at: Date.parse("2026-09-12T03:00:00.000Z"), status: "short" },
+      liveJobs: 4 + 2, crawlLiveJobs: 4, companyLiveJobs: 2,
+      activeSources: 3, staleSources: 1, allSources: 6,
+      lastScan: { at: Date.parse("2026-09-12T04:30:00.000Z"), status: "partial" },
       scannerStale: false,
     });
     expect(report.computedAt).toBe(NOW.getTime());
   });
 
-  it("warns that the scanner itself stopped when it missed a weekday scan", async () => {
-    // Вівторок 12:00: останній скан суботній, понеділкового й вівторкового немає.
+  it("warns that the scanner itself stopped when it missed a daily scan", async () => {
+    // Вівторок 12:00: останній скан суботній, недільного, понеділкового й вівторкового немає.
     const later = new Date(NOW.getTime() + 3 * 24 * H);
     const report = await loadJobSourcesReport(jobs, main.d1, later);
     expect(report.totals.scannerStale).toBe(true);
     expect(report.totals.staleSources).toBe(report.sources.length);
-    expect(report.totals.nextroleLiveJobs).toBe(0);
+    expect(report.totals.crawlLiveJobs).toBe(0);
   });
 });
 
@@ -260,8 +231,8 @@ describe("cache", () => {
   const fake = (at: Date): JobSourcesReport => ({
     sources: [], company: { openJobs: 0, liveJobs: 0, liveWithSalary: 0, newestAt: null },
     totals: {
-      liveJobs: 0, nextroleLiveJobs: 0, companyLiveJobs: 0, activeSources: 0, staleSources: 0,
-      allNextroleSources: 0, lastScan: null, scannerStale: true,
+      liveJobs: 0, crawlLiveJobs: 0, companyLiveJobs: 0, activeSources: 0, staleSources: 0,
+      allSources: 0, lastScan: null, scannerStale: true,
     },
     computedAt: at.getTime(),
   });

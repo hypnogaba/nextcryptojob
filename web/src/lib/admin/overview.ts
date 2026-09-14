@@ -10,7 +10,7 @@ import { sqlTime, startOfUtcDay } from "@/lib/time";
  * статуси знайомств, причини збоїв) згорнуто в JSON усередині тієї ж інструкції
  * (json_group_array, json_group_object), тож на блок припадає один рядок відповіді.
  * Вакансії беремо з кешованого звіту /admin/sources (lib/admin/job-sources.ts), а не
- * рахуємо тут: це повний прохід по jobs_cache у чужій базі.
+ * рахуємо тут: це повний прохід по jobs_cache в базі вакансій.
  *
  * Що тут не рахується, бо в базі немає історії: переходи "Apply" за 7 днів (company_jobs
  * тримає лише загальний лічильник), час останнього скану поза звітом джерел.
@@ -577,7 +577,7 @@ function ageText(ms: number): string {
  *   задача чекає довше за QUEUE_WAIT_ALERT_MS;
  * - версія формули в ужитку без вдалого прогону воріт якості: компанії не бачать цих балів;
  * - добірка: є кому слати, а прогону не було DIGEST_IDLE_ALERT_MS; завислі 'pending';
- * - сканер NextRole пропустив плановий будній скан (lib/admin/job-sources.ts scannerMissed);
+ * - сканер вакансій пропустив плановий щоденний скан (lib/admin/job-sources.ts scannerMissed);
  * - оплати без результату, що чекають повернення, і завислі платежі x402;
  * - заявки агенцій і черга X чекають на адміна.
  */
@@ -630,11 +630,11 @@ export function overviewFlags(o: Overview, jobs: { report: JobSourcesReport | nu
   if (jobs.error) {
     flags.push({ level: "alert", text: `Could not read job sources: ${jobs.error}`, href: "/admin/sources" });
   } else if (jobs.report?.totals.scannerStale) {
-    // scannerStale уже знає розклад (будні о 03:00 UTC): у вихідні прапорця немає, якщо п'ятничний скан був.
+    // scannerStale уже знає розклад (щодня о 04:30 UTC, SCAN_TIME_UTC).
     const scan = jobs.report.totals.lastScan;
     flags.push({
       level: "alert",
-      text: `NextRole scanner missed its scheduled weekday run (${SCAN_TIME_UTC})${scan ? `; last scan ${ageText(now - scan.at)} ago` : ""}.`,
+      text: `Job scanner missed its scheduled daily run (${SCAN_TIME_UTC})${scan ? `; last scan ${ageText(now - scan.at)} ago` : ""}.`,
       href: "/admin/sources",
     });
   }

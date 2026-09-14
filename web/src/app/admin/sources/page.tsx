@@ -22,8 +22,8 @@ import { jobsDb } from "@/lib/jobs-db";
 export const metadata: Metadata = { title: "Job sources", robots: { index: false } };
 
 /**
- * Адмінка: усі джерела вакансій, з яких складається добірка (як блок «Джерела»
- * в адмінці NextRole). Дані й кеш у lib/admin/job-sources.ts; тут лише показ.
+ * Адмінка: усі джерела вакансій, з яких складається добірка. Дані й кеш у
+ * lib/admin/job-sources.ts; тут лише показ.
  */
 
 const NUM = new Intl.NumberFormat("en-US");
@@ -57,10 +57,7 @@ function SourceName({ source }: { source: JobSource }) {
       ) : (
         <span className="font-semibold text-ink">{source.name}</span>
       )}
-      <div className="font-mono text-xs text-ink-muted">
-        {source.key}
-        {source.country ? ` (${source.country} only)` : ""}
-      </div>
+      <div className="font-mono text-xs text-ink-muted">{source.key}</div>
     </>
   );
 }
@@ -75,7 +72,7 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
     <>
       {totals.scannerStale ? (
         <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">
-          The NextRole scanner missed its last scheduled run (weekdays at {SCAN_TIME_UTC})
+          The job scanner missed its last scheduled run (daily at {SCAN_TIME_UTC})
           {scan ? `; last run ${ago(scan.at, now)}` : ""}. Sources look stale because of that, not because they
           broke.
         </p>
@@ -85,7 +82,7 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
         <Tile
           value={NUM.format(totals.liveJobs)}
           label="Live web3 jobs"
-          note={`${NUM.format(totals.nextroleLiveJobs)} NextRole, ${NUM.format(totals.companyLiveJobs)} companies`}
+          note={`${NUM.format(totals.crawlLiveJobs)} scanned, ${NUM.format(totals.companyLiveJobs)} companies`}
         />
         <Tile value={NUM.format(totals.activeSources)} label="Active sources" note={`In the last ${STALE_AFTER_SCANS} scans`} />
         <Tile
@@ -153,17 +150,16 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
 
       <div className="mt-6 grid max-w-prose gap-2 text-xs text-ink-muted">
         <p>
-          Live: tagged web3, seen by the NextRole scan in the last {LIVE_WINDOW_DAYS} days, posted in the last{" "}
+          Live: tagged web3, seen by the scan in the last {LIVE_WINDOW_DAYS} days, posted in the last{" "}
           {POSTED_WINDOW_DAYS} days, company not on the non-crypto list. Role matching per person comes later, and the
           same job on two sources counts twice here. With salary: live jobs that state a salary. Total web3: every
           web3 job from the source still in the cache. For company jobs, Live means in the digest now and Total means
           open.
         </p>
         <p>
-          {NUM.format(sources.length)} of {NUM.format(totals.allNextroleSources)} NextRole sources have web3 jobs; the
-          rest are left out. Stale: no job from the source in the last {STALE_AFTER_SCANS} scans. The scanner runs on
-          weekdays at {SCAN_TIME_UTC} only, so weekends do not make a source stale, but the live count drops over
-          the weekend as jobs age out of the {LIVE_WINDOW_DAYS}-day window.
+          {NUM.format(sources.length)} of {NUM.format(totals.allSources)} sources in the jobs database have web3 jobs;
+          the rest are left out. Stale: no job from the source in the last {STALE_AFTER_SCANS} scans. The scanner
+          runs every day, weekends included, at {SCAN_TIME_UTC}.
         </p>
       </div>
     </>
@@ -188,7 +184,7 @@ export default async function AdminSourcesPage() {
       <AdminNav current="/admin/sources" />
       <h1 className="display text-title">Job sources</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-muted">
-        Where daily jobs come from: the NextRole job cache (read only) and jobs companies post here.
+        Where daily jobs come from: our crypto job scanner (its own jobs database, read only here) and jobs companies post here.
         {report
           ? ` Updated ${ago(report.computedAt, now)}, recounted every ${CACHE_TTL_MS / 60_000} min.`
           : ""}

@@ -1,12 +1,11 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 /**
- * Доступ до бази вакансій NextRole (binding JOBS_DB), лише читання.
+ * Доступ до бази вакансій NextCryptoJob (binding JOBS_DB, D1 nextcryptojob-jobs, db/jobs), лише читання.
  *
- * База спільна з живим NextRole, тож запис звідси зламав би чужий продукт.
- * Прив'язка D1 не вміє бути read-only сама, тому межу тримає код: будь-який
- * запит іде лише через цей модуль і лише як одна інструкція SELECT або WITH.
- * ESLint (eslint.config.mjs) забороняє торкатися JOBS_DB поза цим файлом.
+ * Пише в цю базу лише сканер engine (engine/src/jobs); сайт тільки читає. Прив'язка D1 не вміє
+ * бути read-only сама, тому межу тримає код: будь-який запит іде лише через цей модуль і лише як
+ * одна інструкція SELECT або WITH. ESLint (eslint.config.mjs) забороняє торкатися JOBS_DB поза цим файлом.
  */
 
 export class ReadOnlySqlError extends Error {

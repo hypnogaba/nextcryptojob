@@ -3,22 +3,20 @@ import type { JobsDb } from "@/lib/jobs-db";
 /**
  * Адмінка: звідки беремо вакансії (сторінка /admin/sources).
  *
- * Джерело тут те саме, що в NextRole: значення jobs_cache.source, яке пише
- * сканер NextRole (crypto-jobs-agent/scanner/src/sources/*). Роди:
- *   `<ats>:<slug>`       дошка компанії на ATS (greenhouse:coinbase, ashby:phantom);
- *   `aggregator:<name>`  агрегатор (aggregator:remoteok, aggregator:hn);
- *   `board:<name>`       дошка з таблиці country_boards (board:global-web3career);
- *   `getro:<id>`         колекція Getro з таблиці getro_collections (getro:858 = Solana).
- * У NextRole це блок «Джерела» панелі власника (web/src/app/(app)/admin/page.tsx),
- * рахується так само: за тим, що справді доїхало в кеш, а не за налаштуваннями.
+ * Джерело це значення jobs_cache.source у базі вакансій NextCryptoJob (binding JOBS_DB,
+ * db/jobs), яке пише сканер engine (engine/src/jobs). Роди:
+ *   `<ats>:<slug>`       дошка роботодавця на ATS (greenhouse:coinbase, ashby:kraken.com);
+ *   `board:<name>`       крипто-дошка з таблиці sources (board:web3career, board:remote3);
+ *   `aggregator:<name>`  агрегатор з таблиці sources або з коду (aggregator:speedrun, aggregator:superteam).
+ * Рахується за тим, що справді доїхало в базу, а не за налаштуваннями.
  *
- * Нам потрібні лише джерела з вакансіями web3, тож рядки без жодної такої
- * вакансії сторінка не показує, а лише каже, скільки їх.
+ * База лише крипто, тож тег web3 має кожен рядок; умова на нього лишається запобіжником, а
+ * рядки без жодної вакансії web3 сторінка не показує, лише каже, скільки їх.
  */
 
 // Вікна й сито web3 скопійовано з engine, не імпортовано: engine окремий пакет.
 // Міняти разом з ним: engine/src/digest/jobs.ts (LIVE_WINDOW_DAYS,
-// POSTED_WINDOW_DAYS, NEXTROLE_POOL_SQL) і engine/src/digest/clean.ts
+// POSTED_WINDOW_DAYS, POOL_SQL) і engine/src/digest/clean.ts
 // (NON_CRYPTO_COMPANIES).
 
 /** engine/src/digest/jobs.ts LIVE_WINDOW_DAYS: скільки днів тому скан мав бачити вакансію. */
@@ -37,14 +35,15 @@ export const NON_CRYPTO_COMPANIES: readonly string[] = [
 ];
 
 /**
- * Розклад сканера NextRole: лише будні (пн-пт) о 03:00 UTC. У вихідні скану немає, тож
- * «давно не бачили» міряємо не годинами, а пропущеними плановими сканами: інакше щосуботи
- * застиглими ставали б усі джерела. Скан рахується таким, що мав відбутися, через
- * SCAN_GRACE_HOURS після планового часу; почати він міг до SCAN_EARLY_MS раніше.
+ * Розклад сканера (engine/deploy/nextcryptojob-jobs-scan.timer): щодня, і у вихідні теж, о 04:30 UTC.
+ * «Давно не бачили» міряємо пропущеними плановими сканами, а не годинами. Скан рахується таким,
+ * що мав відбутися, через SCAN_GRACE_HOURS після планового часу; почати він міг до SCAN_EARLY_MS раніше.
+ * Змінюючи час, змінити й таймер.
  */
-export const SCAN_HOUR_UTC = 3;
-/** Для текстів: «03:00 UTC». */
-export const SCAN_TIME_UTC = `${String(SCAN_HOUR_UTC).padStart(2, "0")}:00 UTC`;
+export const SCAN_HOUR_UTC = 4;
+export const SCAN_MINUTE_UTC = 30;
+/** Для текстів: «04:30 UTC». */
+export const SCAN_TIME_UTC = `${String(SCAN_HOUR_UTC).padStart(2, "0")}:${String(SCAN_MINUTE_UTC).padStart(2, "0")} UTC`;
 export const SCAN_GRACE_HOURS = 3;
 /** Джерело застигле, якщо його не було в стільки останніх планових сканах. */
 export const STALE_AFTER_SCANS = 2;
@@ -58,26 +57,25 @@ const SCAN_EARLY_MS = HOUR_MS;
 /**
  * Один запит на весь звіт; jobs_cache читається рівно раз (GROUP BY source).
  *
- * Індексу на fetched_at чи source у jobs_cache немає навмисно (записи D1 дорогі,
- * NextRole зняв індекс 04.09), і додавати його звідси не можна: база чужа й лише
- * для читання. Тож це повний прохід по таблиці плюс сортування для GROUP BY:
- * 12.09 на живій базі ~119 тис. rows_read на 57 тис. рядків. Тому звіт кешується.
+ * Індексу на fetched_at чи source у jobs_cache немає навмисно (db/jobs/0001_schema.sql: скан
+ * щодня переписує fetched_at, а записи D1 у тисячу разів дорожчі за читання). Тож це повний
+ * прохід по таблиці плюс сортування для GROUP BY; база лише крипто (тисячі рядків), і звіт
+ * ще й кешується.
  *
- * Сито те саме, що в engine: тег web3 (LIKE, як NEXTROLE_POOL_SQL), компанія не
+ * Сито те саме, що в engine: тег web3 (LIKE, як POOL_SQL), компанія не
  * з NON_CRYPTO_COMPANIES (тут лише за company_key, engine ще й за назвою), живе =
  * скан бачив за LIVE_WINDOW_DAYS і опубліковано не давніше POSTED_WINDOW_DAYS.
  * Сито ролей за назвою (engine roles.ts) сюди не входить: воно про людину, а не
  * про джерело. Час у jobs_cache ISO з 'T' і 'Z', тож і межі ISO.
  *
- * country_boards і getro_collections дають назву й посилання: це крихітні
- * таблиці з унікальними ключами, приєднання коштує кілька десятків rows_read.
- * COUNT(*) OVER () рахує всі джерела до фільтра web3 (ще ~5 тис. rows_read).
+ * sources дає назву й сайт дошки: крихітна таблиця з первинним ключем. Останній скан:
+ * scan_runs за видом 'scan' (індекс idx_scan_runs_kind_started, один рядок).
+ * COUNT(*) OVER () рахує всі джерела до фільтра web3.
  */
 export const SOURCES_SQL = `SELECT s.source, s.company, s.web3_jobs, s.live_jobs, s.live_salary, s.newest,
-       s.all_sources, b.label AS board_label, b.feed_url AS board_url, b.country AS board_country,
-       g.label AS getro_label, g.url AS getro_url,
-       (SELECT started_at FROM scan_runs ORDER BY started_at DESC LIMIT 1) AS last_scan_at,
-       (SELECT status FROM scan_runs ORDER BY started_at DESC LIMIT 1) AS last_scan_status
+       s.all_sources, b.label AS board_label, COALESCE(b.site_url, b.feed_url) AS board_url,
+       (SELECT started_at FROM scan_runs WHERE kind = 'scan' ORDER BY started_at DESC LIMIT 1) AS last_scan_at,
+       (SELECT status FROM scan_runs WHERE kind = 'scan' ORDER BY started_at DESC LIMIT 1) AS last_scan_status
   FROM (SELECT source,
                MAX(company) AS company,
                SUM(w) AS web3_jobs,
@@ -90,8 +88,7 @@ export const SOURCES_SQL = `SELECT s.source, s.company, s.web3_jobs, s.live_jobs
                        (fetched_at >= ? AND (posted_at IS NULL OR posted_at >= ?)) AS l
                   FROM jobs_cache)
          GROUP BY source) s
-  LEFT JOIN country_boards b ON b.name = s.source
-  LEFT JOIN getro_collections g ON s.source LIKE 'getro:%' AND g.collection_id = CAST(SUBSTR(s.source, 7) AS INTEGER)
+  LEFT JOIN sources b ON b.name = s.source
  WHERE s.web3_jobs > 0
  ORDER BY s.live_jobs DESC, s.web3_jobs DESC, s.source`;
 
@@ -121,25 +118,20 @@ export type SourceAggRow = {
   all_sources: number;
   board_label: string | null;
   board_url: string | null;
-  board_country: string | null;
-  getro_label: string | null;
-  getro_url: string | null;
   last_scan_at: string | null;
   last_scan_status: string | null;
 };
 
-export type SourceKind = "ats" | "aggregator" | "board" | "getro" | "other";
+export type SourceKind = "ats" | "aggregator" | "board" | "other";
 
 export type JobSource = {
   /** jobs_cache.source як є. */
   key: string;
   name: string;
   kind: SourceKind;
-  /** Підпис роду для таблиці: «Greenhouse», «Aggregator», «Job board», «Getro». */
+  /** Підпис роду для таблиці: «Greenhouse», «Aggregator», «Job board». */
   via: string;
   url: string | null;
-  /** Країна дошки (country_boards.country), якщо дошка не для всіх. */
-  country: string | null;
   web3Jobs: number;
   liveJobs: number;
   liveWithSalary: number;
@@ -152,6 +144,8 @@ export type JobSource = {
 const ATS: Record<string, { label: string; url: ((slug: string) => string) | null }> = {
   greenhouse: { label: "Greenhouse", url: (s) => `https://job-boards.greenhouse.io/${s}` },
   lever: { label: "Lever", url: (s) => `https://jobs.lever.co/${s}` },
+  lever_eu: { label: "Lever EU", url: (s) => `https://jobs.eu.lever.co/${s}` },
+  teamtailor: { label: "Teamtailor", url: (s) => `https://${s}.teamtailor.com/jobs` },
   ashby: { label: "Ashby", url: (s) => `https://jobs.ashbyhq.com/${s}` },
   workable: { label: "Workable", url: (s) => `https://apply.workable.com/${s}/` },
   smartrecruiters: { label: "SmartRecruiters", url: (s) => `https://jobs.smartrecruiters.com/${s}` },
@@ -160,29 +154,15 @@ const ATS: Record<string, { label: string; url: ((slug: string) => string) | nul
   rippling: { label: "Rippling", url: (s) => `https://ats.rippling.com/${s}/jobs` },
   personio: { label: "Personio", url: (s) => `https://${s}.jobs.personio.de/` },
   bamboohr: { label: "BambooHR", url: (s) => `https://${s}.bamboohr.com/careers` },
-  // workday:<tenant> без номера сервера й сайту: адресу не скласти.
-  workday: { label: "Workday", url: null },
 };
 
-/** Агрегатори NextRole (scanner/src/sources/aggregators.ts і speedrun): назва й сайт. */
+/** Агрегатори, яких може не бути в таблиці sources (Superteam вмикається змінною engine): назва й сайт. */
 const AGGREGATORS: Record<string, { name: string; url: string }> = {
-  arbeitnow: { name: "Arbeitnow", url: "https://www.arbeitnow.com" },
-  remotive: { name: "Remotive", url: "https://remotive.com" },
-  remoteok: { name: "Remote OK", url: "https://remoteok.com" },
-  jobicy: { name: "Jobicy", url: "https://jobicy.com" },
-  himalayas: { name: "Himalayas", url: "https://himalayas.app" },
-  workingnomads: { name: "Working Nomads", url: "https://www.workingnomads.com" },
-  landingjobs: { name: "Landing.jobs", url: "https://landing.jobs" },
-  themuse: { name: "The Muse", url: "https://www.themuse.com" },
-  wwr: { name: "We Work Remotely", url: "https://weworkremotely.com" },
-  jobspresso: { name: "Jobspresso", url: "https://jobspresso.co" },
-  nodesk: { name: "NoDesk", url: "https://nodesk.co" },
-  cryptocurrencyjobs: { name: "Cryptocurrency Jobs", url: "https://cryptocurrencyjobs.co" },
-  hn: { name: "Hacker News: Who is hiring", url: "https://news.ycombinator.com" },
-  speedrun: { name: "a16z speedrun", url: "https://speedrun.a16z.com" },
+  speedrun: { name: "a16z speedrun", url: "https://speedrun-talent-network.com" },
+  superteam: { name: "Superteam Earn", url: "https://superteam.fun/earn" },
 };
 
-/** Лише http(s): посилання з чужої бази йде в href. */
+/** Лише http(s): посилання з бази йде в href. */
 function safeUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
   try {
@@ -199,43 +179,32 @@ function siteOf(feed: string | null): string | null {
   return url ? `${new URL(url).origin}/` : null;
 }
 
-/** Назва, рід і посилання джерела з його ключа й приєднаних довідників. */
-export function describeSource(row: Pick<SourceAggRow,
-  "source" | "company" | "board_label" | "board_url" | "board_country" | "getro_label" | "getro_url">,
-): Pick<JobSource, "name" | "kind" | "via" | "url" | "country"> {
+/** Назва, рід і посилання джерела з його ключа й таблиці sources. */
+export function describeSource(row: Pick<SourceAggRow, "source" | "company" | "board_label" | "board_url">,
+): Pick<JobSource, "name" | "kind" | "via" | "url"> {
   const i = row.source.indexOf(":");
   const prefix = i === -1 ? row.source : row.source.slice(0, i);
   const rest = i === -1 ? "" : row.source.slice(i + 1);
 
   if (prefix === "board") {
-    const country = row.board_country && row.board_country !== "*" ? row.board_country : null;
-    return { name: row.board_label?.trim() || rest, kind: "board", via: "Job board", url: siteOf(row.board_url), country };
-  }
-  if (prefix === "getro") {
-    return {
-      name: row.getro_label?.trim() || `Getro collection ${rest}`, kind: "getro", via: "Getro",
-      url: safeUrl(row.getro_url) ?? "https://getro.com", country: null,
-    };
+    return { name: row.board_label?.trim() || rest, kind: "board", via: "Job board", url: siteOf(row.board_url) };
   }
   if (prefix === "aggregator") {
-    // wwr-<рубрика>: та сама дошка We Work Remotely, лише рубрика.
-    const base = rest.startsWith("wwr-") ? "wwr" : rest;
-    const known = AGGREGATORS[base];
-    const name = known ? (base === rest ? known.name : `${known.name} (${rest.slice(4)})`) : rest;
-    return { name, kind: "aggregator", via: "Aggregator", url: known?.url ?? null, country: null };
+    const known = AGGREGATORS[rest];
+    return { name: row.board_label?.trim() || known?.name || rest, kind: "aggregator", via: "Aggregator",
+      url: siteOf(row.board_url) ?? known?.url ?? null };
   }
   const ats = ATS[prefix];
   if (ats && rest) {
-    return {
-      name: row.company?.trim() || rest, kind: "ats", via: ats.label,
-      url: ats.url ? ats.url(encodeURIComponent(rest)) : null, country: null,
-    };
+    // Слаг Ashby буває з %20 (Sui%20Foundation): уже закодований, вдруге не кодуємо.
+    const slug = /%[0-9a-f]{2}/i.test(rest) ? rest : encodeURIComponent(rest);
+    return { name: row.company?.trim() || rest, kind: "ats", via: ats.label, url: ats.url ? ats.url(slug) : null };
   }
-  return { name: row.source, kind: "other", via: prefix || "Unknown", url: null, country: null };
+  return { name: row.source, kind: "other", via: prefix || "Unknown", url: null };
 }
 
 /**
- * Дата з бази: ISO ('…T…Z', пише NextRole) або SQLite ('YYYY-MM-DD HH:MM:SS', UTC,
+ * Дата з бази: ISO ('…T…Z', пише сканер) або SQLite ('YYYY-MM-DD HH:MM:SS', UTC,
  * пишемо ми). Те саме правило, що engine/src/digest/jobs.ts parseDbTime.
  */
 export function parseDbTime(v: string | null | undefined): number | null {
@@ -255,22 +224,15 @@ export function ago(at: number, now: number): string {
   return `${Math.floor(h / 24)} d ago`;
 }
 
-/** Будній день UTC: сканер NextRole ходить лише пн-пт. */
-export function isScanDay(at: Date): boolean {
-  const d = at.getUTCDay();
-  return d >= 1 && d <= 5;
-}
-
 /**
- * Планові скани, що вже мали відбутися (03:00 UTC буднього дня + SCAN_GRACE_HOURS не пізніше
- * за now), від найсвіжішого. У суботу й неділю найсвіжіший п'ятничний; у понеділок до 06:00
- * теж п'ятничний.
+ * Планові скани, що вже мали відбутися (04:30 UTC щодня + SCAN_GRACE_HOURS не пізніше за now),
+ * від найсвіжішого. Сканер ходить і у вихідні, тож субота нічим не відрізняється від вівторка.
  */
 export function pastScanSlots(now: Date, count: number): number[] {
   const out: number[] = [];
-  const slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), SCAN_HOUR_UTC));
+  const slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), SCAN_HOUR_UTC, SCAN_MINUTE_UTC));
   while (out.length < count) {
-    if (isScanDay(slot) && slot.getTime() + SCAN_GRACE_HOURS * HOUR_MS <= now.getTime()) out.push(slot.getTime());
+    if (slot.getTime() + SCAN_GRACE_HOURS * HOUR_MS <= now.getTime()) out.push(slot.getTime());
     slot.setUTCDate(slot.getUTCDate() - 1);
   }
   return out;
@@ -283,7 +245,7 @@ export function isStale(newestAt: number | null, now: Date): boolean {
   return newestAt < slots[slots.length - 1] - SCAN_EARLY_MS;
 }
 
-/** Сканер пропустив останній плановий скан: жодного запуску з того буднього 03:00 UTC. */
+/** Сканер пропустив останній плановий скан: жодного запуску з того 04:30 UTC. */
 export function scannerMissed(lastScanAt: number | null, now: Date): boolean {
   return lastScanAt === null || lastScanAt < pastScanSlots(now, 1)[0] - SCAN_EARLY_MS;
 }
@@ -321,18 +283,18 @@ export const COMPANY_JOBS_SQL = `SELECT
 export type LastScan = { at: number; status: string | null } | null;
 
 export type JobSourcesTotals = {
-  /** Живі вакансії web3: сума по джерелах NextRole плюс наші. До злиття дублікатів між джерелами. */
+  /** Живі вакансії web3: сума по джерелах сканування плюс вакансії компаній. До злиття дублікатів між джерелами. */
   liveJobs: number;
-  nextroleLiveJobs: number;
+  crawlLiveJobs: number;
   companyLiveJobs: number;
-  /** Джерела NextRole з вакансіями web3, які були хоч в одному з STALE_AFTER_SCANS останніх сканів. */
+  /** Джерела з вакансіями web3, які були хоч в одному з STALE_AFTER_SCANS останніх сканів. */
   activeSources: number;
   staleSources: number;
-  /** Скільки всього джерел у кеші NextRole, і з web3, і без. */
-  allNextroleSources: number;
-  /** Останній скан NextRole: scan_runs, а якщо таблиця порожня, найсвіжіший fetched_at. */
+  /** Скільки всього джерел у базі вакансій, і з web3, і без. */
+  allSources: number;
+  /** Останній скан: scan_runs, а якщо таблиця порожня, найсвіжіший fetched_at. */
   lastScan: LastScan;
-  /** Сканер пропустив плановий будній скан (scannerMissed): тоді й джерела застигають, і причина в ньому. */
+  /** Сканер пропустив плановий щоденний скан (scannerMissed): тоді й джерела застигають, і причина в ньому. */
   scannerStale: boolean;
 };
 
@@ -345,7 +307,7 @@ export type JobSourcesReport = {
 };
 
 export function summarize(rows: SourceAggRow[], sources: JobSource[], company: CompanyJobsSummary, now: Date): JobSourcesTotals {
-  const nextroleLiveJobs = sources.reduce((n, s) => n + s.liveJobs, 0);
+  const crawlLiveJobs = sources.reduce((n, s) => n + s.liveJobs, 0);
   const first = rows[0];
   const scanAt = parseDbTime(first?.last_scan_at);
   const newest = sources.reduce<number | null>((m, s) => (s.newestAt !== null && (m === null || s.newestAt > m) ? s.newestAt : m), null);
@@ -353,12 +315,12 @@ export function summarize(rows: SourceAggRow[], sources: JobSource[], company: C
     ? { at: scanAt, status: first?.last_scan_status ?? null }
     : newest !== null ? { at: newest, status: null } : null;
   return {
-    liveJobs: nextroleLiveJobs + company.liveJobs,
-    nextroleLiveJobs,
+    liveJobs: crawlLiveJobs + company.liveJobs,
+    crawlLiveJobs,
     companyLiveJobs: company.liveJobs,
     activeSources: sources.filter((s) => !s.stale).length,
     staleSources: sources.filter((s) => s.stale).length,
-    allNextroleSources: Number(first?.all_sources) || 0,
+    allSources: Number(first?.all_sources) || 0,
     lastScan,
     scannerStale: scannerMissed(lastScan?.at ?? null, now),
   };

@@ -7,7 +7,7 @@ import { resetSettingsCache } from "@/lib/admin/settings";
 import { createSession } from "@/lib/auth/session";
 import { OVERVIEW_NOW, seedOverview } from "@/test/admin-fixtures";
 import { exec, harness, resetHarness } from "@/test/harness";
-import { addCachedJob, nextroleJobsDb } from "@/test/nextrole-jobs-db";
+import { addCachedJob, addScanRun, jobsTestDb } from "@/test/jobs-db";
 import { migratedD1 } from "@/test/sqlite-d1";
 import AdminOverviewPage from "./page";
 
@@ -22,7 +22,7 @@ vi.mock("next/navigation", async () => ({
   },
 }));
 
-// База вакансій NextRole: справжній SQLite, як на /admin/sources.
+// База вакансій: справжній SQLite, як на /admin/sources.
 const jobs = vi.hoisted(() => ({ d1: null as unknown as D1Database, reads: 0 }));
 vi.mock("@/lib/jobs-db", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/lib/jobs-db")>();
@@ -55,9 +55,9 @@ beforeEach(() => {
   resetSettingsCache();
   resetHarness({ ADMIN_EMAILS: "boss@example.com" } as never);
   exec("INSERT INTO users (id, email, telegram_id, created_at) VALUES ('boss', 'boss@example.com', '555', '2026-06-01 00:00:00')");
-  const t = nextroleJobsDb();
-  addCachedJob(t.raw, { source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: "2026-09-11T03:10:00.000Z" });
-  t.raw.exec("INSERT INTO scan_runs (id, started_at, status) VALUES ('s1', '2026-09-11T03:00:00.000Z', 'ok')");
+  const t = jobsTestDb();
+  addCachedJob(t.raw, { source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: "2026-09-13T04:40:00.000Z" });
+  addScanRun(t.raw, { id: "s1", startedAt: "2026-09-13T04:30:00.000Z" });
   jobs.d1 = t.d1;
   jobs.reads = 0;
 });
@@ -121,9 +121,10 @@ describe("/admin for an admin", () => {
     }
     // Вакансії зі звіту джерел.
     expect(html).toMatch(/Live web3 jobs<\/dt><dd[^>]*>2<\/dd>/);
-    expect(html).toContain("The live pool drops on weekends because the NextRole scanner does not run");
-    // Неділя, останній скан п'ятничний (сканер у вихідні не ходить): прапорця немає.
-    expect(html).not.toContain("NextRole scanner missed");
+    expect(html).toContain("The job scanner runs every day at 04:30 UTC, weekends included");
+    // Неділя, сьогоднішній скан на місці (сканер ходить і у вихідні): прапорця немає.
+    expect(html).not.toContain("Job scanner missed");
+    expect(html).not.toContain("NextRole");
     expect(jobs.reads).toBe(1);
   });
 

@@ -392,7 +392,7 @@ function Jobs({ report, error, now }: { report: JobSourcesReport | null; error: 
             <Stat
               label="Live web3 jobs"
               value={NUM.format(report.totals.liveJobs)}
-              note={`${NUM.format(report.totals.nextroleLiveJobs)} NextRole, ${NUM.format(report.totals.companyLiveJobs)} companies`}
+              note={`${NUM.format(report.totals.crawlLiveJobs)} scanned, ${NUM.format(report.totals.companyLiveJobs)} companies`}
             />
             <Stat label="Active sources" value={NUM.format(report.totals.activeSources)} note={`In the last ${STALE_AFTER_SCANS} scans`} />
             <Stat
@@ -408,9 +408,9 @@ function Jobs({ report, error, now }: { report: JobSourcesReport | null; error: 
               alert={report.totals.scannerStale}
             />
           </Stats>
-          <p className="text-xs text-ink-muted" data-hint="weekend">
-            The live pool drops on weekends because the NextRole scanner does not run: it scans on weekdays at {SCAN_TIME_UTC},
-            and a job stays live {LIVE_WINDOW_DAYS} days after the last scan saw it.
+          <p className="text-xs text-ink-muted" data-hint="schedule">
+            The job scanner runs every day at {SCAN_TIME_UTC}, weekends included; a job stays live {LIVE_WINDOW_DAYS} days
+            after the last scan saw it.
           </p>
           <p className="text-xs text-ink-muted">
             From the job sources report, counted <Ago at={report.computedAt} now={now} /> and cached for 10 min.
@@ -428,7 +428,7 @@ function Health({ o, report }: { o: Overview; report: JobSourcesReport | null })
       <Stats className="sm:grid-cols-3">
         <Stat label="Scoring engine" value={<Ago at={o.scores.lastEngineAt} now={o.now} />} note="Last write" />
         <Stat label="Digest engine" value={<Ago at={o.digests.newestRunAt} now={o.now} />} note="Newest digest run" />
-        <Stat label="NextRole scanner" value={<Ago at={report?.totals.lastScan?.at ?? null} now={o.now} never="unknown" />} note="Newest scan" />
+        <Stat label="Job scanner" value={<Ago at={report?.totals.lastScan?.at ?? null} now={o.now} never="unknown" />} note="Newest scan" />
       </Stats>
       {cron.available ? null : (
         <p role="alert" className="text-sm text-ink">

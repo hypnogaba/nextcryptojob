@@ -525,7 +525,7 @@ export const ACTIONS = [
   }),
   defineAction({
     name: "search_jobs",
-    description: "Search open crypto jobs (company jobs and the NextRole crawl). Jobs only, never people.",
+    description: "Search open crypto jobs (company jobs and our crypto job crawl). Jobs only, never people.",
     rest: { method: "GET", path: "/public/jobs", status: 200, operationId: "searchJobs" },
     mcp: { tool: "search_jobs", annotations: READ },
     input: z.strictObject({

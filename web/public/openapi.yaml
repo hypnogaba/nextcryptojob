@@ -1564,7 +1564,7 @@ components:
       type: object
       required: [job_id, source, title, company, work_mode, city, salary, url, posted_at, roles]
       properties:
-        job_id: { type: string, description: "job_... for company jobs, nr_<id> for jobs from the NextRole crawl" }
+        job_id: { type: string, description: "job_... for company jobs, nr_<id> for jobs from our crypto job crawl" }
         source: { type: string, enum: [company, crawl] }
         title: { type: string }
         company: { type: string }

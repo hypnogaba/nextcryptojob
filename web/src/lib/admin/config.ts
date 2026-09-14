@@ -211,7 +211,7 @@ export function codeTables(): CodeTable[] {
         ["Email code lifetime", `${CODE_TTL_MINUTES} min`],
         ["Digest", "Up to 5 jobs, hourly engine run at :05, at each person's hour"],
         ["Live job window", `Seen by the scan in ${LIVE_WINDOW_DAYS} days, posted in ${POSTED_WINDOW_DAYS} days`],
-        ["NextRole scanner", `Weekdays at ${SCAN_TIME_UTC} (crypto-jobs-agent)`],
+        ["Job scanner", `Daily at ${SCAN_TIME_UTC} (engine jobs-scan, jobs DB nextcryptojob-jobs)`],
         ["Stale source", `Not in the last ${STALE_AFTER_SCANS} scans`],
       ],
     },

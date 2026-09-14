@@ -46,7 +46,7 @@ export const hourLabel = (h: number): string => `${String(h).padStart(2, "0")}:0
 
 export type Salary = { min: number | null; max: number | null; currency: string | null; period: "year" | "month" };
 
-/** Річна сума лише в правдоподібних межах: 1 000 у кеші NextRole це заглушка, а не зарплата. */
+/** Річна сума лише в правдоподібних межах: 1 000 у вилці це заглушка, а не зарплата. */
 export const MIN_ANNUAL = 10_000;
 export const MAX_ANNUAL = 5_000_000;
 export const plausibleAnnual = (v: number): boolean => v >= MIN_ANNUAL && v <= MAX_ANNUAL;

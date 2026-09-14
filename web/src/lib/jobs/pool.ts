@@ -1,18 +1,18 @@
 import type { RoleKey } from "@/lib/card/roles";
 import { cleanText, plausibleSalary, safeUrl } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
-import { companyKey, isNonCryptoCompany } from "./nextrole-clean";
-import { foldText, isRemoteLocation } from "./nextrole-place";
-import { titleRoles } from "./nextrole-roles";
+import { companyKey, isNonCryptoCompany } from "./clean";
+import { foldText, isRemoteLocation } from "./place";
+import { titleRoles } from "./roles";
 
 /**
- * Вакансії NextRole для публічного search_jobs (lib/crm/public-jobs.ts): той самий пул,
- * що бере добірка engine (engine/src/digest/jobs.ts): ті самі вікна свіжості, той самий
- * SQL з тегом web3, ті самі сита компанії й назви. Тест nextrole-parity.test.ts звіряє
- * константи й SQL з engine.
+ * Вакансії зі сканування (база вакансій NextCryptoJob, binding JOBS_DB; пише її сканер engine,
+ * engine/src/jobs) для публічного search_jobs (lib/crm/public-jobs.ts): той самий пул, що бере
+ * добірка engine (engine/src/digest/jobs.ts): ті самі вікна свіжості, той самий SQL з тегом web3,
+ * ті самі сита компанії й назви. Тест parity.test.ts звіряє константи й SQL з engine.
  *
- * Межа читань. Індексу на fetched_at у jobs_cache немає навмисно (записи D1 у тисячу
- * разів дорожчі за читання, reference у engine/src/digest/jobs.ts), тож кожен запит пулу
+ * Межа читань. Індексу на fetched_at у jobs_cache немає навмисно (db/jobs/0001_schema.sql: записи
+ * D1 у тисячу разів дорожчі за читання, а скан щодня переписує fetched_at), тож кожен запит пулу
  * це прохід по таблиці. Тому пул не читається на кожен пошук: готовий пул живе в пам'яті
  * ізолята POOL_TTL_MS, і рядків не більше POOL_ROW_CAP (найсвіжіше бачені). Пошуки між
  * читаннями фільтрують пул у пам'яті й базу не чіпають.
@@ -26,23 +26,23 @@ import { titleRoles } from "./nextrole-roles";
 
 export const LIVE_WINDOW_DAYS = 3;
 export const POSTED_WINDOW_DAYS = 30;
-export const NEXTROLE_POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
+export const POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
        salary_currency, tags, posted_at, fetched_at, country, dedupe_key
   FROM jobs_cache
  WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
 
 /**
- * Запит пулу на сайті: той самий, що в engine (NEXTROLE_POOL_SQL, тест звіряє), плюс
+ * Запит пулу на сайті: той самий, що в engine (POOL_SQL, тест звіряє), плюс
  * стовпець source для рядка «N live crypto jobs from M sources» на головній. Умова WHERE
  * та сама, тож і рядки ті самі.
  */
-export const POOL_READ_SQL = NEXTROLE_POOL_SQL.replace("country, dedupe_key\n", "country, dedupe_key, source\n");
+export const POOL_READ_SQL = POOL_SQL.replace("country, dedupe_key\n", "country, dedupe_key, source\n");
 
-/** Скільки рядків пул бере найбільше (живий кеш 12.09: ~3 100 свіжих з тегом web3). */
+/** Скільки рядків пул бере найбільше (скан насухо 14.09: ~1 600 живих крипто-вакансій). */
 export const POOL_ROW_CAP = 10_000;
-/** Як довго ізолят тримає пул у пам'яті. Скан NextRole оновлює кеш раз на добу. */
+/** Як довго ізолят тримає пул у пам'яті. Скан оновлює базу раз на добу. */
 export const POOL_TTL_MS = 10 * 60_000;
-/** Після невдалого читання базу NextRole не питаємо стільки часу. */
+/** Після невдалого читання базу вакансій не питаємо стільки часу. */
 export const FAILURE_BACKOFF_MS = 60_000;
 const DAY_MS = 86_400_000;
 
@@ -55,7 +55,7 @@ export interface PublicSalary {
 
 /** Вакансія в пулі пошуку, з будь-якого джерела. */
 export interface PoolJob {
-  /** job_… для вакансій компаній, nr_<id> для вакансій NextRole. */
+  /** job_… для вакансій компаній, nr_<id> для вакансій зі сканування (префікс лишився з часів NextRole). */
   jobId: string;
   source: "company" | "crawl";
   title: string;
@@ -63,7 +63,7 @@ export interface PoolJob {
   companyDomainVerified?: boolean;
   workMode: ("remote" | "city")[];
   city: string | null;
-  /** Текст, у якому шукати місто (локація NextRole або місто вакансії компанії). */
+  /** Текст, у якому шукати місто (локація зі сканування або місто вакансії компанії). */
   placeText: string | null;
   salary: PublicSalary | null;
   roles: RoleKey[];
@@ -77,17 +77,17 @@ export interface PoolJob {
   companyKey: string;
   /** Місце, як його показати людині: «Remote», «Lisbon», «Remote or Lisbon». */
   location: string | null;
-  /** Країна національної дошки NextRole; такі вакансії добірка не бере у «віддалено». */
+  /** Країна національної дошки; такі вакансії добірка не бере у «віддалено». Крипто-джерела лишають null. */
   country: string | null;
   /** Коли скан бачив вакансію востаннє (мс); запасна дата свіжості в добірці. */
   seenMs: number | null;
-  /** Ключ змісту NextRole: та сама вакансія під новою адресою. */
+  /** Ключ змісту: та сама вакансія під новою адресою. */
   dedupeKey: string | null;
   /** jobs_cache.source (дошка, з якої скан узяв вакансію); null для вакансій компаній. */
   origin: string | null;
 }
 
-type NrRow = {
+type PoolRow = {
   id: string;
   url: string;
   company: string;
@@ -115,7 +115,7 @@ export function parseDbTime(v: string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
-// Дослівно як tagsOf в engine/src/digest/jobs.ts (тест nextrole-parity.test.ts звіряє).
+// Дослівно як tagsOf в engine/src/digest/jobs.ts (тест parity.test.ts звіряє).
 function tagsOf(json: string): string[] {
   try {
     const v: unknown = JSON.parse(json);
@@ -123,7 +123,7 @@ function tagsOf(json: string): string[] {
   } catch { return []; }
 }
 
-/** Сума, якою можна вірити: 1 000 у кеші NextRole це заглушка, а не зарплата (як formatSalary). */
+/** Сума, якою можна вірити: 1 000 у вилці це заглушка, а не зарплата (як formatSalary). */
 function plausible(v: number | null, period: "year" | "month"): number | null {
   return v !== null && plausibleSalary(v, period) ? v : null;
 }
@@ -141,11 +141,11 @@ export function publicSalary(
 }
 
 /**
- * Сито рядка: ті самі перевірки й у тому самому порядку, що в nextroleJob engine до побудови
+ * Сито рядка: ті самі перевірки й у тому самому порядку, що в crawlJob engine до побудови
  * вакансії. Тіло до останнього return дослівно як в engine (тест звіряє текст): нове правило
  * там без переносу сюди валить тест.
  */
-export function nextroleSieve(r: NrRow): { tags: string[]; roles: RoleKey[] } | { drop: "tag" | "company" | "title" } {
+export function crawlSieve(r: PoolRow): { tags: string[]; roles: RoleKey[] } | { drop: "tag" | "company" | "title" } {
   const tags = tagsOf(r.tags);
   // Тег web3 перевіряє вже SQL (LIKE); тут ще раз точно, бо LIKE бачить і підрядок.
   if (!tags.includes("web3")) return { drop: "tag" };
@@ -155,9 +155,9 @@ export function nextroleSieve(r: NrRow): { tags: string[]; roles: RoleKey[] } | 
   return { tags, roles };
 }
 
-/** Рядок кешу NextRole → вакансія пошуку; null, якщо сито відкинуло рядок або адреса крива. */
-export function nextroleJob(r: NrRow): PoolJob | null {
-  const sieved = nextroleSieve(r);
+/** Рядок бази вакансій → вакансія пошуку; null, якщо сито відкинуло рядок або адреса крива. */
+export function crawlJob(r: PoolRow): PoolJob | null {
+  const sieved = crawlSieve(r);
   if ("drop" in sieved) return null;
   const { tags, roles } = sieved;
   const url = safeUrl(r.url);
@@ -194,7 +194,7 @@ let cached: { at: number; jobs: PoolJob[] } | null = null;
 let failedAt: number | null = null;
 
 /** Для тестів: наступний пошук читає пул знову. */
-export function resetNextrolePool(): void {
+export function resetCrawlPool(): void {
   cached = null;
   failedAt = null;
 }
@@ -203,32 +203,32 @@ async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<PoolJob[]
   const live = new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString();
   const posted = new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString();
   const started = Date.now();
-  let rows: NrRow[];
+  let rows: PoolRow[];
   try {
     // Найсвіжіше бачені першими: якщо межа спрацює, відріжуться ті, кого скан бачив давніше.
-    rows = await jobs.all<NrRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, live, posted, cap);
+    rows = await jobs.all<PoolRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, live, posted, cap);
   } catch (e) {
     console.warn(`search_jobs: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
     return null;
   }
   if (rows.length >= cap) {
-    console.warn(`search_jobs: NextRole pool hit the ${cap}-row cap; older jobs are left out`);
+    console.warn(`search_jobs: job pool hit the ${cap}-row cap; older jobs are left out`);
   }
   const out: PoolJob[] = [];
   for (const r of rows) {
-    const job = nextroleJob(r);
+    const job = crawlJob(r);
     if (job) out.push(job);
   }
-  console.log(`search_jobs: NextRole pool ${out.length} of ${rows.length} rows in ${Date.now() - started} ms`);
+  console.log(`search_jobs: job pool ${out.length} of ${rows.length} rows in ${Date.now() - started} ms`);
   return out;
 }
 
 /**
- * Пул NextRole: з пам'яті ізолята, якщо він свіжіший за POOL_TTL_MS; інакше читання цим
+ * Пул вакансій зі сканування: з пам'яті ізолята, якщо він свіжіший за POOL_TTL_MS; інакше читання цим
  * запитом. Після невдачі FAILURE_BACKOFF_MS без читань, і весь цей час (та й одразу після
  * невдачі) віддається попередній пул, якщо він є. null, якщо пулу немає зовсім.
  */
-export async function nextrolePool(open: () => JobsDb, now: Date, cap = POOL_ROW_CAP): Promise<PoolJob[] | null> {
+export async function crawlPool(open: () => JobsDb, now: Date, cap = POOL_ROW_CAP): Promise<PoolJob[] | null> {
   const t = Date.now();
   if (cached && t - cached.at < POOL_TTL_MS) return cached.jobs;
   if (failedAt !== null && t - failedAt < FAILURE_BACKOFF_MS) return cached?.jobs ?? null;
@@ -241,7 +241,7 @@ export async function nextrolePool(open: () => JobsDb, now: Date, cap = POOL_ROW
   }
   if (!pool) {
     failedAt = Date.now();
-    if (cached) console.warn("search_jobs: serving the previous NextRole pool while the database does not answer");
+    if (cached) console.warn("search_jobs: serving the previous job pool while the jobs database does not answer");
     return cached?.jobs ?? null;
   }
   failedAt = null;

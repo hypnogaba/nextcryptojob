@@ -1,9 +1,9 @@
-// Роль вакансії з її назви (і тегів NextRole): копія engine/src/digest/roles.ts.
+// Роль вакансії з її назви (і тегів рядка): копія engine/src/digest/roles.ts.
 //
-// search_jobs (lib/crm/public-jobs.ts) відсіює вакансії NextRole тими самими правилами,
+// search_jobs (lib/crm/public-jobs.ts) відсіює вакансії зі сканування тими самими правилами,
 // що й добірка engine: вакансія без нашої ролі в назві чи з не-крипто назвою не йде
 // ні в добірку, ні в пошук. Код нижче першого export дослівно такий самий, як в engine;
-// тест nextrole-parity.test.ts це звіряє. Правити engine, потім переносити сюди.
+// тест parity.test.ts це звіряє. Правити engine, потім переносити сюди.
 import type { RoleKey } from "@/lib/card/roles";
 
 export const ROLE_ORDER: readonly RoleKey[] = [
@@ -245,7 +245,7 @@ const MIN_SCORE = 3;
 const SECOND_ROLE_RATIO = 0.6;
 const MAX_JOB_ROLES = 3;
 
-/** Теги NextRole (jobs_cache.tags), що підштовхують роль, яка вже є в назві (+1). */
+/** Теги сфери (jobs_cache.tags, src/jobs/tags.ts), що підштовхують роль, яка вже є в назві (+1). */
 const TAG_ROLES: Record<string, RoleKey[]> = {
   engineering: ["engineer"],
   security: ["security_auditor"],

@@ -22,7 +22,7 @@ export const HISTORY_LIMIT = 70;
 /**
  * Скільки надісланих посилань читаємо, щоб «Jobs for you now» не повторював надісланого
  * (добірка engine виключає всі). Індекс idx_sent_user (user_id, created_at): читання =
- * повернуті рядки. 1 000 це понад пів року щоденних добірок, а пул NextRole тримає лише
+ * повернуті рядки. 1 000 це понад пів року щоденних добірок, а пул вакансій тримає лише
  * вакансії за 30 днів, тож давніші посилання однаково не збіглися б.
  */
 export const EXCLUDE_LIMIT = 1000;
@@ -33,7 +33,7 @@ export type JobDetails = {
   location: string | null;
   salary: string | null;
   /**
-   * http(s) або mailto (вакансії NextRole); для вакансій компаній їхня сторінка на
+   * http(s) або mailto (вакансії зі сканування); для вакансій компаній їхня сторінка на
    * сайті `/jobs/<id>` (звідти "Apply" рахує перехід); null, якщо адреса непридатна.
    */
   url: string | null;
@@ -179,7 +179,7 @@ async function digestRows(
 
 const placeholders = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 
-async function nextroleDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, JobDetails> | null> {
+async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, JobDetails> | null> {
   if (ids.length === 0) return new Map();
   let rows: NrRow[];
   try {
@@ -189,7 +189,7 @@ async function nextroleDetails(jobs: JobsDb, ids: string[]): Promise<Map<string,
       ...ids,
     );
   } catch (e) {
-    // База NextRole чужа й буває зайнята (429): сторінка лишається, без подробиць.
+    // База вакансій не відповіла (429 чи збій): сторінка лишається, без подробиць.
     console.warn(`jobs page: JOBS_DB read failed (${errorName(e)})`);
     return null;
   }
@@ -278,7 +278,9 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
 
   const refs = (prefix: string) =>
     [...new Set(sent.filter((s) => s.job_ref.startsWith(prefix)).map((s) => s.job_ref.slice(prefix.length)))];
-  const [nr, co] = await Promise.all([nextroleDetails(jobs, refs("nr:")), companyDetails(d, refs("co:"))]);
+  // 'nr:' це вакансія зі сканування (мітка з часів NextRole, sent.job_ref). Посилання, надіслані до
+  // 14.09.2026, вказують на id старої бази: у новій їх немає, тож вони показуються як «gone».
+  const [nr, co] = await Promise.all([crawlDetails(jobs, refs("nr:")), companyDetails(d, refs("co:"))]);
 
   const digests: SentDigest[] = [];
   for (const s of sent) {
