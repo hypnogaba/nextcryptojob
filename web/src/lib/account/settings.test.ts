@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { migratedD1, type TestDb } from "@/test/sqlite-d1";
 import {
-  applyWelcomeSharing,
+  acceptTerms,
   detectTimezone,
   loadSettings,
   saveDailyJobs,
@@ -211,21 +211,41 @@ describe("detectTimezone", () => {
   });
 });
 
-describe("applyWelcomeSharing", () => {
-  it("writes both consents, their events and the flags in one batch, then tells the CRM", async () => {
+describe("acceptTerms (the last button of the brief, no boxes)", () => {
+  it("writes one consent event (the terms) and the default settings as state, in one batch, then tells the CRM", async () => {
     const batch = vi.spyOn(t.d1, "batch");
-    await expect(applyWelcomeSharing(t.d1, "a", { visible: true, direct: true })).resolves.toEqual({ visible: true, direct: true });
+    await expect(acceptTerms(t.d1, "a")).resolves.toEqual({ visible: true, direct: true, accepted: true });
     expect(batch).toHaveBeenCalledTimes(1);
+    expect(all("SELECT kind, granted, text_version FROM consent_events")).toEqual([
+      { kind: "terms", granted: 1, text_version: "terms-0.2" },
+    ]);
     expect(one("SELECT visible_to_companies AS v, contact_mode FROM users")).toEqual({ v: 1, contact_mode: "direct" });
+    await expect(loadSettings(t.d1, "a")).resolves.toMatchObject({ visible: true, contactMode: "direct", scoringConsent: true });
     expect(hooks.notifyCrmVisibility).toHaveBeenCalledWith("a", true);
   });
 
-  it("no direct contact without visibility", async () => {
-    await expect(applyWelcomeSharing(t.d1, "a", { visible: false, direct: true })).resolves.toEqual({ visible: false, direct: false });
+  it("a second press with the same terms writes nothing new", async () => {
+    await acceptTerms(t.d1, "a");
+    hooks.notifyCrmVisibility.mockClear();
+    await expect(acceptTerms(t.d1, "a")).resolves.toEqual({ visible: true, direct: true, accepted: false });
+    expect(all("SELECT COUNT(*) AS n FROM consent_events")).toEqual([{ n: 1 }]);
+    expect(hooks.notifyCrmVisibility).not.toHaveBeenCalled();
+  });
+
+  it("keeps what the person already chose in Settings", async () => {
+    scoringConsent();
+    await setVisibility(t.d1, "a", true);
+    await setVisibility(t.d1, "a", false);
+    await setContactMode(t.d1, "a", "direct");
+    await setContactMode(t.d1, "a", "approval");
+    await expect(acceptTerms(t.d1, "a")).resolves.toEqual({ visible: false, direct: false, accepted: true });
     expect(one("SELECT visible_to_companies AS v, contact_mode FROM users")).toEqual({ v: 0, contact_mode: "approval" });
-    expect(all("SELECT kind, granted, text_version FROM consent_events ORDER BY id")).toEqual([
-      { kind: "visibility", granted: 0, text_version: "welcome.v1" },
-      { kind: "contact", granted: 0, text_version: "welcome.v1" },
-    ]);
+  });
+
+  it("the switches in Settings still turn the defaults off", async () => {
+    await acceptTerms(t.d1, "a");
+    await expect(setVisibility(t.d1, "a", false)).resolves.toEqual({ ok: true, changed: true });
+    await expect(setContactMode(t.d1, "a", "approval")).resolves.toMatchObject({ ok: true, changed: true });
+    await expect(loadSettings(t.d1, "a")).resolves.toMatchObject({ visible: false, contactMode: "approval" });
   });
 });

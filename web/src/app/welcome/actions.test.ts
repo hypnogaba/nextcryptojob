@@ -5,7 +5,6 @@ import { exec, fakeCookieJar, harness, RedirectCalled, resetHarness, rows, TEST_
 import { loadAnswers } from "@/lib/onboarding/store";
 import { savePlaceAction, saveRolesAction, saveTargetAction } from "./actions/answers";
 import { saveDeliveryAction } from "./actions/delivery";
-import { finishAction } from "./actions/finish";
 import { continueSourcesAction, saveSourcesAction } from "./actions/sources";
 import { checkCodeAction } from "./actions/verify";
 import { saveWalletsAction, skipWalletsAction } from "./actions/wallets";
@@ -35,12 +34,12 @@ async function run<T>(p: Promise<T>): Promise<string | T> {
 
 /**
  * Людина на кроці `step` з ролями `roles` і власною сесією (кука в новій банці). Кроки
- * «Stand out» і «done» бувають лише після згоди на бал (кінець анкети), тож тоді й згода.
+ * «Stand out» і «done» бувають лише після умов (кінець анкети), тож тоді й прийняті умови.
  */
 async function signInAt(id: string, step: string | null, roles = "[]") {
   exec("INSERT INTO users (id, email, onboarding_step, roles) VALUES (?, ?, ?, ?)", id, `${id}@example.com`, step, roles);
   if (step && ["x", "wallets", "sources", "done"].includes(step)) {
-    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES (?, 'scoring', 1, 'v1')", id);
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES (?, 'terms', 1, 'terms-0.2')", id);
   }
   harness.jar = fakeCookieJar();
   await createSession(id, null);
@@ -66,7 +65,7 @@ describe("step guards", () => {
     await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/welcome");
     await expect(run(saveSourcesAction({}, form({ github: "ada" })))).resolves.toBe("/welcome");
     await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome");
-    await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/welcome");
+    await expect(run(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "UTC" })))).resolves.toBe("/welcome");
     expect(rows("SELECT * FROM identities")).toEqual([]);
     expect(rows("SELECT * FROM consents")).toEqual([]);
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "target" }]);
@@ -82,9 +81,12 @@ describe("step guards", () => {
   });
 
   it("does not finish without roles", async () => {
-    await signInAt("u", "consent");
-    await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/welcome?step=roles");
+    await signInAt("u", "delivery");
+    await expect(run(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "UTC" })))).resolves.toBe(
+      "/welcome?step=roles",
+    );
     expect(rows("SELECT * FROM score_jobs")).toEqual([]);
+    expect(rows("SELECT * FROM consents")).toEqual([]);
   });
 
   it("sends a visitor without a session to sign in", async () => {
@@ -151,14 +153,15 @@ describe("rescoring after a finished person changes sources", () => {
 });
 
 describe("brief first, then jobs, then the optional stand out steps", () => {
-  it("saves how and when to send the jobs, then asks for consent", async () => {
+  it("the brief ends on the delivery step: saving it accepts the terms, queues a score and goes straight to X", async () => {
     await signInAt("u", "delivery", '["engineer"]');
     await expect(run(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "Europe/Paris" })))).resolves.toBe(
-      "/welcome?step=consent",
+      "/welcome?step=x",
     );
     expect(rows("SELECT channel, digest_hour, timezone, digest_paused, onboarding_step FROM users")).toEqual([
-      { channel: "email", digest_hour: 9, timezone: "Europe/Paris", digest_paused: 0, onboarding_step: "consent" },
+      { channel: "email", digest_hour: 9, timezone: "Europe/Paris", digest_paused: 0, onboarding_step: "x" },
     ]);
+    expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
   });
 
   it("takes Telegram only when it is linked, and saves nothing on an error", async () => {
@@ -168,14 +171,15 @@ describe("brief first, then jobs, then the optional stand out steps", () => {
     expect(rows("SELECT channel, digest_hour, timezone, onboarding_step FROM users")).toEqual([
       { channel: "email", digest_hour: 7, timezone: null, onboarding_step: "delivery" },
     ]);
+    expect(rows("SELECT * FROM consents")).toEqual([]);
   });
 
-  it("ends the brief with consent and a score job, then goes straight to the required X step", async () => {
+  it("someone saved on the old consent step resumes on delivery, where the last button now is", async () => {
     await signInAt("u", "consent", '["engineer"]');
-    await expect(run(finishAction({}, form({ agree: "yes" })))).resolves.toBe("/welcome?step=x");
-    expect(rows("SELECT kind, granted FROM consents")).toEqual([{ kind: "scoring", granted: 1 }]);
-    expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
-    // Досягнуто перший крок «Stand out»: добірці вистачає ролей і першого балу.
+    expect((await loadAnswers(harness.env.DB, "u")).step).toBe("delivery");
+    await expect(run(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "UTC" })))).resolves.toBe(
+      "/welcome?step=x",
+    );
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "x" }]);
   });
 
@@ -271,70 +275,49 @@ describe("roles: our guess from the brief, and a role in the person's own words"
   });
 });
 
-describe("the consent step also asks about companies (owner 14.09: visible and Telegram directly by default)", () => {
-  const sharing = () =>
-    rows("SELECT visible_to_companies AS visible, contact_mode FROM users WHERE id = 'u'");
-  const events = () => rows("SELECT kind, granted, text_version FROM consent_events WHERE kind <> 'scoring' ORDER BY id");
+describe("no consent boxes (owner 14.09, round 3): continuing accepts the terms", () => {
+  const sharing = () => rows("SELECT visible_to_companies AS visible, contact_mode FROM users WHERE id = 'u'");
+  const events = () => rows("SELECT kind, granted, text_version FROM consent_events ORDER BY id");
+  const deliver = () => run(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "UTC" })));
 
-  it("the pre-ticked default: visible, Telegram directly, both recorded as consent events with the step's text version", async () => {
-    await signInAt("u", "consent", '["engineer"]');
-    await expect(run(finishAction({}, form({ agree: "yes", sharing: "yes", visible: "yes" })))).resolves.toBe("/welcome?step=x");
+  it("one consent event, the terms with their version; visible and Telegram directly are on by default", async () => {
+    await signInAt("u", "delivery", '["engineer"]');
+    await expect(deliver()).resolves.toBe("/welcome?step=x");
+    expect(events()).toEqual([{ kind: "terms", granted: 1, text_version: "terms-0.2" }]);
+    expect(rows("SELECT kind, granted, text_version FROM consents ORDER BY kind")).toEqual([
+      { kind: "contact", granted: 1, text_version: "terms-0.2" },
+      { kind: "terms", granted: 1, text_version: "terms-0.2" },
+      { kind: "visibility", granted: 1, text_version: "terms-0.2" },
+    ]);
     expect(sharing()).toEqual([{ visible: 1, contact_mode: "direct" }]);
-    expect(events()).toEqual([
-      { kind: "visibility", granted: 1, text_version: "welcome.v1" },
-      { kind: "contact", granted: 1, text_version: "welcome.v1" },
-    ]);
-    expect(rows("SELECT kind, granted FROM consents ORDER BY kind")).toEqual([
-      { kind: "contact", granted: 1 },
-      { kind: "scoring", granted: 1 },
-      { kind: "visibility", granted: 1 },
-    ]);
-    expect(rows("SELECT action, meta_json FROM audit_log WHERE action LIKE 'consent.%' ORDER BY id")).toEqual([
-      { action: "consent.grant", meta_json: JSON.stringify({ kind: "scoring", version: "v1" }) },
-      { action: "consent.grant", meta_json: JSON.stringify({ kind: "visibility", version: "welcome.v1" }) },
-      { action: "consent.grant", meta_json: JSON.stringify({ kind: "contact", version: "welcome.v1" }) },
+    expect(rows("SELECT action, meta_json FROM audit_log WHERE action LIKE 'terms.%' OR action LIKE 'consent.%'")).toEqual([
+      { action: "terms.accept", meta_json: JSON.stringify({ version: "terms-0.2" }) },
     ]);
   });
 
-  it("only after I approve each company: visible, contact after approval", async () => {
-    await signInAt("u", "consent", '["engineer"]');
-    await run(finishAction({}, form({ agree: "yes", sharing: "yes", visible: "yes", approval_only: "yes" })));
-    expect(sharing()).toEqual([{ visible: 1, contact_mode: "approval" }]);
-    expect(events()).toEqual([
-      { kind: "visibility", granted: 1, text_version: "welcome.v1" },
-      { kind: "contact", granted: 0, text_version: "welcome.v1" },
+  it("a choice made in Settings before the end of the brief is kept (hidden stays hidden)", async () => {
+    await signInAt("u", "delivery", '["engineer"]');
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'visibility', 0, 'visibility.v1')");
+    await deliver();
+    expect(sharing()).toEqual([{ visible: 0, contact_mode: "direct" }]);
+    expect(rows("SELECT granted, text_version FROM consents WHERE kind = 'visibility'")).toEqual([
+      { granted: 0, text_version: "visibility.v1" },
     ]);
   });
 
-  it("unticked: hidden, no direct contact, and the refusal is in the history too", async () => {
-    await signInAt("u", "consent", '["engineer"]');
-    await run(finishAction({}, form({ agree: "yes", sharing: "yes" })));
-    expect(sharing()).toEqual([{ visible: 0, contact_mode: "approval" }]);
-    expect(events()).toEqual([
-      { kind: "visibility", granted: 0, text_version: "welcome.v1" },
-      { kind: "contact", granted: 0, text_version: "welcome.v1" },
-    ]);
-  });
-
-  it("without scoring consent nothing about companies is written", async () => {
-    await signInAt("u", "consent", '["engineer"]');
-    await run(finishAction({}, form({ sharing: "yes", visible: "yes" })));
-    expect(sharing()).toEqual([{ visible: 0, contact_mode: "approval" }]);
-    expect(events()).toEqual([]);
-  });
-
-  it("existing people keep their settings: editing the step after the brief, or a form without the block, changes nothing", async () => {
+  it("people who already finished the brief keep their settings when they edit the delivery step", async () => {
     await signInAt("u", "done", '["engineer"]');
-    await expect(run(finishAction({}, form({ agree: "yes", sharing: "yes", visible: "yes" })))).resolves.toBe("/jobs");
+    exec("DELETE FROM consents WHERE user_id = 'u'");
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
+    await expect(deliver()).resolves.toBe("/jobs");
     expect(sharing()).toEqual([{ visible: 0, contact_mode: "approval" }]);
-
-    exec("INSERT INTO users (id, email, onboarding_step, roles) VALUES ('v', 'v@example.com', 'consent', '[\"engineer\"]')");
-    harness.jar = fakeCookieJar();
-    await createSession("v", null);
-    await run(finishAction({}, form({ agree: "yes" })));
-    expect(rows("SELECT visible_to_companies AS visible, contact_mode FROM users WHERE id = 'v'")).toEqual([
-      { visible: 0, contact_mode: "approval" },
-    ]);
     expect(events()).toEqual([]);
+  });
+
+  it("the old scoring consent still counts as the basis for a score", async () => {
+    await signInAt("u", "x", '["bd"]');
+    exec("UPDATE consents SET kind = 'scoring', text_version = 'v1' WHERE user_id = 'u'");
+    await expect(run(saveXAction({}, form({ handle: "ada" })))).resolves.toBe("/welcome?step=wallets");
+    expect(rows("SELECT reason, status FROM score_jobs")).toEqual([{ reason: "connect", status: "queued" }]);
   });
 });

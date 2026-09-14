@@ -1,3 +1,4 @@
+import { SCORING_BASIS_SQL } from "@/lib/consent";
 import type { JobsDb } from "@/lib/jobs-db";
 import { isRoleKey } from "@/lib/card/roles";
 import { companyKey } from "@/lib/jobs/clean";
@@ -295,7 +296,7 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
       .prepare(
         `SELECT email, telegram_id, channel, digest_hour, timezone, digest_paused, target_text,
                 roles, remote_mode, city, salary_min, salary_currency, role_text, onboarding_step,
-                (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
+                (SELECT MAX(granted) FROM consents WHERE user_id = users.id AND kind IN ${SCORING_BASIS_SQL}) AS scoring
            FROM users WHERE id = ?`,
       )
       .bind(userId)

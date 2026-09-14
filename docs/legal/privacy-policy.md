@@ -2,7 +2,7 @@
 
 > **DRAFT. Not in force. For review by a French lawyer before launch.**
 > This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version: 0.1 (draft), 2026-09-12.
+> Version: 0.2 (draft), 2026-09-14.
 
 This policy explains what personal data NextCryptoJob processes, why, on what legal
 basis, who receives it, how long we keep it, and what rights you have. It covers the
@@ -12,8 +12,9 @@ information required by articles 13 and 14 of the GDPR
 ## 1. Summary
 
 - Candidates never pay. Companies pay.
-- When you finish setting up, "Show me to companies" and "Show my Telegram directly" are on, unless you untick them. Companies with access can then find you and see your score and Telegram handle. You can turn either off at any time in Settings.
-- We compute a score from public data about the accounts and wallets you connect. We do this only with your consent.
+- There are no boxes to tick. At the end of setup we write "By continuing you agree to the Terms and Privacy." Pressing Continue, and using the service, means you accept the Terms for Candidates and this policy. We record the version and the date.
+- When you finish setting up, "Show me to companies" and "Show my Telegram directly" are on. Companies with access can then find you and see your score and Telegram handle. You can turn either off at any time in Settings.
+- Computing a score from public data about the accounts and wallets you add is part of the service. If you add none, there is nothing to score.
 - The formula is written by people and is the same for everyone. A language model writes explanation text only. It does not set your score.
 - Companies never see your wallet addresses or raw data.
 - You can appeal your score, export your data and delete your account at any time.
@@ -50,8 +51,8 @@ We have not appointed a data protection officer. [to confirm with lawyer: whethe
 
 ### 3.2 Data we collect from public sources
 
-When you consent to scoring, we collect public data about the accounts and wallets
-you connected. This is the information that article 14 GDPR requires about data we
+When you add accounts and wallets, we collect public data about them to compute your
+score. This is the information that article 14 GDPR requires about data we
 did not get from you directly.
 
 | Source | What we collect | Through |
@@ -104,11 +105,11 @@ tags, and, for x402 payments, the paying wallet address and the transaction hash
 |---|---|---|
 | Create and run your account, sign you in | Email or Telegram ID, settings | Contract, art. 6(1)(b) GDPR <https://gdpr-info.eu/art-6-gdpr/> |
 | Verify that you control your X account | X handle, verification code | Contract, art. 6(1)(b) |
-| Collect public data and compute your score (profiling) | Sections 3.1 to 3.3 | Your consent, art. 6(1)(a) GDPR, and explicit consent under art. 22(2)(c) GDPR <https://gdpr-info.eu/art-22-gdpr/> |
-| Write the plain-language explanation of your score | Score breakdown and counts | Your consent (part of the scoring consent) |
+| Collect public data and compute your score (profiling) | Sections 3.1 to 3.3 | Contract, art. 6(1)(b): the score is part of the service you accept at the end of setup. It uses only the sources you add. |
+| Write the plain-language explanation of your score | Score breakdown and counts | Contract, art. 6(1)(b) (part of the score) |
 | Publish your card page | Score, role, level, pattern | Your consent (you choose to publish) [to confirm product behaviour: card page public only after you publish it] |
-| Show your profile to companies | Score, roles, level, networks, badges | Your consent, art. 6(1)(a), given on the last setup step (on unless you untick it) and withdrawable in Settings |
-| Share your contact with a company | Your Telegram handle ("direct" mode, on unless you untick it or choose "Only after I approve each company"); your Telegram handle or email after you accept a request | Your consent, per request or in "direct" mode, art. 6(1)(a). In "direct" mode we never share your email. |
+| Show your profile to companies | Score, roles, level, networks, badges | Contract, art. 6(1)(b): being found by companies is what the service is for. On when you finish setting up; you can turn it off at any time in Settings. |
+| Share your contact with a company | Your Telegram handle ("direct" mode, on when you finish setting up, off in Settings); your Telegram handle or email after you accept a request | Contract, art. 6(1)(b), in "direct" mode; your consent, art. 6(1)(a), for each request you accept. In "direct" mode we never share your email. |
 | Send your daily job digest by email or Telegram | Email or Telegram ID, roles, place, salary | Your consent, art. 6(1)(a). The digest can include jobs posted by paying companies, so we also treat it as covered by art. L34-5 of the French Postal and Electronic Communications Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961/> [to confirm with lawyer: consent or contract basis for the digest] |
 | Review your score by a person when you appeal | Your appeal, score data | Contract, and our duty to offer human review under art. 22(3) GDPR |
 | Answer your rights requests | Identity check data, request | Legal obligation, art. 6(1)(c) GDPR |
@@ -118,13 +119,14 @@ tags, and, for x402 payments, the paying wallet address and the transaction hash
 | Manage company subscriptions, invoices and accounting | Company user and billing data | Contract, art. 6(1)(b); legal obligation to keep accounting records, art. L123-22 French Commercial Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006219327> |
 | Test the scoring formula against a reference set (see section 12) | Public data of reference people | Legitimate interest, art. 6(1)(f) [to confirm with lawyer] |
 
-You can use your account and receive the job digest without consenting to scoring.
-[to confirm product behaviour]
+You can use your account and receive the job digest without adding any source. Then
+we have nothing to score.
 
-You can withdraw any consent at any time in Settings. Withdrawal does not affect
+You can turn "Show me to companies" and "Show my Telegram directly" off, stop the
+digest, or withdraw any consent at any time in Settings. This does not affect
 processing that happened before (art. 7(3) GDPR, <https://gdpr-info.eu/art-7-gdpr/>).
-If you withdraw the scoring consent, we stop collecting public data, delete your
-scores and source data, and hide your profile from companies.
+If you remove a source or delete your account, we stop collecting its public data and
+delete the data we collected.
 
 ## 5. Profiling and automated decisions
 
@@ -162,7 +164,7 @@ Justice of the EU held that a score can be an automated decision when a third pa
 <https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=celex%3A62021CJ0634>). So we apply
 the safeguards of article 22 anyway:
 
-- We compute and show your score only with your explicit consent (art. 22(2)(c)).
+- We tell you at the end of setup that the score is part of the service, and you can remove your sources or delete your account at any time.
 - You can ask a person to review your score.
 - You can give your point of view and contest the score.
 - You can see how your score was calculated.
@@ -229,7 +231,7 @@ You can ask us for a copy of the safeguards at [CONTACT EMAIL].
 | Data | How long |
 |---|---|
 | Account, profile, scores, source data | While your account is active. If you do not sign in or use the service for 24 months, we warn you, then delete the account. This follows the CNIL guidance of 2 years after the last contact for candidate data (<https://www.cnil.fr/fr/cnil-direct/question/recrutement-un-employeur-peut-il-conserver-mon-dossier>). |
-| Source data (counts) | Replaced at each weekly refresh. Deleted with your account or when you withdraw scoring consent. |
+| Source data (counts) | Replaced at each weekly refresh. Deleted when you remove the source or delete your account. |
 | Sign-in codes | 10 minutes |
 | Sessions | Until you sign out or the session expires [to confirm duration] |
 | Security logs | 6 months to 1 year, as the CNIL recommends (<https://www.cnil.fr/fr/la-cnil-publie-une-recommandation-relative-aux-mesures-de-journalisation>) [to confirm exact period] |

@@ -2,12 +2,13 @@
 // тож після перезавантаження людина продовжує з того самого місця.
 //
 // Дві частини. Спершу коротка анкета (brief): що людина шукає своїми словами, ролі,
-// віддалено чи місто й зарплата, куди й коли слати вакансії, згода. Після неї щоденна
-// добірка вже може йти. Далі кроки балу (рішення власника 13.09): X обов'язковий, без нього
+// віддалено чи місто й зарплата, куди й коли слати вакансії. Остання кнопка анкети приймає
+// умови (рядок «By continuing you agree…», без галок: власник 14.09, раунд 3). Після неї
+// щоденна добірка вже може йти. Далі кроки балу (рішення власника 13.09): X обов'язковий, без нього
 // далі не пускаємо; гаманці (до 10) і інші джерела необов'язкові, кожне піднімає бал. Після них
 // /welcome/score ставить бал у чергу, чекає на нього й показує картку.
 
-export const BRIEF_STEPS = ["target", "roles", "place", "delivery", "consent"] as const;
+export const BRIEF_STEPS = ["target", "roles", "place", "delivery"] as const;
 export const STANDOUT_STEPS = ["x", "wallets", "sources"] as const;
 export const STEPS = [...BRIEF_STEPS, ...STANDOUT_STEPS] as const;
 export type Step = (typeof STEPS)[number];
@@ -21,7 +22,6 @@ export const STEP_TITLES: Record<Step, string> = {
   roles: "Is this your role?",
   place: "Where do you want to work?",
   delivery: "How should we send your jobs?",
-  consent: "One last thing",
   x: "Your X account",
   wallets: "Your wallets",
   sources: "More sources",
@@ -39,22 +39,26 @@ export function isStandoutStep(value: unknown): value is StandoutStep {
   return typeof value === "string" && (STANDOUT_STEPS as readonly string[]).includes(value);
 }
 
-/** Значення з бази; NULL або щось незнайоме = початок. */
+/**
+ * Значення з бази; NULL або щось незнайоме = початок. «consent» (окремий крок згоди до раунду 3)
+ * = «delivery»: людина ще не приймала умов, і остання кнопка анкети тепер там.
+ */
 export function parseSavedStep(value: string | null | undefined): SavedStep {
   if (value === "done") return "done";
+  if (value === "consent") return "delivery";
   return isStep(value) ? value : "target";
 }
 
 /**
- * Досягнутий крок з урахуванням згоди на бал. До 13.09 кроки X, гаманців і джерел ішли
- * перед згодою; хто зупинився на них за старим порядком, згоди ще не дав, і за новим
- * порядком він мав би пропустити «delivery» і згоду. Такого повертаємо на «delivery».
+ * Досягнутий крок з урахуванням умов (або старої згоди на бал). До 13.09 кроки X, гаманців і
+ * джерел ішли перед згодою; хто зупинився на них за старим порядком, умов ще не приймав. Такого
+ * повертаємо на «delivery», де остання кнопка анкети.
  */
-export function normalizeSavedStep(saved: SavedStep, scoringConsent: boolean): SavedStep {
-  return isStandoutStep(saved) && !scoringConsent ? "delivery" : saved;
+export function normalizeSavedStep(saved: SavedStep, scoringBasis: boolean): SavedStep {
+  return isStandoutStep(saved) && !scoringBasis ? "delivery" : saved;
 }
 
-/** Анкету (brief) пройдено: згоду дано, вакансії вже можна показувати й слати. */
+/** Анкету (brief) пройдено: умови прийнято, вакансії вже можна показувати й слати. */
 export function briefDone(saved: SavedStep): boolean {
   return saved === "done" || isStandoutStep(saved);
 }

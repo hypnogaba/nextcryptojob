@@ -29,7 +29,7 @@ async function signIn(u: User, method: SessionMethod | null = null) {
     u.roles ?? "[]",
   );
   if (u.step && ["x", "wallets", "sources", "done"].includes(u.step)) {
-    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'terms', 1, 'terms-0.2')");
   }
   await createSession("u", method);
 }
@@ -128,9 +128,9 @@ describe("channel step: no dead email option", () => {
     expect(html).toContain("ada@example.com");
     expect(html).not.toContain("Send code");
     await expect(saveDeliveryAction({}, form({ channel: "email", hour: "9", timezone: "UTC" })).catch((e: Error) => e.message)).resolves.toBe(
-      "redirect(/welcome?step=consent)",
+      "redirect(/welcome?step=x)",
     );
-    expect(rows("SELECT channel, onboarding_step FROM users")).toEqual([{ channel: "email", onboarding_step: "consent" }]);
+    expect(rows("SELECT channel, onboarding_step FROM users")).toEqual([{ channel: "email", onboarding_step: "x" }]);
   });
 
   it("with an email and no Telegram, shows only Email and a pointer to connect Telegram later", async () => {
@@ -199,31 +199,28 @@ describe("admin", () => {
   });
 });
 
-describe("consent step: companies block (owner 14.09)", () => {
-  it("first pass: a visible, pre-ticked box with the plain text, and the after-approval option unticked", async () => {
+describe("the end of the brief: no consent boxes (owner 14.09, round 3)", () => {
+  it("the last step has one line under the button with links to the terms and privacy, and no checkbox", async () => {
+    await signIn({ step: "delivery", roles: '["engineer"]' });
+    const html = await render();
+    expect(html).toContain('Step 4 <span class="text-ink-muted">of 4</span>');
+    expect(html).toContain('aria-valuemax="4"');
+    expect(html).toContain("grid-cols-4");
+    expect(html).toMatch(/data-terms-line="">By continuing you agree to the <a[^>]*href="\/terms"[^>]*>Terms<\/a> and <a[^>]*href="\/privacy"[^>]*>Privacy<\/a>\.<\/p>/);
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toContain("One last thing");
+  });
+
+  it("editing the step after the brief has no terms line", async () => {
+    await signIn({ step: "done", roles: '["engineer"]' });
+    expect(await render("delivery")).not.toContain("data-terms-line");
+  });
+
+  it("the old consent step address opens the delivery step", async () => {
     await signIn({ step: "consent", roles: '["engineer"]' });
     const html = await render("consent");
-    expect(html).toContain("data-sharing");
-    expect(html).toMatch(/<input type="checkbox"[^>]*name="visible" checked=""/);
-    expect(html).toContain(
-      "Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. You can turn this off any time in Settings.",
-    );
-    expect(html).toContain("Only after I approve each company");
-    expect(html).not.toMatch(/name="approval_only"[^>]*checked=""/);
-    // Без ніка в Telegram: пояснення, що компанія спершу попросить знайомство, пошта прихована.
-    expect(html).toContain("You have no Telegram username yet");
-  });
-
-  it("shows the handle a company will see when there is one", async () => {
-    await signIn({ step: "consent", roles: '["engineer"]', telegram: "42" });
-    exec("UPDATE users SET telegram_username = 'ada_eth' WHERE id = 'u'");
-    expect(await render("consent")).toContain("Companies see @ada_eth.");
-  });
-
-  it("editing after the brief does not show the block and points to Settings", async () => {
-    await signIn({ step: "done", roles: '["engineer"]' });
-    const html = await render("consent");
-    expect(html).not.toContain("data-sharing");
-    expect(html).toContain('href="/settings#companies-title"');
+    expect(html).toContain("How should we send your jobs?");
+    expect(html).toContain("data-terms-line");
   });
 });
+

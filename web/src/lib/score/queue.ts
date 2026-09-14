@@ -1,6 +1,8 @@
 // Черга рушія балу (docs/contracts.md, §5). Сайт лише додає рядок 'queued';
 // забирає й рахує рушій на VPS.
 
+import { SCORING_BASIS_SQL } from "@/lib/consent";
+
 /** Не частіше одного завдання на людину за стільки секунд. */
 export const ENQUEUE_SPACING_SECONDS = 60;
 
@@ -30,7 +32,7 @@ export async function enqueueScoreJob(
     .prepare(
       `INSERT INTO score_jobs (user_id, reason)
        SELECT ?1, ?2
-        WHERE EXISTS (SELECT 1 FROM consents WHERE user_id = ?1 AND kind = 'scoring' AND granted = 1)
+        WHERE EXISTS (SELECT 1 FROM consents WHERE user_id = ?1 AND kind IN ${SCORING_BASIS_SQL} AND granted = 1)
           AND NOT EXISTS (SELECT 1 FROM score_jobs WHERE status = 'queued' AND user_id = ?1)
           AND COALESCE((SELECT queued_at FROM score_jobs WHERE user_id = ?1 ORDER BY id DESC LIMIT 1), '')
               <= datetime('now', ?3)
@@ -43,7 +45,7 @@ export async function enqueueScoreJob(
   const why = await db
     .prepare(
       `SELECT
-         EXISTS (SELECT 1 FROM consents WHERE user_id = ?1 AND kind = 'scoring' AND granted = 1) AS consent,
+         EXISTS (SELECT 1 FROM consents WHERE user_id = ?1 AND kind IN ${SCORING_BASIS_SQL} AND granted = 1) AS consent,
          EXISTS (SELECT 1 FROM score_jobs WHERE status = 'queued' AND user_id = ?1) AS queued,
          (SELECT CAST(strftime('%s', queued_at) AS INTEGER) FROM score_jobs WHERE user_id = ?1
            ORDER BY id DESC LIMIT 1) + ?2 - CAST(strftime('%s', 'now') AS INTEGER) AS wait`,

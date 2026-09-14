@@ -130,7 +130,7 @@ function Candidates({ o }: { o: Overview }) {
   const funnel: [string, number][] = [
     ["Signed up", c.total],
     ["Brief started", c.briefStarted],
-    ["Brief done, scoring consent", c.briefDone],
+    ["Brief done, terms accepted", c.briefDone],
     ["X verified", c.xVerified],
     ["Wallets added", c.wallets],
     ["Card created", c.cards],

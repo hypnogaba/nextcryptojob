@@ -2,11 +2,32 @@
 // незмінна історія. Кожна зміна пише обидві таблиці в одній пакетній транзакції,
 // щоб стан ніколи не розійшовся з історією.
 
+/**
+ * Стара окрема згода на бал (галка до раунду 3 власника). Нових подій з нею не пишемо: бал
+ * тепер частина послуги й іде з умовами (TERMS_ACCEPTANCE). Наявні рядки чинні далі.
+ */
 export const SCORING_CONSENT = {
   kind: "scoring",
   version: "v1",
   text: "I agree that NextCryptoJob computes my score from the public data I connected.",
 } as const;
+
+/**
+ * Умови для кандидатів разом з політикою приватності (вона частина умов). Власник 14.09, раунд 3:
+ * «підписувати 2 документи забагато, користування сервісом і є згодою». Галки немає: під останньою
+ * кнопкою анкети рядок «By continuing you agree to the Terms and Privacy.», і натискання пише одну
+ * подію з версією умов. Версія = версія docs/legal/terms-candidates.md.
+ */
+export const TERMS_ACCEPTANCE = {
+  kind: "terms",
+  version: "terms-0.2",
+} as const;
+
+/**
+ * Згоди, з якими бал рахується: прийняті умови або стара згода на бал. Для SQL:
+ * `kind IN ${SCORING_BASIS_SQL}`.
+ */
+export const SCORING_BASIS_SQL = `('${SCORING_CONSENT.kind}', '${TERMS_ACCEPTANCE.kind}')`;
 
 /** «Show me to companies» у налаштуваннях (docs/legal/consents.md, розділ 2). */
 export const VISIBILITY_CONSENT = {
@@ -25,20 +46,6 @@ export const CONTACT_CONSENT = {
   kind: "contact",
   version: "v1",
   text: "Show my Telegram handle to every company that can see my profile, without asking me first.",
-} as const;
-
-/**
- * Крок згоди в анкеті (власник 14.09): видимість і Telegram-нік для компаній увімкнено
- * наперед, людина може зняти галку або обрати «лише після мого схвалення». Один текст на
- * обидві згоди, тож обидві події (visibility і contact) пишуться з версією `welcome.v1`
- * (docs/legal/consents.md, розділ 2a).
- */
-export const WELCOME_SHARING = {
-  version: "welcome.v1",
-  text:
-    "Companies hiring on NextCryptoJob can find you and see your score and Telegram handle. " +
-    "You can turn this off any time in Settings.",
-  approvalText: "Only after I approve each company",
 } as const;
 
 export type ConsentState = { granted: boolean; version: string };
@@ -76,6 +83,15 @@ export function consentChange(
       .prepare("INSERT INTO consent_events (user_id, kind, granted, text_version) VALUES (?, ?, ?, ?)")
       .bind(userId, kind, g, version),
   ];
+}
+
+/** Чи є в людини підстава для балу: прийняті умови або стара згода на бал. */
+export async function hasScoringBasis(db: D1Database, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT MAX(granted) AS granted FROM consents WHERE user_id = ? AND kind IN ${SCORING_BASIS_SQL}`)
+    .bind(userId)
+    .first<{ granted: number | null }>();
+  return row?.granted === 1;
 }
 
 /** Чи дала людина цю згоду (і не відкликала). */

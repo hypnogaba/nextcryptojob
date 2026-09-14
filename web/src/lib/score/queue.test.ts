@@ -57,10 +57,16 @@ describe("enqueueScoreJob", () => {
     await expect(enqueueScoreJob(t.d1, "a", "connect")).resolves.toMatchObject({ ok: true });
   });
 
-  it("never queues without the scoring consent", async () => {
+  it("never queues without accepted terms or the old scoring consent", async () => {
     t.raw.exec("INSERT INTO users (id, email) VALUES ('c', 'c@example.com')");
     await expect(enqueueScoreJob(t.d1, "c", "connect")).resolves.toEqual({ ok: false, reason: "no_consent" });
     expect(jobs("c")).toEqual([]);
+  });
+
+  it("the accepted terms are enough: the score is part of the service (owner 14.09, round 3)", async () => {
+    t.raw.exec("INSERT INTO users (id, email) VALUES ('d', 'd@example.com')");
+    await grantConsent(t.d1, "d", "terms", "terms-0.2");
+    await expect(enqueueScoreJob(t.d1, "d", "connect")).resolves.toMatchObject({ ok: true });
   });
 });
 

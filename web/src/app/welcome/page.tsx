@@ -3,7 +3,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { isAdminSession } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/session";
-import { hasConsent, SCORING_CONSENT } from "@/lib/consent";
 import { appEnv, db } from "@/lib/db";
 import { loadSettings } from "@/lib/account/settings";
 import { timezoneList } from "@/lib/account/timezones";
@@ -23,7 +22,6 @@ import { skipWalletsAction } from "./actions/wallets";
 import { parseWait } from "./flow";
 import { StepShell } from "./step-shell";
 import { ClaimPanel } from "./steps/claim-panel";
-import { ConsentForm } from "./steps/consent-form";
 import { PlaceForm } from "./steps/place-form";
 import { RolesForm } from "./steps/roles-form";
 import { SkipForNow } from "./steps/skip-for-now";
@@ -56,8 +54,8 @@ async function claimFor(d: D1Database, userId: string, kind: "x" | "github", raw
  * Анкета першого входу. Досягнутий крок у users.onboarding_step: після
  * перезавантаження людина продовжує звідти ж. ?step= відкриває пройдений
  * крок (Back, «Edit» з профілю чи /jobs); далі досягнутого не пускає.
- * Спершу анкета (5 кроків), далі кроки балу: X обов'язковий, гаманці й джерела
- * необов'язкові; після них /welcome/score з балом і карткою.
+ * Спершу анкета (4 кроки; остання кнопка приймає умови рядком під нею, без галок), далі кроки
+ * балу: X обов'язковий, гаманці й джерела необов'язкові; після них /welcome/score з балом і карткою.
  */
 export default async function WelcomePage({ searchParams }: Props) {
   const user = await requireUser();
@@ -70,7 +68,7 @@ export default async function WelcomePage({ searchParams }: Props) {
   if ((step === "wallets" || step === "sources") && answers.step !== "done" && !identities.some((i) => i.kind === "x")) {
     step = "x";
   }
-  // Анкету правують після згоди; кроки «Stand out» лише тоді, коли пройдено й їх.
+  // Анкету правують після умов; кроки «Stand out» лише тоді, коли пройдено й їх.
   const editing = isBriefStep(step) ? briefDone(answers.step) : answers.step === "done";
   const one = (kind: Identity["kind"]) => identities.find((i) => i.kind === kind) ?? null;
   const wait = parseWait(sp.wait);
@@ -164,6 +162,22 @@ export default async function WelcomePage({ searchParams }: Props) {
             showPause={false}
             submitLabel={editing ? "Save" : "Continue"}
             hideUnavailable
+            footnote={
+              editing ? null : (
+                // Власник 14.09, раунд 3: без галок, користування сервісом і є згодою.
+                <p className="text-sm text-ink-muted" data-terms-line="">
+                  By continuing you agree to the{" "}
+                  <Link href="/terms" className={LINK}>
+                    Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className={LINK}>
+                    Privacy
+                  </Link>
+                  .
+                </p>
+              )
+            }
           />
           {s.email ? null : (
             // Вхід через Telegram без пошти: Email не показуємо вимкненим, а даємо додати тут же.
@@ -239,16 +253,6 @@ export default async function WelcomePage({ searchParams }: Props) {
             <SkipForNow action={continueSourcesAction} note="Optional. Next: we score your work and show your card." />
           )}
         </div>,
-      );
-    }
-
-    case "consent": {
-      const granted = await hasConsent(d, user.id, SCORING_CONSENT.kind);
-      const handle = (await loadSettings(d, user.id))?.telegramHandle?.trim().replace(/^@+/, "") ?? "";
-      return shell(
-        step,
-        "We compute a score only with your consent. Next: your X account, then your score and card.",
-        <ConsentForm granted={granted} editing={editing} telegramHandle={handle ? `@${handle}` : null} />,
       );
     }
   }

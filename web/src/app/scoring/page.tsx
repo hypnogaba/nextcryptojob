@@ -150,7 +150,7 @@ export default function ScoringPage() {
             Companies can find you. You can hide any time.
           </h2>
           <p className="text-ink-muted">
-            When you finish setting up, &quot;Show me to companies&quot; is on unless you untick it. Companies with access
+            When you finish setting up, &quot;Show me to companies&quot; is on. Companies with access
             then see your scores, roles, level and verification badges, and your Telegram handle so they can message you
             directly. They never see your wallet addresses or email. You can hide your profile, or ask companies to
             request an intro first, any time in settings.
