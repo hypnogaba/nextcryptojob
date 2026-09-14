@@ -55,7 +55,7 @@ export interface CompanyInfo {
   latestStatus: string | null;
   /** Вебхук компанії не прийняв подію за 6 спроб (час SQLite); плашка "Your webhook is failing". */
   webhookFailingSince?: string | null;
-  /** Демо-компанія (companies.is_demo, 0020): бачить лише синтетичних кандидатів (lib/admin/demo.ts). */
+  /** Демо-компанія (companies.is_demo, 0021): бачить лише синтетичних кандидатів (lib/admin/demo.ts). */
   isDemo?: boolean;
 }
 

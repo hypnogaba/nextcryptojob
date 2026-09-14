@@ -201,7 +201,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0017_saved_search_baseline.sql | web: CRM | saved_searches.baseline_at, filter_changes, filter_changes_day; last_match_count = нові на останньому сповіщенні |
 | 0018_apply_click_seen.sql | web: вакансії компаній | apply_click_seen (дедуп кліків Apply за HMAC IP+вакансія, 10 хв) |
 | 0019_admin_home.sql | web: адмінка | cron_runs (журнал задач розкладу, 30 днів), app_settings (налаштування з адмінки), індекс digest_runs(created_at) |
-| 0020_owner_tools.sql | web: адмінка | visit_days і visit_visitors (власний лічильник відвідувань, хеш із сіллю дня, без IP), owner_alerts (сповіщення власнику, дедуплікація), users.is_demo і companies.is_demo (демо-компанія), перебудова company_jobs_live без демо |
+| 0021_owner_tools.sql | web: адмінка | visit_days і visit_visitors (власний лічильник відвідувань, хеш із сіллю дня, без IP), owner_alerts (сповіщення власнику, дедуплікація), users.is_demo і companies.is_demo (демо-компанія), перебудова company_jobs_live без демо |
 База вакансій `nextcryptojob-jobs` має свою нумерацію в `db/jobs` (0001_schema.sql: jobs_cache, companies,
 sources, source_state, getro_collections, scan_runs; 0002_salary_estimate.sql: jobs_cache.salary_est_*; 0003_job_boards.sql:
 job_boards, реєстр дошок екосистем і фондів; засів `db/jobs/seed/seed.sql`, дошки `db/jobs/seed/update-2026-09-14-boards.sql`),

@@ -95,8 +95,8 @@ const USER_COLUMNS = "u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.sala
 /**
  * Люди, яким добірка може піти. Колонку digest_paused додає 0011 (доріжка web), і її може
  * ще не бути: тоді запит без неї, а в журналі видно, що пауза поки не діє. Демо-кандидатів
- * (users.is_demo, 0020, доріжка web: синтетичні люди для перевірки CRM) не беремо ніколи;
- * поки 0020 не накочено, колонки немає, і демо теж немає.
+ * (users.is_demo, 0021, доріжка web: синтетичні люди для перевірки CRM) не беремо ніколи;
+ * поки 0021 не накочено, колонки немає, і демо теж немає.
  */
 export async function loadDigestUsers(db: Db, log: (l: string) => void, onlyUserId?: string): Promise<DigestUserRow[]> {
   const byId = onlyUserId ? " AND u.id = ?" : "";
@@ -116,7 +116,7 @@ export async function loadDigestUsers(db: Db, log: (l: string) => void, onlyUser
   }
 }
 
-/** До 0020: без умови на is_demo (демо-рядків тоді ще немає). */
+/** До 0021: без умови на is_demo (демо-рядків тоді ще немає). */
 async function loadDigestUsersWithoutDemo(db: Db, log: (l: string) => void, base: string, byId: string,
                                           params: string[]): Promise<DigestUserRow[]> {
   try {

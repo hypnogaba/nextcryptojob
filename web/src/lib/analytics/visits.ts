@@ -1,7 +1,7 @@
 import { sqlTime } from "@/lib/time";
 
 /**
- * Власний лічильник відвідувань (таблиці visit_days і visit_visitors, 0020). Без сторонніх
+ * Власний лічильник відвідувань (таблиці visit_days і visit_visitors, 0021). Без сторонніх
  * скриптів і без кук: перегляд рахує /api/me, який шапка сайту й так питає на кожному переході
  * (components/site-state.tsx), тож окремого запиту немає.
  *
@@ -184,7 +184,9 @@ export async function loadVisits(db: D1Database, now: Date = new Date(), days = 
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const from = utcDay(new Date(today - (days - 1) * DAY_MS));
   const to = utcDay(new Date(today));
-  const empty: VisitReport = { days: [], totals: { views: 0, uniques: 0, signups: 0 }, pages: [], referrers: [], available: false, error: null };
+  const unavailable = (error: string): VisitReport => ({
+    days: [], totals: { views: 0, uniques: 0, signups: 0 }, pages: [], referrers: [], available: false, error,
+  });
   let res: D1Result<Record<string, unknown>>[];
   try {
     res = await db.batch<Record<string, unknown>>([
@@ -212,7 +214,7 @@ export async function loadVisits(db: D1Database, now: Date = new Date(), days = 
     ]);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/no such (table|column)/i.test(message)) return { ...empty, error: "Visit counting starts after migration 0020 is applied." };
+    if (/no such (table|column)/i.test(message)) return unavailable("Visit counting starts after migration 0021 is applied.");
     throw error;
   }
   const num = (v: unknown) => Number(v) || 0;

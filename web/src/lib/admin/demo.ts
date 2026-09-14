@@ -19,7 +19,7 @@ import { sqlTime } from "@/lib/time";
  * демо-компанія, реальна компанія й гість x402 не бачать ніколи; демо-компанія не бачить
  * реальних людей. Добірки: у демо немає пошти й Telegram, digest_paused = 1, а engine ще й
  * відкидає is_demo = 1 (engine/src/digest/schedule.ts). Аналітика й лічильники адмінки демо
- * не рахують. Вакансії демо-компанії не стають живими (подання company_jobs_live, 0020).
+ * не рахують. Вакансії демо-компанії не стають живими (подання company_jobs_live, 0021).
  *
  * Контакти демо не можуть належати живим людям: нік Telegram з дефісом (у Telegram дефіс
  * заборонено), X з дефісом (у X теж), GitHub з двома дефісами поспіль (GitHub їх не дозволяє).
@@ -96,8 +96,9 @@ export function demoBreakdown(role: Role, score: number, cover: number, formula:
     if (missing) gaps[source === "x" ? "x" : "github"] = "timeout";
   });
   const bonus: Record<string, { max: number; value: number }> = {};
-  recipe.bonus.forEach(([source, max], i) => {
-    bonus[source] = { max, value: i === 0 ? Math.round(score / 2) : 0 };
+  recipe.bonus.forEach(([source, max]) => {
+    // Гаманців у демо немає: ончейн-додаток 0; сайт чи GitHub дає половину балу.
+    bonus[source] = { max, value: source === "onchain" ? 0 : Math.round(score / 2) };
   });
   return { formula, core, bonus, cover, level: null, reason: null, gaps };
 }

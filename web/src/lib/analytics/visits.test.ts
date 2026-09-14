@@ -98,7 +98,7 @@ describe("recordVisit and loadVisits", () => {
   it("says when the counter tables are missing instead of failing the admin page", async () => {
     const { d1 } = crmDb();
     const broken = { ...d1, batch: async () => { throw new Error("D1_ERROR: no such table: visit_days"); } } as unknown as D1Database;
-    expect(await loadVisits(broken)).toMatchObject({ available: false, error: expect.stringContaining("0020") });
+    expect(await loadVisits(broken)).toMatchObject({ available: false, error: expect.stringContaining("0021") });
   });
 
   it("conversion is sign-ups per unique visitor", () => {

@@ -116,7 +116,7 @@ export async function loadWeeklyReport(db: D1Database, jobs: JobsDb | null, now:
       .first<Row>();
     visitors = { views: num(v?.views), uniques: num(v?.uniques), prevUniques: num(v?.prev) };
   } catch {
-    // Лічильника ще немає (0020): звіт без відвідувань.
+    // Лічильника ще немає (0021): звіт без відвідувань.
   }
 
   let scans: WeeklyReport["problems"]["scans"] = null;
@@ -208,7 +208,7 @@ export function weeklyLines(r: WeeklyReport): { title: string; sections: { head:
               `${r.visitors.views} page views`,
               `Visit to sign-up: ${pct(u.newUsers, r.visitors.uniques)}`,
             ]
-          : ["Not counted yet (migration 0020)."],
+          : ["Not counted yet (migration 0021)."],
       },
       {
         head: "People",

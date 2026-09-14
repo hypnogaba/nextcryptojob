@@ -48,7 +48,7 @@ const RULES: Rule[] = [
     where: "started_at < ?",
     params: (now) => [sqlTime(new Date(now.getTime() - CRON_RUNS_KEEP_DAYS * DAY_MS))],
   },
-  // Хеші відвідувачів (0020) потрібні лише сьогодні: день, старший за вчора, стираємо, і
+  // Хеші відвідувачів (0021) потрібні лише сьогодні: день, старший за вчора, стираємо, і
   // тоді відвідувача не впізнати навіть із секретом (lib/analytics/visits.ts).
   {
     table: "visit_visitors",
@@ -56,7 +56,7 @@ const RULES: Rule[] = [
     where: "day < ?",
     params: (now) => [new Date(now.getTime() - DAY_MS).toISOString().slice(0, 10)],
   },
-  // Сповіщення власнику (0020): 60 днів вистачає і для дедуплікації, і для списку в адмінці.
+  // Сповіщення власнику (0021): 60 днів вистачає і для дедуплікації, і для списку в адмінці.
   { table: "owner_alerts", key: "key", where: "sent_at < ?", params: (now) => [sqlTime(new Date(now.getTime() - 60 * DAY_MS))] },
 ];
 

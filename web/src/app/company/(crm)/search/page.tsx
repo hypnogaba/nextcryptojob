@@ -129,6 +129,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
   const filtersForm = (
     <form
+      // Новий вибір ролі вгорі (перехід без перезавантаження) має показати свої значення у фільтрах.
+      key={query}
       id="filters"
       method="get"
       action="/company/search"

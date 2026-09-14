@@ -75,4 +75,4 @@ WHERE j.status = 'open'
   AND a.access = 'subscription'
   AND c.is_demo = 0;
 
-INSERT OR IGNORE INTO schema_migrations(name) VALUES ('0020_owner_tools');
+INSERT OR IGNORE INTO schema_migrations(name) VALUES ('0021_owner_tools');

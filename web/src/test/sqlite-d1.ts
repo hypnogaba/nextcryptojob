@@ -44,7 +44,7 @@ export const APPLIED_AFTER_CRM = [
   // Доріжка web (головна адмінки): cron_runs, app_settings, індекс digest_runs(created_at). Ще НЕ накочено.
   "0019_admin_home.sql",
   // Доріжка web (інструменти власника): відвідування, сповіщення власнику, демо. Ще НЕ накочено.
-  "0020_owner_tools.sql",
+  "0021_owner_tools.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

@@ -283,10 +283,76 @@ function Problems({ report, now }: { report: BoardsReport; now: number }) {
   );
 }
 
+function BoardRow({ b }: { b: Board }) {
+  return (
+    <tr className={TR} data-board={b.slug} data-decision={b.decision}>
+      <td className={TD}>
+        {b.url ? (
+          <a href={b.url} target="_blank" rel={externalRel(b.url)} className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+            {b.label}
+          </a>
+        ) : (
+          <span className="font-semibold text-ink">{b.label}</span>
+        )}
+        <div className="text-xs text-ink-muted capitalize">{b.kind}</div>
+      </td>
+      <td className={`${TD} text-ink-muted`}>{PLATFORM[b.platform] ?? b.platform}</td>
+      <td className={TD}>
+        <span className={`inline-block rounded border px-1.5 py-0.5 text-xs font-semibold ${DECISION[b.decision].cls}`}>
+          {DECISION[b.decision].label}
+        </span>
+        {b.decision === "skip" && b.reason ? <div className="mt-1 max-w-56 text-xs text-ink-muted">{b.reason}</div> : null}
+      </td>
+      <td className={TD_NUM}>
+        {b.lastRun ? NUM.format(b.lastRun.companies) : b.listed !== null ? NUM.format(b.listed) : ""}
+        {b.lastRun ? (
+          <div className="text-xs text-ink-muted">{NUM.format(b.lastRun.withJobs)} hiring</div>
+        ) : b.listed !== null ? (
+          <div className="text-xs text-ink-muted">checked {b.checkedAt}</div>
+        ) : null}
+      </td>
+      <td className={`${TD} text-xs`}>
+        {b.lastRun?.error ? (
+          <span className="font-semibold text-danger">No answer: {b.lastRun.error}</span>
+        ) : b.lastRun ? (
+          <span className="text-ink-muted">
+            {NUM.format(b.lastRun.known)} already known, {NUM.format(b.lastRun.added)} new
+            {b.lastRun.hostedOnly ? `, ${NUM.format(b.lastRun.hostedOnly)} hire only on the board` : ""}
+          </span>
+        ) : (
+          <span className="text-ink-muted">{b.decision === "discover" ? "Not read yet" : ""}</span>
+        )}
+      </td>
+      <td className={TD_NUM}>
+        {NUM.format(b.added)}
+        {b.added > b.enabled ? <div className="text-xs text-ink-muted">{NUM.format(b.enabled)} enabled</div> : null}
+      </td>
+    </tr>
+  );
+}
+
+function BoardsHead() {
+  return (
+    <thead>
+      <tr>
+        <th scope="col" className={TH_TIGHT}>Board</th>
+        <th scope="col" className={TH_TIGHT}>Platform</th>
+        <th scope="col" className={TH_TIGHT}>Decision</th>
+        <th scope="col" className={`${TH_TIGHT} text-right`}>Companies found</th>
+        <th scope="col" className={TH_TIGHT}>Last discovery</th>
+        <th scope="col" className={`${TH_TIGHT} text-right`}>Employers added</th>
+      </tr>
+    </thead>
+  );
+}
+
 function Boards({ report, now }: { report: BoardsReport; now: number }) {
   const d = report.discovery;
   const discover = report.boards.filter((b) => b.decision === "discover");
   const added = report.boards.reduce((n, b) => n + b.added, 0);
+  // Пропущені дошки (Skip) згорнуто: їх багато, а причина довга; читаємо ті, що дають роботодавців.
+  const read = report.boards.filter((b) => b.decision !== "skip");
+  const skipped = report.boards.filter((b) => b.decision === "skip");
   return (
     <section id="boards" aria-labelledby="boards-title" className="mt-12 scroll-mt-6">
       <h2 id="boards-title" className="display text-[1.75rem] leading-none">
@@ -323,65 +389,33 @@ function Boards({ report, now }: { report: BoardsReport; now: number }) {
       </dl>
       <div className={`mt-5 ${BOARD}`}>
         <table className={`${TABLE} min-w-[820px]`} data-table="boards">
-          <thead>
-            <tr>
-              <th scope="col" className={TH_TIGHT}>Board</th>
-              <th scope="col" className={TH_TIGHT}>Platform</th>
-              <th scope="col" className={TH_TIGHT}>Decision</th>
-              <th scope="col" className={`${TH_TIGHT} text-right`}>Companies found</th>
-              <th scope="col" className={TH_TIGHT}>Last discovery</th>
-              <th scope="col" className={`${TH_TIGHT} text-right`}>Employers added</th>
-            </tr>
-          </thead>
+          <BoardsHead />
           <tbody>
-            {report.boards.map((b) => (
-              <tr key={b.slug} className={TR} data-board={b.slug} data-decision={b.decision}>
-                <td className={TD}>
-                  {b.url ? (
-                    <a href={b.url} target="_blank" rel={externalRel(b.url)} className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
-                      {b.label}
-                    </a>
-                  ) : (
-                    <span className="font-semibold text-ink">{b.label}</span>
-                  )}
-                  <div className="text-xs text-ink-muted capitalize">{b.kind}</div>
-                </td>
-                <td className={`${TD} text-ink-muted`}>{PLATFORM[b.platform] ?? b.platform}</td>
-                <td className={TD}>
-                  <span className={`inline-block rounded border px-1.5 py-0.5 text-xs font-semibold ${DECISION[b.decision].cls}`}>
-                    {DECISION[b.decision].label}
-                  </span>
-                  {b.decision === "skip" && b.reason ? <div className="mt-1 max-w-56 text-xs text-ink-muted">{b.reason}</div> : null}
-                </td>
-                <td className={TD_NUM}>
-                  {b.lastRun ? NUM.format(b.lastRun.companies) : b.listed !== null ? NUM.format(b.listed) : ""}
-                  {b.lastRun ? (
-                    <div className="text-xs text-ink-muted">{NUM.format(b.lastRun.withJobs)} hiring</div>
-                  ) : b.listed !== null ? (
-                    <div className="text-xs text-ink-muted">checked {b.checkedAt}</div>
-                  ) : null}
-                </td>
-                <td className={`${TD} text-xs`}>
-                  {b.lastRun?.error ? (
-                    <span className="font-semibold text-danger">No answer: {b.lastRun.error}</span>
-                  ) : b.lastRun ? (
-                    <span className="text-ink-muted">
-                      {NUM.format(b.lastRun.known)} already known, {NUM.format(b.lastRun.added)} new
-                      {b.lastRun.hostedOnly ? `, ${NUM.format(b.lastRun.hostedOnly)} hire only on the board` : ""}
-                    </span>
-                  ) : (
-                    <span className="text-ink-muted">{b.decision === "discover" ? "Not read yet" : ""}</span>
-                  )}
-                </td>
-                <td className={TD_NUM}>
-                  {NUM.format(b.added)}
-                  {b.added > b.enabled ? <div className="text-xs text-ink-muted">{NUM.format(b.enabled)} enabled</div> : null}
-                </td>
-              </tr>
+            {read.map((b) => (
+              <BoardRow key={b.slug} b={b} />
             ))}
           </tbody>
         </table>
       </div>
+      {skipped.length > 0 ? (
+        <details className="group mt-4" data-skipped-boards={skipped.length}>
+          <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-line-strong">
+            <span className="group-open:hidden">Show {NUM.format(skipped.length)} skipped boards</span>
+            <span className="hidden group-open:inline">Hide {NUM.format(skipped.length)} skipped boards</span>
+            <span className="font-normal text-ink-muted">not read, each with its reason</span>
+          </summary>
+          <div className={`mt-3 ${BOARD}`}>
+            <table className={`${TABLE} min-w-[820px]`} data-table="skipped-boards">
+              <BoardsHead />
+              <tbody>
+                {skipped.map((b) => (
+                  <BoardRow key={b.slug} b={b} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -415,6 +449,14 @@ export default async function AdminSourcesPage() {
         {report
           ? ` Updated ${ago(report.computedAt, now)}, recounted every ${CACHE_TTL_MS / 60_000} min.`
           : ""}
+      </p>
+      <p className="mt-3 flex flex-wrap gap-x-4 text-sm">
+        <a href="#problems" className="inline-flex min-h-11 items-center font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+          Problems{boards && boards.failing.length ? ` (${NUM.format(boards.failing.length)})` : ""}
+        </a>
+        <a href="#boards" className="inline-flex min-h-11 items-center font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+          Ecosystem and fund boards{boards ? ` (${NUM.format(boards.boards.length)})` : ""}
+        </a>
       </p>
       {failure !== null ? (
         <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">

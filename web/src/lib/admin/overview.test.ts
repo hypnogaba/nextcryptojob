@@ -168,7 +168,7 @@ describe("loadOverview", () => {
   });
 
   it("still loads without migration 0019 and says cron history is missing", async () => {
-    // Лише без 0019; 0020 (is_demo) від неї не залежить і накочена.
+    // Лише без 0019; 0021 (is_demo) від неї не залежить і накочена.
     const t = migratedD1(ALL_MIGRATIONS.filter((m) => !m.startsWith("0019")));
     const o = await loadOverview(t.d1, OVERVIEW_NOW);
     expect(o.cron.available).toBe(false);

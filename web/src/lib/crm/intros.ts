@@ -695,7 +695,7 @@ export interface CandidateIntroRow {
   telegram_id: string | null;
   telegram_username: string | null;
   email: string | null;
-  /** Демо-кандидат (users.is_demo, 0020): людини немає, сповіщати нікого. */
+  /** Демо-кандидат (users.is_demo, 0021): людини немає, сповіщати нікого. */
   is_demo: number;
 }
 

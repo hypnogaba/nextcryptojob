@@ -196,9 +196,9 @@ describe("runDigestDue", () => {
     expect(log.join("\n")).toMatch(/digest_paused missing/);
   });
 
-  it("демо-кандидат (users.is_demo = 1, 0020) добірки не отримує ніколи, навіть з робочим каналом і без паузи", async () => {
+  it("демо-кандидат (users.is_demo = 1, 0021) добірки не отримує ніколи, навіть з робочим каналом і без паузи", async () => {
     db.close();
-    db = new SqliteD1([...DIGEST_MIGRATIONS, "0020_owner_tools.sql"]);
+    db = new SqliteD1([...DIGEST_MIGRATIONS, "0021_owner_tools.sql"]);
     addUser("real");
     addUser("demo", { channel: "telegram", telegram: "888", email: "d@example.com" });
     db.exec("UPDATE users SET is_demo = 1 WHERE id = 'demo'");
@@ -208,7 +208,7 @@ describe("runDigestDue", () => {
     expect(runs().map((r) => r.user_id)).toEqual(["real"]);
   });
 
-  it("база без 0020: колонки is_demo ще немає, добірка йде як раніше", async () => {
+  it("база без 0021: колонки is_demo ще немає, добірка йде як раніше", async () => {
     addUser("u1");
     addJobs(5);
     expect((await runDigestDue(deps())).sent).toBe(1);

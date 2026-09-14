@@ -182,7 +182,7 @@ function times(now: Date): Times {
   };
 }
 
-/** Кандидати: один прохід по users і три підрахунки по малих індексах. Демо (is_demo, 0020) не рахуємо ніде. */
+/** Кандидати: один прохід по users і три підрахунки по малих індексах. Демо (is_demo, 0021) не рахуємо ніде. */
 export const CANDIDATES_SQL = `SELECT
   COUNT(*) AS total,
   COALESCE(SUM(u.created_at >= ?1), 0) AS today,
@@ -261,7 +261,7 @@ export const DIGEST_MISC_SQL = `SELECT
 
 /**
  * Компанії й CRM. Використання за 7 днів: діапазон індексом idx_usage_created.
- * Демо-компанії (is_demo, 0020) не рахуємо: список їхніх id іде частковим індексом.
+ * Демо-компанії (is_demo, 0021) не рахуємо: список їхніх id іде частковим індексом.
  */
 const DEMO_COMPANIES = "(SELECT id FROM companies WHERE is_demo = 1)";
 export const COMPANIES_SQL = `SELECT
