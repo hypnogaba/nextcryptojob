@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomToken, sha256Hex } from "@/lib/auth/hash";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
+import { resetCompanyProfiles } from "@/lib/jobs/companies";
 import { resetCrawlPool } from "@/lib/jobs/pool";
 import { crmDb, run } from "@/test/crm-fixtures";
 import { exec, harness, RedirectCalled, resetHarness } from "@/test/harness";
@@ -24,6 +25,7 @@ vi.mock("@/lib/jobs-db", async (importOriginal) => ({
 beforeEach(() => {
   resetHarness();
   resetCrawlPool();
+  resetCompanyProfiles();
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   const { raw, d1 } = crmDb();
   harness.raw = raw;
@@ -79,10 +81,15 @@ describe("/jobs", () => {
       ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
     await signIn("ada");
     const html = await render();
-    const w3 = new RegExp(`<a [^>]*href="${apply.replace(/[?]/g, "\\?").replace(/&/g, "&amp;")}"[^>]*>`).exec(html)![0];
-    expect(w3).toContain('rel="noopener"');
-    expect(w3).toContain('target="_blank"');
-    expect(w3).not.toMatch(/nofollow|noreferrer|ugc|sponsored/);
+    // Назва й кнопка "Apply": обидві рівно на apply_url, follow, з реферером.
+    const links = [...html.matchAll(new RegExp(`<a [^>]*href="${apply.replace(/[?]/g, "\\?").replace(/&/g, "&amp;")}"[^>]*>`, "g"))].map((m) => m[0]);
+    expect(links).toHaveLength(2);
+    for (const w3 of links) {
+      expect(w3).toContain('rel="noopener"');
+      expect(w3).toContain('target="_blank"');
+      expect(w3).not.toMatch(/nofollow|noreferrer|ugc|sponsored/);
+    }
+    expect(html).toMatch(/>Apply<svg/);
     expect(html).toContain("via web3.career");
     expect(html.match(/via web3\.career/g)).toHaveLength(1);
     expect(html).toContain('href="https://jobs.example.com/gh" target="_blank" rel="noopener noreferrer nofollow"');
@@ -101,10 +108,10 @@ describe("/jobs", () => {
       ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
     await signIn("ada");
     const html = await render();
-    expect(html).toContain('<p class="text-xs text-ink-muted min-w-0 wrap-anywhere">est. $180k to $225k (web3.career estimate)</p>');
-    expect(html).toContain("Koinly · Remote</p>");
+    // Оцінка приглушеним пунктиром, окремо від зарплати (зарплата темним пунктом).
+    expect(html).toMatch(/<li class="[^"]*border-dashed[^"]*text-ink-muted[^"]*">est\. \$180k to \$225k \(web3\.career estimate\)<\/li>/);
     // Зарплата роботодавця є: оцінки не видно.
-    expect(html).toContain("Paying Labs · Remote · $120k to $150k");
+    expect(html).toMatch(/<li class="[^"]*bg-ink[^"]*">\$120k to \$150k<\/li>/);
     expect(html).not.toContain("$300k");
   });
 
@@ -162,11 +169,13 @@ describe("/jobs: Jobs for you now", () => {
   it("shows live matches for the signed-in person's brief only, right away", async () => {
     await signIn("ada");
     const ada = await render();
-    expect(ada).toContain("Jobs for you now");
+    expect(ada).toContain("Your best matches today");
     expect(ada).toContain("Solidity Engineer");
     expect(ada).toContain("Rust Engineer");
-    expect(ada).toContain("Lido · Remote · $120k to $150k");
-    expect(ada).toContain("Matches your Engineer role. Remote.");
+    expect(ada).toMatch(/<li class="[^"]*bg-ink[^"]*">\$120k to \$150k<\/li>/);
+    expect(ada).toContain("Why this fits you");
+    expect(ada).toContain("Matches your Engineer role.");
+    expect(ada).toContain("Remote, as you asked.");
     // Бобова роль і місто, яке ніхто не просив, у вибір Ади не йдуть.
     expect(ada).not.toContain("Crypto Trader");
     expect(ada).not.toContain("Backend Engineer");
@@ -185,7 +194,7 @@ describe("/jobs: Jobs for you now", () => {
       ('ada', 'nr:eng2', 'nextrole', 'dg_a', 1, 'failed', 'email', 'x')`);
     await signIn("ada");
     const html = await render();
-    const now = html.slice(html.indexOf("Jobs for you now"), html.indexOf("Sent to you"));
+    const now = html.slice(html.indexOf("Your best matches today"), html.indexOf("Sent to you"));
     expect(now).toContain("Solidity Engineer");
     expect(now).not.toContain("Rust Engineer");
   });
@@ -216,12 +225,57 @@ describe("/jobs: Jobs for you now", () => {
     expect(html).toContain("Your first jobs are coming.");
   });
 
-  it("offers the optional stand out steps after the brief, and not before or after them", async () => {
+  it("offers to improve the matches after the brief: edit the brief, or add X, wallets and GitHub", async () => {
+    await signIn("ada");
+    // Анкету ще не пройдено: покращувати нічого.
+    expect(await render()).not.toContain("Improve your matches");
     exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('ada', 'scoring', 1, 'v1')");
     exec("UPDATE users SET onboarding_step = 'x' WHERE id = 'ada'");
-    await signIn("ada");
-    expect(await render()).toContain("Stand out to companies");
+    const html = await render();
+    expect(html).toContain("Not quite right? Improve your matches");
+    expect(html).toMatch(/<a [^>]*href="\/welcome\?step=target"[^>]*>Describe the job you want<\/a>/);
+    expect(html).toContain('href="/welcome?step=roles"');
+    expect(html).toContain('href="/welcome?step=place"');
+    expect(html).toMatch(/<a [^>]*href="\/welcome\?step=x"[^>]*>Add X, wallets or GitHub<\/a>/);
     exec("UPDATE users SET onboarding_step = 'done' WHERE id = 'ada'");
-    expect(await render()).not.toContain("Stand out to companies");
+    const done = await render();
+    expect(done).toContain("Improve your matches");
+    expect(done).not.toContain("Add X, wallets or GitHub");
+    expect(done).toMatch(/<a [^>]*href="\/profile"[^>]*>See your score and sources<\/a>/);
+  });
+
+  it("says how many live jobs were checked and from how many sources, with real numbers", async () => {
+    await signIn("ada");
+    const html = await render();
+    // 4 живі вакансії в пулі, одне джерело (greenhouse:chainlabs); Аді підходять дві.
+    expect(html).toContain("We checked 4 live jobs from 1 source. <strong");
+    expect(html).toContain(">These 2 fit you best.</strong>");
+  });
+
+  it("every match has an Apply button straight to the job, with the link rules, and a letter or logo", async () => {
+    await signIn("ada");
+    const html = await render();
+    const apply = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>Apply<svg/g)].map((m) => m[0]);
+    expect(apply).toHaveLength(2);
+    for (const a of apply) {
+      expect(a).toContain('target="_blank"');
+      expect(a).toContain('rel="noopener noreferrer nofollow"');
+      expect(a).toMatch(/href="https:\/\/boards\.example\.com\/eng[12]"/);
+    }
+    // Без домену в реєстрі: літера компанії, без картинки.
+    expect(html).not.toContain("/api/logo/");
+  });
+
+  it("the registry's domain and about sentence show on the card", async () => {
+    const nr = jobsTestDb();
+    addPoolJob(nr.raw, { id: "eng1", title: "Solidity Engineer", company: "Aave", postedAt: hoursAgo(5), fetchedAt: hoursAgo(2) });
+    nr.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, about)
+                 VALUES ('aave', 'Aave', 'greenhouse', 'aave', 'manual', 'aave.com', 'Aave runs lending markets on many chains.')`);
+    jobsHolder.db = readOnlyJobsDb(nr.d1);
+    await signIn("ada");
+    const html = await render();
+    expect(html).toContain('src="/api/logo/aave.com"');
+    expect(html).toContain("About Aave.</span> Aave runs lending markets on many chains.");
+    expect(html).toContain("aave.com");
   });
 });

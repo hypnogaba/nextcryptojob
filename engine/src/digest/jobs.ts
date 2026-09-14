@@ -6,39 +6,76 @@
 // зі сканування», а не компанії: це збережені значення (CHECK у db/migrations/0006_digest.sql і
 // контракт листа), тож лишаються з часів, коли вакансії читались з бази NextRole (до 14.09.2026).
 import type { Db } from "../pipeline/db.js";
+import { ATS_PROVIDERS } from "../jobs/types.js";
 import { companyKey, isNonCryptoCompany } from "./clean.js";
 import type { JobsDb } from "./jobs-db.js";
-import { annualRange, type DigestJob, formatSalary, isRemoteLocation, type JobSalary } from "./match.js";
+import { annualRange, type DigestJob, formatSalary, isFresh, isRemoteLocation, type JobSalary } from "./match.js";
 import { parseRoles, titleRoles } from "./roles.js";
 
+// Правило «жива вакансія» (14.09.2026, однакове для сканера, добірки, сайту й адмінки):
+//   1. Вакансія є в ОСТАННЬОМУ вдалому скані свого джерела. Скан пише всім рядкам прогону той самий
+//      fetched_at, тож «в останньому скані» = fetched_at дорівнює найсвіжішому fetched_at джерела.
+//      Зникла з вдалого скану = не жива одразу. Джерело впало = його fetched_at не рухається, і
+//      вакансії лишаються живими, поки останній вдалий скан не старший за LIVE_WINDOW_DAYS.
+//   2. Вік від дати публікації (без неї від first_seen_at, коли скан побачив її вперше):
+//      власна дошка роботодавця на ATS (Greenhouse, Lever, Ashby…) до ATS_WINDOW_DAYS: поки вакансія
+//      є у фіді роботодавця, вона відкрита; дошки й агрегатори (web3.career, JobStash, remote3,
+//      speedrun) до POSTED_WINDOW_DAYS: оголошення на дошці може бути застарілим.
+
 /**
- * Скільки днів тому скан мав бачити вакансію на дошці. Скан щодня (і у вихідні) оновлює
- * fetched_at у кожної побаченої; хто випав з вікна, той знятий з дошки. Три доби: запас на
- * два пропущені скани. Старіше за 30 днів прибирає jobs-prune.
+ * Запас для джерела, що не прочиталось: скільки днів після його останнього вдалого скану вакансії
+ * ще живі. Скан щодня (і у вихідні); три доби = два пропущені скани. Старіше за 30 днів прибирає jobs-prune.
  */
 export const LIVE_WINDOW_DAYS = 3;
-/** Свіжість за датою публікації (match.ts FRESH_DAYS); тут лише щоб не тягнути старе з бази. */
+/** Дошки й агрегатори: опубліковано не давніше (match.ts FRESH_DAYS, та сама межа «свіжої»). */
 export const POSTED_WINDOW_DAYS = 30;
+/** Власна дошка роботодавця на ATS: відкрита, поки є у фіді, але не давніше за стільки днів. */
+export const ATS_WINDOW_DAYS = 90;
 const DAY_MS = 86_400_000;
+
+/** Джерело = власний фід роботодавця: `<ats>:<slug>` з відомим провайдером ATS (engine/src/jobs/types.ts). */
+export function isEmployerFeed(source: string | null | undefined): boolean {
+  const i = (source ?? "").indexOf(":");
+  return i > 0 && (ATS_PROVIDERS as readonly string[]).includes(source!.slice(0, i));
+}
+
+/** Скільки днів від публікації (чи першої появи) вакансія цього джерела може бути живою. */
+export function openWindowDays(source: string | null | undefined): number {
+  return isEmployerFeed(source) ? ATS_WINDOW_DAYS : POSTED_WINDOW_DAYS;
+}
+
+/** isEmployerFeed мовою SQL: провайдер до першої ':' у списку ATS. Решта (board:, aggregator:, невідоме) = дошка. */
+export const EMPLOYER_FEED_SQL = `substr(source, 1, instr(source, ':') - 1) IN (${ATS_PROVIDERS.map((p) => `'${p}'`).join(", ")})`;
 
 /**
  * Один запит на прогін. Індексу на fetched_at у jobs_cache немає навмисно (db/jobs/0001_schema.sql:
  * скан щодня переписує fetched_at у кожного рядка, і індекс з ним подвоював би записи, а записи D1
  * в тисячу разів дорожчі за читання), тож це повний прохід по таблиці: база лише крипто, тисячі
- * рядків, і читається лише в години, коли комусь пора добірка. Тег web3 сканер ставить кожному
- * рядку; умова лишається запобіжником. Час сканер пише як ISO з 'T' і 'Z', тому межі теж ISO.
+ * рядків, і читається лише в години, коли комусь пора добірка. Найсвіжіший fetched_at джерела
+ * рахується вікном (PARTITION BY source) до решти умов: інакше рядок, що випав з вікна віку, лишив би
+ * джерело з давнішим «останнім сканом». Тег web3 сканер ставить кожному рядку; умова лишається
+ * запобіжником. Час сканер пише як ISO з 'T' і 'Z', тому межі теж ISO. Параметри: poolParams.
  */
 export const POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
-       salary_currency, tags, posted_at, fetched_at, country, dedupe_key, salary_est_min, salary_est_max, salary_est_currency,
-       source
-  FROM jobs_cache
- WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
+       salary_currency, tags, posted_at, fetched_at, first_seen_at, country, dedupe_key, salary_est_min, salary_est_max,
+       salary_est_currency, source
+  FROM (SELECT *, MAX(fetched_at) OVER (PARTITION BY source) AS source_seen_at FROM jobs_cache WHERE fetched_at >= ?)
+ WHERE fetched_at = source_seen_at AND tags LIKE '%"web3"%'
+   AND COALESCE(posted_at, first_seen_at) >= CASE WHEN ${EMPLOYER_FEED_SQL} THEN ? ELSE ? END`;
+
+/** Параметри POOL_SQL: [запас для джерела, що не прочиталось; межа віку ATS; межа віку дошки]. */
+export function poolParams(now: Date): [string, string, string] {
+  const ago = (days: number) => new Date(now.getTime() - days * DAY_MS).toISOString();
+  return [ago(LIVE_WINDOW_DAYS), ago(ATS_WINDOW_DAYS), ago(POSTED_WINDOW_DAYS)];
+}
 
 /** Рядок POOL_SQL. */
 export type PoolRow = {
   id: string; url: string; company: string; company_key: string; title: string; location: string | null;
   remote: number; salary_min: number | null; salary_max: number | null; salary_currency: string | null;
   tags: string; posted_at: string | null; fetched_at: string; country: string | null; dedupe_key: string | null;
+  /** Коли скан побачив вакансію вперше: вік вакансії без дати публікації. */
+  first_seen_at?: string | null;
   /** Оцінка дошки (db/jobs/0002), не вилка: у DigestJob не йде, лише в текст добірки (salaryEstimateOf). */
   salary_est_min?: number | null; salary_est_max?: number | null; salary_est_currency?: string | null;
   /** jobs_cache.source: чия оцінка (підпис «web3.career estimate») і рядок джерел на головній сайту. */
@@ -76,6 +113,8 @@ export type PoolStats = {
   fetched: number;
   /** Скільки лишилось після чистки (роль, не-крипто компанія чи назва). */
   kept: number;
+  /** З них ще відкриті, але опубліковані давніше за FRESH_DAYS (добірка бере їх лише добрати до п'яти). */
+  older: number;
   dropped: { tag: number; company: number; title: number };
   rowsRead: number | null;
   d1Ms: number | null;
@@ -96,7 +135,8 @@ export function crawlJob(r: PoolRow): { job: DigestJob } | { drop: "tag" | "comp
       companyKey: r.company_key || companyKey(r.company), url: r.url, location: r.location?.trim() || null,
       placeText: r.location, remote: isRemoteLocation(r.remote === 1, r.location), country: r.country,
       salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, null),
-      postedAt: parseDbTime(r.posted_at), seenAt: parseDbTime(r.fetched_at), dedupeKey: r.dedupe_key, roles,
+      postedAt: parseDbTime(r.posted_at), firstSeenAt: parseDbTime(r.first_seen_at), seenAt: parseDbTime(r.fetched_at),
+      dedupeKey: r.dedupe_key, roles,
     },
   };
 }
@@ -126,9 +166,7 @@ export function estimateText(e: SalaryEstimate | null | undefined): string | nul
 }
 
 export async function loadCrawlPool(jobs: JobsDb, now: Date): Promise<{ jobs: DigestJob[]; stats: PoolStats; estimates: Map<string, SalaryEstimate> }> {
-  const live = new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString();
-  const posted = new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString();
-  const res = await jobs.select<PoolRow>(POOL_SQL, [live, posted]);
+  const res = await jobs.select<PoolRow>(POOL_SQL, poolParams(now));
   const out: DigestJob[] = [];
   const estimates = new Map<string, SalaryEstimate>();
   const dropped = { tag: 0, company: 0, title: 0 };
@@ -141,7 +179,7 @@ export async function loadCrawlPool(jobs: JobsDb, now: Date): Promise<{ jobs: Di
   }
   return {
     jobs: out, estimates,
-    stats: { fetched: res.rows.length, kept: out.length, dropped, rowsRead: res.meta.rowsRead, d1Ms: res.meta.durationMs, wallMs: res.wallMs },
+    stats: { fetched: res.rows.length, kept: out.length, older: out.filter((j) => !isFresh(j, now)).length, dropped, rowsRead: res.meta.rowsRead, d1Ms: res.meta.durationMs, wallMs: res.wallMs },
   };
 }
 
@@ -165,7 +203,7 @@ export function companyJob(r: CompanyRow, siteUrl: string): DigestJob | null {
     ref: `co:${r.id}`, source: "company", id: r.id, title: r.title.trim(), company: r.company_name.trim(),
     companyKey: companyKey(r.company_name), url: companyJobUrl(siteUrl, r.id), location, placeText: city, remote,
     country: r.country, salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, r.salary_period),
-    postedAt: parseDbTime(r.published_at), seenAt: null, dedupeKey: null, roles,
+    postedAt: parseDbTime(r.published_at), firstSeenAt: null, seenAt: null, dedupeKey: null, roles,
   };
 }
 
@@ -188,4 +226,43 @@ export async function loadCompanyPool(db: Db, log: (l: string) => void, siteUrl:
     throw e;
   }
   return rows.map((r) => companyJob(r, siteUrl)).filter((j): j is DigestJob => j !== null);
+}
+
+// ---------------- про компанію (db/jobs/0005) ----------------
+
+/** Що знаємо про роботодавця: домен для значка, одне-два речення про те, що він робить. */
+export type CompanyProfile = { domain: string | null; about: string | null };
+
+/** Рядки реєстру, де хоч щось заповнено (пише engine jobs-about). Кілька сотень рядків, один запит на прогін. */
+export const PROFILES_SQL = "SELECT name, domain, about FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL";
+
+/** Домен, яким можна вірити як імені хоста: лише літери, цифри, дефіс і крапки. */
+export const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+
+/**
+ * Профілі за ключем компанії (companyKey назви, як jobs_cache.company_key вакансій з ATS цієї компанії).
+ * Два рядки з одним ключем: перший непорожній домен і перший непорожній опис. Без 0005 (стовпців
+ * немає) або коли база не відповіла: порожньо, і добірка йде без речень про компанію.
+ */
+export async function loadCompanyProfiles(jobs: JobsDb, log: (l: string) => void): Promise<Map<string, CompanyProfile>> {
+  const out = new Map<string, CompanyProfile>();
+  let rows: Array<{ name: string; domain: string | null; about: string | null }>;
+  try {
+    rows = (await jobs.select<{ name: string; domain: string | null; about: string | null }>(PROFILES_SQL)).rows;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log(/no such column/i.test(msg)
+      ? "digest: companies.domain/about missing (db/jobs 0005 not applied), jobs go without the company sentence"
+      : `digest: company profiles not read (${msg.slice(0, 120)})`);
+    return out;
+  }
+  for (const r of rows) {
+    const key = companyKey(r.name);
+    if (!key) continue;
+    const domain = r.domain && DOMAIN_RE.test(r.domain.trim().toLowerCase()) ? r.domain.trim().toLowerCase() : null;
+    const about = r.about?.replace(/\s+/g, " ").trim() || null;
+    const cur = out.get(key);
+    out.set(key, { domain: cur?.domain ?? domain, about: cur?.about ?? about });
+  }
+  return out;
 }

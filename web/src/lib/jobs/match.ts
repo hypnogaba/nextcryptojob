@@ -50,7 +50,9 @@ export interface DigestJob {
   salary: JobSalary | null;
   /** Мс від епохи; null, якщо джерело дату не дало. */
   postedAt: number | null;
-  /** Коли джерело бачило вакансію востаннє (мс); запасна дата свіжості. */
+  /** Коли скан побачив вакансію вперше (мс): вік вакансії без дати публікації. null для вакансій компаній. */
+  firstSeenAt: number | null;
+  /** Коли джерело бачило вакансію востаннє (мс); остання запасна дата свіжості. */
   seenAt: number | null;
   /** Ключ змісту зі сканування (компанія + роль): та сама вакансія під новою адресою. */
   dedupeKey: string | null;
@@ -266,40 +268,60 @@ export function formatSalary(s: JobSalary | null): string | null {
 /** Місто, як його ввела людина, без країни після коми. */
 const cityLabel = (city: string): string => (city.split(",")[0] ?? city).trim();
 
+/** Від якої дати вакансії вік: публікація, без неї перша поява в скані, без неї остання. */
+export function ageFrom(job: DigestJob): number | null {
+  return job.postedAt ?? job.firstSeenAt ?? job.seenAt;
+}
+
+/** Чи вакансія свіжа: опублікована (без дати: вперше побачена) за FRESH_DAYS. */
+export function isFresh(job: DigestJob, now: Date): boolean {
+  const at = ageFrom(job);
+  if (at === null) return false;
+  return now.getTime() - at <= FRESH_DAYS * DAY_MS;
+}
+
+/**
+ * «Still open, posted 6 weeks ago.» для вакансії зі сканування, давнішої за FRESH_DAYS; null для
+ * свіжої і для вакансії компанії. Без дати публікації кажемо, коли її вперше побачили, а не «posted».
+ */
+export function stillOpenNote(job: DigestJob, now: Date): string | null {
+  if (job.source !== "nextrole" || isFresh(job, now)) return null;
+  const at = ageFrom(job);
+  if (at === null) return null;
+  // Давніша за FRESH_DAYS = щонайменше 4 тижні, тож завжди «weeks».
+  const weeks = Math.floor((now.getTime() - at) / (7 * DAY_MS));
+  return `Still open, ${job.postedAt !== null ? "posted" : "first seen"} ${weeks} weeks ago.`;
+}
+
 /**
  * Рядок «чому ця вакансія», англійською, детерміновано, без довгого тире:
  * "Matches your Security auditor role. Remote. Salary listed: $120k to $150k."
+ * З `now` давніша за FRESH_DAYS вакансія ще й каже, що вона досі відкрита і коли опублікована.
  */
-export function whyLine(pick: Omit<DigestPick, "why">, profile: DigestProfile): string {
+export function whyLine(pick: Omit<DigestPick, "why">, profile: DigestProfile, now?: Date): string {
   const parts = [pick.keyword ? `Matches "${pick.keyword}" from your own words.` : `Matches your ${ROLE_NAMES[pick.role]} role.`];
   parts.push(pick.place === "city" && profile.city ? `In ${cityLabel(profile.city)}.` : "Remote.");
   const salary = formatSalary(pick.job.salary);
   if (salary) parts.push(pick.meetsSalary ? `Salary listed: ${salary}, meets your minimum.` : `Salary listed: ${salary}.`);
+  const open = now ? stillOpenNote(pick.job, now) : null;
+  if (open) parts.push(open);
   return parts.join(" ").replace(/\u2014/g, "-");
 }
 
 // ---------------- відбір ----------------
 
-type Candidate = Omit<DigestPick, "why"> & { key: [number, number, number, string] };
+type Candidate = Omit<DigestPick, "why"> & { fresh: boolean; key: [number, number, number, number, string] };
 
-/** Менший ключ = вище: місто перед віддаленим (коли обидва), зарплата, свіжість, ref. */
-function rankKey(place: "remote" | "city", meets: boolean | null, job: DigestJob, bothModes: boolean): Candidate["key"] {
+/** Менший ключ = вище: свіжа перед давнішою, місто перед віддаленим (коли обидва), зарплата, свіжість, ref. */
+function rankKey(place: "remote" | "city", meets: boolean | null, job: DigestJob, bothModes: boolean, fresh: boolean): Candidate["key"] {
   const placeTier = bothModes && place === "remote" ? 1 : 0;
   // Дотягує 0, невідомо 1, нижче 2: відсутня зарплата ніколи не нижча за відому погану.
   const salaryTier = meets === true ? 0 : meets === null ? 1 : 2;
-  const fresh = job.postedAt ?? job.seenAt ?? 0;
-  return [placeTier, salaryTier, -fresh, job.ref];
+  return [fresh ? 0 : 1, placeTier, salaryTier, -(ageFrom(job) ?? 0), job.ref];
 }
 
 function compareKeys(a: Candidate["key"], b: Candidate["key"]): number {
-  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || (a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0);
-}
-
-/** Чи вакансія свіжа: дата публікації за FRESH_DAYS; без дати рахується дата, коли її бачили. */
-export function isFresh(job: DigestJob, now: Date): boolean {
-  const at = job.postedAt ?? job.seenAt;
-  if (at === null) return false;
-  return now.getTime() - at <= FRESH_DAYS * DAY_MS;
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || (a[4] < b[4] ? -1 : a[4] > b[4] ? 1 : 0);
 }
 
 function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: SelectOptions, excludedDedupe: ReadonlySet<string>,
@@ -319,10 +341,11 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
     if (!role) continue;
     const place = placeMatch(job, effectiveModes, profile.city);
     if (!place) continue;
-    // Вакансії компаній живуть, поки відкриті й оплачені (company_jobs_live); 30 днів лише для вакансій зі сканування.
-    if (job.source === "nextrole" && !isFresh(job, o.now)) continue;
+    // Живе все, що в пулі (jobs.ts); 30 днів лише ділять вакансії зі сканування на свіжі й давніші.
+    // Вакансії компаній живуть, поки відкриті й оплачені (company_jobs_live), і завжди свіжі.
+    const fresh = job.source !== "nextrole" || isFresh(job, o.now);
     const meets = meetsFloor(job, profile.salaryMin, profile.salaryCurrency);
-    out.push({ job, role, ...(keyword ? { keyword } : {}), place, meetsSalary: meets, key: rankKey(place, meets, job, both) });
+    out.push({ job, role, ...(keyword ? { keyword } : {}), place, meetsSalary: meets, fresh, key: rankKey(place, meets, job, both, fresh) });
   }
   return out.sort((a, b) => compareKeys(a.key, b.key));
 }
@@ -330,7 +353,9 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
 /**
  * До `limit` вакансій. Вакансія компанії (не більше однієї) іде першою; решту
  * набираємо по колу за ролями людини (найкраща для першої ролі, для другої, …),
- * щоб друга роль не зникала за першою; показ у порядку ключа ранжування.
+ * щоб друга роль не зникала за першою: спершу лише зі свіжих (FRESH_DAYS), і лише
+ * якщо їх не вистачило до `limit`, так само з ще відкритих давніших. Показ у порядку
+ * ключа ранжування: давніші завжди після свіжих.
  */
 export function selectJobs(
   pool: { crawl: readonly DigestJob[]; company: readonly DigestJob[] },
@@ -368,21 +393,25 @@ export function selectJobs(
 
   const crawl = candidatesFor(pool.crawl, profile, o, excludedDedupe, phrases).filter((c) => c.job.source === "nextrole");
   // Черга на кожну роль людини і ще одна для збігів за словами своєї ролі.
-  const queues = [...profile.roles.map((r) => crawl.filter((c) => !c.keyword && c.role === r)), crawl.filter((c) => c.keyword)];
-  const cursor = queues.map(() => 0);
-  while (chosen.length < limit) {
-    let progressed = false;
-    for (let q = 0; q < queues.length && chosen.length < limit; q++) {
-      const queue = queues[q]!;
-      while (cursor[q]! < queue.length) {
-        const c = queue[cursor[q]!]!;
-        cursor[q]!++;
-        if (take(c)) { progressed = true; break; }
+  const byRoles = (list: Candidate[]): void => {
+    const queues = [...profile.roles.map((r) => list.filter((c) => !c.keyword && c.role === r)), list.filter((c) => c.keyword)];
+    const cursor = queues.map(() => 0);
+    while (chosen.length < limit) {
+      let progressed = false;
+      for (let q = 0; q < queues.length && chosen.length < limit; q++) {
+        const queue = queues[q]!;
+        while (cursor[q]! < queue.length) {
+          const c = queue[cursor[q]!]!;
+          cursor[q]!++;
+          if (take(c)) { progressed = true; break; }
+        }
       }
+      if (!progressed) break;
     }
-    if (!progressed) break;
-  }
+  };
+  byRoles(crawl.filter((c) => c.fresh));
+  byRoles(crawl.filter((c) => !c.fresh));
 
   const rest = chosen.slice(companyPicks.length).sort((a, b) => compareKeys(a.key, b.key));
-  return [...companyPicks, ...rest].map(({ key: _key, ...pick }) => ({ ...pick, why: whyLine(pick, profile) }));
+  return [...companyPicks, ...rest].map(({ key: _key, fresh: _fresh, ...pick }) => ({ ...pick, why: whyLine(pick, profile, o.now) }));
 }

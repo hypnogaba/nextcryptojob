@@ -47,7 +47,25 @@ export interface NewCompany { slug: string; name: string; provider: AtsProvider;
  * завершення лише таблиця (1). companies: таблиця й UNIQUE(ats_provider, ats_slug) (2).
  * Живий прогін бере справжнє число з meta.rows_written.
  */
-export const WRITE_COST = { job: 1, runStart: 2, runFinish: 1, sourceState: 1, company: 2 } as const;
+export const WRITE_COST = { job: 1, runStart: 2, runFinish: 1, sourceState: 1, company: 2, companyProfile: 1 } as const;
+
+/** Рядок реєстру для jobs-about (db/jobs/0005): що про компанію вже відомо. */
+export interface CompanyProfileRow {
+  slug: string; name: string; ats_provider: string; ats_slug: string; enabled: number; note: string | null;
+  domain: string | null; about: string | null;
+}
+
+/** Що дописати компанії: лише відсутнє, null = нічого нового. */
+export interface CompanyProfileFill { slug: string; domain: string | null; about: string | null }
+
+/**
+ * Лише порожнє поле отримує значення: заповнене (руками чи раніше) не переписується, null не пишеться.
+ * Рядок без жодної зміни умовою WHERE не зачіпається, тож повторний прогін нічого не пише.
+ */
+export const FILL_PROFILE_SQL = `UPDATE companies SET domain = COALESCE(domain, ?), about = COALESCE(about, ?)
+ WHERE slug = ? AND ((domain IS NULL AND ? IS NOT NULL) OR (about IS NULL AND ? IS NOT NULL))`;
+
+const isMissingColumn = (e: unknown): boolean => e instanceof Error && /no such column/i.test(e.message);
 
 /** Рядків в одній інструкції вставки вакансій: 20 стовпців × 5 = 100 параметрів (D1 дозволяє 100). */
 export const JOBS_PER_STATEMENT = 5;
@@ -236,6 +254,38 @@ export class JobsStore {
   async knownSlugs(): Promise<Set<string>> {
     if (!this.backend) return new Set(this.seed!.companies.map((c) => c.slug));
     return new Set((await this.backend.query<{ slug: string }>("SELECT slug FROM companies")).map((r) => r.slug));
+  }
+
+  /**
+   * Реєстр для jobs-about з доменом і описом. null: стовпців ще немає (db/jobs/0005 не накочено).
+   * Без бази (насухо) засів: домену й опису там немає, лише примітки.
+   */
+  async loadCompanyProfiles(): Promise<CompanyProfileRow[] | null> {
+    if (!this.backend) {
+      return this.seed!.companies.map((c) => ({ slug: c.slug, name: c.name, ats_provider: c.ats_provider, ats_slug: c.ats_slug,
+        enabled: c.enabled, note: c.note, domain: null, about: null }));
+    }
+    try {
+      return await this.backend.query<CompanyProfileRow>(
+        "SELECT slug, name, ats_provider, ats_slug, enabled, note, domain, about FROM companies ORDER BY slug");
+    } catch (e) {
+      if (isMissingColumn(e)) return null;
+      throw e;
+    }
+  }
+
+  /** Адреси вакансій з ATS роботодавців (не дошки й агрегатори): звідти видно власний сайт компанії. */
+  async atsJobUrls(): Promise<Array<{ source: string; url: string }>> {
+    if (!this.backend) return [];
+    return this.backend.query<{ source: string; url: string }>(
+      "SELECT source, url FROM jobs_cache WHERE source NOT LIKE 'board:%' AND source NOT LIKE 'aggregator:%'");
+  }
+
+  /** Дописати домен і опис (FILL_PROFILE_SQL): одна інструкція на компанію, без індексу 1 рядок. */
+  async fillCompanyProfiles(fills: readonly CompanyProfileFill[]): Promise<void> {
+    const real = fills.filter((f) => f.domain !== null || f.about !== null);
+    await this.write(real.map((f) => ({ sql: FILL_PROFILE_SQL, params: [f.domain, f.about, f.slug, f.domain, f.about] })),
+      real.length * WRITE_COST.companyProfile);
   }
 
   /** Скільки вакансій скан не бачив з `before` (ISO). */

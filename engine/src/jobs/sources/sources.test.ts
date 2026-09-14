@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { __resetLimiters } from "../../limits.js";
-import { prepare } from "../prepare.js";
+import { prepare, WINDOWS } from "../prepare.js";
 import type { BoardSource } from "../types.js";
 import * as ats from "./ats.js";
 import { fetchBoard, parseJobPostings, parseNextPayload, parseRssBoard, splitBoardTitle } from "./boards.js";
@@ -105,7 +105,7 @@ describe("ATS: форми відповідей, зняті 14.09", () => {
       ["Anti-Fraud Engineer (NYC / MIA)", null, false, "teamtailor:crossmint.na"],
       ["Engineering Manager - Identity, Compliance & Risk (NYC / MIA)", "New York, Miami", false, "teamtailor:crossmint.na"],
     ]);
-    const { rows } = prepare(jobs, 30, new Date("2026-09-14T08:00:00Z"));
+    const { rows } = prepare(jobs, WINDOWS, new Date("2026-09-14T08:00:00Z"));
     expect(rows.map((r) => [r.title.slice(0, 16), r.salaryMin, r.salaryMax, r.salaryCurrency]).sort()).toEqual([
       ["Anti-Fraud Engin", 185_000, 220_000, "USD"], ["Engineering Mana", 250_000, 280_000, "USD"],
     ]);

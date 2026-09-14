@@ -6,12 +6,13 @@ import {
   type DigestPick,
   type DigestProfile,
   formatSalary,
-  isFresh,
   placeMatch,
   selectJobs,
   workModes,
 } from "./match";
 import { estimateText } from "@/lib/digest/format";
+import { type CompanyProfiles, companyProfiles, profileFor } from "./companies";
+import { type FitContext, fitNote, fitReasons } from "./fit";
 import { crawlPool, type PoolJob } from "./pool";
 import { parseRoles, ROLE_NAMES } from "./roles";
 
@@ -40,6 +41,14 @@ export type ShownJob = {
   postedBy: string | null;
   /** «est. $Xk to $Yk (web3.career estimate)»: оцінка дошки, лише без зарплати; у підборі не бере участі. */
   salaryEstimate: string | null;
+  /** Одна-три причини, чому вакансія підходить (fit.ts); `why` це вони (і примітка) одним рядком. */
+  reasons: string[];
+  /** «Still open, posted 6 weeks ago.» для вакансії, давнішої за 30 днів; інакше null. */
+  note: string | null;
+  /** Про компанію з реєстру (db/jobs 0005), лише для вакансій зі сканування. */
+  about: string | null;
+  /** Домен компанії для значка (/api/logo); null, якщо не знаємо. */
+  domain: string | null;
 };
 
 /** Колонки users, з яких складається анкета добірки. */
@@ -79,26 +88,38 @@ export function digestJobOf(job: PoolJob): DigestJob {
     country: job.country,
     salary: job.salary,
     postedAt: job.postedMs,
+    firstSeenAt: job.firstSeenMs,
     seenAt: job.seenMs,
     dedupeKey: job.dedupeKey,
     roles: job.roles,
   };
 }
 
-function shown(pick: DigestPick, estimates: ReadonlyMap<string, string>): ShownJob {
+/** Нічого, крім анкети: причини лише з ролі, місця й зарплати. */
+export const NO_FIT: FitContext = { words: null, scores: {} };
+
+function shown(pick: DigestPick, estimates: ReadonlyMap<string, string>, profile: DigestProfile, fit: FitContext,
+               profiles: CompanyProfiles, now: Date): ShownJob {
   const j = pick.job;
   const company = j.source === "company";
   const salary = formatSalary(j.salary);
+  const reasons = fitReasons(pick, profile, fit);
+  const note = fitNote(pick, now);
+  const known = company ? null : profileFor(profiles, j.companyKey, j.company);
   return {
     ref: j.ref,
     title: j.title,
     company: j.company,
     location: j.location,
     salary,
-    why: pick.why,
+    why: [...reasons, ...(note ? [note] : [])].join(" "),
     url: j.url,
     postedBy: company ? j.company : null,
     salaryEstimate: salary ? null : (estimates.get(j.ref) ?? null),
+    reasons,
+    note,
+    about: known?.about ?? null,
+    domain: known?.domain ?? null,
   };
 }
 
@@ -119,8 +140,11 @@ export type NoMatchReason =
   /** Усе, що підходить, уже надіслано. */
   | { kind: "all_sent" };
 
+/** Скільки переглянуто: живі вакансії пулу, з якого вибирав підбір, і з кількох джерел (як на головній). */
+export type Checked = { jobs: number; sources: number };
+
 export type InstantMatches =
-  | { state: "ok"; jobs: ShownJob[] }
+  | { state: "ok"; jobs: ShownJob[]; checked: Checked }
   | { state: "none"; reason: NoMatchReason }
   /** Базу вакансій зараз не прочитали (і попереднього пулу в ізоляті немає). */
   | { state: "unavailable" };
@@ -131,10 +155,13 @@ export function roleList(roles: readonly RoleKey[]): string {
   return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
 }
 
-/** Причина порожнього вибору. Ті самі правила, що в selectJobs, лише без обмеження «п'ять». */
-export function noMatchReason(pool: Pool, profile: DigestProfile, now: Date): NoMatchReason {
+/**
+ * Причина порожнього вибору. Ті самі правила, що в selectJobs, лише без обмеження «п'ять». Живе все,
+ * що в пулі (pool.ts вже відібрав відкриті вакансії); свіжість лише впорядковує вибір.
+ */
+export function noMatchReason(pool: Pool, profile: DigestProfile): NoMatchReason {
   if (profile.roles.length === 0) return { kind: "no_roles" };
-  const live = [...pool.company, ...pool.crawl.filter((j) => isFresh(j, now))];
+  const live = [...pool.company, ...pool.crawl];
   const forRoles = live.filter((j) => profile.roles.some((r) => j.roles.includes(r)));
   if (forRoles.length === 0) return { kind: "no_role_jobs", roles: profile.roles };
   const modes = workModes(profile.remoteMode);
@@ -167,10 +194,14 @@ async function companyJobs(db: D1Database, env: { SITE_URL?: string }, label: st
  * До п'яти вакансій для анкети людини, як їх вибрала б добірка зараз. `exclude` = sent.job_ref
  * цієї людини: надіслане раніше не повторюється, як і в добірці.
  */
-export async function instantMatches(deps: InstantDeps, brief: BriefRow, exclude: ReadonlySet<string>): Promise<InstantMatches> {
+export async function instantMatches(
+  deps: InstantDeps, brief: BriefRow, exclude: ReadonlySet<string>, fit: FitContext = NO_FIT,
+): Promise<InstantMatches> {
   const profile = profileOf(brief);
   if (profile.roles.length === 0) return { state: "none", reason: { kind: "no_roles" } };
-  const [company, crawl] = await Promise.all([companyJobs(deps.db, deps.env, "jobs now"), crawlPool(deps.jobs, deps.now)]);
+  const [company, crawl, profiles] = await Promise.all([
+    companyJobs(deps.db, deps.env, "jobs now"), crawlPool(deps.jobs, deps.now), companyProfiles(deps.jobs),
+  ]);
   if (!crawl) return { state: "unavailable" };
   const pool: Pool = { crawl: crawl.map(digestJobOf), company: company.map(digestJobOf) };
   const picks = selectJobs(pool, profile, { now: deps.now, exclude });
@@ -180,12 +211,24 @@ export async function instantMatches(deps: InstantDeps, brief: BriefRow, exclude
     const text = estimateText(j.salaryEstimate);
     if (text) estimates.set(digestJobOf(j).ref, text);
   }
-  if (picks.length > 0) return { state: "ok", jobs: picks.map((p) => shown(p, estimates)) };
-  return { state: "none", reason: noMatchReason(pool, profile, deps.now) };
+  if (picks.length > 0) {
+    return { state: "ok", jobs: picks.map((p) => shown(p, estimates, profile, fit, profiles, deps.now)), checked: checkedIn(crawl, company) };
+  }
+  return { state: "none", reason: noMatchReason(pool, profile) };
 }
 
 // ---------------------------------------------------------------------------
 // Кількість
+
+/**
+ * «We checked N live jobs from M sources»: увесь пул, з якого вибирав підбір (скановані після сита плюс
+ * живі вакансії компаній), і різні джерела так само, як на головній (homeStats: jobs_cache.source
+ * сканованих і, якщо є, вакансії компаній у нас одним джерелом). Тест звіряє з homeStats.
+ */
+export function checkedIn(crawl: readonly PoolJob[], company: readonly PoolJob[]): Checked {
+  const origins = new Set(crawl.map((j) => j.origin).filter((o): o is string => Boolean(o)));
+  return { jobs: crawl.length + company.length, sources: origins.size + (company.length > 0 ? 1 : 0) };
+}
 
 /**
  * Кількість без прикрашання: до 100 точно, далі вниз до десятка чи сотні з «+»

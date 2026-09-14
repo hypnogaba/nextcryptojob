@@ -8,8 +8,13 @@ import { titleRoles } from "./roles";
 /**
  * Вакансії зі сканування (база вакансій NextCryptoJob, binding JOBS_DB; пише її сканер engine,
  * engine/src/jobs) для публічного search_jobs (lib/crm/public-jobs.ts): той самий пул, що бере
- * добірка engine (engine/src/digest/jobs.ts): ті самі вікна свіжості, той самий SQL з тегом web3,
- * ті самі сита компанії й назви. Тест parity.test.ts звіряє константи й SQL з engine.
+ * добірка engine (engine/src/digest/jobs.ts): те саме правило «жива вакансія», той самий SQL з
+ * тегом web3, ті самі сита компанії й назви. Тест parity.test.ts звіряє константи й SQL з engine.
+ *
+ * Жива вакансія (engine/src/digest/jobs.ts, там докладно): є в останньому вдалому скані свого
+ * джерела (джерело впало: ще LIVE_WINDOW_DAYS від його останнього вдалого скану), і не старша від
+ * публікації (без дати: від першої появи в скані) за ATS_WINDOW_DAYS для власного фіду роботодавця
+ * на ATS або за POSTED_WINDOW_DAYS для дошки чи агрегатора.
  *
  * Межа читань. Індексу на fetched_at у jobs_cache немає навмисно (db/jobs/0001_schema.sql: записи
  * D1 у тисячу разів дорожчі за читання, а скан щодня переписує fetched_at), тож кожен запит пулу
@@ -24,13 +29,38 @@ import { titleRoles } from "./roles";
  * застарілий (краще вчорашні вакансії, ніж жодної); якщо його немає, лише вакансії компаній.
  */
 
+const DAY_MS = 86_400_000;
+
 export const LIVE_WINDOW_DAYS = 3;
 export const POSTED_WINDOW_DAYS = 30;
+export const ATS_WINDOW_DAYS = 90;
+/** Провайдери ATS, чиї дошки сканер читає як власні фіди роботодавців (engine/src/jobs/types.ts ATS_PROVIDERS). */
+export const ATS_PROVIDERS = [
+  "greenhouse", "lever", "lever_eu", "ashby", "workable", "smartrecruiters", "recruitee", "teamtailor",
+  "breezy", "bamboohr", "rippling", "personio",
+] as const;
+
+/** Джерело = власний фід роботодавця: `<ats>:<slug>` з відомим провайдером (як isEmployerFeed в engine). */
+export function isEmployerFeed(source: string | null | undefined): boolean {
+  const i = (source ?? "").indexOf(":");
+  return i > 0 && (ATS_PROVIDERS as readonly string[]).includes(source!.slice(0, i));
+}
+
+/** isEmployerFeed мовою SQL (як EMPLOYER_FEED_SQL в engine, тест звіряє). */
+export const EMPLOYER_FEED_SQL = `substr(source, 1, instr(source, ':') - 1) IN (${ATS_PROVIDERS.map((p) => `'${p}'`).join(", ")})`;
+
 export const POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
-       salary_currency, tags, posted_at, fetched_at, country, dedupe_key, salary_est_min, salary_est_max, salary_est_currency,
-       source
-  FROM jobs_cache
- WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
+       salary_currency, tags, posted_at, fetched_at, first_seen_at, country, dedupe_key, salary_est_min, salary_est_max,
+       salary_est_currency, source
+  FROM (SELECT *, MAX(fetched_at) OVER (PARTITION BY source) AS source_seen_at FROM jobs_cache WHERE fetched_at >= ?)
+ WHERE fetched_at = source_seen_at AND tags LIKE '%"web3"%'
+   AND COALESCE(posted_at, first_seen_at) >= CASE WHEN ${EMPLOYER_FEED_SQL} THEN ? ELSE ? END`;
+
+/** Параметри POOL_SQL, як poolParams в engine: [запас для джерела, що не прочиталось; межа віку ATS; межа віку дошки]. */
+export function poolParams(now: Date): [string, string, string] {
+  const ago = (days: number) => new Date(now.getTime() - days * DAY_MS).toISOString();
+  return [ago(LIVE_WINDOW_DAYS), ago(ATS_WINDOW_DAYS), ago(POSTED_WINDOW_DAYS)];
+}
 
 /**
  * Запит пулу на сайті: той самий, що в engine (POOL_SQL, тест звіряє). Стовпець source дає рядок
@@ -38,13 +68,15 @@ export const POOL_SQL = `SELECT id, url, company, company_key, title, location, 
  */
 export const POOL_READ_SQL = POOL_SQL;
 
-/** Скільки рядків пул бере найбільше (скан насухо 14.09: ~1 600 живих крипто-вакансій). */
+/**
+ * Скільки рядків пул бере найбільше. Скан насухо 14.09: ~1 600 живих крипто-вакансій з вікном 30 днів
+ * для всіх; з 90 днями для фідів ATS пул більшає (docs/STATUS.md), але до межі далеко.
+ */
 export const POOL_ROW_CAP = 10_000;
 /** Як довго ізолят тримає пул у пам'яті. Скан оновлює базу раз на добу. */
 export const POOL_TTL_MS = 10 * 60_000;
 /** Після невдалого читання базу вакансій не питаємо стільки часу. */
 export const FAILURE_BACKOFF_MS = 60_000;
-const DAY_MS = 86_400_000;
 
 export interface PublicSalary {
   min: number | null;
@@ -79,8 +111,10 @@ export interface PoolJob {
   location: string | null;
   /** Країна національної дошки; такі вакансії добірка не бере у «віддалено». Крипто-джерела лишають null. */
   country: string | null;
-  /** Коли скан бачив вакансію востаннє (мс); запасна дата свіжості в добірці. */
+  /** Коли скан бачив вакансію востаннє (мс); остання запасна дата свіжості в добірці. */
   seenMs: number | null;
+  /** Коли скан побачив вакансію вперше (мс): вік вакансії без дати публікації. null для вакансій компаній. */
+  firstSeenMs: number | null;
   /** Ключ змісту: та сама вакансія під новою адресою. */
   dedupeKey: string | null;
   /** jobs_cache.source (дошка, з якої скан узяв вакансію); null для вакансій компаній. */
@@ -109,6 +143,7 @@ type PoolRow = {
   tags: string;
   posted_at: string | null;
   fetched_at: string;
+  first_seen_at?: string | null;
   country: string | null;
   dedupe_key: string | null;
   source?: string | null;
@@ -207,6 +242,7 @@ export function crawlJob(r: PoolRow): PoolJob | null {
     location: location ?? (remote ? "Remote" : null),
     country: r.country,
     seenMs: parseDbTime(r.fetched_at),
+    firstSeenMs: parseDbTime(r.first_seen_at),
     dedupeKey: r.dedupe_key,
     origin: r.source ?? null,
     salaryEstimate: salaryEstimateOf(r),
@@ -223,13 +259,11 @@ export function resetCrawlPool(): void {
 }
 
 async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<PoolJob[] | null> {
-  const live = new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString();
-  const posted = new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString();
   const started = Date.now();
   let rows: PoolRow[];
   try {
     // Найсвіжіше бачені першими: якщо межа спрацює, відріжуться ті, кого скан бачив давніше.
-    rows = await jobs.all<PoolRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, live, posted, cap);
+    rows = await jobs.all<PoolRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, ...poolParams(now), cap);
   } catch (e) {
     console.warn(`search_jobs: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
     return null;

@@ -1,12 +1,13 @@
 import { loadCompanyJobs } from "@/lib/crm/public-jobs";
 import { cleanText, estimateText } from "@/lib/digest/format";
+import type { RoleKey } from "@/lib/card/roles";
 import type { JobsDb } from "@/lib/jobs-db";
 import { externalJobLink } from "./link";
 import { formatSalary } from "./match";
 import { FAILURE_BACKOFF_MS, crawlPool, POOL_TTL_MS, type PoolJob } from "./pool";
 
 /**
- * Табло головної: лічильники й стрічка вакансій із зарплатою.
+ * Табло головної: лічильники, приклад щоденного листа і стрічка вакансій із зарплатою.
  *
  * Жодного власного читання бази: усе рахується в пам'яті з того самого пулу, що бере
  * search_jobs і «Jobs for you now» (pool.ts, пам'ять ізолята POOL_TTL_MS), плюс
@@ -17,17 +18,25 @@ import { FAILURE_BACKOFF_MS, crawlPool, POOL_TTL_MS, type PoolJob } from "./pool
  */
 
 const DAY_MS = 86_400_000;
-/** «New this week»: опубліковані за стільки днів. Без дати публікації вакансія новою не рахується. */
+/**
+ * «New this week»: опубліковані за стільки днів; без дати публікації вперше побачені сканом за
+ * стільки днів (вакансії компаній без дати новими не рахуються). Не за правилом «жива»: стара, але
+ * ще відкрита вакансія не нова.
+ */
 export const NEW_WINDOW_DAYS = 7;
 /** Скільки вакансій бере стрічка. */
 export const TICKER_SIZE = 20;
 /** Менше цього стрічка не рухається: коротка доріжка не заповнить широкий екран без дірки. */
 export const TICKER_MIN_TO_SCROLL = 8;
+/** Скільки вакансій у прикладі щоденного листа на головній: стільки, скільки шле добірка. */
+export const TODAY_SIZE = 5;
+/** Для кого приклад: найчисленніша роль, віддалено. */
+export const TODAY_ROLE: RoleKey = "engineer";
 
 export type HomeStats = {
-  /** Живих вакансій у пулі (зі сканування після сита + компаній). */
+  /** Живих вакансій у пулі (зі сканування після сита + компаній): правило «жива вакансія», pool.ts. */
   live: number;
-  /** Опубліковані за NEW_WINDOW_DAYS днів. */
+  /** Опубліковані (без дати: вперше побачені) за NEW_WINDOW_DAYS днів. */
   newThisWeek: number;
   /** Різних компаній (ключ компанії, як у правилі добірки «одна на компанію»). */
   companies: number;
@@ -58,11 +67,17 @@ export type TickerJob = {
   via: string | null;
 };
 
-export type HomeBoard =
-  | { available: true; stats: HomeStats; ticker: TickerJob[] }
-  | { available: false; stats: null; ticker: [] };
+/**
+ * Приклад щоденного листа: TODAY_SIZE живих вакансій. `role` задано, коли всі вони для
+ * TODAY_ROLE і віддалені (так і підписуємо); null, коли таких забракло і взято вакансії різних ролей.
+ */
+export type TodaysJobs = { role: RoleKey | null; jobs: TickerJob[] };
 
-const UNAVAILABLE: HomeBoard = { available: false, stats: null, ticker: [] };
+export type HomeBoard =
+  | { available: true; stats: HomeStats; today: TodaysJobs; ticker: TickerJob[] }
+  | { available: false; stats: null; today: null; ticker: [] };
+
+const UNAVAILABLE: HomeBoard = { available: false, stats: null, today: null, ticker: [] };
 
 // ---------------------------------------------------------------------------
 // Лічильники
@@ -78,7 +93,10 @@ export function homeStats(crawl: readonly PoolJob[], company: readonly PoolJob[]
   }
   return {
     live: all.length,
-    newThisWeek: all.filter((j) => j.postedMs !== null && j.postedMs >= since && j.postedMs <= t).length,
+    newThisWeek: all.filter((j) => {
+      const at = j.postedMs ?? j.firstSeenMs;
+      return at !== null && at >= since && at <= t;
+    }).length,
     companies: new Set(all.map((j) => j.companyKey)).size,
     withSalary: all.filter((j) => formatSalary(j.salary) !== null).length,
     sources: origins.size + (company.length > 0 ? 1 : 0),
@@ -113,17 +131,17 @@ export function tickerHref(job: PoolJob): TickerLink | null {
   return { href: link.href, external: true, rel: link.rel, via: link.via };
 }
 
+type Cand = { job: PoolJob; salary: string; estimate: boolean; link: TickerLink };
+
 /**
- * До `size` вакансій із зарплатою для стрічки, одна на компанію, по черзі з різних ролей
- * (у кожній ролі найсвіжіші першими), щоб стрічка не була самими інженерами.
- * Не беремо: без зарплати чи без валюти («150k» без валюти нічого не каже), з кривим чи
- * не http(s) посиланням, з національних дощок (country: назви мовою країни).
- * Вакансія лише з оцінкою дошки (web3.career) іде в чергу своєї ролі ПІСЛЯ всіх із зарплатою
- * роботодавця і показується підписом «est. … (web3.career estimate)»: так роль без жодної вилки
- * (Community, Creator) не зникає зі стрічки, а оцінка ніколи не випереджає справжню зарплату.
+ * Вакансії, які можна показати на головній, у порядку показу. Не беремо: без зарплати чи без
+ * валюти («150k» без валюти нічого не каже), з кривим чи не http(s) посиланням, з національних
+ * дощок (country: назви мовою країни). Вакансія лише з оцінкою дошки (web3.career) іде після всіх
+ * із зарплатою роботодавця і показується підписом «est. … (web3.career estimate)».
+ * Порядок: зарплата роботодавця перед оцінкою; новіші за датою публікації спершу; без дати після
+ * всіх датованих (відсутнє значення не випереджає справжнє), серед них за першою появою в скані; далі за jobId.
  */
-export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJob[] {
-  type Cand = { job: PoolJob; salary: string; estimate: boolean; link: TickerLink };
+function candidates(all: readonly PoolJob[], withEstimates: boolean): Cand[] {
   const cands: Cand[] = [];
   for (const job of all) {
     if (job.country || job.roles.length === 0) continue;
@@ -134,23 +152,47 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
       cands.push({ job, salary, estimate: false, link });
       continue;
     }
-    const est = !job.salary && job.salaryEstimate?.currency ? estimateText(job.salaryEstimate) : null;
+    const est = withEstimates && !job.salary && job.salaryEstimate?.currency ? estimateText(job.salaryEstimate) : null;
     if (est) cands.push({ job, salary: est, estimate: true, link });
   }
-  // Зарплата роботодавця перед оцінкою; новіші за датою публікації спершу; без дати після всіх
-  // датованих (відсутнє значення не випереджає справжнє), серед них за тим, коли скан бачив; далі за jobId.
-  const at = (j: PoolJob) => j.postedMs ?? j.seenMs ?? 0;
-  cands.sort(
+  const at = (j: PoolJob) => j.postedMs ?? j.firstSeenMs ?? j.seenMs ?? 0;
+  return cands.sort(
     (a, b) =>
       Number(a.estimate) - Number(b.estimate) ||
       Number(a.job.postedMs === null) - Number(b.job.postedMs === null) ||
       at(b.job) - at(a.job) ||
       (a.job.jobId < b.job.jobId ? -1 : a.job.jobId > b.job.jobId ? 1 : 0),
   );
+}
 
+/** Ключ вакансії на сторінці: co:<id> для вакансій компаній, nr:<id> для сканованих. */
+const refOf = (j: PoolJob) => (j.source === "company" ? `co:${j.jobId}` : `nr:${j.jobId.replace(/^nr_/, "")}`);
+
+function toTickerJob(c: Cand): TickerJob {
+  return {
+    ref: refOf(c.job),
+    title: cleanText(c.job.title, 70),
+    company: cleanText(c.job.company, 40),
+    place: c.job.location ? cleanText(c.job.location, 36) : null,
+    salary: c.salary,
+    estimate: c.estimate,
+    href: c.link.href,
+    external: c.link.external,
+    rel: c.link.rel,
+    via: c.link.via,
+  };
+}
+
+/**
+ * До `size` вакансій із зарплатою для стрічки, одна на компанію, по черзі з різних ролей
+ * (у кожній ролі найсвіжіші першими), щоб стрічка не була самими інженерами. Вакансія лише з
+ * оцінкою дошки йде в чергу своєї ролі після всіх із зарплатою роботодавця: так роль без жодної
+ * вилки (Community, Creator) не зникає зі стрічки, а оцінка ніколи не випереджає справжню зарплату.
+ */
+export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJob[] {
   // Черги за першою роллю вакансії, у порядку, в якому роль уперше трапилась (найсвіжіша першою).
   const queues = new Map<string, Cand[]>();
-  for (const c of cands) {
+  for (const c of candidates(all, true)) {
     const role = c.job.roles[0];
     const q = queues.get(role);
     if (q) q.push(c);
@@ -167,22 +209,35 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
       if (!c) continue;
       used.add(c.job.companyKey);
       took = true;
-      out.push({
-        ref: c.job.source === "company" ? `co:${c.job.jobId}` : `nr:${c.job.jobId.replace(/^nr_/, "")}`,
-        title: cleanText(c.job.title, 70),
-        company: cleanText(c.job.company, 40),
-        place: c.job.location ? cleanText(c.job.location, 36) : null,
-        salary: c.salary,
-        estimate: c.estimate,
-        href: c.link.href,
-        external: c.link.external,
-        rel: c.link.rel,
-        via: c.link.via,
-      });
+      out.push(toTickerJob(c));
       if (out.length >= size) break;
     }
   }
   return out;
+}
+
+/**
+ * Приклад щоденного листа: TODAY_SIZE найсвіжіших віддалених вакансій для TODAY_ROLE із зарплатою
+ * роботодавця (оцінку дошки сюди не беремо), одна на компанію. Якщо таких менше TODAY_SIZE,
+ * беремо перші TODAY_SIZE зі стрічки (різні ролі) і role: null, щоб підпис не обіцяв інженера.
+ */
+export function todaysJobs(all: readonly PoolJob[]): TodaysJobs {
+  const used = new Set<string>();
+  const jobs: TickerJob[] = [];
+  for (const c of candidates(all, false)) {
+    if (!c.job.roles.includes(TODAY_ROLE) || !c.job.workMode.includes("remote") || used.has(c.job.companyKey)) continue;
+    used.add(c.job.companyKey);
+    jobs.push(toTickerJob(c));
+    if (jobs.length === TODAY_SIZE) return { role: TODAY_ROLE, jobs };
+  }
+  return { role: null, jobs: tickerJobs(all, TODAY_SIZE) };
+}
+
+/** Приклад листа і стрічка без повторів: вакансії з прикладу в стрічку не йдуть. */
+export function homeLists(all: readonly PoolJob[]): { today: TodaysJobs; ticker: TickerJob[] } {
+  const today = todaysJobs(all);
+  const shown = new Set(today.jobs.map((j) => j.ref));
+  return { today, ticker: tickerJobs(all.filter((j) => !shown.has(refOf(j)))) };
 }
 
 // ---------------------------------------------------------------------------
@@ -215,7 +270,7 @@ export async function homeBoard(deps: {
       } catch (e) {
         console.warn(`home: company jobs read failed (${e instanceof Error ? e.name : "unknown"})`);
       }
-      value = { available: true, stats: homeStats(crawl, company, deps.now), ticker: tickerJobs([...company, ...crawl]) };
+      value = { available: true, stats: homeStats(crawl, company, deps.now), ...homeLists([...company, ...crawl]) };
     }
   } catch (e) {
     // Напр. немає прив'язки DB поза Worker: головна однаково відкривається.

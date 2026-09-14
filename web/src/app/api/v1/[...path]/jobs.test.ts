@@ -68,6 +68,9 @@ const OPEN = {
 };
 
 let nrSeq = 0;
+// Один час скану на весь файл, як у справжньому скані: «жива» лише вакансія з
+// останнього успішного скану свого джерела (fetched_at = найновіший у джерела).
+const SCAN_AT = iso(3_600_000);
 function crawlJob(o: {
   title: string;
   company?: string;
@@ -100,8 +103,8 @@ function crawlJob(o: {
     JSON.stringify(o.tags ?? ["web3"]),
     `${id}-d`,
     o.postedAt === undefined ? iso(2 * DAY) : o.postedAt,
-    o.fetchedAt ?? iso(3_600_000),
-    o.fetchedAt ?? iso(3_600_000),
+    o.fetchedAt ?? SCAN_AT,
+    o.fetchedAt ?? SCAN_AT,
   );
   return id;
 }

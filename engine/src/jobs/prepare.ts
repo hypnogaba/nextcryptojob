@@ -1,18 +1,28 @@
 // Перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.ts (prepare, officeOnly, richness),
-// з поправками під крипто-базу: лише крипто, список не-крипто компаній, вікно 30 днів, id з адреси.
+// з поправками під крипто-базу: лише крипто, список не-крипто компаній, вікно віку за родом джерела, id з адреси.
 import { companyKey, isNonCryptoCompany } from "../digest/clean.js";
+import { ATS_WINDOW_DAYS, isEmployerFeed, POSTED_WINDOW_DAYS } from "../digest/jobs.js";
 import { dedupeKey, jobId } from "./ids.js";
 import { extractSalary } from "./salary-text.js";
 import { jobTags } from "./tags.js";
 import type { JobRow, RawJob } from "./types.js";
 
 /**
- * Скільки днів від публікації вакансія ще йде в базу. Крипто-вакансії стоять відкритими місяцями:
- * на 23 публічних крипто-дошках 13.09 з 1 572 відкритих позицій 14 днів і новіші мали 14%, 30 днів
- * і новіші 27%. 30 днів це й вікно пулу (engine/src/digest/jobs.ts POSTED_WINDOW_DAYS): старіше
- * в базі нікому не показується, а запис коштує. Змінна JOBS_WINDOW_DAYS.
+ * Скільки днів від публікації вакансія ще йде в базу, за родом джерела. Ті самі межі, що в пулі
+ * (engine/src/digest/jobs.ts): старіше в базі нікому не показується, а запис коштує.
+ * - Власна дошка роботодавця на ATS: 90 днів (ATS_WINDOW_DAYS). Крипто-вакансії стоять відкритими
+ *   місяцями, і те, що вакансія досі у фіді роботодавця, і є доказ, що вона відкрита. 14.09 на
+ *   jobs.solana.com (Marketing/Ops/BD) 39 з 80 вакансій були в компаній, яких ми читаємо, досі
+ *   відкриті в їхньому ATS, але старші за 30 днів. Змінна JOBS_ATS_WINDOW_DAYS.
+ * - Дошки й агрегатори: 30 днів (POSTED_WINDOW_DAYS), бо оголошення на дошці може бути застарілим.
+ *   На 23 публічних крипто-дошках 13.09 з 1 572 відкритих позицій 30 днів і новіші мали 27%.
+ *   Змінна JOBS_WINDOW_DAYS.
  */
-export const WINDOW_DAYS = 30;
+export const WINDOW_DAYS = POSTED_WINDOW_DAYS;
+
+/** Межі віку для prepare: дошки й агрегатори (`board`) і власні фіди роботодавців на ATS (`ats`). */
+export interface Windows { board: number; ats: number }
+export const WINDOWS: Windows = { board: WINDOW_DAYS, ats: ATS_WINDOW_DAYS };
 
 const collapse = (v: string): string => v.replace(/\s+/g, " ").trim();
 
@@ -56,7 +66,7 @@ export interface Dropped {
   notCrypto: number;
   /** Компанія зі списку не-крипто (engine/src/digest/clean.ts). */
   company: number;
-  /** Старіша за вікно. */
+  /** Старіша за вікно свого роду джерела (Windows). */
   old: number;
   /** Без робочої адреси, назви чи компанії. */
   broken: number;
@@ -83,7 +93,7 @@ function estimate(e: RawJob["salaryEstimate"]): Pick<JobRow, "salaryEstMin" | "s
   return { salaryEstMin: min, salaryEstMax: max, salaryEstCurrency: e?.currency?.trim().toUpperCase() || null };
 }
 
-export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date): Prepared {
+export function prepare(jobs: readonly RawJob[], windows: Windows, now: Date): Prepared {
   const dropped: Dropped = { notCrypto: 0, company: 0, old: 0, broken: 0, duplicate: 0 };
   const nonCrypto: Record<string, number> = {};
   const seenKey = new Set<string>();
@@ -99,7 +109,7 @@ export function prepare(jobs: readonly RawJob[], windowDays: number, now: Date):
     if (!hasLiveUrl(url) || !title || !company) { dropped.broken++; continue; }
     const key = companyKey(company);
     if (isNonCryptoCompany(key, company)) { dropped.company++; nonCrypto[company] = (nonCrypto[company] ?? 0) + 1; continue; }
-    if (!isFresh(j.postedAt, windowDays, now)) { dropped.old++; continue; }
+    if (!isFresh(j.postedAt, isEmployerFeed(j.source) ? windows.ats : windows.board, now)) { dropped.old++; continue; }
     // Адреса йде в базу як є (web3.career: apply_url без жодної правки); id зі стійкого ключа, якщо він є.
     const id = jobId(j.idKey?.trim() || url);
     const dk = dedupeKey(company, title);

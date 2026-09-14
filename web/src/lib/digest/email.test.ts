@@ -406,4 +406,22 @@ describe("email content", () => {
     expect(String(sent[0].text)).toContain(`Pause daily jobs: ${url}`);
     expect(String(sent[0].html)).toContain(`href="${url.replace(/&/g, "&amp;")}"`);
   });
+
+  it("says how many live jobs were checked and what each company does, when engine sends them", async () => {
+    const p = payload({ pool_jobs: 1437 });
+    p.jobs[0] = { ...p.jobs[0], about: "Paying Labs builds <payment> rails." };
+    expect((await signedPost(p)).status).toBe(200);
+    const text = String(sent[0].text);
+    const html = String(sent[0].html);
+    expect(text).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
+    expect(text).toContain("Paying Labs builds <payment> rails.");
+    expect(html).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
+    expect(html).toContain("Paying Labs builds &lt;payment&gt; rails.");
+  });
+
+  it("an old engine without the new fields still gets the same email, without those lines", async () => {
+    expect((await signedPost(payload())).status).toBe(200);
+    expect(String(sent[0].text)).not.toContain("We checked");
+    expect(String(sent[0].text)).not.toContain("undefined");
+  });
 });

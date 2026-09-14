@@ -8,9 +8,12 @@ import {
   homeBoard,
   homeStats,
   resetHomeBoard,
+  homeLists,
   TICKER_SIZE,
+  TODAY_SIZE,
   tickerHref,
   tickerJobs,
+  todaysJobs,
   updatedAgo,
 } from "./home-board";
 import { resetCrawlPool, type PoolJob } from "./pool";
@@ -46,6 +49,7 @@ function job(p: Partial<PoolJob> = {}): PoolJob {
     location: "Remote",
     country: null,
     seenMs: T - 5 * H,
+    firstSeenMs: null,
     dedupeKey: null,
     origin: "greenhouse:a",
     salaryEstimate: null,
@@ -78,6 +82,17 @@ describe("counters", () => {
       // Вакансія компанії опублікована годину тому, скан бачив решту 5 годин тому.
       updatedMs: T - H,
     });
+  });
+
+  it("live counts every open job in the pool; new this week goes by posting date, else by first seen", () => {
+    const crawl = [
+      // Ще відкрита у фіді роботодавця, опублікована 60 днів тому: жива, але не нова.
+      job({ companyKey: "kraken", postedMs: T - 60 * 24 * H, firstSeenMs: T - 2 * 24 * H }),
+      // Без дати публікації: нова, якщо скан уперше побачив її цього тижня.
+      job({ companyKey: "rippling-co", postedMs: null, firstSeenMs: T - 3 * 24 * H }),
+      job({ companyKey: "bamboo-co", postedMs: null, firstSeenMs: T - 10 * 24 * H }),
+    ];
+    expect(homeStats(crawl, [], NOW)).toMatchObject({ live: 3, newThisWeek: 1 });
   });
 
   it("never take a time from the future as the last update", () => {
@@ -202,6 +217,41 @@ describe("ticker", () => {
   });
 });
 
+describe("today's 5 on the home page", () => {
+  const pay = usd(150_000, 190_000);
+  const engineers = (k: number, p: Partial<PoolJob> = {}) =>
+    Array.from({ length: k }, (_, i) => job({ title: `Engineer ${i}`, postedMs: T - (i + 1) * H, salary: pay, ...p }));
+
+  it("takes the 5 freshest remote engineer jobs with an employer salary, one per company", () => {
+    const all = [
+      ...engineers(6),
+      // Свіжіші, але не підходять: у місті, інша роль, лише оцінка дошки, та сама компанія.
+      job({ title: "City", workMode: ["city"], postedMs: T - 0.1 * H, salary: pay }),
+      job({ title: "Trader", roles: ["trader"], postedMs: T - 0.2 * H, salary: pay }),
+      job({ title: "Estimate", postedMs: T - 0.3 * H, salaryEstimate: { ...pay, by: "web3.career" } }),
+    ];
+    const today = todaysJobs(all);
+    expect(today.role).toBe("engineer");
+    expect(today.jobs.map((j) => j.title)).toEqual(["Engineer 0", "Engineer 1", "Engineer 2", "Engineer 3", "Engineer 4"]);
+    const same = todaysJobs([job({ companyKey: "aave", salary: pay, postedMs: T - H }), ...engineers(5, { companyKey: "aave" })]);
+    expect(same.role).toBeNull();
+  });
+
+  it("falls back to the ticker's mix of roles, without the engineer label, when fewer than 5 fit", () => {
+    const today = todaysJobs([...engineers(2), job({ title: "Trader", roles: ["trader"], salary: pay })]);
+    expect(today.role).toBeNull();
+    expect(today.jobs.map((j) => j.title)).toEqual(["Engineer 0", "Trader", "Engineer 1"]);
+  });
+
+  it("keeps the example jobs out of the ticker", () => {
+    const { today, ticker } = homeLists([...engineers(8), job({ title: "Trader", roles: ["trader"], salary: pay })]);
+    expect(today.jobs).toHaveLength(TODAY_SIZE);
+    const shown = new Set(today.jobs.map((j) => j.ref));
+    expect(ticker.some((j) => shown.has(j.ref))).toBe(false);
+    expect(ticker.map((j) => j.title)).toEqual(["Engineer 5", "Trader", "Engineer 6", "Engineer 7"]);
+  });
+});
+
 describe("the board on the home page", () => {
   let nr: TestDb;
   let ours: TestDb;
@@ -242,17 +292,21 @@ describe("the board on the home page", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("counts from the same pool as the digest and fills the ticker from it", async () => {
+  it("counts from the same pool as the digest and fills the example list from it", async () => {
     const b = await board();
     expect(b.available).toBe(true);
     if (!b.available) return;
     // Два скановані рядки пройшли сито («Head Chef» ні) + вакансія компанії.
     expect(b.stats).toMatchObject({ live: 3, newThisWeek: 2, companies: 3, withSalary: 2, sources: 3 });
+    // Віддалених інженерів менше п'яти: приклад бере зі стрічки різні ролі, без підпису «engineer».
     // Aave опублікована 20 год тому, Acme добу тому: свіжіша перша.
-    expect(b.ticker.map((j) => [j.title, j.href])).toEqual([
+    expect(b.today.role).toBeNull();
+    expect(b.today.jobs.map((j) => [j.title, j.href])).toEqual([
       ["Protocol Engineer", "https://boards.example.com/a"],
       ["Solidity Auditor", "/jobs/job_acme"],
     ]);
+    // Що вже в прикладі, стрічка не повторює.
+    expect(b.ticker).toEqual([]);
   });
 
   it("reads the jobs database at most once per 10 minutes", async () => {
@@ -264,7 +318,7 @@ describe("the board on the home page", () => {
   it("still answers when the jobs database fails: no numbers, no ticker, no error", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const broken = () => ({ all: async () => Promise.reject(new Error("D1_ERROR: overloaded")), first: async () => null });
-    expect(await board(broken)).toEqual({ available: false, stats: null, ticker: [] });
+    expect(await board(broken)).toEqual({ available: false, stats: null, today: null, ticker: [] });
   });
 
   it("still answers when the Worker has no jobs database binding", async () => {

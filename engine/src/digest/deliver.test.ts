@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { __resetLimiters } from "../limits.js";
 import {
-  deliverDigest, type DigestMessage, EMAIL_NOT_CONFIGURED, planChannel, SIGNATURE_HEADER, sendTelegram, telegramText,
+  deliverDigest, type DigestMessage, EMAIL_NOT_CONFIGURED, emailPayload, planChannel, SIGNATURE_HEADER, sendTelegram, telegramText,
   TELEGRAM_NOT_CONFIGURED,
 } from "./deliver.js";
 
@@ -134,11 +134,44 @@ describe("Telegram", () => {
     const long = { ...MESSAGE, jobs: Array.from({ length: 5 }, (_, i) => ({ ...MESSAGE.jobs[0]!, position: i + 1, why: "x".repeat(1500) })) };
     const text = telegramText(long, "https://nextcryptojob.xyz");
     expect(text.length).toBeLessThanOrEqual(4096);
-    expect(text).toContain("your account");
+    expect(text).toContain('<a href="https://nextcryptojob.xyz/settings">settings</a>');
+  });
+
+  it("says how many live jobs we checked, adds what the company does, and points to /jobs for earlier ones", () => {
+    const m: DigestMessage = {
+      ...MESSAGE, checked: 1437,
+      jobs: [{ ...MESSAGE.jobs[0]!, about: "Aave builds lending markets <on> Ethereum." }, MESSAGE.jobs[1]!],
+    };
+    const text = telegramText(m, "https://nextcryptojob.xyz");
+    expect(text).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
+    expect(text).toContain("\nAave builds lending markets &lt;on&gt; Ethereum.");
+    expect(text).toContain("Earlier jobs: send /jobs.");
+    expect(text).toContain('<a href="https://nextcryptojob.xyz/jobs">your jobs</a>');
+    // Без числа й без опису: рядків немає, а не порожні.
+    const plain = telegramText(MESSAGE, "https://nextcryptojob.xyz");
+    expect(plain).not.toContain("We checked");
+    expect(plain).not.toContain("undefined");
+  });
+
+  it("a web3.career job keeps its apply_url exactly and names web3.career", () => {
+    const apply = "https://web3.career/r/wczNxUTM__U4HFyv?ref=U4HFyv&utm_source=w3c";
+    const text = telegramText({ ...MESSAGE, jobs: [{ ...MESSAGE.jobs[0]!, url: apply }] }, "https://nextcryptojob.xyz");
+    expect(text).toContain(`href="${apply.replace(/&/g, "&amp;")}"`);
+    expect(text).toContain("via web3.career");
   });
 });
 
 describe("лист через сайт", () => {
+  it("тіло листа несе, скільки вакансій переглянуто, і речення про компанію; без них полів немає", () => {
+    const now = new Date("2026-09-12T07:05:00Z");
+    const rich = emailPayload({ ...MESSAGE, checked: 1437, jobs: [{ ...MESSAGE.jobs[0]!, about: "Acme builds rails." }] }, now);
+    expect(rich.pool_jobs).toBe(1437);
+    expect(rich.jobs[0]!.about).toBe("Acme builds rails.");
+    const plain = emailPayload(MESSAGE, now);
+    expect("pool_jobs" in plain).toBe(false);
+    expect(plain.jobs[0]!.about).toBeNull();
+  });
+
   it("підпис HMAC-SHA256 над сирим тілом у заголовку NCJ-Internal-Signature", async () => {
     const f = fakeFetch([new Response(null, { status: 200 })]);
     const now = new Date("2026-09-12T07:05:00Z");

@@ -1,4 +1,4 @@
-import { LIVE_WINDOW_DAYS, POSTED_WINDOW_DAYS, SCAN_TIME_UTC, STALE_AFTER_SCANS } from "@/lib/admin/job-sources";
+import { ATS_WINDOW_DAYS, LIVE_WINDOW_DAYS, POSTED_WINDOW_DAYS, SCAN_TIME_UTC, STALE_AFTER_SCANS } from "@/lib/admin/job-sources";
 import { adminEmails } from "@/lib/auth/admin";
 import { CODE_TTL_MINUTES, MIN_SECRET_LENGTH } from "@/lib/auth/email-code";
 import { SESSION_DAYS } from "@/lib/auth/session";
@@ -210,7 +210,8 @@ export function codeTables(): CodeTable[] {
         ["Session length", `${SESSION_DAYS} days`],
         ["Email code lifetime", `${CODE_TTL_MINUTES} min`],
         ["Digest", "Up to 5 jobs, hourly engine run at :05, at each person's hour"],
-        ["Live job window", `Seen by the scan in ${LIVE_WINDOW_DAYS} days, posted in ${POSTED_WINDOW_DAYS} days`],
+        ["Live job window", `In the latest scan of its source (${LIVE_WINDOW_DAYS} days if the source fails); posted in ` +
+          `${ATS_WINDOW_DAYS} days on an employer ATS, ${POSTED_WINDOW_DAYS} days on a board`],
         ["Job scanner", `Daily at ${SCAN_TIME_UTC} (engine jobs-scan, jobs DB nextcryptojob-jobs)`],
         ["Stale source", `Not in the last ${STALE_AFTER_SCANS} scans`],
       ],

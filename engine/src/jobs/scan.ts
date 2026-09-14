@@ -6,13 +6,13 @@
 // без драбини й зростання: реєстр крипто-компаній відомий, і читається він увесь, щодня, без вихідних.
 import { randomUUID } from "node:crypto";
 import type { FetchOptions } from "../http.js";
-import { crawlJob, POSTED_WINDOW_DAYS, type PoolRow } from "../digest/jobs.js";
-import { annualRange, isFresh } from "../digest/match.js";
+import { ATS_WINDOW_DAYS, crawlJob, openWindowDays, POSTED_WINDOW_DAYS, type PoolRow } from "../digest/jobs.js";
+import { ageFrom, annualRange, isFresh } from "../digest/match.js";
 import { ROLE_ORDER } from "../digest/roles.js";
 import type { EngineEnv } from "../pipeline/registry.js";
 import type { RoleKey } from "../types.js";
 import { envFlag, envInt } from "./env.js";
-import { type Dropped, prepare, WINDOW_DAYS } from "./prepare.js";
+import { type Dropped, prepare, type Windows, WINDOWS } from "./prepare.js";
 import { mapLimit, runSource } from "./run.js";
 import { ATS, atsSourceKey } from "./sources/ats.js";
 import { fetchBoard } from "./sources/boards.js";
@@ -45,6 +45,8 @@ export interface ScanDeps {
 export interface PoolStats {
   /** Живі крипто-вакансії, що пройшли сито добірки (роль у назві, не-крипто компанія). */
   pool: number;
+  /** З них опубліковані (без дати: вперше побачені) давніше за 30 днів: лише з фідів ATS, добірка бере їх добрати до п'яти. */
+  older: number;
   /** Унікальні за ключем змісту (компанія + назва). */
   unique: number;
   withSalary: number;
@@ -60,7 +62,7 @@ export interface ScanReport {
   runId: string;
   dry: boolean;
   status: "ok" | "partial" | "failed";
-  windowDays: number;
+  windows: Windows;
   sources: { total: number; ok: number; failed: number; rateLimited: number; skippedDead: number };
   raw: number;
   kept: number;
@@ -116,23 +118,32 @@ function emptyRoles(): Record<RoleKey, number> {
   return Object.fromEntries(ROLE_ORDER.map((r) => [r, 0])) as Record<RoleKey, number>;
 }
 
-/** Рядки скану крізь сито добірки (crawlJob) і її вікно свіжості: скільки людина справді отримає. */
+/**
+ * Рядки скану крізь сито добірки (crawlJob): скільки людина справді може отримати. Вікно віку
+ * вже застосував prepare (за родом джерела, як пул добірки); тут лише ділимо на свіжі й давніші.
+ * first_seen_at нового рядка = цей скан (так його й запише upsert).
+ */
 export function poolStats(rows: readonly JobRow[], now: Date): PoolStats {
   const byRole = emptyRoles();
   const byRoleSalary = emptyRoles();
   const unique = new Set<string>();
   const companies = new Set<string>();
-  let pool = 0, withSalary = 0, withEstimateOnly = 0, remote = 0;
+  let pool = 0, older = 0, withSalary = 0, withEstimateOnly = 0, remote = 0;
   for (const r of rows) {
     const row: PoolRow = {
       id: r.id, url: r.url, company: r.company, company_key: r.companyKey, title: r.title, location: r.location,
       remote: r.remote ? 1 : 0, salary_min: r.salaryMin, salary_max: r.salaryMax, salary_currency: r.salaryCurrency,
-      tags: JSON.stringify(r.tags), posted_at: r.postedAt, fetched_at: r.fetchedAt, country: null, dedupe_key: r.dedupeKey,
+      tags: JSON.stringify(r.tags), posted_at: r.postedAt, fetched_at: r.fetchedAt, first_seen_at: r.fetchedAt,
+      country: null, dedupe_key: r.dedupeKey,
     };
     const x = crawlJob(row);
-    if (!("job" in x) || !isFresh(x.job, now)) continue;
+    if (!("job" in x)) continue;
     const job = x.job;
+    // Межа віку пулу (на випадок JOBS_*_WINDOW_DAYS ширших за неї): рядок є, але добірка його не бере.
+    const at = ageFrom(job);
+    if (at !== null && now.getTime() - at > openWindowDays(r.source) * DAY_MS) continue;
     pool++;
+    if (!isFresh(job, now)) older++;
     unique.add(job.dedupeKey ?? job.ref);
     companies.add(job.companyKey);
     const paid = annualRange(job.salary) !== null;
@@ -144,7 +155,7 @@ export function poolStats(rows: readonly JobRow[], now: Date): PoolStats {
       if (paid) byRoleSalary[role]++;
     }
   }
-  return { pool, unique: unique.size, withSalary, withEstimateOnly, remote, companies: companies.size, byRole, byRoleSalary };
+  return { pool, older, unique: unique.size, withSalary, withEstimateOnly, remote, companies: companies.size, byRole, byRoleSalary };
 }
 
 function tasks(reg: Registry, env: EngineEnv, windowDays: number, now: Date, o: FetchOptions,
@@ -176,7 +187,11 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
   const { store, env } = deps;
   const now = deps.now ?? new Date();
   const log = deps.log ?? ((l: string) => console.log(l));
-  const windowDays = envInt(env, "JOBS_WINDOW_DAYS", WINDOW_DAYS, 1, 365);
+  // Дошки й агрегатори 30 днів, власні фіди роботодавців 90 (prepare.ts): ті самі межі, що в пулі добірки.
+  const windows: Windows = {
+    board: envInt(env, "JOBS_WINDOW_DAYS", WINDOWS.board, 1, 365),
+    ats: envInt(env, "JOBS_ATS_WINDOW_DAYS", WINDOWS.ats, 1, 365),
+  };
   const runId = `scan_${randomUUID()}`;
   const startedAt = now.toISOString();
   await store.startRun(runId, "scan", startedAt);
@@ -185,13 +200,13 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
     const reg = await store.loadRegistry();
     const prior = new Map(reg.states.map((s) => [s.source, s]));
     const skipped: string[] = [];
-    const list = tasks(reg, env, windowDays, now, deps.fetch ?? {}, prior, skipped);
+    const list = tasks(reg, env, windows.board, now, deps.fetch ?? {}, prior, skipped);
     log(`jobs-scan${store.dry ? " --dry" : ""}: ${reg.companies.length} companies, ${reg.boards.length} boards, ` +
-        `${list.length} sources to read, ${skipped.length} dead skipped, window ${windowDays} d`);
+        `${list.length} sources to read, ${skipped.length} dead skipped, window ${windows.board} d boards, ${windows.ats} d employer ATS`);
 
     const results = await mapLimit(list, CONCURRENCY, (t) => t.run());
     const raw = results.flatMap((r) => r.jobs);
-    const { rows, dropped, nonCrypto } = prepare(raw, windowDays, now);
+    const { rows, dropped, nonCrypto } = prepare(raw, windows, now);
     const existing = await store.existingIds();
     const newJobs = rows.filter((r) => !existing.has(r.id)).length;
 
@@ -210,8 +225,8 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
     const pool = poolStats(rows, now);
 
     const notes = {
-      window_days: windowDays, raw: raw.length, dropped, skipped_dead: skipped.length, non_crypto: nonCrypto,
-      pool: { live: pool.pool, unique: pool.unique, with_salary: pool.withSalary, companies: pool.companies },
+      window_days: windows, raw: raw.length, dropped, skipped_dead: skipped.length, non_crypto: nonCrypto,
+      pool: { live: pool.pool, older: pool.older, unique: pool.unique, with_salary: pool.withSalary, companies: pool.companies },
       boards: bySource.filter((s) => /^(board|aggregator):/.test(s.source)),
       failures: bySource.filter((s) => s.error).slice(0, 40).map((s) => ({ source: s.source, error: s.error })),
     };
@@ -223,7 +238,7 @@ export async function runJobsScan(deps: ScanDeps): Promise<ScanReport> {
     }, new Date().toISOString());
 
     const report: ScanReport = {
-      runId, dry: store.dry, status, windowDays,
+      runId, dry: store.dry, status, windows,
       sources: { total: list.length + skipped.length, ok, failed, rateLimited, skippedDead: skipped.length },
       raw: raw.length, kept: rows.length, newJobs, dropped, nonCrypto, bySource, pool,
       rowsWritten: { estimated: store.estimatedRows, measured: store.dry ? null : store.measuredRows },
@@ -246,9 +261,11 @@ export function formatScanReport(r: ScanReport): string[] {
     `jobs-scan${r.dry ? " --dry" : ""}: ${r.status}; sources ${r.sources.ok} ok, ${r.sources.failed} failed, ` +
       `${r.sources.rateLimited} rate-limited, ${r.sources.skippedDead} dead skipped`,
     `  jobs: ${r.raw} read, ${r.kept} kept (${r.newJobs} new); dropped: not crypto ${r.dropped.notCrypto}, ` +
-      `non-crypto company ${r.dropped.company}, older than ${r.windowDays} d ${r.dropped.old}, broken ${r.dropped.broken}, ` +
+      `non-crypto company ${r.dropped.company}, older than ${r.windows.board} d (boards) or ${r.windows.ats} d (employer ATS) ` +
+      `${r.dropped.old}, broken ${r.dropped.broken}, ` +
       `duplicate ${r.dropped.duplicate}`,
-    `  live pool (digest sieve, posted within ${POSTED_WINDOW_DAYS} d): ${r.pool.pool} jobs, ${r.pool.unique} unique, ` +
+    `  live pool (digest sieve; boards ${POSTED_WINDOW_DAYS} d, employer ATS ${ATS_WINDOW_DAYS} d while listed): ${r.pool.pool} jobs ` +
+      `(${r.pool.older} posted over ${POSTED_WINDOW_DAYS} d ago), ${r.pool.unique} unique, ` +
       `${r.pool.companies} companies, ${r.pool.withSalary} with salary (${pct(r.pool.withSalary, r.pool.pool)}), ` +
       `${r.pool.withEstimateOnly} with a board estimate only, ${r.pool.remote} remote`,
     `  by role (with salary): ${ROLE_ORDER.filter((k) => r.pool.byRole[k] > 0).map((k) => `${k} ${r.pool.byRole[k]} (${r.pool.byRoleSalary[k]})`).join(", ")}`,

@@ -147,6 +147,14 @@ export async function fetchSpeedrunCrypto(days: number, o: FetchOptions = {}, no
   return out;
 }
 
+/** Короткий опис компанії мережі (`blurb` деталі компанії) для картки вакансії; null, якщо його немає. */
+export async function fetchSpeedrunBlurb(companySlug: string, o: FetchOptions = {}): Promise<string | null> {
+  const p = await fetchJson<{ company?: { blurb?: unknown } }>(
+    `${BASE}/companies/${encodeURIComponent(companySlug)}?${q({})}`, {}, o);
+  const b = p.company?.blurb;
+  return typeof b === "string" && b.trim() ? b : null;
+}
+
 // ── розвідка: справжній ATS роботодавця ──────────────────────
 /** Ідентифікатор першої відкритої ролі компанії: вхід до її ATS. */
 export async function firstJobId(companySlug: string, o: FetchOptions = {}): Promise<string | null> {

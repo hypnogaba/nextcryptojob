@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import * as engineJobs from "../../../../engine/src/digest/jobs";
 import * as engineMatch from "../../../../engine/src/digest/match";
 import * as engineRoles from "../../../../engine/src/digest/roles";
+import { ATS_PROVIDERS as ENGINE_ATS_PROVIDERS } from "../../../../engine/src/jobs/types";
 import { foldText, isRemoteLocation, mentionsCity } from "./place";
 import { plausibleSalary } from "@/lib/digest/format";
-import { LIVE_WINDOW_DAYS, POOL_SQL, crawlSieve, POSTED_WINDOW_DAYS } from "./pool";
+import {
+  ATS_PROVIDERS, ATS_WINDOW_DAYS, crawlSieve, EMPLOYER_FEED_SQL, isEmployerFeed, LIVE_WINDOW_DAYS, POOL_SQL, poolParams,
+  POSTED_WINDOW_DAYS,
+} from "./pool";
 import { titleRoles } from "./roles";
 
 /**
@@ -31,10 +35,23 @@ describe("Job rules in web are the engine's rules", () => {
     expect(fromFirstExport(read("./match.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/match.ts")));
   });
 
-  it("the same pool query and the same freshness windows", () => {
+  it("why a job fits (the reasons on /jobs, in sent.why, the email and Telegram): the code is the same as engine/src/digest/fit.ts", () => {
+    expect(fromFirstExport(read("./fit.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/fit.ts")));
+  });
+
+  it("the same pool query, the same live-job rule and the same windows", () => {
     expect(POOL_SQL).toBe(engineJobs.POOL_SQL);
+    expect(EMPLOYER_FEED_SQL).toBe(engineJobs.EMPLOYER_FEED_SQL);
     expect(LIVE_WINDOW_DAYS).toBe(engineJobs.LIVE_WINDOW_DAYS);
     expect(POSTED_WINDOW_DAYS).toBe(engineJobs.POSTED_WINDOW_DAYS);
+    expect(ATS_WINDOW_DAYS).toBe(engineJobs.ATS_WINDOW_DAYS);
+    expect([...ATS_PROVIDERS]).toEqual([...ENGINE_ATS_PROVIDERS]);
+    const now = new Date("2026-09-14T10:00:00Z");
+    expect(poolParams(now)).toEqual(engineJobs.poolParams(now));
+    for (const source of ["greenhouse:coinbase", "lever_eu:aave", "ashby:Sui%20Foundation", "board:web3career",
+      "aggregator:speedrun", "careers:acme", "greenhouse", "", null]) {
+      expect({ source, ats: isEmployerFeed(source) }).toEqual({ source, ats: engineJobs.isEmployerFeed(source) });
+    }
   });
 
   it("the row sieve (tag, company, title) is the engine's crawlJob up to where it builds the job", () => {

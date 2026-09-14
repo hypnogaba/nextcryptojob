@@ -4,6 +4,7 @@ import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, crmDb, run } from "@/test/crm-fixtures";
 import { jobsTestDb } from "@/test/jobs-db";
 import { type TestDb } from "@/test/sqlite-d1";
+import { resetCompanyProfiles } from "@/lib/jobs/companies";
 import { HISTORY_LIMIT, loadJobsPage } from "./history";
 
 let t: TestDb;
@@ -17,7 +18,8 @@ const jobsDbForTest = (): TestDb => jobsTestDb();
 function spyJobs(inner: JobsDb): JobsDb {
   return {
     all: async (sql, ...params) => {
-      jobsCalls.push(params);
+      // Лише запити до вакансій: реєстр компаній (значки й «про компанію») читається без параметрів людини.
+      if (/FROM jobs_cache/.test(sql)) jobsCalls.push(params);
       return inner.all(sql, ...params);
     },
     first: inner.first,
@@ -90,6 +92,7 @@ function digest(userId: string, id: string, localDate: string, refs: string[], o
 const refsOf = (page: Awaited<ReturnType<typeof loadJobsPage>>) => page!.digests.map((d) => [d.localDate, d.jobs.map((j) => j.ref)]);
 
 beforeEach(() => {
+  resetCompanyProfiles();
   t = crmDb();
   nr = jobsDbForTest();
   jobsCalls = [];

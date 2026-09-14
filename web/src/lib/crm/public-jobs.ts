@@ -102,6 +102,7 @@ function companyPoolJob(r: LiveRow, env: { SITE_URL?: string }): PoolJob {
     location: companyJobLocation(r.remote_mode, r.city),
     country: r.country,
     seenMs: null,
+    firstSeenMs: null,
     dedupeKey: null,
     origin: null,
     salaryEstimate: null,

@@ -1,19 +1,23 @@
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as engineJobs from "../../../../engine/src/digest/jobs";
+import * as engineFit from "../../../../engine/src/digest/fit";
 import * as engineMatch from "../../../../engine/src/digest/match";
 import { readFileSync } from "node:fs";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { addCompany, addSubscription, crmDb, run } from "@/test/crm-fixtures";
 import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import type { TestDb } from "@/test/sqlite-d1";
+import { homeStats } from "./home-board";
 import {
   type BriefRow,
+  checkedIn,
   instantMatches,
   profileOf,
   roughCount,
 } from "./instant";
-import { POOL_SQL, POOL_READ_SQL, resetCrawlPool } from "./pool";
+import { resetCompanyProfiles } from "./companies";
+import { crawlPool, POOL_SQL, POOL_READ_SQL, resetCrawlPool } from "./pool";
 
 /**
  * «Jobs for you now»: ті самі вакансії й той самий порядок, що вибрала б щоденна добірка
@@ -28,7 +32,10 @@ let ours: TestDb;
 let reads: number;
 let jobs: () => JobsDb;
 
-/** Живий пул з тими пастками, які добірка обходить: одна компанія двічі, «Hybrid», нац. дошка, старе, не наша роль. */
+/**
+ * Живий пул з тими пастками, які добірка обходить: одна компанія двічі, «Hybrid», нац. дошка, не наша роль,
+ * старе: з фіду роботодавця (ATS) 40 днів ще відкрите й лише добирає, з дошки 40 днів і з ATS 100 днів не живі.
+ */
 function seed(raw: DatabaseSync) {
   const f = ago(2);
   addPoolJob(raw, { id: "e1", title: "Senior Solidity Engineer", company: "Aave", postedAt: ago(24), fetchedAt: f, salaryMin: 150_000, salaryMax: 180_000, currency: "USD" });
@@ -41,6 +48,8 @@ function seed(raw: DatabaseSync) {
   addPoolJob(raw, { id: "b1", title: "BD Lead", company: "Phantom", postedAt: ago(20), fetchedAt: f, salaryMin: 1000, currency: "USD" });
   addPoolJob(raw, { id: "d1", title: "Product Designer", company: "Lido", location: "Lisbon", remote: false, postedAt: ago(8), fetchedAt: f, source: "ashby:lido" });
   addPoolJob(raw, { id: "old", title: "Solidity Engineer", company: "Old Co", postedAt: ago(24 * 40), fetchedAt: f });
+  addPoolJob(raw, { id: "oldboard", title: "Solidity Engineer", company: "Board Co", postedAt: ago(24 * 40), fetchedAt: f, source: "board:web3career" });
+  addPoolJob(raw, { id: "ancient", title: "Solidity Engineer", company: "Ancient Co", postedAt: ago(24 * 100), fetchedAt: f });
   addPoolJob(raw, { id: "chef", title: "Head Chef", company: "Food Co", postedAt: ago(4), fetchedAt: f });
 }
 
@@ -58,6 +67,7 @@ function seedCompanyJob(raw: DatabaseSync) {
 
 beforeEach(() => {
   resetCrawlPool();
+  resetCompanyProfiles();
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   nr = jobsTestDb();
   seed(nr.raw);
@@ -86,11 +96,9 @@ const brief = (o: Omit<Partial<BriefRow>, "roles"> & { roles: string[] }): Brief
 
 const deps = () => ({ db: ours.d1, env: {}, jobs, now: NOW });
 
-/** Що вибрала б добірка engine: її власний пул з тих самих рядків і її selectJobs. */
+/** Що вибрала б добірка engine: її власний пул з тих самих рядків, її selectJobs і її пояснення (fit.ts). */
 function engineChoice(b: BriefRow, exclude: Set<string>) {
-  const live = new Date(NOW.getTime() - engineJobs.LIVE_WINDOW_DAYS * 86_400_000).toISOString();
-  const posted = new Date(NOW.getTime() - engineJobs.POSTED_WINDOW_DAYS * 86_400_000).toISOString();
-  const rows = nr.raw.prepare(engineJobs.POOL_SQL).all(live, posted) as never[];
+  const rows = nr.raw.prepare(engineJobs.POOL_SQL).all(...engineJobs.poolParams(NOW)) as never[];
   const crawl = rows.flatMap((r) => {
     const x = engineJobs.crawlJob(r);
     return "job" in x ? [x.job] : [];
@@ -100,7 +108,7 @@ function engineChoice(b: BriefRow, exclude: Set<string>) {
     .filter((j) => j !== null);
   return engineMatch
     .selectJobs({ crawl, company }, profileOf(b), { now: NOW, exclude })
-    .map((p) => ({ ref: p.job.ref, why: p.why }));
+    .map((p) => ({ ref: p.job.ref, why: engineFit.fitLine(p, profileOf(b), { words: null, scores: {} }, NOW) }));
 }
 
 describe("Jobs for you now", () => {
@@ -128,9 +136,13 @@ describe("Jobs for you now", () => {
     if (now.state !== "ok") return;
     const refs = now.jobs.map((j) => j.ref);
     // Вакансія компанії першою (не більше однієї), далі скановані за свіжістю (без дати публікації
-    // рахується, коли скан бачив: e6 2 год тому); Aave лише раз, і не надіслана e2. «Hybrid» (e4)
-    // і національна дошка (e5) не віддалені, Lisbon (e3) не для віддаленої анкети.
-    expect(refs).toEqual(["co:job_acme", "nr:e6", "nr:e1"]);
+    // рахується, коли скан уперше побачив: e6 2 год тому); Aave лише раз, і не надіслана e2. «Hybrid» (e4)
+    // і національна дошка (e5) не віддалені, Lisbon (e3) не для віддаленої анкети. Свіжих лише три,
+    // тож добирає ще відкрита вакансія з фіду роботодавця (old, 40 днів), і пояснення це каже;
+    // та сама давнина з дошки (oldboard) і 100 днів з ATS (ancient) не живі.
+    expect(refs).toEqual(["co:job_acme", "nr:e6", "nr:e1", "nr:old"]);
+    expect(now.jobs[3]!.why).toBe("Matches your Engineer role. Remote, as you asked. Still open, posted 5 weeks ago.");
+    expect(now.jobs[3]).toMatchObject({ reasons: ["Matches your Engineer role.", "Remote, as you asked."], note: "Still open, posted 5 weeks ago." });
     expect(now.jobs[0]).toMatchObject({ url: "/jobs/job_acme", postedBy: "Acme Labs", location: "Remote or Lisbon" });
     expect(now.jobs[2]).toMatchObject({ company: "Aave", salary: "$150k to $180k", url: "https://boards.example.com/e1" });
     expect(now.jobs.every((j) => j.why.startsWith("Matches your Engineer role."))).toBe(true);
@@ -138,7 +150,7 @@ describe("Jobs for you now", () => {
 
   it("the preferences decide: a city brief sees the city job, a remote brief does not", async () => {
     const city = await instantMatches(deps(), brief({ roles: ["designer"], remote_mode: "city", city: "lisboa" }), new Set());
-    expect(city).toMatchObject({ state: "ok", jobs: [{ ref: "nr:d1", why: "Matches your Designer role. In lisboa." }] });
+    expect(city).toMatchObject({ state: "ok", jobs: [{ ref: "nr:d1", why: "Matches your Designer role. In lisboa, where you want to work." }] });
     const remote = await instantMatches(deps(), brief({ roles: ["designer"] }), new Set());
     expect(remote).toEqual({ state: "none", reason: { kind: "remote_only", inCities: 1 } });
   });
@@ -153,7 +165,7 @@ describe("Jobs for you now", () => {
     expect(await reason(brief({ roles: ["engineer"], remote_mode: "city", city: "Berlin" }))).toEqual({
       kind: "city_only",
       city: "Berlin",
-      remote: 4,
+      remote: 5,
     });
     expect(await reason(brief({ roles: ["trader"] }), new Set(["nr:t1"]))).toEqual({ kind: "all_sent" });
   });
@@ -186,6 +198,52 @@ describe("Jobs for you now", () => {
     expect(profileOf({ roles: "not json", remote_mode: null, city: "   ", salary_min: null, salary_currency: null })).toMatchObject({
       roles: [], city: null,
     });
+  });
+});
+
+describe("why it fits, and how many we checked", () => {
+  it("the header numbers are the whole pool the matcher chose from, counted like the home page", async () => {
+    const now = await instantMatches(deps(), brief({ roles: ["engineer"] }), new Set());
+    expect(now.state).toBe("ok");
+    if (now.state !== "ok") return;
+    const crawl = (await crawlPool(jobs, NOW))!;
+    const company = (await import("@/lib/crm/public-jobs")).loadCompanyJobs(ours.d1, {});
+    const stats = homeStats(crawl, await company, NOW);
+    expect(now.checked).toEqual({ jobs: stats.live, sources: stats.sources });
+    // Живі скановані після сита (10 з 13 рядків: без давніх з дошки й ATS і без кухаря) плюс вакансія компанії.
+    expect(now.checked.jobs).toBe(crawl.length + 1);
+    expect(now.checked.jobs).toBe(11);
+    // Джерела: greenhouse:chainlabs, ashby:lido, ashby:wintermute, board:de-web3 і вакансії компаній у нас.
+    expect(now.checked.sources).toBe(5);
+  });
+
+  it("checkedIn counts sources once each, and company jobs as one source", () => {
+    const j = (origin: string | null) => ({ origin }) as never;
+    expect(checkedIn([j("greenhouse:a"), j("greenhouse:a"), j("board:web3career"), j(null)], [])).toEqual({ jobs: 4, sources: 2 });
+    expect(checkedIn([j("greenhouse:a")], [j(null), j(null)])).toEqual({ jobs: 3, sources: 2 });
+    expect(checkedIn([], [])).toEqual({ jobs: 0, sources: 0 });
+  });
+
+  it("reasons use the person's own words and score; the company sentence and logo come from the registry", async () => {
+    nr.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, about)
+                 VALUES ('aave', 'Aave', 'greenhouse', 'aave', 'manual', 'aave.com', 'Aave runs lending markets on many chains.')`);
+    const now = await instantMatches(deps(), brief({ roles: ["engineer"], salary_min: 120_000, salary_currency: "USD" }), new Set(),
+      { words: "I want senior Solidity work", scores: { engineer: 81 } });
+    expect(now.state).toBe("ok");
+    if (now.state !== "ok") return;
+    const aave = now.jobs.find((x) => x.ref === "nr:e1")!;
+    expect(aave.reasons).toEqual([
+      'Matches your Engineer role, and the title has your words "solidity".',
+      "Pays $150k to $180k, meets your $120k minimum.",
+      "A senior role, the level you asked for.",
+    ]);
+    expect(aave).toMatchObject({ about: "Aave runs lending markets on many chains.", domain: "aave.com", note: null });
+    expect(aave.why).toBe(aave.reasons.join(" "));
+    // Бал людини стає причиною, коли є місце (у вакансії без зарплати й рівня).
+    const uni = now.jobs.find((x) => x.ref === "nr:e6")!;
+    expect(uni.reasons).toContain("Your Engineer score is 81, from your public work.");
+    // Вакансія компанії не бере чужий опис з реєстру.
+    expect(now.jobs[0]).toMatchObject({ ref: "co:job_acme", about: null, domain: null });
   });
 });
 

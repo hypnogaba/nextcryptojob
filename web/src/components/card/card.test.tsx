@@ -67,6 +67,16 @@ describe("Seal", () => {
   });
 });
 
+describe("Seal motion", () => {
+  it("spins only where asked: the landing's small card and the /scoring card, never a real card by default", () => {
+    const seal = (spin?: boolean) => renderToStaticMarkup(<Seal seed={42} level={8} inks={["#000000", "#555555"]} spin={spin} />);
+    expect(seal(true)).toContain('class="ncj-seal ncj-seal-spin"');
+    expect(seal()).not.toContain("ncj-seal-spin");
+    expect(renderToStaticMarkup(<CardFront face={exampleFace()} draw />)).not.toContain("ncj-seal-spin");
+    expect(renderToStaticMarkup(<CardFront face={exampleFace()} draw spin />)).toContain("ncj-seal ncj-seal-draw ncj-seal-spin");
+  });
+});
+
 describe("CardBackFace", () => {
   it("itemizes the formula and prints none with the reason", () => {
     const html = renderToStaticMarkup(<CardBackFace face={exampleFace()} back={EXAMPLE_BACK} meta="Formula v5." />);

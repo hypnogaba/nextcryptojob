@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  type DigestJob, type DigestProfile, formatSalary, isRemoteLocation, keywordHit, meetsFloor, mentionsCity, roleKeywords,
-  selectJobs, whyLine,
+  type DigestJob, type DigestProfile, formatSalary, isFresh, isRemoteLocation, keywordHit, meetsFloor, mentionsCity,
+  roleKeywords, selectJobs, stillOpenNote, whyLine,
 } from "./match.js";
 
 const NOW = new Date("2026-09-12T10:00:00Z");
@@ -17,7 +17,7 @@ function job(p: Partial<DigestJob> & { title?: string } = {}): DigestJob {
     company: p.company ?? `Company ${seq}`, companyKey: p.companyKey ?? `company ${seq}`, url: `https://jobs.example/${id}`,
     location: p.location ?? "Remote", placeText: p.placeText ?? p.location ?? "Remote", remote: p.remote ?? true,
     country: p.country ?? null, salary: p.salary ?? null, postedAt: p.postedAt === undefined ? daysAgo(2) : p.postedAt,
-    seenAt: p.seenAt ?? daysAgo(1), dedupeKey: p.dedupeKey ?? null, roles: p.roles ?? ["engineer"],
+    firstSeenAt: p.firstSeenAt === undefined ? null : p.firstSeenAt, seenAt: p.seenAt ?? daysAgo(1), dedupeKey: p.dedupeKey ?? null, roles: p.roles ?? ["engineer"],
   };
 }
 
@@ -163,12 +163,12 @@ describe("selectJobs: зарплата м'яко", () => {
 });
 
 describe("selectJobs: свіжість, компанії, виключення", () => {
-  it("старші за 30 днів відкидаються, новіші спершу; без дати публікації рахується дата, коли бачили", () => {
+  it("новіші спершу; ще відкрита давніша за 30 днів лише добирає і стоїть після свіжих", () => {
     const old = job({ postedAt: daysAgo(31) });
     const mid = job({ postedAt: daysAgo(10) });
     const fresh = job({ postedAt: daysAgo(1) });
     const undated = job({ postedAt: null, seenAt: daysAgo(0.5) });
-    expect(pick([old, mid, fresh, undated], profile()).map((p) => p.job.id)).toEqual([undated.id, fresh.id, mid.id]);
+    expect(pick([old, mid, fresh, undated], profile()).map((p) => p.job.id)).toEqual([undated.id, fresh.id, mid.id, old.id]);
   });
 
   it("одна вакансія на компанію", () => {
@@ -211,6 +211,70 @@ describe("selectJobs: свіжість, компанії, виключення",
   });
 });
 
+describe("selectJobs: свіжі спершу, ще відкриті давніші лише добирають", () => {
+  it("п'ять свіжих: давніша не йде, навіть з кращою зарплатою чи в місті людини", () => {
+    const fresh = Array.from({ length: 5 }, (_, i) => job({ postedAt: daysAgo(1 + i) }));
+    const olderPaid = job({ postedAt: daysAgo(45), salary: { min: 200_000, max: 250_000, currency: "USD", period: "year" } });
+    const olderParis = job({ postedAt: daysAgo(40), location: "Paris", placeText: "Paris", remote: false });
+    const out = pick([olderPaid, olderParis, ...fresh], profile({ remoteMode: "remote,city", city: "Paris", salaryMin: 150_000, salaryCurrency: "USD" }));
+    expect(out.map((p) => p.job.id)).toEqual(fresh.map((j) => j.id));
+    expect(out.every((p) => !/Still open/.test(p.why))).toBe(true);
+  });
+
+  it("свіжих менше п'яти: добираємо давніші, новіші з них спершу, і пояснення каже, що вакансія досі відкрита", () => {
+    const fresh = [job({ postedAt: daysAgo(3) }), job({ postedAt: daysAgo(12) })];
+    const older = [job({ postedAt: daysAgo(80) }), job({ postedAt: daysAgo(44) }), job({ postedAt: daysAgo(60) }), job({ postedAt: daysAgo(35) })];
+    const out = pick([...older, ...fresh], profile());
+    expect(out.map((p) => p.job.id)).toEqual([fresh[0]!.id, fresh[1]!.id, older[3]!.id, older[1]!.id, older[2]!.id]);
+    expect(out.map((p) => p.why)).toEqual([
+      "Matches your Engineer role. Remote.",
+      "Matches your Engineer role. Remote.",
+      "Matches your Engineer role. Remote. Still open, posted 5 weeks ago.",
+      "Matches your Engineer role. Remote. Still open, posted 6 weeks ago.",
+      "Matches your Engineer role. Remote. Still open, posted 8 weeks ago.",
+    ]);
+  });
+
+  it("давніша свіжої не випереджає навіть у місті людини: спершу свіжа віддалена", () => {
+    const freshRemote = job({ postedAt: daysAgo(2) });
+    const olderParis = job({ postedAt: daysAgo(50), location: "Paris", placeText: "Paris", remote: false });
+    const out = pick([olderParis, freshRemote], profile({ remoteMode: "remote,city", city: "Paris" }));
+    expect(out.map((p) => [p.job.id, p.place])).toEqual([[freshRemote.id, "remote"], [olderParis.id, "city"]]);
+  });
+
+  it("одна на компанію й серед давніших: свіжа компанії займає її місце, давніша іншої компанії добирає", () => {
+    const okxFresh = job({ companyKey: "okx", postedAt: daysAgo(5) });
+    const okxOlder = job({ companyKey: "okx", postedAt: daysAgo(40) });
+    const krakenOlder = job({ companyKey: "kraken", postedAt: daysAgo(50) });
+    const krakenOlder2 = job({ companyKey: "kraken", postedAt: daysAgo(70) });
+    const out = pick([okxOlder, krakenOlder2, krakenOlder, okxFresh], profile());
+    expect(out.map((p) => p.job.id)).toEqual([okxFresh.id, krakenOlder.id]);
+  });
+
+  it("давніша надісланої свіжої тієї ж компанії може добрати; та сама вакансія під новою адресою ні", () => {
+    const sentFresh = job({ companyKey: "okx", postedAt: daysAgo(5), dedupeKey: "okx|solidity" });
+    const repostOlder = job({ companyKey: "okx", postedAt: daysAgo(40), dedupeKey: "okx|solidity" });
+    const otherOlder = job({ companyKey: "okx", postedAt: daysAgo(41), dedupeKey: "okx|rust" });
+    const out = pick([sentFresh, repostOlder, otherOlder], profile(), [], [sentFresh.ref]);
+    expect(out.map((p) => p.job.id)).toEqual([otherOlder.id]);
+  });
+
+  it("вік без дати публікації: від першої появи в скані, а не від останньої", () => {
+    const undatedOld = job({ postedAt: null, firstSeenAt: daysAgo(40), seenAt: daysAgo(0.2) });
+    const undatedNew = job({ postedAt: null, firstSeenAt: daysAgo(3), seenAt: daysAgo(0.2) });
+    expect(isFresh(undatedOld, NOW)).toBe(false);
+    expect(isFresh(undatedNew, NOW)).toBe(true);
+    expect(stillOpenNote(undatedOld, NOW)).toBe("Still open, first seen 5 weeks ago.");
+    expect(pick([undatedOld, undatedNew], profile()).map((p) => p.job.id)).toEqual([undatedNew.id, undatedOld.id]);
+  });
+
+  it("вакансія компанії завжди свіжа: без позначки «Still open»", () => {
+    const co = job({ source: "company", postedAt: daysAgo(50) });
+    expect(stillOpenNote(co, NOW)).toBeNull();
+    expect(pick([], profile(), [co])[0]!.why).toBe("Matches your Engineer role. Remote.");
+  });
+});
+
 describe("whyLine", () => {
   it("детермінований рядок англійською без довгого тире", () => {
     const j = job({ salary: { min: 120_000, max: 150_000, currency: "USD", period: "year" } });
@@ -223,5 +287,13 @@ describe("whyLine", () => {
     const j = job({ salary: { min: 8_000, max: 10_000, currency: "EUR", period: "month" } });
     const line = whyLine({ job: j, role: "engineer", place: "city", meetsSalary: true }, profile({ city: "Paris, France" }));
     expect(line).toBe("Matches your Engineer role. In Paris. Salary listed: €8k to €10k a month, meets your minimum.");
+  });
+
+  it("давніша за 30 днів: після зарплати «Still open, posted N weeks ago.», тижні вниз", () => {
+    const j = job({ postedAt: daysAgo(62), salary: { min: 120_000, max: 150_000, currency: "USD", period: "year" } });
+    expect(whyLine({ job: j, role: "bd", place: "remote", meetsSalary: null }, profile(), NOW))
+      .toBe("Matches your BD & partnerships role. Remote. Salary listed: $120k to $150k. Still open, posted 8 weeks ago.");
+    // Без `now` рядок як раніше.
+    expect(whyLine({ job: j, role: "bd", place: "remote", meetsSalary: null }, profile())).not.toMatch(/Still open/);
   });
 });
