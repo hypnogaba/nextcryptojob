@@ -5,6 +5,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import {
   ago,
+  ATS_WINDOW_DAYS,
   CACHE_TTL_MS,
   cachedJobSourcesReport,
   LIVE_WINDOW_DAYS,
@@ -151,8 +152,10 @@ function Report({ report, now }: { report: JobSourcesReport; now: number }) {
 
       <div className="mt-6 grid max-w-prose gap-2 text-xs text-ink-muted">
         <p>
-          Live: tagged web3, seen by the scan in the last {LIVE_WINDOW_DAYS} days, posted in the last{" "}
-          {POSTED_WINDOW_DAYS} days, company not on the non-crypto list. Role matching per person comes later, and the
+          Live: tagged web3, listed by the latest scan of its source (if the source fails, for {LIVE_WINDOW_DAYS} days
+          after its last good scan), posted in the last {ATS_WINDOW_DAYS} days on an employer&apos;s own ATS or{" "}
+          {POSTED_WINDOW_DAYS} days on a job board or aggregator (no posting date: first seen by the scan), company not
+          on the non-crypto list. Role matching per person comes later, and the
           same job on two sources counts twice here. With salary: live jobs that state a salary. Total web3: every
           web3 job from the source still in the cache. For company jobs, Live means in the digest now and Total means
           open.

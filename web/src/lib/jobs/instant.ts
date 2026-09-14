@@ -6,7 +6,6 @@ import {
   type DigestPick,
   type DigestProfile,
   formatSalary,
-  isFresh,
   placeMatch,
   selectJobs,
   workModes,
@@ -77,6 +76,7 @@ export function digestJobOf(job: PoolJob): DigestJob {
     country: job.country,
     salary: job.salary,
     postedAt: job.postedMs,
+    firstSeenAt: job.firstSeenMs,
     seenAt: job.seenMs,
     dedupeKey: job.dedupeKey,
     roles: job.roles,
@@ -129,10 +129,13 @@ export function roleList(roles: readonly RoleKey[]): string {
   return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
 }
 
-/** Причина порожнього вибору. Ті самі правила, що в selectJobs, лише без обмеження «п'ять». */
-export function noMatchReason(pool: Pool, profile: DigestProfile, now: Date): NoMatchReason {
+/**
+ * Причина порожнього вибору. Ті самі правила, що в selectJobs, лише без обмеження «п'ять». Живе все,
+ * що в пулі (pool.ts вже відібрав відкриті вакансії); свіжість лише впорядковує вибір.
+ */
+export function noMatchReason(pool: Pool, profile: DigestProfile): NoMatchReason {
   if (profile.roles.length === 0) return { kind: "no_roles" };
-  const live = [...pool.company, ...pool.crawl.filter((j) => isFresh(j, now))];
+  const live = [...pool.company, ...pool.crawl];
   const forRoles = live.filter((j) => profile.roles.some((r) => j.roles.includes(r)));
   if (forRoles.length === 0) return { kind: "no_role_jobs", roles: profile.roles };
   const modes = workModes(profile.remoteMode);
@@ -179,7 +182,7 @@ export async function instantMatches(deps: InstantDeps, brief: BriefRow, exclude
     if (text) estimates.set(digestJobOf(j).ref, text);
   }
   if (picks.length > 0) return { state: "ok", jobs: picks.map((p) => shown(p, estimates)) };
-  return { state: "none", reason: noMatchReason(pool, profile, deps.now) };
+  return { state: "none", reason: noMatchReason(pool, profile) };
 }
 
 // ---------------------------------------------------------------------------

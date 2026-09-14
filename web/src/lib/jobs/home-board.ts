@@ -17,7 +17,11 @@ import { FAILURE_BACKOFF_MS, crawlPool, POOL_TTL_MS, type PoolJob } from "./pool
  */
 
 const DAY_MS = 86_400_000;
-/** «New this week»: опубліковані за стільки днів. Без дати публікації вакансія новою не рахується. */
+/**
+ * «New this week»: опубліковані за стільки днів; без дати публікації вперше побачені сканом за
+ * стільки днів (вакансії компаній без дати новими не рахуються). Не за правилом «жива»: стара, але
+ * ще відкрита вакансія не нова.
+ */
 export const NEW_WINDOW_DAYS = 7;
 /** Скільки вакансій бере стрічка. */
 export const TICKER_SIZE = 20;
@@ -25,9 +29,9 @@ export const TICKER_SIZE = 20;
 export const TICKER_MIN_TO_SCROLL = 8;
 
 export type HomeStats = {
-  /** Живих вакансій у пулі (зі сканування після сита + компаній). */
+  /** Живих вакансій у пулі (зі сканування після сита + компаній): правило «жива вакансія», pool.ts. */
   live: number;
-  /** Опубліковані за NEW_WINDOW_DAYS днів. */
+  /** Опубліковані (без дати: вперше побачені) за NEW_WINDOW_DAYS днів. */
   newThisWeek: number;
   /** Різних компаній (ключ компанії, як у правилі добірки «одна на компанію»). */
   companies: number;
@@ -78,7 +82,10 @@ export function homeStats(crawl: readonly PoolJob[], company: readonly PoolJob[]
   }
   return {
     live: all.length,
-    newThisWeek: all.filter((j) => j.postedMs !== null && j.postedMs >= since && j.postedMs <= t).length,
+    newThisWeek: all.filter((j) => {
+      const at = j.postedMs ?? j.firstSeenMs;
+      return at !== null && at >= since && at <= t;
+    }).length,
     companies: new Set(all.map((j) => j.companyKey)).size,
     withSalary: all.filter((j) => formatSalary(j.salary) !== null).length,
     sources: origins.size + (company.length > 0 ? 1 : 0),
@@ -138,8 +145,8 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
     if (est) cands.push({ job, salary: est, estimate: true, link });
   }
   // Зарплата роботодавця перед оцінкою; новіші за датою публікації спершу; без дати після всіх
-  // датованих (відсутнє значення не випереджає справжнє), серед них за тим, коли скан бачив; далі за jobId.
-  const at = (j: PoolJob) => j.postedMs ?? j.seenMs ?? 0;
+  // датованих (відсутнє значення не випереджає справжнє), серед них за першою появою в скані; далі за jobId.
+  const at = (j: PoolJob) => j.postedMs ?? j.firstSeenMs ?? j.seenMs ?? 0;
   cands.sort(
     (a, b) =>
       Number(a.estimate) - Number(b.estimate) ||

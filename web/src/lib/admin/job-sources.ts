@@ -1,4 +1,6 @@
 import type { JobsDb } from "@/lib/jobs-db";
+import { NON_CRYPTO_COMPANIES as NON_CRYPTO } from "@/lib/jobs/clean";
+import { ATS_WINDOW_DAYS, EMPLOYER_FEED_SQL, LIVE_WINDOW_DAYS, POSTED_WINDOW_DAYS, poolParams } from "@/lib/jobs/pool";
 
 /**
  * Адмінка: звідки беремо вакансії (сторінка /admin/sources).
@@ -14,25 +16,12 @@ import type { JobsDb } from "@/lib/jobs-db";
  * рядки без жодної вакансії web3 сторінка не показує, лише каже, скільки їх.
  */
 
-// Вікна й сито web3 скопійовано з engine, не імпортовано: engine окремий пакет.
-// Міняти разом з ним: engine/src/digest/jobs.ts (LIVE_WINDOW_DAYS,
-// POSTED_WINDOW_DAYS, POOL_SQL) і engine/src/digest/clean.ts
-// (NON_CRYPTO_COMPANIES).
-
-/** engine/src/digest/jobs.ts LIVE_WINDOW_DAYS: скільки днів тому скан мав бачити вакансію. */
-export const LIVE_WINDOW_DAYS = 3;
-/** engine/src/digest/jobs.ts POSTED_WINDOW_DAYS: давніше опубліковане в добірку не йде. */
-export const POSTED_WINDOW_DAYS = 30;
+// Правило «жива вакансія» і сито web3 з web-копій правил engine (lib/jobs/pool.ts і lib/jobs/clean.ts,
+// тест parity.test.ts тримає їх дослівними з engine/src/digest/jobs.ts і clean.ts), не своя копія.
+export { ATS_WINDOW_DAYS, LIVE_WINDOW_DAYS, POSTED_WINDOW_DAYS };
 
 /** engine/src/digest/clean.ts NON_CRYPTO_COMPANIES: тег web3 є, але компанія не крипто. */
-export const NON_CRYPTO_COMPANIES: readonly string[] = [
-  "perle", "crusoe", "ping identity", "zscaler", "sophos", "notion", "ashby", "zinnia", "inmobi", "virtuozzo",
-  "givedirectly", "fuse energy", "dynamo ai", "discord", "stockx", "str", "blackrock", "wave mobile money",
-  "lunar a s", "funding circle", "shippo", "cyberhaven", "integra", "current mobile", "immuta", "greenhouse",
-  "branch", "cross river", "auxmoney", "clue", "masterclass", "axiom", "launchpadtechnologiesinc", "stash",
-  "transmit security", "sift", "cls", "groma", "webai", "hyperbolic", "hyperbolic labs", "wealthsimple",
-  "bcg attorney search",
-];
+export const NON_CRYPTO_COMPANIES: readonly string[] = [...NON_CRYPTO];
 
 /**
  * Розклад сканера (engine/deploy/nextcryptojob-jobs-scan.timer): щодня, і у вихідні теж, о 04:30 UTC.
@@ -51,7 +40,6 @@ export const STALE_AFTER_SCANS = 2;
 export const CACHE_TTL_MS = 10 * 60_000;
 
 const HOUR_MS = 3_600_000;
-const DAY_MS = 24 * HOUR_MS;
 const SCAN_EARLY_MS = HOUR_MS;
 
 /**
@@ -63,8 +51,10 @@ const SCAN_EARLY_MS = HOUR_MS;
  * ще й кешується.
  *
  * Сито те саме, що в engine: тег web3 (LIKE, як POOL_SQL), компанія не
- * з NON_CRYPTO_COMPANIES (тут лише за company_key, engine ще й за назвою), живе =
- * скан бачив за LIVE_WINDOW_DAYS і опубліковано не давніше POSTED_WINDOW_DAYS.
+ * з NON_CRYPTO_COMPANIES (тут лише за company_key, engine ще й за назвою), живе = те саме
+ * правило, що POOL_SQL: рядок з останнього вдалого скану свого джерела (найсвіжіший fetched_at
+ * джерела, вікном), той скан не давніший за LIVE_WINDOW_DAYS, і вік від публікації (без дати від
+ * first_seen_at) не більше ATS_WINDOW_DAYS для фіду роботодавця на ATS чи POSTED_WINDOW_DAYS для дошки.
  * Сито ролей за назвою (engine roles.ts) сюди не входить: воно про людину, а не
  * про джерело. Час у jobs_cache ISO з 'T' і 'Z', тож і межі ISO.
  *
@@ -85,7 +75,8 @@ export const SOURCES_SQL = `SELECT s.source, s.company, s.web3_jobs, s.live_jobs
                COUNT(*) OVER () AS all_sources
           FROM (SELECT source, company, fetched_at, salary_min, salary_max,
                        (tags LIKE '%"web3"%' AND instr(?, '|' || company_key || '|') = 0) AS w,
-                       (fetched_at >= ? AND (posted_at IS NULL OR posted_at >= ?)) AS l
+                       (fetched_at >= ? AND fetched_at = MAX(fetched_at) OVER (PARTITION BY source)
+                        AND COALESCE(posted_at, first_seen_at) >= CASE WHEN ${EMPLOYER_FEED_SQL} THEN ? ELSE ? END) AS l
                   FROM jobs_cache)
          GROUP BY source) s
   LEFT JOIN sources b ON b.name = s.source
@@ -93,18 +84,14 @@ export const SOURCES_SQL = `SELECT s.source, s.company, s.web3_jobs, s.live_jobs
  ORDER BY s.live_jobs DESC, s.web3_jobs DESC, s.source`;
 
 /**
- * Параметри SOURCES_SQL: [список не-крипто компаній, бачили не раніше, опубліковано
- * не раніше]. Список іде рядком '|perle|crusoe|…|' для instr, а не як NOT IN (…):
+ * Параметри SOURCES_SQL: [список не-крипто компаній, ...poolParams: запас для джерела, що не
+ * прочиталось, межа віку ATS, межа віку дошки]. Список іде рядком '|perle|crusoe|…|' для instr, а не як NOT IN (…):
  * з NOT IN на живій базі rows_read зростав з 119 до 290 тис., бо D1 рахує кожну
  * пробу в тимчасовий індекс списку. instr лише порівнює рядки. У company_key
  * лише літери, цифри й пробіли, тож '|' в ньому не трапиться.
  */
-export function sourcesParams(now: Date): [string, string, string] {
-  return [
-    `|${NON_CRYPTO_COMPANIES.join("|")}|`,
-    new Date(now.getTime() - LIVE_WINDOW_DAYS * DAY_MS).toISOString(),
-    new Date(now.getTime() - POSTED_WINDOW_DAYS * DAY_MS).toISOString(),
-  ];
+export function sourcesParams(now: Date): [string, string, string, string] {
+  return [`|${NON_CRYPTO_COMPANIES.join("|")}|`, ...poolParams(now)];
 }
 
 /** Рядок SOURCES_SQL як його віддає D1. */

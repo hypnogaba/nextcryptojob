@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { __resetLimiters, __setLimiter } from "../../limits.js";
 import { jobId } from "../ids.js";
-import { prepare } from "../prepare.js";
+import { prepare, WINDOWS } from "../prepare.js";
 import {
   extractJobs, fetchWeb3Career, hideToken, parseWeb3Career, WEB3CAREER_QUERIES, WEB3CAREER_SOURCE, WEB3CAREER_TAGS,
   web3CareerEstimate, web3CareerPay, web3CareerUrl, type Web3CareerJob, type Web3CareerUsage,
@@ -79,17 +79,17 @@ describe("відповідь API", () => {
     expect(web3CareerEstimate(by(151770))).toBeNull(); // є вилка роботодавця
     expect(web3CareerEstimate({ estimated_min_salary: 900, estimated_max_salary: 1200 })).toBeNull();
     const [raw] = parseWeb3Career([by(154039)], BOARD);
-    const { rows } = prepare([raw!], 30, NOW);
+    const { rows } = prepare([raw!], WINDOWS, NOW);
     expect(rows[0]).toMatchObject({ salaryMin: null, salaryMax: null, salaryCurrency: null,
       salaryEstMin: 180_000, salaryEstMax: 225_000, salaryEstCurrency: "USD" });
-    const paid = prepare(parseWeb3Career([by(154034)], BOARD), 30, NOW).rows[0]!;
+    const paid = prepare(parseWeb3Career([by(154034)], BOARD), WINDOWS, NOW).rows[0]!;
     expect(paid).toMatchObject({ salaryMin: 99_815, salaryEstMin: null, salaryEstMax: null });
   });
 
   it("prepare: адреса web3.career з мітками лишається байт у байт, id з номера", () => {
     const apply = "https://web3.career/r/=cTMxEDN__U4HFyv?utm_source=partner&utm_medium=api&ref=U4HFyv&b=2&a=1";
     const [raw] = parseWeb3Career([{ ...JOBS[0]!, id: 777, apply_url: apply }], BOARD);
-    const { rows } = prepare([raw!], 30, NOW);
+    const { rows } = prepare([raw!], WINDOWS, NOW);
     expect(rows[0]!.url).toBe(apply);
     expect(rows[0]!.id).toBe(jobId("web3career:777"));
     expect(rows[0]!.tags).toEqual(expect.arrayContaining(["web3", "community", "marketing", "remote"]));

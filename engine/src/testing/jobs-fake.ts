@@ -26,6 +26,8 @@ export interface FakeJob {
   tags?: string[];
   postedAt?: string | null;
   fetchedAt?: string;
+  /** Типово = fetchedAt (нова вакансія). */
+  firstSeenAt?: string;
   country?: string | null;
   dedupeKey?: string;
   source?: string;
@@ -56,7 +58,7 @@ export class FakeJobsDb extends SqliteD1 {
       j.location === undefined ? "Remote" : j.location, j.remote === false ? 0 : 1,
       j.salaryMin ?? null, j.salaryMax ?? null, j.salaryCurrency ?? null, j.source ?? "board:test",
       JSON.stringify(j.tags ?? ["web3"]), j.dedupeKey ?? `${company.toLowerCase()}|${j.title.toLowerCase()}`,
-      j.postedAt === undefined ? iso(2) : j.postedAt, fetched, fetched, j.country ?? null,
+      j.postedAt === undefined ? iso(2) : j.postedAt, fetched, j.firstSeenAt ?? fetched, j.country ?? null,
       ...(j.estimate ?? [null, null, null]));
   }
 }

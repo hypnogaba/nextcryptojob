@@ -110,6 +110,18 @@ describe("loadCrawlPool", () => {
     expect(stats.dropped.tag).toBe(1); // LIKE без регістру пропустив "WEB3", точна перевірка ні
   });
 
+  it("ATS: ще у фіді й до 90 днів, давніші за 30 рахуються в older; дошка лише 30; без дати вік від first_seen_at", async () => {
+    const iso = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
+    fake.add({ id: "ats60", title: "Solidity Engineer", source: "greenhouse:acme", postedAt: iso(60) });
+    fake.add({ id: "ats100", title: "Rust Engineer", source: "greenhouse:acme", postedAt: iso(100) });
+    fake.add({ id: "board40", title: "Go Engineer", source: "board:web3career", postedAt: iso(40) });
+    fake.add({ id: "undated", title: "Frontend Engineer", source: "rippling:acme", postedAt: null, firstSeenAt: iso(45) });
+    const { jobs, stats } = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
+    expect(jobs.map((j) => j.id).sort()).toEqual(["ats60", "undated"]);
+    expect(stats).toMatchObject({ kept: 2, older: 2 });
+    expect(jobs.find((j) => j.id === "undated")!.firstSeenAt).toBe(NOW.getTime() - 45 * 86_400_000);
+  });
+
   it("чистить не-крипто компанії й назви та назви без нашої ролі", async () => {
     fake.add({ id: "a", title: "Expert Audio Transcriber, Bulgarian", company: "Perle", companyKey: "perle" });
     fake.add({ id: "b", title: "Customer Success Manager", company: "Notion", companyKey: "notion" });

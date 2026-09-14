@@ -409,8 +409,8 @@ function Jobs({ report, error, now }: { report: JobSourcesReport | null; error: 
             />
           </Stats>
           <p className="text-xs text-ink-muted" data-hint="schedule">
-            The job scanner runs every day at {SCAN_TIME_UTC}, weekends included; a job stays live {LIVE_WINDOW_DAYS} days
-            after the last scan saw it.
+            The job scanner runs every day at {SCAN_TIME_UTC}, weekends included; a job is live while the latest scan of
+            its source lists it, and when a source fails its jobs stay live {LIVE_WINDOW_DAYS} days after its last good scan.
           </p>
           <p className="text-xs text-ink-muted">
             From the job sources report, counted <Ago at={report.computedAt} now={now} /> and cached for 10 min.

@@ -46,6 +46,7 @@ function job(p: Partial<PoolJob> = {}): PoolJob {
     location: "Remote",
     country: null,
     seenMs: T - 5 * H,
+    firstSeenMs: null,
     dedupeKey: null,
     origin: "greenhouse:a",
     salaryEstimate: null,
@@ -78,6 +79,17 @@ describe("counters", () => {
       // Вакансія компанії опублікована годину тому, скан бачив решту 5 годин тому.
       updatedMs: T - H,
     });
+  });
+
+  it("live counts every open job in the pool; new this week goes by posting date, else by first seen", () => {
+    const crawl = [
+      // Ще відкрита у фіді роботодавця, опублікована 60 днів тому: жива, але не нова.
+      job({ companyKey: "kraken", postedMs: T - 60 * 24 * H, firstSeenMs: T - 2 * 24 * H }),
+      // Без дати публікації: нова, якщо скан уперше побачив її цього тижня.
+      job({ companyKey: "rippling-co", postedMs: null, firstSeenMs: T - 3 * 24 * H }),
+      job({ companyKey: "bamboo-co", postedMs: null, firstSeenMs: T - 10 * 24 * H }),
+    ];
+    expect(homeStats(crawl, [], NOW)).toMatchObject({ live: 3, newThisWeek: 1 });
   });
 
   it("never take a time from the future as the last update", () => {
