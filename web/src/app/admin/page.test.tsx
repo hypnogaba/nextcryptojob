@@ -186,6 +186,26 @@ describe("/admin for an admin", () => {
     expect(html).toContain("no third-party scripts, no cookies");
   });
 
+  it("shows a handful of key numbers up front, and tucks the rest behind More stats", async () => {
+    const html = await render();
+    // П'ять головних чисел одразу видно, перед закритою розкривкою.
+    const keyNumbersEnd = html.indexOf("<details");
+    expect(keyNumbersEnd).toBeGreaterThan(0);
+    const upFront = html.slice(0, keyNumbersEnd);
+    expect(upFront).toMatch(/Users<\/dt><dd[^>]*>5<\/dd>/);
+    expect(upFront).toMatch(/Active today<\/dt><dd[^>]*>1<\/dd>/);
+    expect(upFront).toMatch(/Cards<\/dt><dd[^>]*>1<\/dd>/);
+    expect(upFront).toMatch(/Jobs live<\/dt><dd[^>]*>2<\/dd>/);
+    expect(upFront).toContain(">Alerts</dt>");
+    // Розкривка не відкрита за замовчуванням, і містить решту панелей.
+    expect(html).not.toMatch(/<details[^>]* open/);
+    expect(html).toContain("More stats");
+    const rest = html.slice(keyNumbersEnd);
+    for (const title of ["Candidates", "Scores", "Daily digests", "Companies", "Payments", "Jobs", "Health"]) {
+      expect(rest).toContain(`>${title}</h2>`);
+    }
+  });
+
   it("has the weekly report button, the alerts list and the demo company block", async () => {
     exec(`INSERT INTO owner_alerts (key, kind, sent_at, summary, channel) VALUES
       ('agency:app_1', 'agency', '2026-09-13 10:00:00', 'New agency application: Hire3', 'telegram')`);

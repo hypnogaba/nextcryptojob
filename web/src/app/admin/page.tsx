@@ -107,6 +107,43 @@ function Flags({ flags }: { flags: Flag[] }) {
   );
 }
 
+/**
+ * Кілька головних чисел одразу видно (власник 14.09: «занадто багато цифр і вкладок,
+ * лишити лише важливе»). Решта панелей ховається за «More stats», відкрито за потреби.
+ */
+function KeyNumbers({ o, report, flags }: { o: Overview; report: JobSourcesReport | null; flags: Flag[] }) {
+  const alertCount = flags.filter((f) => f.level === "alert").length;
+  return (
+    <Stats className="sm:grid-cols-5">
+      <Stat label="Users" value={NUM.format(o.candidates.total)} />
+      <Stat label="Active today" value={NUM.format(o.candidates.today)} note="Signed up since 00:00 UTC" />
+      <Stat label="Cards" value={NUM.format(o.candidates.cards)} />
+      <Stat label="Jobs live" value={report ? NUM.format(report.totals.liveJobs) : "?"} />
+      <Stat
+        label="Alerts"
+        value={NUM.format(alertCount)}
+        note={flags.length > alertCount ? `+${NUM.format(flags.length - alertCount)} to do` : undefined}
+        alert={alertCount > 0}
+      />
+    </Stats>
+  );
+}
+
+/** Решта панелей: закрито за замовчуванням, розгортає одним кліком. */
+function MoreStats({ children }: { children: ReactNode }) {
+  return (
+    <details className="mt-8 group">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="inline-block transition-transform group-open:rotate-90">
+          {"›"}
+        </span>
+        More stats
+      </summary>
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">{children}</div>
+    </details>
+  );
+}
+
 function SettingsLine({ settings }: { settings: AppSettings }) {
   const item = (label: string, value: string, off: boolean) => (
     <span className="whitespace-nowrap">
@@ -756,9 +793,12 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         Live counts from the database as of {CLOCK.format(now)} UTC. Reload to recount.
       </p>
       <SettingsLine settings={settings} />
+      <div className="mt-6">
+        <KeyNumbers o={overview} report={report} flags={flags} />
+      </div>
       <Flags flags={flags} />
 
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+      <MoreStats>
         <Visitors v={visits} />
         <Candidates o={overview} />
         <div className="grid gap-6">
@@ -771,7 +811,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         <Health o={overview} report={report} />
         <Owner alerts={alerts} now={now} status={statusFor(query, "owner")} />
         <Demo demo={demo} status={statusFor(query, "demo")} />
-      </div>
+      </MoreStats>
 
       <p className="mt-8 text-xs text-ink-muted" data-cost="">
         This page ran {overview.statements} database statements in one batch
