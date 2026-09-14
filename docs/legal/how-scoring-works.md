@@ -123,7 +123,7 @@ changes or when we release a new formula version.
 
 - You.
 - The public, only on your card page if you publish it: score, role and level. No wallets, no links.
-- Paying companies, while "Show me to companies" is on. It is on when you finish setting up, and you can turn it off at any time in Settings. They can filter by score. They never see your wallet addresses or raw data.
+- Paying companies, while "Show me to companies" is on. It is on when you finish setting up, and you can turn it off at any time in Settings. They can filter by score. While "Show my Telegram directly" is also on, they also see your Telegram, X, GitHub, YouTube, website and wallet addresses. They never see your email without your approval, or raw data.
 
 Companies must not decide to hire or reject anyone based only on the score. A person
 must decide.

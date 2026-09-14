@@ -29,13 +29,19 @@ export const TERMS_ACCEPTANCE = {
  */
 export const SCORING_BASIS_SQL = `('${SCORING_CONSENT.kind}', '${TERMS_ACCEPTANCE.kind}')`;
 
-/** «Show me to companies» у налаштуваннях (docs/legal/consents.md, розділ 2). */
+/**
+ * «Show me to companies» у налаштуваннях (docs/legal/consents.md, розділ 2). Текст оновлено
+ * 14.09 (C4): поки «Show my Telegram directly» теж увімкнено, компанія бачить не лише
+ * позначки джерел, а й самі посилання та адреси гаманців (lib/crm/project.ts, linksOf).
+ * Версія лишається v1: політика ще чернетка, до перевірки юристом (docs/legal/privacy-policy.md).
+ */
 export const VISIBILITY_CONSENT = {
   kind: "visibility",
   version: "v1",
   text:
     "Show me to companies with access: they can see my scores, roles, level, chains and verification badges, " +
-    "but never my wallet addresses, email or handles.",
+    "and, while Show my Telegram directly is also on, my Telegram, X, GitHub, YouTube, website and wallet " +
+    "addresses. They never see my email without my approval.",
 } as const;
 
 /**

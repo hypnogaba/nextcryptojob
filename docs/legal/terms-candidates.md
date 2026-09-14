@@ -94,7 +94,7 @@ one month.
 ## 7. Visibility to companies and contact
 
 - When you finish setting up, "Show me to companies" is on: being found by companies is what the service is for. You can turn it off at any time in Settings. While it is off, companies cannot find you.
-- When it is on, paying companies can see your score, roles, level, networks and verification badges. They never see your wallet addresses or raw data.
+- When it is on, paying companies can see your score, roles, level, networks and verification badges. While "Show my Telegram directly" is also on, they see your Telegram, X, GitHub, YouTube, website and wallet addresses too. They never see your email without your approval, or raw data.
 - You choose how companies reach you:
   - "Show my Telegram directly" (on when you finish setting up; turn it off in Settings): companies that can see your profile also see your Telegram handle and can message you. If you have no Telegram username, they send you an intro request instead. We never show your email in this mode.
   - "Only after I approve each company": you see each request, with the company and role, and answer yes or no.

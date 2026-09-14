@@ -221,7 +221,7 @@ processing is not occasional and includes profiling.
 - Rate limits per email, per IP and per API key.
 - Telegram webhook protected by a secret header.
 - Companies isolated from each other at query level; tests check cross-company access.
-- Companies never receive wallet addresses or raw source data.
+- Companies receive wallet addresses and public account links only while the candidate has "Show my Telegram directly" on (opt-out in Settings); they never receive raw source data.
 - Secrets kept in Worker secrets and in a root-only environment file on the engine server; never in the repository.
 - Admin access limited to the operator, with strong authentication.
 - Audit log for consent changes, exports, deletions, contact sharing and admin actions.

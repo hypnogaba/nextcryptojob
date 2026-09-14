@@ -64,7 +64,7 @@ adds. There is no separate scoring box any more.
 - **Requires:** `terms` or an older `scoring` record (no score, nothing to show).
 - **Legal basis:** contract, art. 6(1)(b) GDPR, with an opt-out at any time.
 
-> Show me to paying companies: they can see and filter by my score, roles, level, networks and verification badges, but never my wallet addresses or raw data. [What companies see](https://nextcryptojob.xyz/privacy#companies)
+> Show me to paying companies: they can see and filter by my score, roles, level, networks and verification badges, and, while Show my Telegram directly is also on, my Telegram, X, GitHub, YouTube, website and wallet addresses. They never see my raw data. [What companies see](https://nextcryptojob.xyz/privacy#companies)
 
 **Help text under the switch (not part of the consent):**
 
