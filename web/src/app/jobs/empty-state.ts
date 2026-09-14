@@ -1,6 +1,6 @@
 import { hourLabel } from "@/lib/digest/format";
 import type { DigestSetup } from "@/lib/digest/history";
-import { type NoMatchReason, roleList, roughCount } from "@/lib/jobs/instant";
+import { type Checked, type NoMatchReason, roleList, roughCount } from "@/lib/jobs/instant";
 
 /**
  * Чому на /jobs порожньо, словами людини, і куди йти далі. Порядок той, у якому
@@ -129,4 +129,15 @@ export function noMatch(reason: NoMatchReason): EmptyState {
         cta: "Change your roles",
       };
   }
+}
+
+/** «We checked 1,437 live jobs from 318 sources. These 5 fit you best.» Числа з пулу, з якого вибирав підбір. */
+export function checkedLine(checked: Checked, shown: number): { lead: string; tail: string } {
+  const jobs = checked.jobs.toLocaleString("en-US");
+  const sources = checked.sources.toLocaleString("en-US");
+  const from = checked.sources > 0 ? ` from ${sources} source${checked.sources === 1 ? "" : "s"}` : "";
+  return {
+    lead: `We checked ${jobs} live job${checked.jobs === 1 ? "" : "s"}${from}.`,
+    tail: shown === 1 ? "This one fits you best." : `These ${shown} fit you best.`,
+  };
 }

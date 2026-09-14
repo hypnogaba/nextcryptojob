@@ -527,6 +527,29 @@ Development (функції Community у Getro немає; назву з «commu
 4. `/etc/nextcryptojob-engine.env`: `JOBS_GETRO_DISCOVERY='1'` (як у §3, одинарні лапки). Перший прогін
    можна насухо: `runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js jobs-discover --dry --out /tmp/discover.json`.
 
+### Домен і опис роботодавця (`jobs-about`, db/jobs/0005)
+
+Картка вакансії на `/jobs`, лист і Telegram показують значок компанії й одне-два речення про те, що вона
+робить. Їх бере `jobs-about` (`src/jobs/about.ts`) у стовпці `companies.domain` і `companies.about`
+(міграція `db/jobs/0005_company_profile.sql`). Сам іде щотижня одразу після `jobs-discover` (той самий юніт і
+таймер, змін у systemd немає; збій тут не міняє результату розвідки); окремо: `node dist/cli.js jobs-about [--dry]`.
+
+- Домен, без жодного запиту: примітка реєстру «company site https://…», слаг Ashby, що сам є доменом
+  (`kraken.com`), і найчастіший власний хост серед адрес вакансій компанії в `jobs_cache` (Greenhouse часто
+  веде на `coinbase.com/careers`). Хости ATS, дошок і загальних сервісів доменом не стають ніколи.
+- Опис: дошка Greenhouse (`boards-api.greenhouse.io/v1/boards/<slug>`, поле `content`), акаунт Workable
+  (`apply.workable.com/api/v1/widget/accounts/<slug>`, поле `description`), `blurb` мережі speedrun для
+  компаній, яких мережа знає за назвою. Лише увімкнені компанії без опису, не більше `JOBS_ABOUT_BUDGET`
+  (типово 150) запитів за прогін; збій одного лишає поле порожнім до наступного тижня. Із тексту береться
+  перше одне-два речення про компанію (без заголовків, запитань і речень про саму вакансію), до 240 символів.
+- Запис лише відсутнього: заповнене (зокрема руками) не переписується, null не пишеться, рядок без змін не
+  зачіпається. Перший прогін пише кілька сотень рядків (1 на компанію, індексу на стовпцях немає), далі лише
+  нових роботодавців. Без стовпців (0005 не накочено) команда пише один рядок у журнал і нічого не робить.
+
+Накочування (controller): `npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0005_company_profile.sql`,
+новий `dist` engine, далі перше заповнення руками:
+`runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js jobs-about` (насухо спершу з `--dry`).
+
 ### Сухий прогін усіх джерел 14.09.2026 (після обох правок)
 
 `env -u CF_JOBS_D1_DATABASE_ID WEB3CAREER_TOKEN=… npx tsx src/cli.ts jobs-scan --dry` з Mac, реєстр засіву
@@ -606,7 +629,8 @@ npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
 | `JOBS_WINDOW_DAYS` | ні (30) | вікно від публікації для дошок і агрегаторів |
 | `JOBS_ATS_WINDOW_DAYS` | ні (90) | вікно від публікації для власних дошок роботодавців на ATS |
 | `JOBS_PRUNE_DAYS` | ні (30) | `jobs-prune`: скільки днів скан мав не бачити вакансію |
-| `JOBS_SPEEDRUN` | ні (1) | `0` вимикає speedrun у скані й розвідці |
+| `JOBS_SPEEDRUN` | ні (1) | `0` вимикає speedrun у скані, розвідці й `jobs-about` |
+| `JOBS_ABOUT_BUDGET` | ні (150) | `jobs-about`: скільки запитів за описом компаній за прогін найбільше |
 | `JOBS_SUPERTEAM` | ні (0) | `1` вмикає Superteam Earn |
 | `JOBS_GETRO_DISCOVERY` | так, `'1'` (рішення власника 14.09) | розвідка з дошок Getro реєстру `job_boards` (ризик умов прийнято, «Дошки екосистем і фондів» нижче); `0` вимикає, без рядка вимкнено |
 | `JOBS_GETRO_MAX_PAGES` | ні (50) | стеля сторінок списку компаній на одну дошку (12 компаній на сторінку) |

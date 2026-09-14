@@ -1,4 +1,8 @@
 import type { JobsDb } from "@/lib/jobs-db";
+import { isRoleKey } from "@/lib/card/roles";
+import { companyKey } from "@/lib/jobs/clean";
+import { type CompanyProfiles, companyProfiles, profileFor } from "@/lib/jobs/companies";
+import type { FitContext } from "@/lib/jobs/fit";
 import type { BriefRow } from "@/lib/jobs/instant";
 import { normalizeSavedStep, parseSavedStep, type SavedStep } from "@/lib/onboarding/steps";
 import type { Channel } from "@/lib/telegram/channel";
@@ -42,6 +46,10 @@ export type JobDetails = {
   postedBy: string | null;
   /** Оцінка дошки підписом («est. … (web3.career estimate)»), лише без зарплати; null для решти. */
   salaryEstimate?: string | null;
+  /** Про компанію з реєстру (db/jobs 0005), лише для вакансій зі сканування. */
+  about?: string | null;
+  /** Домен компанії для значка (/api/logo). */
+  domain?: string | null;
 };
 
 export type SentJob = {
@@ -78,6 +86,8 @@ export type JobsPage = {
   setup: DigestSetup;
   /** Анкета людини для «Jobs for you now» (lib/jobs/instant.ts). */
   brief: BriefRow;
+  /** Слова людини й її бали: для причин «чому підходить» (lib/jobs/fit.ts). */
+  fit: FitContext;
   /** Досягнутий крок анкети (як loadAnswers): чи показувати «Stand out to companies». */
   step: SavedStep;
   /** sent.job_ref цієї людини, будь-який статус; порожньо, якщо історію не прочитали. */
@@ -96,6 +106,7 @@ type UserRow = BriefRow & {
   digest_paused: number;
   onboarding_step: string | null;
   scoring: number | null;
+  target_text: string | null;
 };
 
 type SentRow = {
@@ -186,7 +197,7 @@ async function digestRows(
 
 const placeholders = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 
-async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, JobDetails> | null> {
+async function crawlDetails(jobs: JobsDb, ids: string[], profiles: CompanyProfiles): Promise<Map<string, JobDetails> | null> {
   if (ids.length === 0) return new Map();
   let rows: NrRow[];
   try {
@@ -204,6 +215,7 @@ async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, Jo
   return new Map(
     rows.map((r) => {
       const estimate = estimateText(salaryEstimateOf(r));
+      const known = profileFor(profiles, companyKey(r.company));
       return [
       `nr:${r.id}`,
       {
@@ -214,6 +226,7 @@ async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, Jo
         url: safeUrl(r.url),
         postedBy: null,
         ...(estimate ? { salaryEstimate: estimate } : {}),
+        ...(known ? { about: known.about, domain: known.domain } : {}),
       },
       ];
     }),
@@ -262,12 +275,25 @@ async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string,
   );
 }
 
+/** Бали людини за ролями (scores): причина «Your Engineer score is 72». Не прочитали: без цієї причини. */
+export async function userScores(d: D1Database, userId: string): Promise<FitContext["scores"]> {
+  try {
+    const { results } = await d.prepare("SELECT role, score FROM scores WHERE user_id = ?").bind(userId).all<{ role: string; score: number | null }>();
+    const out: FitContext["scores"] = {};
+    for (const r of results) if (isRoleKey(r.role)) out[r.role] = r.score;
+    return out;
+  } catch (e) {
+    console.warn(`jobs page: scores read failed (${errorName(e)})`);
+    return {};
+  }
+}
+
 /** Усе для сторінки /jobs однієї людини; null, якщо людини вже немає. */
 export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string): Promise<JobsPage | null> {
-  const [user, history] = await Promise.all([
+  const [user, history, scores, profiles] = await Promise.all([
     d
       .prepare(
-        `SELECT email, telegram_id, channel, digest_hour, timezone, digest_paused,
+        `SELECT email, telegram_id, channel, digest_hour, timezone, digest_paused, target_text,
                 roles, remote_mode, city, salary_min, salary_currency, onboarding_step,
                 (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
            FROM users WHERE id = ?`,
@@ -275,6 +301,8 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
       .bind(userId)
       .first<UserRow>(),
     digestRows(d, userId),
+    userScores(d, userId),
+    companyProfiles(() => jobs),
   ]);
   if (!user) return null;
   const sent = history?.sent ?? [];
@@ -292,7 +320,7 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     [...new Set(sent.filter((s) => s.job_ref.startsWith(prefix)).map((s) => s.job_ref.slice(prefix.length)))];
   // 'nr:' це вакансія зі сканування (мітка з часів NextRole, sent.job_ref). Посилання, надіслані до
   // 14.09.2026, вказують на id старої бази: у новій їх немає, тож вони показуються як «gone».
-  const [nr, co] = await Promise.all([crawlDetails(jobs, refs("nr:")), companyDetails(d, refs("co:"))]);
+  const [nr, co] = await Promise.all([crawlDetails(jobs, refs("nr:"), profiles), companyDetails(d, refs("co:"))]);
 
   const digests: SentDigest[] = [];
   for (const s of sent) {
@@ -314,5 +342,52 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     salary_currency: user.salary_currency,
   };
   const step = normalizeSavedStep(parseSavedStep(user.onboarding_step), user.scoring === 1);
-  return { setup, brief, step, sentRefs: history?.refs ?? new Set(), digests, historyError: history === null };
+  const fit: FitContext = { words: user.target_text?.trim() || null, scores };
+  return { setup, brief, fit, step, sentRefs: history?.refs ?? new Set(), digests, historyError: history === null };
+}
+
+// ---------------------------------------------------------------------------
+// Бот: /jobs
+
+/** Скільки останніх надісланих вакансій показує /jobs у боті. */
+export const BOT_JOBS_LIMIT = 10;
+
+export type RecentJob = {
+  ref: string;
+  /** YYYY-MM-DD у поясі людини: день добірки. */
+  localDate: string;
+  state: SentJob["state"];
+  details: JobDetails | null;
+};
+
+const NO_PROFILES: CompanyProfiles = { byKey: new Map(), domains: new Set() };
+
+/**
+ * Останні `limit` вакансій, які добірка справді надіслала цій людині (sent.status = 'sent'), новіші
+ * зверху. Лише user_id людини: і `sent`, і `digest_runs` обмежено ним. null, якщо наша база не відповіла.
+ */
+export async function recentSentJobs(d: D1Database, jobs: JobsDb, userId: string, limit = BOT_JOBS_LIMIT): Promise<RecentJob[] | null> {
+  let rows: { job_ref: string; local_date: string }[];
+  try {
+    ({ results: rows } = await d
+      .prepare(
+        `SELECT s.job_ref, r.local_date
+           FROM sent s JOIN digest_runs r ON r.id = s.digest_id AND r.user_id = s.user_id
+          WHERE s.user_id = ? AND s.status = 'sent'
+          ORDER BY r.local_date DESC, s.digest_id DESC, s.position
+          LIMIT ?`,
+      )
+      .bind(userId, limit)
+      .all<{ job_ref: string; local_date: string }>());
+  } catch (e) {
+    console.warn(`bot jobs: history read failed (${errorName(e)})`);
+    return null;
+  }
+  const ids = (prefix: string) => [...new Set(rows.filter((r) => r.job_ref.startsWith(prefix)).map((r) => r.job_ref.slice(prefix.length)))];
+  const [nr, co] = await Promise.all([crawlDetails(jobs, ids("nr:"), NO_PROFILES), companyDetails(d, ids("co:"))]);
+  return rows.map((r) => {
+    const source = r.job_ref.startsWith("nr:") ? nr : co;
+    const details = source?.get(r.job_ref) ?? null;
+    return { ref: r.job_ref, localDate: r.local_date, state: details ? "ok" : source === null ? "unavailable" : "gone", details };
+  });
 }

@@ -8,6 +8,7 @@
 //   node dist/cli.js digest-due [--dry-run [--user <id> | --profile <json>]]
 //   node dist/cli.js jobs-scan [--dry] [--registry <file>] [--out <file>]
 //   node dist/cli.js jobs-discover [--dry] [--out <file>]
+//   node dist/cli.js jobs-about [--dry]
 //   node dist/cli.js jobs-prune [--dry] [--days N]
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,7 @@ import type { CollectorRegistry, EngineEnv } from "./pipeline/registry.js";
 import { FORMULA_VERSION } from "./formula/score.js";
 import { scoreUser } from "./pipeline/run-person.js";
 import { formatScoreFacts, type ScoreFactsArgs, scoreFacts } from "./pipeline/score-facts.js";
+import { runCompanyAbout } from "./jobs/about.js";
 import { runJobsDiscover } from "./jobs/discover.js";
 import { JOBS_DB_ENV, jobsD1FromEnv } from "./jobs/env.js";
 import { runJobsPrune } from "./jobs/prune.js";
@@ -59,6 +61,9 @@ export const USAGE = `usage: nextcryptojob-engine <command>
                                            this JSON (default db/jobs/seed/registry.json)
       [--out <file>]                       also write the report and the rows as JSON
   jobs-discover [--dry] [--out <file>]     add new crypto companies with a public ATS to the registry (weekly)
+                                           (then jobs-about for the whole registry)
+  jobs-about [--dry]                       fill a missing company domain and a one or two sentence "about" from
+                                           the registry note, job links, Greenhouse, Workable and speedrun
   jobs-prune [--dry] [--days N]            delete jobs the scan has not seen for N days (default 30; weekly)`;
 
 /** Залежності команд: у тестах підставні, у продукті з оточення. */
@@ -202,9 +207,22 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
         const dry = has(args, "--dry");
         const outFile = flag(args, "--out");
         if (args.length) { err(USAGE); return 2; }
-        const report = await runJobsDiscover({ store: jobsStore(deps, dry), env: deps.env, log: out,
-          fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
+        const fetch = deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined;
+        const report = await runJobsDiscover({ store: jobsStore(deps, dry), env: deps.env, log: out, fetch });
         if (outFile) writeFileSync(outFile, JSON.stringify(report, null, 1));
+        // Нові роботодавці одразу отримують домен і опис. Збій тут результату розвідки не міняє.
+        try {
+          await runCompanyAbout({ store: jobsStore(deps, dry), env: deps.env, log: out, fetch });
+        } catch (e) {
+          out(`jobs-about after jobs-discover failed: ${shortError(e, 300)}`);
+        }
+        return 0;
+      }
+      case "jobs-about": {
+        const dry = has(args, "--dry");
+        if (args.length) { err(USAGE); return 2; }
+        await runCompanyAbout({ store: jobsStore(deps, dry), env: deps.env, log: out,
+          fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
         return 0;
       }
       case "jobs-prune": {

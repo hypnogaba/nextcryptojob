@@ -227,3 +227,42 @@ export async function loadCompanyPool(db: Db, log: (l: string) => void, siteUrl:
   }
   return rows.map((r) => companyJob(r, siteUrl)).filter((j): j is DigestJob => j !== null);
 }
+
+// ---------------- про компанію (db/jobs/0005) ----------------
+
+/** Що знаємо про роботодавця: домен для значка, одне-два речення про те, що він робить. */
+export type CompanyProfile = { domain: string | null; about: string | null };
+
+/** Рядки реєстру, де хоч щось заповнено (пише engine jobs-about). Кілька сотень рядків, один запит на прогін. */
+export const PROFILES_SQL = "SELECT name, domain, about FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL";
+
+/** Домен, яким можна вірити як імені хоста: лише літери, цифри, дефіс і крапки. */
+export const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+
+/**
+ * Профілі за ключем компанії (companyKey назви, як jobs_cache.company_key вакансій з ATS цієї компанії).
+ * Два рядки з одним ключем: перший непорожній домен і перший непорожній опис. Без 0005 (стовпців
+ * немає) або коли база не відповіла: порожньо, і добірка йде без речень про компанію.
+ */
+export async function loadCompanyProfiles(jobs: JobsDb, log: (l: string) => void): Promise<Map<string, CompanyProfile>> {
+  const out = new Map<string, CompanyProfile>();
+  let rows: Array<{ name: string; domain: string | null; about: string | null }>;
+  try {
+    rows = (await jobs.select<{ name: string; domain: string | null; about: string | null }>(PROFILES_SQL)).rows;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log(/no such column/i.test(msg)
+      ? "digest: companies.domain/about missing (db/jobs 0005 not applied), jobs go without the company sentence"
+      : `digest: company profiles not read (${msg.slice(0, 120)})`);
+    return out;
+  }
+  for (const r of rows) {
+    const key = companyKey(r.name);
+    if (!key) continue;
+    const domain = r.domain && DOMAIN_RE.test(r.domain.trim().toLowerCase()) ? r.domain.trim().toLowerCase() : null;
+    const about = r.about?.replace(/\s+/g, " ").trim() || null;
+    const cur = out.get(key);
+    out.set(key, { domain: cur?.domain ?? domain, about: cur?.about ?? about });
+  }
+  return out;
+}

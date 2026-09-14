@@ -35,6 +35,8 @@ export interface DeliveryJob {
   source: "nextrole" | "company";
   /** «est. $180k to $225k (web3.career estimate)», лише коли вилки роботодавця немає; оцінка, не зарплата. */
   salaryEstimate?: string | null;
+  /** Одне-два речення про компанію (companies.about, db/jobs 0005); null, якщо не знаємо. */
+  about?: string | null;
 }
 
 export interface DigestMessage {
@@ -43,6 +45,8 @@ export interface DigestMessage {
   /** Дата людини, YYYY-MM-DD. */
   localDate: string;
   jobs: DeliveryJob[];
+  /** Скільки живих вакансій переглянув підбір (пул прогону): «We checked 1,437 live jobs». */
+  checked?: number | null;
 }
 
 export interface DeliveryUser {
@@ -131,8 +135,16 @@ export function jobVia(url: string): string | null {
   return host === "web3.career" || host?.endsWith(".web3.career") ? "web3.career" : null;
 }
 
+/** «We checked 1,437 live crypto jobs. These 5 fit you best.»; null, якщо переглянутих не знаємо. */
+export function checkedLine(checked: number | null | undefined, shown: number): string | null {
+  if (!checked || checked < shown || shown <= 0) return null;
+  const these = shown === 1 ? "This one fits" : `These ${shown} fit`;
+  return `We checked ${checked.toLocaleString("en-US")} live crypto job${checked === 1 ? "" : "s"}. ${these} you best.`;
+}
+
 export function telegramText(m: DigestMessage, siteUrl: string): string {
-  const head = `<b>Your crypto jobs for ${escapeHtml(shortDate(m.localDate))}</b>`;
+  const checked = checkedLine(m.checked, m.jobs.length);
+  const head = `<b>Your crypto jobs for ${escapeHtml(shortDate(m.localDate))}</b>${checked ? `\n${escapeHtml(checked)}` : ""}`;
   const blocks = m.jobs.map((j) => {
     const meta = [cleanText(j.company, 60), j.location ? cleanText(j.location, 60) : null, j.salary].filter(Boolean).join(" · ");
     // Посиланням у Telegram лише http(s). Вакансія компанії може подаватись поштою (apply_url mailto:):
@@ -145,6 +157,8 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
       // Оцінка дошки окремим рядком, не в рядку зарплати: це не пропозиція роботодавця.
       ...(j.salaryEstimate && !j.salary ? [escapeHtml(j.salaryEstimate)] : []),
       `<i>${escapeHtml(j.why)}</i>`,
+      // Що робить компанія: лише коли знаємо з її дошки чи speedrun (companies.about).
+      ...(j.about ? [escapeHtml(cleanText(j.about, 240))] : []),
     ];
     if (!linked && /^mailto:/i.test(j.url)) lines.push(`Apply: ${escapeHtml(j.url.replace(/^mailto:/i, "").split("?")[0]!)}`);
     if (j.postedBy) lines.push(`Posted by ${escapeHtml(cleanText(j.postedBy, 60))} on NextCryptoJob`);
@@ -152,7 +166,8 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
     if (via) lines.push(`via ${via}`);
     return lines.join("\n");
   });
-  const foot = `Change the time or pause the digest: <a href="${escapeHtml(siteUrl)}/account">your account</a>.`;
+  const foot = `Earlier jobs: send /jobs. Every job with its reasons: <a href="${escapeHtml(siteUrl)}/jobs">your jobs</a>. ` +
+    `Change the time or pause: <a href="${escapeHtml(siteUrl)}/settings">settings</a>.`;
   let text = [head, ...blocks, foot].join("\n\n");
   // П'ять вакансій у 4096 символів вміщаються з запасом; обрізаємо лише на випадок дивних даних.
   while (text.length > TELEGRAM_MAX_CHARS && blocks.length > 1) {
@@ -225,21 +240,27 @@ export interface EmailPayload {
   local_date: string;
   /** Unix-секунди підпису: сайт відкидає запити старші за 5 хвилин. */
   ts: number;
+  /** Скільки живих вакансій переглянув підбір (з 14.09.2026, необов'язкове): рядок «We checked …» у листі. */
+  pool_jobs?: number;
   jobs: Array<{
     position: number; title: string; company: string; location: string | null; salary: string | null;
     why: string; url: string; posted_by: string | null; source: "nextrole" | "company";
     /** Оцінка дошки підписом (DeliveryJob.salaryEstimate); сайт показує її приглушено. */
     salary_estimate: string | null;
+    /** Одне-два речення про компанію (з 14.09.2026, необов'язкове). */
+    about?: string | null;
   }>;
 }
 
 export function emailPayload(m: DigestMessage, now: Date): EmailPayload {
   return {
     version: 1, digest_id: m.digestId, user_id: m.userId, local_date: m.localDate, ts: Math.floor(now.getTime() / 1000),
+    ...(m.checked ? { pool_jobs: m.checked } : {}),
     jobs: m.jobs.map((j) => ({
       position: j.position, title: cleanText(j.title, 200), company: cleanText(j.company, 100),
       location: j.location ? cleanText(j.location, 100) : null, salary: j.salary, why: j.why, url: j.url,
       posted_by: j.postedBy, source: j.source, salary_estimate: j.salary ? null : j.salaryEstimate ?? null,
+      about: j.about ? cleanText(j.about, 240) : null,
     })),
   };
 }

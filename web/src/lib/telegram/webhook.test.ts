@@ -1,10 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { exec, resetHarness, rows } from "@/test/harness";
+import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import { BOT_TEXT, parseCommand } from "./bot";
 import { BOT_CHAT_LIMITS, handleWebhookRequest } from "./webhook";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
+
+// База вакансій для /jobs: прив'язку підміняємо на рівні модуля, як і в Worker лише через jobsDb().
+const jobsHolder = vi.hoisted(() => ({ db: null as JobsDb | null }));
+vi.mock("@/lib/jobs-db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
+  jobsDb: () => jobsHolder.db,
+}));
 
 const SECRET = "a".repeat(64);
 const TOKEN = "123456:bot-token";
@@ -115,15 +124,36 @@ describe("commands", () => {
     expect(String(sent[0].body.text)).toContain(`<a href="${ORIGIN}/login">site.test/login</a>`);
   });
 
-  it("/start greets a linked person differently", async () => {
-    exec("INSERT INTO users (id, telegram_id) VALUES ('u1', '555')");
+  it("/start to a stranger explains how it works and what comes when", async () => {
     await post(message("/start"));
-    expect(sent[0].body.text).toBe(BOT_TEXT.startKnown(ORIGIN));
+    const text = String(sent[0].body.text);
+    expect(text).toContain("in your own words");
+    expect(text).toContain("send you the 5 that fit you best");
+    expect(text).toContain("says why it fits you");
+    expect(text).toContain("/help lists the commands.");
   });
 
-  it("/help lists the commands", async () => {
+  it("/start greets a linked person with their hour, channel and /jobs", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, digest_hour, timezone) VALUES ('u1', '555', 'telegram', 9, 'Europe/Paris')");
+    await post(message("/start"));
+    expect(sent[0].body.text).toBe(BOT_TEXT.startKnown(ORIGIN, { hour: 9, timezone: "Europe/Paris", channel: "telegram", hasEmail: false }));
+    expect(plain()).toContain("Your jobs come every day at 09:00 (Europe/Paris), in this chat");
+    expect(plain()).toContain("/jobs shows the jobs we already sent you.");
+    expect(String(sent[0].body.text)).toContain(`<a href="${ORIGIN}/welcome?step=target">your brief</a>`);
+  });
+
+  it("/help explains how it works, lists every command and the site pages", async () => {
     await post(message("/help"));
-    expect(sent[0].body.text).toBe(BOT_TEXT.help(ORIGIN));
+    expect(sent[0].body.text).toBe(BOT_TEXT.help(ORIGIN, null));
+    for (const c of ["/jobs", "/stop", "/start", "/help"]) expect(plain()).toContain(c);
+    expect(String(sent[0].body.text)).toContain(`<a href="${ORIGIN}/settings">Settings</a>`);
+    expect(plain()).toContain("This Telegram is not connected yet.");
+  });
+
+  it("/help to a linked person says when their jobs come", async () => {
+    exec("INSERT INTO users (id, email, telegram_id, channel, digest_hour, timezone) VALUES ('u1', 'a@example.com', '555', 'email', 7, 'America/New_York')");
+    await post(message("/help"));
+    expect(plain()).toContain("Your jobs come every day at 07:00 (America/New York), by email.");
   });
 
   it("answers other text with the list of commands", async () => {
@@ -156,7 +186,9 @@ describe("/stop", () => {
     const [{ channel }] = rows<{ channel: string }>("SELECT channel FROM users");
     await post(message("/stop"));
     expect(rows("SELECT digest_paused, channel FROM users")).toEqual([{ digest_paused: 1, channel }]);
-    expect(plain()).toBe("Daily jobs are paused. Send /start to resume, or change it in Settings.");
+    expect(plain()).toBe(
+      "Daily jobs are paused. We keep your brief and the jobs we sent you (/jobs).\n\nSend /start to resume, or change it in Settings.",
+    );
     expect(String(sent[0].body.text)).toContain(`<a href="${ORIGIN}/settings">Settings</a>`);
     expect(rows("SELECT actor, action, meta_json FROM audit_log")).toEqual([
       { actor: "u1", action: "bot.stop", meta_json: '{"digest_paused":true}' },
@@ -167,7 +199,7 @@ describe("/stop", () => {
     exec("INSERT INTO users (id, telegram_id, channel, digest_paused) VALUES ('u1', '555', 'telegram', 1)");
     await post(message("/stop"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 1 }]);
-    expect(plain()).toBe("Daily jobs are paused. Send /start to resume, or change it in Settings.");
+    expect(plain()).toContain("Daily jobs are paused.");
     expect(rows("SELECT action FROM audit_log")).toEqual([]);
   });
 
@@ -184,8 +216,8 @@ describe("/start after /stop", () => {
     exec("INSERT INTO users (id, telegram_id, channel, digest_paused) VALUES ('u1', '555', 'telegram', 1)");
     await post(message("/start"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
-    expect(sent[0].body.text).toBe(BOT_TEXT.startResumed(ORIGIN, "telegram"));
-    expect(plain()).toContain("Daily jobs are back on. They come to this chat.");
+    expect(sent[0].body.text).toBe(BOT_TEXT.startResumed(ORIGIN, { hour: 7, timezone: null, channel: "telegram", hasEmail: false }));
+    expect(plain()).toContain("Daily jobs are back on. They come every day at 07:00 (UTC), in this chat.");
     expect(rows("SELECT actor, action, meta_json FROM audit_log")).toEqual([
       { actor: "u1", action: "bot.start", meta_json: '{"digest_paused":false}' },
     ]);
@@ -197,7 +229,7 @@ describe("/start after /stop", () => {
     );
     await post(message("/start"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
-    expect(plain()).toContain("Daily jobs are back on. They go to your email.");
+    expect(plain()).toContain("Daily jobs are back on. They come every day at 07:00 (UTC), by email.");
   });
 
   it("a stop then a start leaves daily jobs on", async () => {
@@ -341,5 +373,60 @@ describe("per-chat limit", () => {
   it("stops answering a chat that floods the bot", async () => {
     for (let i = 0; i < BOT_CHAT_LIMITS.maxAttempts + 3; i++) await post(message("/help"));
     expect(sent).toHaveLength(BOT_CHAT_LIMITS.maxAttempts);
+  });
+});
+
+describe("/jobs", () => {
+  const f = new Date(Date.now() - 3_600_000).toISOString();
+
+  beforeEach(() => {
+    const jobs = jobsTestDb();
+    addPoolJob(jobs.raw, { id: "mine1", title: "Solidity Engineer", company: "Aave", fetchedAt: f, url: "https://jobs.example.com/mine1?a=1&b=2" });
+    addPoolJob(jobs.raw, { id: "mine2", title: "Community Manager", company: "Koinly", fetchedAt: f, url: "https://web3.career/r/wczNxUTM__U4HFyv" });
+    addPoolJob(jobs.raw, { id: "theirs", title: "Secret Role", company: "Other Labs", fetchedAt: f });
+    jobsHolder.db = readOnlyJobsDb(jobs.d1);
+    exec("INSERT INTO users (id, telegram_id, channel, digest_hour, timezone) VALUES ('u1', '555', 'telegram', 8, 'Europe/Kyiv'), ('u2', '777', 'telegram', 8, NULL)");
+    exec(`INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES
+      ('dg_1', 'u1', '2026-09-12', 'sent', 1, 'telegram'), ('dg_2', 'u1', '2026-09-13', 'sent', 1, 'telegram'),
+      ('dg_3', 'u2', '2026-09-13', 'sent', 1, 'telegram'), ('dg_4', 'u1', '2026-09-14', 'failed', 1, 'telegram')`);
+    exec(`INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES
+      ('u1', 'nr:mine1', 'nextrole', 'dg_1', 1, 'sent', 'telegram', 'x'),
+      ('u1', 'nr:mine2', 'nextrole', 'dg_2', 1, 'sent', 'telegram', 'x'),
+      ('u2', 'nr:theirs', 'nextrole', 'dg_3', 1, 'sent', 'telegram', 'x'),
+      ('u1', 'nr:gone', 'nextrole', 'dg_4', 1, 'failed', 'telegram', 'x')`);
+  });
+
+  it("lists only the jobs sent to this Telegram's own profile, newest first, with exact links", async () => {
+    await post(message("/jobs", { fromId: 555 }));
+    const text = String(sent[0].body.text);
+    expect(text).toContain("The last 2 jobs we sent you");
+    expect(text.indexOf("Community Manager")).toBeLessThan(text.indexOf("Solidity Engineer"));
+    expect(text).toContain('<a href="https://jobs.example.com/mine1?a=1&amp;b=2">Solidity Engineer</a>');
+    // web3.career: адреса як є і джерело названо.
+    expect(text).toContain('<a href="https://web3.career/r/wczNxUTM__U4HFyv">Community Manager</a>');
+    expect(text).toContain("via web3.career");
+    expect(text).toContain("<b>Sep 13</b>");
+    expect(text).toContain(`<a href="${ORIGIN}/jobs">your jobs page</a>`);
+    // Чуже й не надіслане (failed) не показується.
+    expect(text).not.toContain("Secret Role");
+    expect(text).not.toContain("Other Labs");
+    expect(text).not.toContain("no longer listed");
+
+    await post(message("/jobs", { fromId: 777 }));
+    const other = String(sent[1].body.text);
+    expect(other).toContain("Secret Role");
+    expect(other).not.toContain("Solidity Engineer");
+    expect(other).not.toContain("Community Manager");
+  });
+
+  it("a Telegram without a profile gets a sign-in link, and nobody's jobs", async () => {
+    await post(message("/jobs", { fromId: 999 }));
+    expect(sent[0].body.text).toBe(BOT_TEXT.jobsNotLinked(ORIGIN));
+  });
+
+  it("nothing sent yet: says when the first jobs come", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, digest_hour, timezone) VALUES ('u3', '888', 'telegram', 6, 'UTC')");
+    await post(message("/jobs", { fromId: 888 }));
+    expect(plain()).toContain("We have not sent you any jobs yet. Your first ones come every day at 06:00 (UTC), in this chat.");
   });
 });

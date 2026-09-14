@@ -14,7 +14,18 @@ const UNDERPRINT_ON_BLACK = underprintDataUri("#a9adb2", 0.16);
  * до шести джерел з «gap» замість нуля, рядок сезону й номера.
  * EXAMPLE з'являється лише на face.kind === "example".
  */
-export function CardFront({ face, draw = false, className }: { face: CardFace; draw?: boolean; className?: string }) {
+export function CardFront({
+  face,
+  draw = false,
+  spin = false,
+  className,
+}: {
+  face: CardFace;
+  draw?: boolean;
+  /** Печатка повільно обертається після малювання (components/card/seal.tsx). */
+  spin?: boolean;
+  className?: string;
+}) {
   const t = face.tier;
   const dark = t.finish === "black" || t.finish === "red_seal";
   return (
@@ -35,7 +46,7 @@ export function CardFront({ face, draw = false, className }: { face: CardFace; d
           style={{ backgroundImage: `url("${dark ? UNDERPRINT_ON_BLACK : UNDERPRINT_ON_PAPER}")`, backgroundSize: "cover" }}
         >
           {face.sealSeed !== null ? (
-            <Seal seed={face.sealSeed} level={t.sealLayers} inks={t.sealInks} strokeWidth={0.85} draw={draw} />
+            <Seal seed={face.sealSeed} level={t.sealLayers} inks={t.sealInks} strokeWidth={0.85} draw={draw} spin={spin} />
           ) : (
             <p className="ncj-art-empty">The seal is drawn when you create the card.</p>
           )}

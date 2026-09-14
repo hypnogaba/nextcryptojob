@@ -17,10 +17,14 @@ import {
   type ChannelPlan, DEFAULT_SITE_URL, deliverDigest, type DeliveryJob, type DeliveryOutcome, type DeliveryUser,
   type DigestMessage, planChannel, siteUrlOf,
 } from "./deliver.js";
-import { estimateText, loadCompanyPool, loadCrawlPool, type PoolStats, type SalaryEstimate } from "./jobs.js";
+import type { RoleKey } from "../types.js";
+import { type FitContext, fitLine } from "./fit.js";
+import {
+  type CompanyProfile, estimateText, loadCompanyPool, loadCompanyProfiles, loadCrawlPool, type PoolStats, type SalaryEstimate,
+} from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
 import { type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
-import { parseRoles } from "./roles.js";
+import { isRoleKey, parseRoles } from "./roles.js";
 
 /** Прогін, що висить 'pending' довше, уже не доставиться: процес упав між записом і відправкою. */
 export const STALE_PENDING_MINUTES = 30;
@@ -87,10 +91,12 @@ export interface DigestUserRow {
   channel: string;
   email: string | null;
   telegram_id: string | null;
+  /** Що людина шукає своїми словами: для пояснення «чому» (fit.ts), не для підбору. */
+  target_text?: string | null;
 }
 
 const USER_COLUMNS = "u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.salary_currency, u.digest_hour, " +
-  "u.timezone, u.channel, u.email, u.telegram_id";
+  "u.timezone, u.channel, u.email, u.telegram_id, u.target_text";
 
 /**
  * Люди, яким добірка може піти. Колонку digest_paused додає 0011 (доріжка web), і її може
@@ -153,6 +159,14 @@ async function sentRefs(db: Db, userId: string): Promise<Set<string>> {
   // Усі, без межі в часі: UNIQUE(user_id, job_ref) не дасть вставити старий рядок удруге.
   const rows = await db.query<{ job_ref: string }>("SELECT job_ref FROM sent WHERE user_id = ?", [userId]);
   return new Set(rows.map((r) => r.job_ref));
+}
+
+/** Бали людини за ролями: для причини «Your Engineer score is 72». Кілька рядків за ключем (user_id, role). */
+async function userScores(db: Db, userId: string): Promise<FitContext["scores"]> {
+  const rows = await db.query<{ role: string; score: number | null }>("SELECT role, score FROM scores WHERE user_id = ?", [userId]);
+  const out: Partial<Record<RoleKey, number | null>> = {};
+  for (const r of rows) if (isRoleKey(r.role)) out[r.role] = r.score;
+  return out;
 }
 
 /** Завислі 'pending' старші за STALE_PENDING_MINUTES → 'failed'. Безпечно повторювати. */
@@ -219,13 +233,25 @@ const who = (id: string) => id.slice(0, 8);
  * Вибір → те, що бачить людина. Оцінка дошки (estimates) лише підписом поруч, коли вилки роботодавця
  * немає: сам вибір її не бачив (DigestJob її не має).
  */
-export function deliveryJobs(picks: readonly DigestPick[], estimates: ReadonlyMap<string, SalaryEstimate> = new Map()): DeliveryJob[] {
+export function deliveryJobs(
+  picks: readonly DigestPick[], estimates: ReadonlyMap<string, SalaryEstimate> = new Map(),
+  profiles: ReadonlyMap<string, CompanyProfile> = new Map(),
+): DeliveryJob[] {
   return picks.map((p, i) => ({
     position: i + 1, title: p.job.title, company: p.job.company, location: p.job.location,
     salary: formatSalary(p.job.salary), why: p.why, url: p.job.url,
     salaryEstimate: formatSalary(p.job.salary) ? null : estimateText(estimates.get(p.job.ref)),
     postedBy: p.job.source === "company" ? p.job.company : null, source: p.job.source,
+    // Про компанію лише для вакансій зі сканування: у вакансії компанії є своя сторінка на сайті.
+    about: p.job.source === "nextrole" ? (profiles.get(p.job.companyKey)?.about ?? null) : null,
   }));
+}
+
+/** Що бачить людина поруч із вибором: оцінки дошки, профілі компаній, скільки вакансій переглянуто. */
+export interface DeliveryExtras {
+  estimates: ReadonlyMap<string, SalaryEstimate>;
+  profiles: ReadonlyMap<string, CompanyProfile>;
+  checked: number;
 }
 
 type Planned = { row: DigestUserRow | null; profile: DigestProfile; clock: LocalClock; plan: ChannelPlan };
@@ -282,6 +308,9 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   const company = db ? await loadCompanyPool(db, log, siteUrlOf(deps.env) ?? DEFAULT_SITE_URL) : [];
   summary.companyJobs = company.length;
   const pool = { crawl: crawl.jobs, company };
+  const extras: DeliveryExtras = {
+    estimates: crawl.estimates, profiles: await loadCompanyProfiles(deps.jobs, log), checked: crawl.jobs.length + company.length,
+  };
   log(`digest: pool ${crawl.stats.kept} jobs, ${crawl.stats.older} of them posted over 30 d ago (fetched ${crawl.stats.fetched}, dropped tag ${crawl.stats.dropped.tag} ` +
     `company ${crawl.stats.dropped.company} title ${crawl.stats.dropped.title}; rows_read ${crawl.stats.rowsRead ?? "n/a"}, ` +
     `D1 ${crawl.stats.d1Ms === null ? "n/a" : `${Math.round(crawl.stats.d1Ms)} ms`}, wall ${crawl.stats.wallMs} ms); company jobs ${company.length}`);
@@ -291,7 +320,9 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
     const label = p.row ? `user ${who(p.row.id)}` : "profile";
     try {
       const exclude = p.row && db ? await sentRefs(db, p.row.id) : new Set<string>();
-      const picks = selectJobs(pool, p.profile, { now, exclude });
+      // Пояснення словами людини (fit.ts): сам вибір від цього не залежить.
+      const fit: FitContext = { words: p.row?.target_text ?? null, scores: p.row && db ? await userScores(db, p.row.id) : {} };
+      const picks = selectJobs(pool, p.profile, { now, exclude }).map((pk) => ({ ...pk, why: fitLine(pk, p.profile, fit, now) }));
       if (dry) {
         summary.dry.push({
           who: label, local: `${p.clock.date} ${String(p.clock.hour).padStart(2, "0")}h ${p.clock.tz}`,
@@ -302,7 +333,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       }
       const row = p.row!;
       const plan = p.plan as Exclude<ChannelPlan, { skip: string }>;
-      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), log, crawl.estimates);
+      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), log, extras);
       if (outcome === "empty") summary.empty++;
       else if (outcome === "already") summary.already++;
       else if (outcome.status === "sent") summary.sent++;
@@ -324,7 +355,7 @@ function deliveryUser(row: DigestUserRow): DeliveryUser {
 async function buildAndDeliver(
   db: Db, deps: DigestDeps, row: DigestUserRow, localDate: string, picks: DigestPick[],
   plan: { primary: "telegram" | "email"; emailFallback: boolean }, digestId: string, log: (l: string) => void,
-  estimates: ReadonlyMap<string, SalaryEstimate> = new Map(),
+  extras: DeliveryExtras = { estimates: new Map(), profiles: new Map(), checked: 0 },
 ): Promise<DeliveryOutcome | "empty" | "already"> {
   if (picks.length === 0) {
     // Запис, щоб наступна година (запас isDueHour) не шукала вдруге того самого дня.
@@ -352,7 +383,9 @@ async function buildAndDeliver(
     throw e;
   }
 
-  const message: DigestMessage = { digestId, userId: row.id, localDate, jobs: deliveryJobs(picks, estimates) };
+  const message: DigestMessage = {
+    digestId, userId: row.id, localDate, jobs: deliveryJobs(picks, extras.estimates, extras.profiles), checked: extras.checked,
+  };
   const outcome = await deliverDigest(deliveryUser(row), message, plan,
     // Годинник, а не мить початку прогону: `ts` листа ставиться під час відправки. Прогін
     // з паузами Telegram (429) може тривати довше за 5 хвилин, і сайт відкинув би старий ts.

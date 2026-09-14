@@ -22,6 +22,8 @@ export type DigestEmailJob = {
   posted_by: string | null;
   /** Оцінка дошки («est. $180k to $225k (web3.career estimate)»), лише без зарплати; не зарплата. */
   salary_estimate?: string | null;
+  /** Одне-два речення про компанію, якщо знаємо. */
+  about?: string | null;
 };
 
 /** Екранування для тексту й атрибутів у лапках. */
@@ -38,7 +40,7 @@ export const DIGEST_FOOTER_REASON = "You get this because you turned on daily jo
 
 type Job = {
   title: string; meta: string; why: string; url: string | null; postedBy: string | null; via: string | null;
-  estimate: string | null;
+  estimate: string | null; about: string | null;
 };
 
 function tidy(j: DigestEmailJob): Job {
@@ -52,7 +54,15 @@ function tidy(j: DigestEmailJob): Job {
     postedBy: j.posted_by ? cleanText(j.posted_by, 100) : null,
     via: j.posted_by ? null : jobVia(j.url),
     estimate: !j.salary && j.salary_estimate ? cleanText(j.salary_estimate, 120) : null,
+    about: j.about ? cleanText(j.about, 240) : null,
   };
+}
+
+/** «We checked 1,437 live crypto jobs. These 5 fit you best.» (як checkedLine в engine/src/digest/deliver.ts). */
+export function checkedLine(checked: number | null | undefined, shown: number): string | null {
+  if (!checked || checked < shown || shown <= 0) return null;
+  const these = shown === 1 ? "This one fits" : `These ${shown} fit`;
+  return `We checked ${checked.toLocaleString("en-US")} live crypto job${checked === 1 ? "" : "s"}. ${these} you best.`;
 }
 
 const INK = "#141a1b";
@@ -67,6 +77,8 @@ export type DigestEmailInput = {
   site: string;
   /** Підписана адреса відписки (lib/digest/unsubscribe.ts). */
   unsubscribeUrl: string;
+  /** Скільки живих вакансій переглянув підбір; null, якщо engine не сказав. */
+  checked?: number | null;
 };
 
 export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
@@ -76,6 +88,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const jobsUrl = new URL("/jobs", input.site).toString();
   const settingsUrl = new URL("/settings", input.site).toString();
   const pauseUrl = input.unsubscribeUrl;
+  const checked = checkedLine(input.checked, n);
 
   const textBlocks = jobs.map((j, i) =>
     [
@@ -83,6 +96,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
       j.meta,
       j.estimate,
       j.why,
+      j.about,
       j.postedBy ? `Posted by ${j.postedBy} on NextCryptoJob` : null,
       j.via ? `via ${j.via}` : null,
       j.url,
@@ -92,7 +106,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   );
   const text =
     [
-      heading,
+      checked ? `${heading}\n${checked}` : heading,
       ...textBlocks,
       [
         `All jobs we sent you: ${jobsUrl}`,
@@ -113,6 +127,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         (j.meta ? `<p style="margin:0 0 8px;color:${MUTED}">${escapeHtml(j.meta)}</p>` : "") +
         (j.estimate ? `<p style="margin:0 0 8px;color:${MUTED};font-size:13px">${escapeHtml(j.estimate)}</p>` : "") +
         `<p style="margin:0">${escapeHtml(j.why)}</p>` +
+        (j.about ? `<p style="margin:8px 0 0;color:${MUTED};font-size:14px">${escapeHtml(j.about)}</p>` : "") +
         (j.postedBy
           ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob</p>`
           : "") +
@@ -124,7 +139,8 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const html =
     `<div style="max-width:560px;margin:0 auto;padding:24px 16px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;` +
     `font-size:15px;line-height:1.5;color:${INK}">` +
-    `<h1 style="font-size:20px;line-height:1.3;margin:0 0 16px">${escapeHtml(heading)}</h1>` +
+    `<h1 style="font-size:20px;line-height:1.3;margin:0 ${checked ? "0 6px" : "0 16px"}">${escapeHtml(heading)}</h1>` +
+    (checked ? `<p style="margin:0 0 16px;color:${MUTED}">${escapeHtml(checked)}</p>` : "") +
     htmlJobs +
     `<p style="margin:16px 0 0;color:${MUTED};font-size:13px">` +
     `<a href="${escapeHtml(jobsUrl)}" style="color:${BRAND}">All jobs we sent you</a>. ` +
