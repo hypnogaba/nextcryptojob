@@ -14,7 +14,7 @@ export default async function NewJobPage() {
   const { ctx, company } = await crmPage("jobs");
   if (company.access !== "subscription") {
     return (
-      <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+      <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
         <PageTitle>New job</PageTitle>
         {company.access === "none" ? <NoAccess /> : <Notice tone="info">Read-only: no active subscription. Subscribe to post jobs.</Notice>}
       </div>
@@ -23,7 +23,7 @@ export default async function NewJobPage() {
   const limit = openJobLimit(company);
   const open = await openJobCount(ctx);
   return (
-    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+    <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
       <p>
         <Link href="/company/jobs" className={`${LINK} text-sm`}>
           Back to jobs

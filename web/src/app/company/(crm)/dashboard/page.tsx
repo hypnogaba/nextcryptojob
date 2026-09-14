@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   const { ctx, company } = await crmPage("dashboard");
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-5xl`}>
+      <div className={`${PAGE} max-w-7xl`}>
         <PageTitle>Dashboard</PageTitle>
         <NoAccess />
       </div>
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
   const fresh = board.total === 0 && board.savedSearches.total === 0 && board.jobs.length === 0;
 
   return (
-    <div className={`${PAGE} max-w-5xl`}>
+    <div className={`${PAGE} max-w-7xl`}>
       <PageTitle>Dashboard</PageTitle>
 
       {fresh ? (
