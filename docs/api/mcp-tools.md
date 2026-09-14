@@ -229,7 +229,7 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 ### 4.9 Для кандидатів (публічно)
 
 **`search_jobs`** → `GET /public/jobs`. Безкоштовно, без ключа, 30 запитів на хвилину з IP.
-Опис: "Search open crypto jobs (company jobs and the NextRole crawl). Jobs only, never people."
+Опис: "Search open crypto jobs (company jobs and our crypto job crawl). Jobs only, never people."
 ```json
 { "type": "object", "additionalProperties": false, "properties": {
   "q": { "type": "string", "maxLength": 100 },

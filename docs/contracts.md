@@ -174,7 +174,10 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
   `TELEGRAM_OIDC_CLIENT_ID`, `TELEGRAM_OIDC_CLIENT_SECRET`, `SESSION_SECRET`, `INTERNAL_API_SECRET` (підпис листа
   добірки, спільний з engine); binding `DB` = D1 `nextcryptojob`
-  (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `crypto-jobs-agent` (лише читання в коді).
+  (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `nextcryptojob-jobs` (база вакансій, `db/jobs`;
+  пише лише сканер engine, сайт читає, лише читання в коді).
+- engine, база вакансій (з 14.09): `CF_JOBS_D1_DATABASE_ID` (обов'язкова для `digest-due` і `jobs-*`); необов'язкові
+  `JOBS_WINDOW_DAYS` (30), `JOBS_PRUNE_DAYS` (30), `JOBS_SPEEDRUN` (1), `JOBS_SUPERTEAM` (0), `JOBS_GETRO_DISCOVERY` (0).
 
 ## 7. Номери міграцій (щоб доріжки не зіткнулись)
 | Файл | Власник | Таблиці |
@@ -197,6 +200,8 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0017_saved_search_baseline.sql | web: CRM | saved_searches.baseline_at, filter_changes, filter_changes_day; last_match_count = нові на останньому сповіщенні |
 | 0018_apply_click_seen.sql | web: вакансії компаній | apply_click_seen (дедуп кліків Apply за HMAC IP+вакансія, 10 хв) |
 | 0019_admin_home.sql | web: адмінка | cron_runs (журнал задач розкладу, 30 днів), app_settings (налаштування з адмінки), індекс digest_runs(created_at) |
+База вакансій `nextcryptojob-jobs` має свою нумерацію в `db/jobs` (0001_schema.sql: jobs_cache, companies,
+sources, source_state, getro_collections, scan_runs; засів `db/jobs/seed/seed.sql`), власник engine (сканер).
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)

@@ -29,12 +29,22 @@
 (усі 9 збирачів; межа збору = старт + `ENGINE_DEADLINE_MS` іде кожному). Профіль Sherlock звіряється
 лише з підтвердженими GitHub і X (`verified_at`).
 `src/main.ts` worker, `src/cli.ts` команди (`worker`, `score-user`, `enqueue-refresh`,
-`quality-gate`, `score-facts`, `digest-due`). Встановлення на VPS: `deploy/README.md`.
+`quality-gate`, `score-facts`, `digest-due`, `jobs-scan`, `jobs-discover`, `jobs-prune`). Встановлення на VPS: `deploy/README.md`.
 
-`src/digest/` щоденна добірка вакансій (`digest-due`, щогодинний таймер): кеш NextRole лише для
-читання (`jobs-db.ts`), чистка не-крипто (`clean.ts`, `roles.ts`), підбір (`match.ts`), доставка
+`src/digest/` щоденна добірка вакансій (`digest-due`, щогодинний таймер): база вакансій NextCryptoJob
+лише для читання (`jobs-db.ts`), чистка не-крипто (`clean.ts`, `roles.ts`), підбір (`match.ts`), доставка
 Telegram або листом через сайт (`deliver.ts`), розклад і запис `sent`/`digest_runs` (`schedule.ts`).
 Контракт листа й правила підбору: `src/digest/README.md`.
+
+`src/jobs/` власний крипто-сканер вакансій (`jobs-scan` щодня, `jobs-discover` і `jobs-prune` щотижня),
+пише лише в базу вакансій D1 `nextcryptojob-jobs` (`../db/jobs`, змінна `CF_JOBS_D1_DATABASE_ID`):
+реєстр крипто-роботодавців з публічним ATS (`sources/ats.ts`: Greenhouse, Lever і Lever EU, Ashby,
+Workable, SmartRecruiters, Recruitee, Teamtailor, Breezy, BambooHR, Rippling, Personio), крипто-дошки
+(`sources/boards.ts`: web3.career, JobStash, remote3), крипто-компанії a16z speedrun, за бажанням
+Superteam Earn; вилка в річну (`pay.ts`, `salary-text.ts`), вікно 30 днів і дедуп (`prepare.ts`).
+`--dry` не пише нічого й друкує, скільки рядків D1 записав би прогін. Частину коду перенесено зі сканера
+NextRole (позначено в заголовках файлів); у роботі від NextRole нічого не залежить. Засів реєстру:
+`scripts/jobs-seed.ts`. Встановлення й умови джерел: `deploy/README.md` §8.
 
 Живий прогін без D1 (лише для людей, що погодились; X і GitHub тут вважаються підтвердженими):
 
