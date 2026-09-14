@@ -177,7 +177,8 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
   (`c66a99cf-230b-4b8b-9cff-862d4b18a4ae`), `JOBS_DB` = D1 `nextcryptojob-jobs` (база вакансій, `db/jobs`;
   пише лише сканер engine, сайт читає, лише читання в коді).
 - engine, база вакансій (з 14.09): `CF_JOBS_D1_DATABASE_ID` (обов'язкова для `digest-due` і `jobs-*`); необов'язкові
-  `JOBS_WINDOW_DAYS` (30), `JOBS_PRUNE_DAYS` (30), `JOBS_SPEEDRUN` (1), `JOBS_SUPERTEAM` (0), `JOBS_GETRO_DISCOVERY` (0).
+  `JOBS_WINDOW_DAYS` (30), `JOBS_PRUNE_DAYS` (30), `JOBS_SPEEDRUN` (1), `JOBS_SUPERTEAM` (0), `JOBS_GETRO_DISCOVERY` (0 у коді;
+  на VPS 1 з рішення власника 14.09, `engine/deploy/README.md` §8), `JOBS_GETRO_MAX_PAGES` (50, сторінок списку компаній на дошку).
 
 ## 7. Номери міграцій (щоб доріжки не зіткнулись)
 | Файл | Власник | Таблиці |
@@ -201,7 +202,9 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0018_apply_click_seen.sql | web: вакансії компаній | apply_click_seen (дедуп кліків Apply за HMAC IP+вакансія, 10 хв) |
 | 0019_admin_home.sql | web: адмінка | cron_runs (журнал задач розкладу, 30 днів), app_settings (налаштування з адмінки), індекс digest_runs(created_at) |
 База вакансій `nextcryptojob-jobs` має свою нумерацію в `db/jobs` (0001_schema.sql: jobs_cache, companies,
-sources, source_state, getro_collections, scan_runs; засів `db/jobs/seed/seed.sql`), власник engine (сканер).
+sources, source_state, getro_collections, scan_runs; 0002_salary_estimate.sql: jobs_cache.salary_est_*; 0003_job_boards.sql:
+job_boards, реєстр дошок екосистем і фондів; засів `db/jobs/seed/seed.sql`, дошки `db/jobs/seed/update-2026-09-14-boards.sql`),
+власник engine (сканер).
 Нова таблиця поза цим списком лише через controller.
 
 ## 8. Ключі, яких ще немає (власник додасть у кінці)

@@ -1,6 +1,8 @@
 // Сховище сканера: база вакансій NextCryptoJob (D1 `nextcryptojob-jobs`, db/jobs) або, насухо,
 // лише лічильник записів. Сканер знає тільки цей інтерфейс, тож сухий прогін іде тим самим кодом.
 import type { D1Meta, D1Statement, StatementOptions } from "../d1.js";
+import { companyKey } from "../digest/clean.js";
+import { type GetroBoard, getroBoardFromRow, getroBoards, loadBoardRegistry } from "./job-boards.js";
 import { type SeedRegistry, seedBoards, seedCompanies, seedGetro } from "./seed.js";
 import { type AtsProvider, type BoardSource, type Company, type GetroCollection, isAtsProvider, type JobRow,
   type SourceKind, type SourceState } from "./types.js";
@@ -202,6 +204,33 @@ export class JobsStore {
     if (!this.backend) return new Set(this.seed!.companies.map((c) => `${c.ats_provider}:${c.ats_slug.toLowerCase()}`));
     const rows = await this.backend.query<{ ats_provider: string; ats_slug: string }>("SELECT ats_provider, ats_slug FROM companies");
     return new Set(rows.map((r) => `${r.ats_provider}:${r.ats_slug.toLowerCase()}`));
+  }
+
+  /**
+   * Назви роботодавців реєстру (companyKey) → чи є серед них увімкнений. Розвідка не додає ту саму
+   * компанію під іншою дошкою, поки стара жива; якщо всі її рядки вимкнені (мертва дошка), додає.
+   */
+  async knownNames(): Promise<Map<string, boolean>> {
+    const rows = this.backend
+      ? await this.backend.query<{ name: string; enabled: number }>("SELECT name, enabled FROM companies")
+      : this.seed!.companies.map((c) => ({ name: c.name, enabled: c.enabled }));
+    const out = new Map<string, boolean>();
+    for (const r of rows) {
+      const k = companyKey(r.name);
+      if (k) out.set(k, (out.get(k) ?? false) || Number(r.enabled) === 1);
+    }
+    return out;
+  }
+
+  /**
+   * Дошки Getro для розвідки (job_boards, рішення 'discover'). Без бази з db/jobs/seed/boards.json.
+   * Окремо від loadRegistry: щоденний скан таблиці job_boards не потребує (працює й до 0003).
+   */
+  async loadGetroBoards(): Promise<GetroBoard[]> {
+    if (!this.backend) return getroBoards(loadBoardRegistry());
+    const rows = await this.backend.query<{ slug: string; label: string; url: string | null; platform_id: string | null; crypto_scope: string }>(
+      "SELECT slug, label, url, platform_id, crypto_scope FROM job_boards WHERE platform = 'getro' AND decision = 'discover' ORDER BY slug");
+    return rows.map(getroBoardFromRow).filter((b): b is GetroBoard => b !== null);
   }
 
   async knownSlugs(): Promise<Set<string>> {

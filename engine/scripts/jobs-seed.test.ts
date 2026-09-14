@@ -5,10 +5,14 @@ import { describe, expect, it } from "vitest";
 import { assertReadOnlySql } from "../src/digest/jobs-db.js";
 import { registryUpdateSql, seedProblems, type SeedRegistry, seedSql } from "../src/jobs/seed.js";
 import { FakeJobsDb } from "../src/testing/jobs-fake.js";
-import { buildRegistry, CURATED, DEAD_AT_SEED, EXPORT_FILE, EXPORT_QUERIES, type ExportFile, REGISTRY_FILE, SEED_DISABLED, SQL_FILE, UPDATE_2026_09_14 } from "./jobs-seed.js";
+import { getroBoards, loadBoardRegistry } from "../src/jobs/job-boards.js";
+import { boardsUpdateSql, buildRegistry, CURATED, DEAD_AT_SEED, EXPORT_FILE, EXPORT_QUERIES, type ExportFile, loadBoardCompanies, REGISTRY_FILE,
+  SEED_DISABLED, SQL_FILE, UPDATE_2026_09_14, UPDATE_2026_09_14_BOARDS } from "./jobs-seed.js";
 
 const exported = JSON.parse(readFileSync(EXPORT_FILE, "utf8")) as ExportFile;
 const registry = JSON.parse(readFileSync(REGISTRY_FILE, "utf8")) as SeedRegistry;
+const boardCompanies = loadBoardCompanies();
+const boardSlugs = new Set(boardCompanies.map((c) => c.slug));
 
 describe("експорт (разовий, 14.09.2026)", () => {
   it("лише SELECT і лише публічні стовпці", () => {
@@ -67,9 +71,9 @@ describe("реєстр з експорту", () => {
     expect(registry.sources.every((s) => s.terms_note)).toBe(true);
   });
 
-  it("числа реєстру (14.09.2026)", () => {
-    expect(registry.companies.length).toBe(369);
-    expect(registry.companies.filter((c) => c.enabled === 1).length).toBe(325);
+  it("числа реєстру (14.09.2026): засів 369 (325 увімкнених) плюс роботодавці з дошок екосистем і фондів", () => {
+    expect(registry.companies.length).toBe(369 + boardCompanies.length);
+    expect(registry.companies.filter((c) => c.enabled === 1).length).toBe(325 + boardCompanies.length);
     expect(registry.companies.filter((c) => c.enabled === 0).length).toBe(Object.keys(SEED_DISABLED).length + DEAD_AT_SEED.size);
     expect(registry.getro_collections.length).toBe(22);
   });
@@ -84,13 +88,13 @@ describe("доповнення живої бази 14.09 (web3.career через
     const db = new FakeJobsDb();
     const old: SeedRegistry = {
       ...registry,
-      companies: registry.companies.filter((c) => !(UPDATE_2026_09_14.companies as readonly string[]).includes(c.slug)),
+      companies: registry.companies.filter((c) => !(UPDATE_2026_09_14.companies as readonly string[]).includes(c.slug) && !boardSlugs.has(c.slug)),
       sources: registry.sources.map((s) => (s.name === "board:web3career" ? { ...s, feed_url: "https://web3.career/", terms_note: "old" } : s)),
     };
     db.sqlite.exec(seedSql(old));
     db.exec("UPDATE companies SET enabled = 0 WHERE slug = ?", old.companies[0]!.slug);
     for (let i = 0; i < 2; i++) db.sqlite.exec(readFileSync(UPDATE_2026_09_14.file, "utf8"));
-    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies")?.n).toBe(registry.companies.length);
+    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies")?.n).toBe(registry.companies.length - boardCompanies.length);
     expect(db.all("SELECT slug, ats_provider, ats_slug, enabled FROM companies WHERE discovered_via = 'curated' AND slug <> 'crossmint' ORDER BY slug")).toEqual(
       UPDATE_2026_09_14.companies.map((slug) => {
         const c = registry.companies.find((x) => x.slug === slug)!;
@@ -100,6 +104,45 @@ describe("доповнення живої бази 14.09 (web3.career через
     expect(db.get<{ enabled: number }>("SELECT enabled FROM companies WHERE slug = ?", old.companies[0]!.slug)?.enabled).toBe(0);
     const w3 = registry.sources.find((s) => s.name === "board:web3career")!;
     expect(db.get("SELECT feed_url, terms_note, kind FROM sources WHERE name = 'board:web3career'")).toEqual({ feed_url: w3.feed_url, terms_note: w3.terms_note, kind: "jsonld" });
+    db.close();
+  });
+});
+
+describe("дошки екосистем і фондів (14.09): job_boards і роботодавці з них", () => {
+  const boards = loadBoardRegistry();
+  const discover = new Set(getroBoards(boards).map((b) => `getro:${b.collectionId}`));
+  const manual = new Set(boards.boards.filter((b) => b.decision === "manual").map((b) => `portfolio:${b.slug}`));
+
+  it("файл доповнення збігається з boardsUpdateSql(boards.json, роботодавці з дошок у registry.json)", () => {
+    expect(readFileSync(UPDATE_2026_09_14_BOARDS.file, "utf8"))
+      .toBe(boardsUpdateSql(boards, registry.companies.filter((c) => boardSlugs.has(c.slug))));
+  });
+
+  it("кожен роботодавець з дошки: звідки відомо (дошка на розвідці чи портфель 'manual'), жива дошка ATS того дня, увімкнений", () => {
+    expect(boardCompanies.length).toBeGreaterThan(0);
+    for (const c of boardCompanies) {
+      expect(discover.has(c.discovered_via) || manual.has(c.discovered_via) || c.discovered_via === "curated").toBe(true);
+      expect(c.note).toMatch(/\(\d+ open on 2026-09-14\)/);
+      expect(c.enabled).toBe(1);
+      expect(registry.companies.find((x) => x.slug === c.slug)).toEqual(c);
+    }
+    // Жодна дошка ATS не повторює засів: розвідка додає лише нове.
+    const seedBoards = new Set(buildRegistry(exported, []).registry.companies.map((c) => `${c.ats_provider}:${c.ats_slug.toLowerCase()}`));
+    expect(boardCompanies.filter((c) => seedBoards.has(`${c.ats_provider}:${c.ats_slug.toLowerCase()}`))).toEqual([]);
+  });
+
+  it("лягає після 0003 на базу зі старим засівом, вдруге нічого не міняє, змінене руками не чіпає", () => {
+    const db = new FakeJobsDb();
+    db.sqlite.exec(seedSql({ ...registry, companies: registry.companies.filter((c) => !boardSlugs.has(c.slug)) }));
+    db.sqlite.exec(readFileSync(UPDATE_2026_09_14_BOARDS.file, "utf8"));
+    db.exec("UPDATE job_boards SET decision = 'skip' WHERE slug = 'solana'");
+    db.exec("UPDATE companies SET enabled = 0 WHERE slug = ?", boardCompanies[0]!.slug);
+    db.sqlite.exec(readFileSync(UPDATE_2026_09_14_BOARDS.file, "utf8"));
+    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM job_boards")?.n).toBe(boards.boards.length);
+    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies")?.n).toBe(registry.companies.length);
+    expect(db.get<{ d: string }>("SELECT decision AS d FROM job_boards WHERE slug = 'solana'")?.d).toBe("skip");
+    expect(db.get<{ e: number }>("SELECT enabled AS e FROM companies WHERE slug = ?", boardCompanies[0]!.slug)?.e).toBe(0);
+    expect(db.get<{ n: string }>("SELECT name AS n FROM schema_migrations WHERE name = ?", UPDATE_2026_09_14_BOARDS.name)?.n).toBe(UPDATE_2026_09_14_BOARDS.name);
     db.close();
   });
 });
@@ -115,7 +158,7 @@ describe("seed.sql", () => {
     db.exec("UPDATE companies SET enabled = 0 WHERE slug = ?", registry.companies[0]!.slug);
     db.sqlite.exec(readFileSync(SQL_FILE, "utf8"));
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies")?.n).toBe(registry.companies.length);
-    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies WHERE enabled = 1")?.n).toBe(324);
+    expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM companies WHERE enabled = 1")?.n).toBe(324 + boardCompanies.length);
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM sources")?.n).toBe(registry.sources.length);
     expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM getro_collections")?.n).toBe(22);
     db.close();

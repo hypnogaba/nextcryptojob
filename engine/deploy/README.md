@@ -329,7 +329,7 @@ quality gate: PASSED (within-one >= 85%)
 | Remote3 (`board:remote3`) | їхній RSS `/api/rss` | `sources.enabled` | умови забороняють автоматичні запити до сайту, тому лише їхня стрічка |
 | a16z speedrun (`aggregator:speedrun`) | відкритий API, лише крипто-компанії мережі | `JOBS_SPEEDRUN=0` | `/developers`: «reads are open and unauthenticated»; передаємо `?source=nextcryptojob` |
 | Superteam Earn (`aggregator:superteam`) | публічний JSON `superteam.fun/api/listings` | **вимкнено**, `JOBS_SUPERTEAM=1` вмикає | баунті, а не вакансії (без зарплати, короткий строк); сторінка умов не прочиталась |
-| Колекції Getro (`getro_collections`, 22) | лише щотижнева розвідка посилань на ATS, вакансій з Getro в базі немає | **вимкнено**, `JOBS_GETRO_DISCOVERY=1` вмикає | **ризик**: умови Getro (getro.com/terms, v3.1) забороняють «crawl, scrape or spider» будь-яку частину сервісу, `api.getro.com/robots.txt` `Disallow: /`. Навіть розвідка раз на тиждень читає колекції. Вмикати лише рішенням власника |
+| Дошки екосистем і фондів на Getro (`job_boards`, 26 з рішенням `discover`) | лише щотижнева розвідка: список компаній дошки і сторінка вакансій лише невідомої реєстру компанії, звідки береться адреса її ATS; вакансій і текстів Getro в базі немає | **увімкнено на VPS з 14.09** (`JOBS_GETRO_DISCOVERY=1`, рішення власника); `0` вимикає, у коді типово 0 | **ризик прийнято**: умови Getro (getro.com/terms, v3.1) забороняють «crawl, scrape or spider» будь-яку частину сервісу, `api.getro.com/robots.txt` `Disallow: /`. Обсяг малий: див. «Дошки екосистем і фондів» нижче |
 
 Не беремо: cryptocurrencyjobs.co (умови забороняють scrape, crawl і масовий передрук), crypto-careers.com
 (забороняє автоматичний збір), cryptojobslist.com (те саме), сторінки web3.career (лише їхній API).
@@ -421,6 +421,86 @@ DV Trading (`dvtrading`), tastylive (`tastylive`), Localcoin (`localcoin`), Blue
 їх зі своєю, пізнішою датою; вікно скану рахує дату роботодавця), 69 на дошці роботодавця немає (закриті або
 копії однієї вакансії під різні міста, як 25 з 38 у Bitpanda).
 
+### Дошки екосистем і фондів (`job_boards`, 14.09.2026)
+
+Рішення власника 14.09: вакансії з дошок екосистем (jobs.solana.com, jobs.arbitrum.io …) і фондів
+(talent.cyber.fund, jobs.multicoin.capital …) тягнути обов'язково, але малим обсягом: дошка лише каже, які
+там компанії й де їхній ATS, а вакансії йдуть з публічного API ATS роботодавця, як і решта реєстру.
+
+Реєстр дошок: таблиця `job_boards` (`db/jobs/0003_job_boards.sql`), джерело правди `db/jobs/seed/boards.json`
+(65 дошок, кожна перевірена своєю сторінкою 14.09: `__NEXT_DATA__` → `network.id` для Getro, `consider.com` у
+розмітці для Consider). Рішення:
+
+| Рішення | Дошки |
+|---|---|
+| `discover`, Getro (26) | екосистеми Solana 858, Arbitrum 4184, Avalanche 10223, Monad 13457, Injective 13490, Polkadot 11180, Filecoin 1486; фонди cyber.fund 9035, Multicoin 390, Polychain 203, Dragonfly 1118, Electric Capital 1640, Coinbase Ventures 1625, Framework 1127, Variant 1508, Placeholder 922, Castle Island 13362, Jump Crypto 20916, Delphi 1440, Spartan 1179, Animoca 6230, Blockchain Capital 815, Outlier Ventures 1524, Galaxy Ventures 9134, Bitkraft 3095; Blockchain Association 869 |
+| `manual` (Consider, 3) | a16z crypto, Paradigm, Hashed: дошку не читаємо ніколи (умови Consider), роботодавців з публічної сторінки портфеля фонду додано руками |
+| `manual` (без дошки, 4) | 1kx, Mechanism, Robot Ventures (публічні сторінки портфеля), Protocol Labs network (os.pl.xyz, власний довідник, прочитано один раз) |
+| `skip` (32) | Consider без публічного портфеля (Pantera, Lemniscap, Fenbushi); порожня (Tezos) чи мертва дошка (Cosmos, TON, Algorand); власні дошки без ATS (Sui на HireChain, Aptos, Starknet, Berachain на Polymer, YZi Labs); екосистеми без дошки, чиї фонди й лабораторії вже в реєстрі (Ethereum, Optimism, Base, Polygon, NEAR, ZKsync, Celestia, Sei, Chainlink, Hedera, Stellar, Cardano); фонди без дошки й без списку в розмітці (Hack VC, Alliance, Portal, DWF, IOSG, HashKey, OKX Ventures, Kraken Ventures) |
+
+`crypto_scope`: `all` для екосистем і крипто-фондів; `tagged` (крипто або без галузі за Getro) для
+Coinbase Ventures, Galaxy Ventures і Blockchain Association; `strict` (лише названі крипто) для ігрового
+Bitkraft. Список не-крипто компаній добірки (`src/digest/clean.ts`) діє завжди.
+
+Як ходить розвідка (`jobs-discover`, неділя 05:30 UTC, `JOBS_GETRO_DISCOVERY=1`), `src/jobs/discover.ts`:
+
+1. Список компаній кожної дошки (`search/companies`, 12 на сторінку, стеля `JOBS_GETRO_MAX_PAGES`=50).
+2. Компанію без відкритих вакансій, не крипто за `crypto_scope` або вже відому реєстру за назвою
+   («Ethena Labs» = «Ethena», але «Solana Foundation» ≠ «Solana Labs») пропускаємо без жодного запиту.
+3. Для решти одна сторінка її вакансій (`search/jobs` з `organization.id`), з якої береться лише адреса:
+   ATS, який скан читає, стає кандидатом; адреса на сайт роботодавця = одна-дві його сторінки
+   (`src/jobs/sources/careers.ts`) у пошуках ATS; вакансія, вписана прямо в Getro, = «лише на Getro».
+4. Нова дошка ATS мусить відповісти своїм API (перевірка тим самим кодом скану), і лише тоді рядок
+   `companies` (`discovered_via = 'getro:<id>'`, примітка: яка дошка, яке посилання, скільки відкрито).
+5. Компанії лише на Getro, на чужому ATS (Notion, LinkedIn, Wellfound, Gem, Dover, Workday…) і без ATS на
+   сторінці кар'єри в реєстр не йдуть: окремими списками в журналі й у `scan_runs.notes`.
+
+Запити до Getro по одному, не частіше ніж раз на 1,5 с (`limits.ts`). Сухий прогін 14.09 з Mac: 393 запити,
+11 хвилин, плюс сторінки кар'єри самих роботодавців. Щоденний скан Getro не читає; назв, текстів і зарплат
+Getro ніде немає. Ризик умов Getro (заборона crawl/scrape, `robots.txt` `Disallow: /`) прийнято власником.
+Вимкнути все: `JOBS_GETRO_DISCOVERY=0`; одну дошку: `UPDATE job_boards SET decision = 'skip' WHERE slug = …`.
+
+Сухий прогін розвідки 14.09 (реєстр засіву, `JOBS_SPEEDRUN=0`, у базу нічого): 26 дошок, 1 741 компанія,
+693 з вакансіями, 636 крипто. За назвою вже в реєстрі 338 (засів NextRole колись читав ті самі колекції); з
+решти ATS видно у 58 (55 з посилання, 3 зі сторінки кар'єри), з них 45 дошок уже в реєстрі під іншою назвою,
+нових 11 (Solana Foundation, cyber•Fund, Neutron, Rated Labs, Sweatcoin, Pixion Games, Kiln, Citrea, Fence,
+Inca Digital, Pocket Worlds; останню вакансії без слова про крипту, тож вона в списку не-крипто компаній).
+Не читаються: лише на Getro 25 компаній (Nasdaq, Aleph Zero, Arcade, SkyTrade, Brine, самі фонди…), на чужому
+ATS 76 (Notion 25, LinkedIn 12, Wellfound 12, Gem 7, Dover 5…), сторінка кар'єри без адреси ATS 96 (Circle,
+Bitget, OneKey, MakerDAO, MegaETH, Katana, PoolTogether…; їхні сторінки малюють список скриптом). Слаг за
+назвою не вгадуємо: `jobs.ashbyhq.com/circle` це Circle.so, `/katana` це Katana MRP, не крипто.
+
+Руками (Consider і фонди без дошки, `engine/scripts/portfolio-ats.ts`: сторінка портфеля → сайт компанії →
+її ATS → жива відповідь API): a16z crypto 7, Paradigm 4, Hashed 1, 1kx 3, Mechanism 4, Robot Ventures 1,
+Protocol Labs 2, плюс Cardano Foundation і IOG з перевірки екосистем. Разом з розвідкою 34 нових роботодавці
+(`db/jobs/seed/boards-companies-2026-09-14.json`, 369 → 403 у реєстрі), усі з приміткою, звідки відомо.
+
+Сухий скан лише цих 34 (`jobs-scan --dry --registry`, 14.09): 91 вакансія, у вікні 30 днів 13, у пулі добірки
+10, усі нові для живого пулу (звірка з `jobs_cache` лише SELECT за id і ключем «компанія + назва»): Engineer 3,
+PM 1, BD 2 (1 з вилкою), Marketing 2, Operations 2; з вилкою 1 з 10. Повний сухий скан з новим реєстром:
+пул 1 281 (1 272 без них), з вилкою 369 (29%).
+
+Перевірка jobs.solana.com, фільтр функцій Marketing & Communications, Operations, Sales & Business
+Development (функції Community у Getro немає; назву з «community» має одна вакансія, Enjoyoors на Notion):
+80 вакансій. У живому пулі вже 13; у компаній, яких скан уже читає з їхнього ATS, ще 39, але роботодавець
+опублікував їх понад 30 днів тому (Rain, Coinflow, Squads, Phantom …; вони відкриті, вікно скану й добірки 30
+днів від дати роботодавця); на сторінці компанії чи чужому ATS 19 (Dover, Gem, Notion, Deel, HiBob, власні
+сторінки); лише на Getro 8; Perle 1 (не-крипто). Нові роботодавці з дошок не додали жодної з цих 80. Тобто
+для маркетингу, BD й операцій головне обмеження не покриття дошок, а вікно 30 днів: 21 з тих 39
+за датою, коли їх побачив Getro, молодші за 90 днів.
+
+Накочування (controller, по порядку):
+
+1. `npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0003_job_boards.sql`
+2. `npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/seed/update-2026-09-14-boards.sql`
+   (65 рядків `job_boards` і 34 роботодавці; повторне накочування нічого не міняє, змінене руками не чіпає).
+   Перевірка: `SELECT (SELECT COUNT(*) FROM job_boards) AS boards, (SELECT COUNT(*) FROM job_boards WHERE decision = 'discover') AS discover,
+   (SELECT COUNT(*) FROM companies) AS companies` → 65, 26, 403 (якщо розвідка ще нічого не додала).
+3. Новий `dist` engine (§2). Скан від `job_boards` не залежить; розвідка без таблиці впала б з помилкою,
+   тому спершу кроки 1 і 2.
+4. `/etc/nextcryptojob-engine.env`: `JOBS_GETRO_DISCOVERY='1'` (як у §3, одинарні лапки). Перший прогін
+   можна насухо: `runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js jobs-discover --dry --out /tmp/discover.json`.
+
 ### Сухий прогін усіх джерел 14.09.2026 (після обох правок)
 
 `env -u CF_JOBS_D1_DATABASE_ID WEB3CAREER_TOKEN=… npx tsx src/cli.ts jobs-scan --dry` з Mac, реєстр засіву
@@ -472,12 +552,15 @@ Localcoin 2, BCB 0; з реєстру зросли Alpaca 11 → 25, Binance 13 
 npx wrangler d1 create nextcryptojob-jobs                       # записати database_id
 npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0001_schema.sql
 npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0002_salary_estimate.sql
+npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/0003_job_boards.sql
 npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/seed/seed.sql
+npx wrangler d1 execute nextcryptojob-jobs --remote --file ../db/jobs/seed/update-2026-09-14-boards.sql
 npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
   (SELECT COUNT(*) FROM companies) AS companies, (SELECT COUNT(*) FROM companies WHERE enabled = 1) AS enabled,
   (SELECT COUNT(*) FROM sources) AS sources, (SELECT COUNT(*) FROM getro_collections) AS getro,
   (SELECT group_concat(name) FROM schema_migrations) AS migrations"
-# очікуємо: 369, 325, 4, 22, 0001_schema,0002_salary_estimate,seed_registry (свіжа база з новим seed.sql)
+# очікуємо: 403, 359, 4, 22, 0001_schema,0002_salary_estimate,0003_job_boards,registry_2026_09_14_boards,seed_registry
+# (свіжа база з новим seed.sql; seed.sql уже має роботодавців з дошок, файл дошок додає job_boards)
 ```
 
 2. Токен. `CF_API_TOKEN` у `/etc/nextcryptojob-engine.env` має право D1 Edit на `nextcryptojob-jobs`.
@@ -498,7 +581,8 @@ npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
 | `JOBS_PRUNE_DAYS` | ні (30) | `jobs-prune`: скільки днів скан мав не бачити вакансію |
 | `JOBS_SPEEDRUN` | ні (1) | `0` вимикає speedrun у скані й розвідці |
 | `JOBS_SUPERTEAM` | ні (0) | `1` вмикає Superteam Earn |
-| `JOBS_GETRO_DISCOVERY` | ні (0) | `1` вмикає розвідку посилань з колекцій Getro (ризик умов, вище) |
+| `JOBS_GETRO_DISCOVERY` | так, `'1'` (рішення власника 14.09) | розвідка з дошок Getro реєстру `job_boards` (ризик умов прийнято, «Дошки екосистем і фондів» нижче); `0` вимикає, без рядка вимкнено |
+| `JOBS_GETRO_MAX_PAGES` | ні (50) | стеля сторінок списку компаній на одну дошку (12 компаній на сторінку) |
 | `WEB3CAREER_TOKEN` | так, для web3.career | токен Web3 Jobs API (вище «web3.career: офіційний API»). Лише тут, root 600; ніде не друкувати й не комітити. Без нього `board:web3career` падає з причиною |
 
    Стара змінна `JOBS_D1_DATABASE_ID` (якщо була) більше не читається: прибрати рядок.

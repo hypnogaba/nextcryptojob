@@ -6,6 +6,7 @@
  *   npx tsx scripts/jobs-seed.ts build [--export <file>]      # → db/jobs/seed/registry.json
  *   npx tsx scripts/jobs-seed.ts sql                          # → db/jobs/seed/seed.sql
  *   npx tsx scripts/jobs-seed.ts update                       # → db/jobs/seed/update-2026-09-14-web3career.sql
+ *   npx tsx scripts/jobs-seed.ts boards                       # → db/jobs/seed/update-2026-09-14-boards.sql
  *
  * `export` один раз (14.09.2026) прочитав з бази NextRole (D1 `crypto-jobs-agent`, той самий власник)
  * лише публічні дані: роботодавців з тегом web3 (назва, ATS, слаг), глобальні дошки (назва, адреса
@@ -24,6 +25,7 @@ import { D1Client } from "../src/d1.js";
 import { companyKey, isNonCryptoCompany } from "../src/digest/clean.js";
 import { assertReadOnlySql, readOnlyJobsDb, type JobsDb } from "../src/digest/jobs-db.js";
 import { hostSlug } from "../src/jobs/sources/ats.js";
+import { type BoardRegistry, boardsSql, loadBoardRegistry } from "../src/jobs/job-boards.js";
 import { registryUpdateSql, type SeedCompany, type SeedGetro, type SeedRegistry, type SeedSource, seedProblems, seedSql } from "../src/jobs/seed.js";
 import { isAtsProvider } from "../src/jobs/types.js";
 
@@ -43,6 +45,49 @@ export const UPDATE_2026_09_14 = {
   sources: ["board:web3career"],
   file: resolve(SEED_DIR, "update-2026-09-14-web3career.sql"),
 } as const;
+
+/**
+ * Дошки екосистем і фондів, 14.09.2026: роботодавці, знайдені через дошки реєстру job_boards (сухий
+ * прогін розвідки Getro, engine jobs-discover --dry) і руками з публічних сторінок портфелів фондів,
+ * чиї дошки на Consider або яких немає (scripts/portfolio-ats.ts). Кожен з приміткою, звідки відомо, і
+ * дошкою ATS, що відповіла своїм API. Файл db/jobs/seed/boards-companies-2026-09-14.json.
+ */
+export const BOARD_COMPANIES_FILE = resolve(SEED_DIR, "boards-companies-2026-09-14.json");
+
+export interface BoardCompaniesFile { source: string; companies: SeedCompany[] }
+
+export function loadBoardCompanies(path = BOARD_COMPANIES_FILE): SeedCompany[] {
+  return (JSON.parse(readFileSync(path, "utf8")) as BoardCompaniesFile).companies;
+}
+
+export const UPDATE_2026_09_14_BOARDS = {
+  name: "registry_2026_09_14_boards",
+  note: "дошки екосистем і фондів (job_boards) і роботодавці, знайдені через них, з перевіреними дошками ATS",
+  file: resolve(SEED_DIR, "update-2026-09-14-boards.sql"),
+} as const;
+
+const sq = (v: string | number | null): string => (v === null ? "NULL" : typeof v === "number" ? String(v) : `'${v.replace(/'/g, "''")}'`);
+
+/**
+ * Доповнення живої бази: рядки job_boards і нові роботодавці з дошок (ON CONFLICT DO NOTHING: наявне
+ * не чіпається, повторне накочування нічого не міняє). Лише після db/jobs/0003_job_boards.sql.
+ */
+export function boardsUpdateSql(boards: BoardRegistry, companies: readonly SeedCompany[]): string {
+  const out = [
+    `-- Доповнення живої бази nextcryptojob-jobs (${UPDATE_2026_09_14_BOARDS.name}). ЗГЕНЕРОВАНО з db/jobs/seed/boards.json`,
+    "-- і db/jobs/seed/boards-companies-2026-09-14.json: cd engine && npx tsx scripts/jobs-seed.ts boards",
+    `-- ${UPDATE_2026_09_14_BOARDS.note}`,
+    "-- Накочує controller ПІСЛЯ db/jobs/0003_job_boards.sql: wrangler d1 execute nextcryptojob-jobs --remote --file db/jobs/seed/<цей файл>",
+    ...boardsSql(boards),
+  ];
+  for (let i = 0; i < companies.length; i += 20) {
+    const rows = companies.slice(i, i + 20)
+      .map((c) => `(${[c.slug, c.name, c.ats_provider, c.ats_slug, c.enabled, c.discovered_via, c.note].map(sq).join(", ")})`);
+    out.push(`INSERT INTO companies (slug, name, ats_provider, ats_slug, enabled, discovered_via, note) VALUES\n  ${rows.join(",\n  ")}\n  ON CONFLICT DO NOTHING;`);
+  }
+  out.push(`INSERT OR IGNORE INTO schema_migrations(name) VALUES (${sq(UPDATE_2026_09_14_BOARDS.name)});`);
+  return `${out.join("\n")}\n`;
+}
 
 /** Запити експорту: лише публічні стовпці. Звіряє тест (жодних інших полів у файлі). */
 export const EXPORT_QUERIES = {
@@ -169,7 +214,7 @@ function validAtsSlug(provider: string, slug: string): boolean {
 }
 
 /** Реєстр з експорту. Чиста функція: її перевіряє тест і нею ж зроблено registry.json. */
-export function buildRegistry(ex: ExportFile): { registry: SeedRegistry; skipped: Array<{ slug: string; why: string }> } {
+export function buildRegistry(ex: ExportFile, boardCompanies: readonly SeedCompany[] = loadBoardCompanies()): { registry: SeedRegistry; skipped: Array<{ slug: string; why: string }> } {
   const skipped: Array<{ slug: string; why: string }> = [];
   const companies: SeedCompany[] = [];
   const boards = new Set<string>();
@@ -193,6 +238,7 @@ export function buildRegistry(ex: ExportFile): { registry: SeedRegistry; skipped
       enabled: off ? 0 : 1, note: off });
   }
   for (const c of CURATED) add(c);
+  for (const c of boardCompanies) add(c);
 
   const sources: SeedSource[] = [];
   for (const b of ex.boards) {
@@ -212,7 +258,7 @@ export function buildRegistry(ex: ExportFile): { registry: SeedRegistry; skipped
     registry: {
       version: 1,
       source: `public registry fields exported once from the NextRole job database on ${ex.exported_at.slice(0, 10)} ` +
-        "(companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions; see engine/scripts/jobs-seed.ts",
+        "(companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions and companies found through ecosystem and fund job boards on 2026-09-14; see engine/scripts/jobs-seed.ts",
       companies, sources, getro_collections: getro,
     },
     skipped,
@@ -296,7 +342,14 @@ async function main(argv: string[]): Promise<void> {
     console.log(`update: ${UPDATE_2026_09_14.file}`);
     return;
   }
-  throw new Error("команда: export | build | sql | update");
+  if (cmd === "boards") {
+    const registry = JSON.parse(readFileSync(REGISTRY_FILE, "utf8")) as SeedRegistry;
+    const slugs = new Set(loadBoardCompanies().map((c) => c.slug));
+    writeFileSync(UPDATE_2026_09_14_BOARDS.file, boardsUpdateSql(loadBoardRegistry(), registry.companies.filter((c) => slugs.has(c.slug))));
+    console.log(`boards: ${UPDATE_2026_09_14_BOARDS.file}`);
+    return;
+  }
+  throw new Error("команда: export | build | sql | update | boards");
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

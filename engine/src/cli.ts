@@ -7,7 +7,7 @@
 //   node dist/cli.js score-facts --x <h> --github <l> --site <url> --evm <a,...> --solana <a,...> [--sherlock <h>]
 //   node dist/cli.js digest-due [--dry-run [--user <id> | --profile <json>]]
 //   node dist/cli.js jobs-scan [--dry] [--registry <file>] [--out <file>]
-//   node dist/cli.js jobs-discover [--dry]
+//   node dist/cli.js jobs-discover [--dry] [--out <file>]
 //   node dist/cli.js jobs-prune [--dry] [--days N]
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -58,7 +58,7 @@ export const USAGE = `usage: nextcryptojob-engine <command>
       [--registry <file>]                  with --dry and no CF_JOBS_D1_DATABASE_ID: companies and boards from
                                            this JSON (default db/jobs/seed/registry.json)
       [--out <file>]                       also write the report and the rows as JSON
-  jobs-discover [--dry]                    add new crypto companies with a public ATS to the registry (weekly)
+  jobs-discover [--dry] [--out <file>]     add new crypto companies with a public ATS to the registry (weekly)
   jobs-prune [--dry] [--days N]            delete jobs the scan has not seen for N days (default 30; weekly)`;
 
 /** Залежності команд: у тестах підставні, у продукті з оточення. */
@@ -200,9 +200,11 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
       }
       case "jobs-discover": {
         const dry = has(args, "--dry");
+        const outFile = flag(args, "--out");
         if (args.length) { err(USAGE); return 2; }
-        await runJobsDiscover({ store: jobsStore(deps, dry), env: deps.env, log: out,
+        const report = await runJobsDiscover({ store: jobsStore(deps, dry), env: deps.env, log: out,
           fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
+        if (outFile) writeFileSync(outFile, JSON.stringify(report, null, 1));
         return 0;
       }
       case "jobs-prune": {

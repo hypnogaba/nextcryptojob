@@ -12,7 +12,7 @@ EnvironmentFile=/etc/nextcryptojob-engine.env
 Environment=NODE_ENV=production
 # Node 24 (engines >=24): на VPS /usr/bin/node це Node 22, Node 24 стоїть у /usr/local/bin.
 ExecStart=/usr/local/bin/node dist/cli.js jobs-discover
-# speedrun: два запити на компанію; Getro лише з JOBS_GETRO_DISCOVERY=1 (типово вимкнено).
+# speedrun: два запити на компанію; дошки Getro з job_boards лише з JOBS_GETRO_DISCOVERY=1 (на VPS увімкнено 14.09, README §8).
 TimeoutStartSec=3600
 NoNewPrivileges=true
 ProtectSystem=strict

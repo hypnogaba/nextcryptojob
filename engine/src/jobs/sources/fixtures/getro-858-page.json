@@ -1,0 +1,281 @@
+{
+ "results": {
+  "count": 14,
+  "jobs": [
+   {
+    "id": 93100601,
+    "source": "career_page",
+    "url": "https://app.screenloop.com/careers/avianlabs/job_posts/8866",
+    "organization": {
+     "id": 6063447,
+     "name": "Morse",
+     "slug": "morse",
+     "industry_tags": [],
+     "topics": []
+    }
+   },
+   {
+    "id": 92969191,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/rain/0d371778-f7d7-4da5-a9ec-48c850294e43",
+    "organization": {
+     "id": 4282351,
+     "name": "Rain",
+     "slug": "rain",
+     "industry_tags": [
+      "Finance"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92869875,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/phantom/d1c4fabe-d012-4a5d-845c-986a1e5ea976",
+    "organization": {
+     "id": 35393,
+     "name": "Phantom",
+     "slug": "phantom",
+     "industry_tags": [
+      "Software"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92816978,
+    "source": "admin_portal",
+    "url": "https://jobs.solana.com/companies/arcade-2/jobs/92816978-founding-platform-engineer",
+    "organization": {
+     "id": 65051,
+     "name": "Arcade",
+     "slug": "arcade-2",
+     "industry_tags": [
+      "Alternative Lending",
+      "Blockchain",
+      "Blockchain and Cryptocurrency",
+      "Blockchain Services",
+      "Cryptocurrency",
+      "Financial Services",
+      "Fintech",
+      "Information Technology",
+      "Internet",
+      "Internet Services",
+      "Non-Fungible Token (NFT)",
+      "Payments",
+      "Platform",
+      "Software",
+      "Technology"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92764996,
+    "source": "career_page",
+    "url": "https://boards.greenhouse.io/ondofinance/jobs/4401466009",
+    "organization": {
+     "id": 36563,
+     "name": "Ondo Finance",
+     "slug": "ondo-finance",
+     "industry_tags": [
+      "Blockchain",
+      "Blockchain and Cryptocurrency",
+      "Cryptocurrency",
+      "Decentralized Finance (DeFi)",
+      "Financial Services",
+      "Financial Software",
+      "Fintech",
+      "Lending and Investments",
+      "Media and Information Services (B2B)",
+      "Other Financial Services",
+      "Payments",
+      "Platform",
+      "Software",
+      "Technology",
+      "Trading Platform"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92715303,
+    "source": "career_page",
+    "url": "https://ats.rippling.com/perle/jobs/1713da29-70e8-4cb7-b5b1-90f4720f038d",
+    "organization": {
+     "id": 3443833,
+     "name": "Perle",
+     "slug": "perle-2-0f9ff345-67d2-4bf3-af58-751b33bd578b",
+     "industry_tags": [
+      "AI",
+      "Artificial Intelligence (AI)",
+      "Blockchain",
+      "Crypto",
+      "Data",
+      "Data & Analytics",
+      "Data Collection",
+      "Data Labeling",
+      "Information Technology",
+      "Internet",
+      "Internet Services",
+      "LLMs",
+      "Science and Engineering",
+      "Software",
+      "Software Development Applications",
+      "Tech",
+      "Web 3",
+      "Web3"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92543025,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/dourolabs.xyz/20f3e7d8-6fd4-4d05-8eab-e0b69d04ead4",
+    "organization": {
+     "id": 706669,
+     "name": "Douro Labs",
+     "slug": "douro-labs-2",
+     "industry_tags": [
+      "Data & Analytics",
+      "Database",
+      "Software",
+      "Web Development"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92514407,
+    "source": "career_page",
+    "url": "https://crossmint.na.teamtailor.com/jobs/697262-anti-fraud-engineer-nyc-mia",
+    "organization": {
+     "id": 1041296,
+     "name": "Crossmint",
+     "slug": "crossmint-2",
+     "industry_tags": [
+      "Blockchain",
+      "Blockchain and Cryptocurrency",
+      "Developer Tools",
+      "Financial Services",
+      "Fintech",
+      "Payments",
+      "Software",
+      "Software Development"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92502282,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/batoncorporation/b4c1c019-6c93-4825-a341-bb500c5a66e5",
+    "organization": {
+     "id": 4422778,
+     "name": "Baton Corporation",
+     "slug": "baton-corporation",
+     "industry_tags": [],
+     "topics": []
+    }
+   },
+   {
+    "id": 92502284,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/batoncorporation/9200468c-0428-434b-a4fa-0a4481ab4339",
+    "organization": {
+     "id": 4422778,
+     "name": "Baton Corporation",
+     "slug": "baton-corporation",
+     "industry_tags": [],
+     "topics": []
+    }
+   },
+   {
+    "id": 92465458,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/wormholelabs/06e547b0-a5be-4bc6-ab0f-b0c2519d751c",
+    "organization": {
+     "id": 90050,
+     "name": "Wormhole",
+     "slug": "wormhole-2",
+     "industry_tags": [
+      "Apps",
+      "Blockchain",
+      "Blockchain and Cryptocurrency",
+      "Business/Productivity Software",
+      "Communication Software",
+      "Cryptocurrency",
+      "Developer Tools",
+      "Financial Services",
+      "Financial Software",
+      "Information Services (B2C)",
+      "Information Technology",
+      "Internet Services",
+      "Messaging",
+      "Messaging and Telecommunications",
+      "Other Commercial Services",
+      "Other Financial Services",
+      "Payments",
+      "Platform",
+      "Software",
+      "Software Development Applications",
+      "Technology"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92435218,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/batoncorporation/22835229-d4ca-4be7-b217-f3f3ab49f60a",
+    "organization": {
+     "id": 4422778,
+     "name": "Baton Corporation",
+     "slug": "baton-corporation",
+     "industry_tags": [],
+     "topics": []
+    }
+   },
+   {
+    "id": 92434114,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/wormholelabs/06e547b0-a5be-4bc6-ab0f-b0c2519d751c",
+    "organization": {
+     "id": 1106236,
+     "name": "Wormhole Labs",
+     "slug": "wormhole-labs-2-be889885-4d16-4911-98e8-707a8bef2d3d",
+     "industry_tags": [
+      "Internet Services"
+     ],
+     "topics": []
+    }
+   },
+   {
+    "id": 92402912,
+    "source": "career_page",
+    "url": "https://jobs.ashbyhq.com/fomo-labs/a1baeafc-c91d-4281-b9fd-9a5c284aefcc",
+    "organization": {
+     "id": 3781912,
+     "name": "Fomo",
+     "slug": "fomo-2-12bbd144-f1c8-44a3-bd2a-ed54a499ceea",
+     "industry_tags": [
+      "Blockchain and Cryptocurrency",
+      "Cryptocurrency",
+      "Financial Services",
+      "Financial Software",
+      "Fintech",
+      "Internet Services",
+      "Lending and Investments",
+      "Other Financial Services",
+      "Payments",
+      "Software",
+      "Trading Platform",
+      "Web3"
+     ],
+     "topics": []
+    }
+   }
+  ]
+ }
+}

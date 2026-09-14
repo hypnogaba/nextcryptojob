@@ -6,7 +6,7 @@ import { loadCrawlPool } from "../digest/jobs.js";
 import { readOnlyJobsDb } from "../digest/jobs-db.js";
 import { __resetLimiters, __setLimiter } from "../limits.js";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
-import { cryptoLinks, newCompanies, runJobsDiscover } from "./discover.js";
+import { cryptoLinks, looseKey, nameLookup, newCompanies, newCompaniesFrom, runJobsDiscover } from "./discover.js";
 import { jobsDatabaseId } from "./env.js";
 import { jobId } from "./ids.js";
 import { runJobsPrune } from "./prune.js";
@@ -18,6 +18,28 @@ import type { SourceState } from "./types.js";
 const NOW = new Date("2026-09-14T04:30:00Z");
 const DAY = 86_400_000;
 const fixture = (name: string): string => readFileSync(new URL(`./sources/fixtures/${name}`, import.meta.url), "utf8");
+
+/**
+ * Підставний Getro: список компаній по 12 на сторінку (`search/companies`) і сторінка вакансій однієї
+ * організації (`search/jobs` з фільтром `organization.id`). Знімки 14.09.2026: сторінка вакансій дошки;
+ * список компаній = знята сторінка 0 списку (для 858) плюс організації тієї сторінки вакансій з їхнім
+ * числом вакансій (getro-*-companies.json складено з цих двох відповідей).
+ */
+function getroFake(jobsFile: string, companiesFile: string) {
+  const jobs = (JSON.parse(fixture(jobsFile)) as { results: { jobs: Array<{ organization: { id: number } }> } }).results.jobs;
+  const companies = (JSON.parse(fixture(companiesFile)) as { results: { companies: unknown[] } }).results.companies;
+  return (url: string, init?: RequestInit): Response | null => {
+    if (!url.includes("api.getro.com")) return null;
+    const body = JSON.parse(String(init?.body ?? "{}")) as { page?: number; filters?: Record<string, number[]> };
+    if (url.endsWith("/search/companies")) {
+      const page = body.page ?? 0;
+      return new Response(JSON.stringify({ results: { count: companies.length, companies: companies.slice(page * 12, page * 12 + 12) } }), { status: 200 });
+    }
+    const org = body.filters?.["organization.id"]?.[0];
+    const list = org === undefined ? jobs : jobs.filter((j) => j.organization.id === org);
+    return new Response(JSON.stringify({ results: { count: list.length, jobs: list } }), { status: 200 });
+  };
+}
 
 const REGISTRY: SeedRegistry = {
   version: 1, source: "test",
@@ -41,9 +63,11 @@ let deadAnswers: 404 | 200;
 let web3careerStatus: 200 | 401;
 
 /** Підставна мережа: адреса → файл знімка; дошка deadco відповідає 404 (або порожнім списком). */
-const fetchImpl = (async (input: string) => {
+const fetchImpl = (async (input: string, init?: RequestInit) => {
   const url = String(input);
   urls.push(url);
+  const getro = getroFake("getro-1625-page.json", "getro-1625-companies.json")(url, init);
+  if (getro) return getro;
   const json = (file: string) => new Response(fixture(file), { status: 200, headers: { "content-type": "application/json" } });
   if (url.includes("boards-api.greenhouse.io")) return json("greenhouse-coinbase-pay.json");
   if (url.includes("api.ashbyhq.com")) return json("ashby-kraken-comp.json");
@@ -54,7 +78,6 @@ const fetchImpl = (async (input: string) => {
   if (url.includes("/companies?")) return json("speedrun-companies-page.json");
   if (url.includes("/companies/anchorage")) return json("speedrun-company-anchorage.json");
   if (url.includes("/companies/")) return new Response(JSON.stringify({ company: { jobs: [] } }), { status: 200 });
-  if (url.includes("api.getro.com")) return json("getro-1625-page.json");
   if (url.startsWith("https://web3.career/api/v1?")) {
     return web3careerStatus === 200 ? json("web3career-api.json") : new Response("invalid token", { status: 401 });
   }
@@ -74,6 +97,7 @@ beforeEach(() => {
   web3careerStatus = 200;
   db.seen.length = 0;
   __setLimiter("web3.career", { concurrency: 1, minIntervalMs: 0 });
+  __setLimiter("api.getro.com", { concurrency: 1, minIntervalMs: 0 });
 });
 afterEach(() => db.close());
 
@@ -259,12 +283,78 @@ describe("jobs-discover", () => {
     expect(count("SELECT COUNT(*) AS n FROM companies WHERE discovered_via = 'speedrun'")).toBe(2);
   });
 
-  it("Getro лише з JOBS_GETRO_DISCOVERY=1: організації, які Getro не називає крипто, не беруться", async () => {
+  it("Getro лише з JOBS_GETRO_DISCOVERY=1 і лише дошки job_boards; фонд 'tagged': Notion не береться", async () => {
+    db.exec(`INSERT INTO job_boards (slug, label, kind, url, platform, platform_id, decision, crypto_scope, reason, checked_at)
+      VALUES ('coinbase-ventures', 'Coinbase Ventures', 'fund', 'https://coinbase.getro.com/jobs', 'getro', '1625', 'discover', 'tagged', 't', '2026-09-14'),
+             ('pantera', 'Pantera', 'fund', 'https://jobs.panteracapital.com/jobs', 'consider', NULL, 'manual', 'all', 't', '2026-09-14')`);
     const r = await runJobsDiscover({ store: new JobsStore(db, true), env: { JOBS_GETRO_DISCOVERY: "1", JOBS_SPEEDRUN: "0" },
       now: NOW, log: () => undefined, fetch: o() });
-    expect(r.getro).toEqual([{ id: 1625, links: 4, crypto: 3, withAts: 2 }]);
-    expect(r.added.map((c) => `${c.provider}:${c.atsSlug}`)).toEqual(["greenhouse:taxbit", "greenhouse:bvnk"]);
+    expect(r.getro).toEqual([{ board: "coinbase-ventures", id: 1625, label: "Coinbase Ventures", companies: 4, withJobs: 4, cryptoOrgs: 3,
+      known: 0, ats: 2, viaCareerPage: 0, hostedOnly: 0, otherAts: 1, unresolved: 0, knownBoard: 0, added: 2, requests: 4 }]);
+    expect(r.added.map((c) => `${c.provider}:${c.atsSlug} ${c.discoveredVia}`)).toEqual(["greenhouse:taxbit getro:1625", "greenhouse:bvnk getro:1625"]);
+    expect(r.added[0]!.note).toMatch(/^found via getro:1625 \(Coinbase Ventures board, only there\): its jobs link greenhouse:taxbit \(\d+ open on 2026-09-14\)$/);
+    expect(r.otherAts).toEqual([{ company: "VALR", boards: ["coinbase-ventures"], jobs: 1, detail: "hibob" }]);
+    // Список компаній (1 сторінка) і вакансії лише трьох крипто-компаній, яких реєстр не знає; Notion не читається.
+    expect(urls.filter((u) => u.includes("api.getro.com"))).toHaveLength(4);
+    expect(urls.some((u) => u.includes("consider") || u.includes("pantera"))).toBe(false);
     expect(count("SELECT COUNT(*) AS n FROM companies")).toBe(REGISTRY.companies.length); // насухо
+  });
+
+  it("дошка екосистеми (jobs.solana.com): відомих не читає, нові дошки ATS лише після живої відповіді API; лише Getro й чужий ATS окремо", async () => {
+    db.exec(`INSERT INTO job_boards (slug, label, kind, url, platform, platform_id, decision, crypto_scope, reason, checked_at)
+      VALUES ('solana', 'Solana', 'ecosystem', 'https://jobs.solana.com/jobs', 'getro', '858', 'discover', 'all', 't', '2026-09-14')`);
+    // Phantom уже в реєстрі під іншою, живою дошкою, Alchemy як «Alchemy Labs», Anza: їхніх вакансій розвідка не
+    // читає. Akash Network є лише з вимкненою дошкою: читає.
+    db.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via) VALUES
+      ('phantom-old', 'Phantom', 'lever', 'phantom-old', 'seed'), ('alchemy', 'Alchemy Labs', 'ashby', 'alchemy', 'seed'),
+      ('anza', 'Anza', 'workable', 'anza-xyz', 'seed')`);
+    db.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, enabled) VALUES ('akash', 'Akash Network', 'lever', 'akashnetwork', 'seed', 0)`);
+    const fake = getroFake("getro-858-page.json", "getro-858-companies.json");
+    const f = (async (input: string, init?: RequestInit) => {
+      const url = String(input);
+      const g = fake(url, init);
+      if (g) { urls.push(url); return g; }
+      if (url.includes("api.ashbyhq.com/posting-api/job-board/rain")) { urls.push(url); return new Response("not found", { status: 404 }); }
+      return fetchImpl(url, init);
+    }) as unknown as typeof fetch;
+    const r = await runJobsDiscover({ store: new JobsStore(db, false), env: { JOBS_GETRO_DISCOVERY: "1", JOBS_SPEEDRUN: "0" },
+      now: NOW, log: () => undefined, fetch: { fetchImpl: f, retries: 0 } });
+    expect(r.added.map((c) => `${c.provider}:${c.atsSlug}`)).toEqual([
+      "greenhouse:ondofinance", "ashby:dourolabs.xyz", "ashby:batoncorporation", "ashby:wormholelabs", "ashby:fomo-labs"]);
+    // 23 компанії, 16 з вакансіями; Perle на списку не-крипто компаній добірки (engine/src/digest/clean.ts).
+    // Відомі за назвою: Alchemy («Alchemy Labs»), Anza, Phantom, Crossmint (REGISTRY). Запитів: 2 сторінки компаній + 11 організацій.
+    expect(r.getro).toEqual([{ board: "solana", id: 858, label: "Solana", companies: 23, withJobs: 16, cryptoOrgs: 15, known: 4,
+      ats: 7, viaCareerPage: 0, hostedOnly: 1, otherAts: 1, unresolved: 2, knownBoard: 0, added: 6, requests: 13 }]);
+    expect(r.hostedOnly.map((x) => x.company)).toEqual(["Arcade"]);
+    expect(r.otherAts.map((x) => `${x.company} ${x.detail}`)).toEqual(["Morse screenloop"]);
+    expect(r.unresolved.map((x) => `${x.company} ${x.detail}`)).toEqual(["Akash Network no jobs listed", "Anchorage Digital no jobs listed"]);
+    expect(r.unverified.map((x) => `${x.company} ${x.detail?.slice(0, 10)}`)).toEqual(["Rain ashby:rain"]);
+    // Живий прогін: у реєстр пішли лише перевірені, з приміткою, звідки відомо.
+    expect(db.all<{ slug: string; discovered_via: string; enabled: number }>(
+      "SELECT slug, discovered_via, enabled FROM companies WHERE discovered_via LIKE 'getro:%' ORDER BY slug"))
+      .toEqual(["batoncorporation", "dourolabs.xyz", "fomo-labs", "ondofinance", "wormholelabs"]
+        .map((slug) => ({ slug, discovered_via: "getro:858", enabled: 1 })));
+    // Відомих за назвою вакансій не читали.
+    const orgQueries = urls.filter((u) => u.includes("api.getro.com") && u.endsWith("/search/jobs"));
+    expect(orgQueries).toHaveLength(11);
+    // Вакансій з Getro в базі немає, лише розвідка.
+    expect(count("SELECT COUNT(*) AS n FROM jobs_cache")).toBe(0);
+  });
+
+  it("та сама компанія за назвою: «Ethena Labs» і «Ethena» так, «Solana Foundation» і «Solana Labs» ні; дошка Notion не береться", () => {
+    const known = nameLookup(new Map([["ethena", true], ["solana labs", true], ["akash network", false]]));
+    expect(known("Ethena Labs")).toBe(true);
+    expect(known("Solana Foundation")).toBeUndefined();
+    expect(known("Solana")).toBe(true);
+    expect(known("Akash")).toBe(false);
+    expect(looseKey("The Graph Foundation")).toBe("graph");
+    const { added, skipped } = newCompaniesFrom([
+      { provider: "ashby", slug: "notion", company: "PropellerHeads", via: "getro:1440" },
+      { provider: "ashby", slug: "ethena", company: "Ethena Labs", via: "getro:1" },
+      { provider: "ashby", slug: "akash", company: "Akash", via: "getro:1" },
+    ], new Set(), new Set(), new Map([["ethena", true], ["akash network", false]]));
+    expect(added.map((c) => [c.slug, c.note])).toEqual([["akash", "found via getro:1: ashby:akash; the same company is in the registry only with a disabled board"]]);
+    expect(skipped).toEqual([{ company: "Ethena Labs", board: "ashby:ethena", why: "known-name" }]);
   });
 
   it("newCompanies: не-крипто компанія й зайнятий слаг", () => {

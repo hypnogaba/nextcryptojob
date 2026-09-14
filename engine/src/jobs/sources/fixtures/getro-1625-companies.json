@@ -1,0 +1,104 @@
+{
+ "results": {
+  "count": 4,
+  "companies": [
+   {
+    "id": 72886,
+    "name": "Tactic",
+    "slug": "tactic-2",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Application Software",
+     "Blockchain and Cryptocurrency",
+     "Business/Productivity Software",
+     "Cryptocurrency",
+     "Financial Services",
+     "Financial Software",
+     "Fintech",
+     "Payments",
+     "Software",
+     "Software Development",
+     "Systems Integrator",
+     "Technology"
+    ],
+    "topics": [
+     "Platform & developer tools"
+    ]
+   },
+   {
+    "id": 118443,
+    "name": "BVNK",
+    "slug": "bvnk",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Application Software",
+     "B2B",
+     "Banking",
+     "Cloud platforms(PaaS)",
+     "Cryptocurrency",
+     "Enterprise Software",
+     "Financial Services",
+     "Financial Software",
+     "Fintech",
+     "Information Technology",
+     "IT Infrastructure",
+     "Lending and Investments",
+     "Other Financial Services",
+     "Payments",
+     "Software",
+     "Technology"
+    ],
+    "topics": []
+   },
+   {
+    "id": 66220,
+    "name": "VALR",
+    "slug": "valr",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Bitcoin",
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Blockchain Technology",
+     "Cryptocurrencies",
+     "Cryptocurrency",
+     "Cryptocurrency Exchange",
+     "Ethereum",
+     "Financial Services",
+     "Financial Software",
+     "Fintech",
+     "Innovation",
+     "Lending and Investments",
+     "Mobile App",
+     "Other Financial Services",
+     "Payments",
+     "Platform",
+     "Software",
+     "Technology",
+     "Trading",
+     "Trading Platform"
+    ],
+    "topics": [
+     "cefi"
+    ]
+   },
+   {
+    "id": 29765,
+    "name": "Notion",
+    "slug": "notion-2",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Apps",
+     "Collaboration",
+     "Mobile Apps",
+     "Product Management",
+     "Productivity Tools",
+     "Project Management",
+     "Real Time",
+     "Software"
+    ],
+    "topics": []
+   }
+  ]
+ }
+}

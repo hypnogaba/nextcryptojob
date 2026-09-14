@@ -1,0 +1,403 @@
+{
+ "results": {
+  "count": 23,
+  "companies": [
+   {
+    "id": 67395,
+    "name": "01 Exchange",
+    "slug": "01-exchange",
+    "active_jobs_count": 0,
+    "industry_tags": [
+     "Financial Software",
+     "Other Financial Services"
+    ],
+    "topics": [],
+    "domain": "01.xyz"
+   },
+   {
+    "id": 1565598,
+    "name": "ABC Labs",
+    "slug": "abc-labs-2-829ccc6b-2e70-4c3e-a615-96a5317cf3fe",
+    "active_jobs_count": 0,
+    "industry_tags": [],
+    "topics": [],
+    "domain": "abclabs.co"
+   },
+   {
+    "id": 396295,
+    "name": "Access Protocol",
+    "slug": "access-protocol",
+    "active_jobs_count": 0,
+    "industry_tags": [
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Business/Productivity Software",
+     "Content Creators",
+     "Cryptocurrency",
+     "Financial Services",
+     "IT Services and IT Consulting",
+     "Media & Entertainment",
+     "Media and Information Services (B2B)",
+     "Payments",
+     "Software"
+    ],
+    "topics": [],
+    "domain": "accessprotocol.co"
+   },
+   {
+    "id": 28531,
+    "name": "Akash Network",
+    "slug": "akash-network",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Business/Productivity Software",
+     "Cloud",
+     "Cloud Computing",
+     "Cloud Infrastructure",
+     "Cloud platforms(PaaS)",
+     "Cloud services(SaaS)",
+     "Decentralized",
+     "Hardware",
+     "Information Technology",
+     "Infrastructure",
+     "Internet",
+     "Internet Services",
+     "Network Management Software",
+     "Open Source",
+     "Robotics",
+     "Science and Engineering",
+     "Software",
+     "Software Development",
+     "Systems and Information Management",
+     "Technology",
+     "Technology And Computing",
+     "Web Development",
+     "Web3"
+    ],
+    "topics": [],
+    "domain": "akash.network"
+   },
+   {
+    "id": 34774,
+    "name": "Alchemy",
+    "slug": "alchemy-2",
+    "active_jobs_count": 14,
+    "industry_tags": [
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Developer APIs",
+     "Developer Platform",
+     "Information Technology",
+     "Software",
+     "Web3"
+    ],
+    "topics": [],
+    "domain": "alchemy.com"
+   },
+   {
+    "id": 3546151,
+    "name": "alphafc.xyz",
+    "slug": "alphafc-xyz",
+    "active_jobs_count": 0,
+    "industry_tags": [
+     "Blockchain and Crypto",
+     "Finance, Sports",
+     "Sports",
+     "Sports, Consumer Products"
+    ],
+    "topics": [],
+    "domain": "alphafc.xyz"
+   },
+   {
+    "id": 13831,
+    "name": "Anchorage Digital",
+    "slug": "anchorage-digital",
+    "active_jobs_count": 9,
+    "industry_tags": [
+     "Blockchain",
+     "Cryptocurrency",
+     "Digital Asset Custody",
+     "Finance",
+     "Financial Services",
+     "Fintech",
+     "Payments",
+     "Privacy and Security",
+     "Software"
+    ],
+    "topics": [],
+    "domain": "anchorage.com"
+   },
+   {
+    "id": 1040598,
+    "name": "Anza",
+    "slug": "anza-2",
+    "active_jobs_count": 4,
+    "industry_tags": [
+     "Information Technology",
+     "Software"
+    ],
+    "topics": [],
+    "domain": "anza.xyz"
+   },
+   {
+    "id": 37180,
+    "name": "Apricot Finance",
+    "slug": "apricot-finance",
+    "active_jobs_count": 0,
+    "industry_tags": [
+     "Finance",
+     "Finance",
+     "Financial Services",
+     "Financial Software",
+     "Fintech",
+     "Other Financial Services"
+    ],
+    "topics": [],
+    "domain": "apricot.one"
+   },
+   {
+    "id": 65051,
+    "name": "Arcade",
+    "slug": "arcade-2",
+    "active_jobs_count": 3,
+    "industry_tags": [
+     "Alternative Lending",
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Blockchain Services",
+     "Cryptocurrency",
+     "Financial Services",
+     "Fintech",
+     "Information Technology",
+     "Internet",
+     "Internet Services",
+     "Non-Fungible Token (NFT)",
+     "Payments",
+     "Platform",
+     "Software",
+     "Technology"
+    ],
+    "topics": [],
+    "domain": "arcade.xyz"
+   },
+   {
+    "id": 75880,
+    "name": "Arrakis Finance",
+    "slug": "arrakis-finance-2",
+    "active_jobs_count": 0,
+    "industry_tags": [
+     "Business/Productivity Software",
+     "Financial Software",
+     "Internet Services",
+     "Media and Information Services (B2B)"
+    ],
+    "topics": [],
+    "domain": "arrakis.finance"
+   },
+   {
+    "id": 73023,
+    "name": "Artemis",
+    "slug": "artemis-2",
+    "active_jobs_count": 0,
+    "industry_tags": [
+     "Blockchain and Cryptocurrency",
+     "Business/Productivity Software",
+     "Cryptocurrency",
+     "Cyber Security",
+     "Data Storage",
+     "Database Software",
+     "Financial Services",
+     "Financial Software",
+     "Hardware",
+     "Information Technology",
+     "Payments",
+     "Privacy and Security",
+     "Software",
+     "Software Development"
+    ],
+    "topics": [],
+    "domain": "artemis.xyz"
+   },
+   {
+    "id": 6063447,
+    "name": "Morse",
+    "slug": "morse",
+    "active_jobs_count": 1,
+    "industry_tags": [],
+    "topics": []
+   },
+   {
+    "id": 4282351,
+    "name": "Rain",
+    "slug": "rain",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Finance"
+    ],
+    "topics": []
+   },
+   {
+    "id": 35393,
+    "name": "Phantom",
+    "slug": "phantom",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Software"
+    ],
+    "topics": []
+   },
+   {
+    "id": 36563,
+    "name": "Ondo Finance",
+    "slug": "ondo-finance",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Cryptocurrency",
+     "Decentralized Finance (DeFi)",
+     "Financial Services",
+     "Financial Software",
+     "Fintech",
+     "Lending and Investments",
+     "Media and Information Services (B2B)",
+     "Other Financial Services",
+     "Payments",
+     "Platform",
+     "Software",
+     "Technology",
+     "Trading Platform"
+    ],
+    "topics": []
+   },
+   {
+    "id": 3443833,
+    "name": "Perle",
+    "slug": "perle-2-0f9ff345-67d2-4bf3-af58-751b33bd578b",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "AI",
+     "Artificial Intelligence (AI)",
+     "Blockchain",
+     "Crypto",
+     "Data",
+     "Data & Analytics",
+     "Data Collection",
+     "Data Labeling",
+     "Information Technology",
+     "Internet",
+     "Internet Services",
+     "LLMs",
+     "Science and Engineering",
+     "Software",
+     "Software Development Applications",
+     "Tech",
+     "Web 3",
+     "Web3"
+    ],
+    "topics": []
+   },
+   {
+    "id": 706669,
+    "name": "Douro Labs",
+    "slug": "douro-labs-2",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Data & Analytics",
+     "Database",
+     "Software",
+     "Web Development"
+    ],
+    "topics": []
+   },
+   {
+    "id": 1041296,
+    "name": "Crossmint",
+    "slug": "crossmint-2",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Developer Tools",
+     "Financial Services",
+     "Fintech",
+     "Payments",
+     "Software",
+     "Software Development"
+    ],
+    "topics": []
+   },
+   {
+    "id": 4422778,
+    "name": "Baton Corporation",
+    "slug": "baton-corporation",
+    "active_jobs_count": 3,
+    "industry_tags": [],
+    "topics": []
+   },
+   {
+    "id": 90050,
+    "name": "Wormhole",
+    "slug": "wormhole-2",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Apps",
+     "Blockchain",
+     "Blockchain and Cryptocurrency",
+     "Business/Productivity Software",
+     "Communication Software",
+     "Cryptocurrency",
+     "Developer Tools",
+     "Financial Services",
+     "Financial Software",
+     "Information Services (B2C)",
+     "Information Technology",
+     "Internet Services",
+     "Messaging",
+     "Messaging and Telecommunications",
+     "Other Commercial Services",
+     "Other Financial Services",
+     "Payments",
+     "Platform",
+     "Software",
+     "Software Development Applications",
+     "Technology"
+    ],
+    "topics": []
+   },
+   {
+    "id": 1106236,
+    "name": "Wormhole Labs",
+    "slug": "wormhole-labs-2-be889885-4d16-4911-98e8-707a8bef2d3d",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Internet Services"
+    ],
+    "topics": []
+   },
+   {
+    "id": 3781912,
+    "name": "Fomo",
+    "slug": "fomo-2-12bbd144-f1c8-44a3-bd2a-ed54a499ceea",
+    "active_jobs_count": 1,
+    "industry_tags": [
+     "Blockchain and Cryptocurrency",
+     "Cryptocurrency",
+     "Financial Services",
+     "Financial Software",
+     "Fintech",
+     "Internet Services",
+     "Lending and Investments",
+     "Other Financial Services",
+     "Payments",
+     "Software",
+     "Trading Platform",
+     "Web3"
+    ],
+    "topics": []
+   }
+  ]
+ }
+}

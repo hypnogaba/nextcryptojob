@@ -1,6 +1,6 @@
 {
  "version": 1,
- "source": "public registry fields exported once from the NextRole job database on 2026-09-14 (companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions; see engine/scripts/jobs-seed.ts",
+ "source": "public registry fields exported once from the NextRole job database on 2026-09-14 (companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions and companies found through ecosystem and fund job boards on 2026-09-14; see engine/scripts/jobs-seed.ts",
  "companies": [
   {
    "slug": "0g",
@@ -46,6 +46,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "3jane",
+   "name": "3Jane",
+   "ats_provider": "lever",
+   "ats_slug": "3jane",
+   "discovered_via": "portfolio:paradigm",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.paradigm.xyz/investments; company site https://www.3jane.xyz/ careers page https://www.3jane.xyz/ links lever:3jane (0 open on 2026-09-14)"
   },
   {
    "slug": "a16z",
@@ -109,6 +118,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "alloralabs",
+   "name": "Allora Labs",
+   "ats_provider": "bamboohr",
+   "ats_slug": "alloralabs",
+   "discovered_via": "portfolio:mechanism",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.mechanism.capital/portfolio; company site https://allora.network/ careers page https://allora.network/ links bamboohr:alloralabs (0 open on 2026-09-14)"
   },
   {
    "slug": "alpaca",
@@ -309,6 +327,15 @@
    "note": null
   },
   {
+   "slug": "axiom",
+   "name": "Axiom (axiom.xyz)",
+   "ats_provider": "ashby",
+   "ats_slug": "axiom",
+   "discovered_via": "portfolio:paradigm",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.paradigm.xyz/investments; company site https://www.axiom.xyz/ careers page https://www.axiom.xyz/ links ashby:axiom (3 open on 2026-09-14)"
+  },
+  {
    "slug": "azragames",
    "name": "Azra Games",
    "ats_provider": "greenhouse",
@@ -390,6 +417,15 @@
    "note": "board name 'BCB Group' on the EU Greenhouse host (1 open on 2026-09-14; bcbgroup.com/careers lists the same role); crypto payments"
   },
   {
+   "slug": "bettermoney",
+   "name": "The Better Money Company",
+   "ats_provider": "ashby",
+   "ats_slug": "bettermoney",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/; company site https://bettermoney.com/ careers page https://bettermoney.com/ links ashby:bettermoney (6 open on 2026-09-14)"
+  },
+  {
    "slug": "biconomy",
    "name": "Biconomy",
    "ats_provider": "lever",
@@ -406,6 +442,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "bio",
+   "name": "Bio Protocol",
+   "ats_provider": "ashby",
+   "ats_slug": "bio",
+   "discovered_via": "portfolio:protocol-labs",
+   "enabled": 1,
+   "note": "Protocol Labs network directory https://os.pl.xyz/jobs (read once on 2026-09-14) lists this team's roles at ashby:bio (11 open on 2026-09-14)"
   },
   {
    "slug": "bitdeer",
@@ -525,6 +570,15 @@
    "note": "board name 'Blue Cube Services', customer and user operations for crypto partners (8 open on 2026-09-14); listed by web3.career"
   },
   {
+   "slug": "bluefin",
+   "name": "Bluefin",
+   "ats_provider": "workable",
+   "ats_slug": "bluefin",
+   "discovered_via": "portfolio:mechanism",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.mechanism.capital/portfolio; company site https://bluefin.io/ careers page https://bluefin.io/careers links workable:bluefin (0 open on 2026-09-14)"
+  },
+  {
    "slug": "bluenote",
    "name": "Bluenote Health",
    "ats_provider": "ashby",
@@ -606,6 +660,15 @@
    "note": null
   },
   {
+   "slug": "cardano-foundation",
+   "name": "Cardano Foundation",
+   "ats_provider": "personio",
+   "ats_slug": "cardano-foundation",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "Cardano ecosystem check 2026-09-14: cardano-foundation.jobs.personio.com answers with the Cardano Foundation's roles (1 open on 2026-09-14)"
+  },
+  {
    "slug": "casa",
    "name": "Casa",
    "ats_provider": "greenhouse",
@@ -622,6 +685,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "catena",
+   "name": "Catena Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "catena",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/; company site https://catenalabs.com/ careers page https://catenalabs.com/careers links ashby:catena (4 open on 2026-09-14)"
   },
   {
    "slug": "celestia",
@@ -685,6 +757,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "chainwaylabs",
+   "name": "Citrea",
+   "ats_provider": "bamboohr",
+   "ats_slug": "chainwaylabs",
+   "discovered_via": "getro:9134",
+   "enabled": 1,
+   "note": "found via getro:9134 (Galaxy Ventures board, only there): its jobs link bamboohr:chainwaylabs (1 open on 2026-09-14)"
   },
   {
    "slug": "chakra-labs",
@@ -804,6 +885,15 @@
    "note": null
   },
   {
+   "slug": "connext-network",
+   "name": "Everclear (Connext)",
+   "ats_provider": "lever",
+   "ats_slug": "connext-network",
+   "discovered_via": "portfolio:hashed",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.hashed.com/portfolio/; company site https://www.connext.network/ careers page https://www.connext.network/ links lever:connext-network (1 open on 2026-09-14)"
+  },
+  {
    "slug": "consensys",
    "name": "Consensys",
    "ats_provider": "greenhouse",
@@ -885,6 +975,15 @@
    "note": null
   },
   {
+   "slug": "cyber.fund",
+   "name": "cyber•Fund",
+   "ats_provider": "ashby",
+   "ats_slug": "cyber.Fund",
+   "discovered_via": "getro:9035",
+   "enabled": 1,
+   "note": "found via getro:9035 (cyber.fund board, only there): its jobs link ashby:cyber.Fund (1 open on 2026-09-14)"
+  },
+  {
    "slug": "d3",
    "name": "D3",
    "ats_provider": "greenhouse",
@@ -946,6 +1045,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "distributedcrafts",
+   "name": "BOB (Build on Bitcoin)",
+   "ats_provider": "workable",
+   "ats_slug": "distributedcrafts",
+   "discovered_via": "portfolio:mechanism",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.mechanism.capital/portfolio; company site https://gobob.xyz/ careers page https://gobob.xyz/ links workable:distributedcrafts (0 open on 2026-09-14)"
   },
   {
    "slug": "divineresearch",
@@ -1027,6 +1135,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "ecoinc",
+   "name": "Eco",
+   "ats_provider": "greenhouse",
+   "ats_slug": "ecoinc",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/ (also 1kx); company site https://www.eco.com/ careers page https://www.eco.com/ links greenhouse:ecoinc (0 open on 2026-09-14)"
   },
   {
    "slug": "edisyl",
@@ -1155,6 +1272,15 @@
    "note": null
   },
   {
+   "slug": "everyrealm",
+   "name": "Everyrealm",
+   "ats_provider": "workable",
+   "ats_slug": "everyrealm",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/ (also hashed); company site https://everyrealm.com/ careers page https://everyrealm.com/careers links workable:everyrealm (0 open on 2026-09-14)"
+  },
+  {
    "slug": "exodus54",
    "name": "Exodus",
    "ats_provider": "greenhouse",
@@ -1171,6 +1297,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "fence-finance",
+   "name": "Fence",
+   "ats_provider": "ashby",
+   "ats_slug": "fence-finance",
+   "discovered_via": "getro:9134",
+   "enabled": 1,
+   "note": "found via getro:9134 (Galaxy Ventures board, only there): its jobs link ashby:fence-finance (4 open on 2026-09-14)"
   },
   {
    "slug": "figment",
@@ -1216,6 +1351,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "fleek",
+   "name": "Fleek",
+   "ats_provider": "ashby",
+   "ats_slug": "fleek",
+   "discovered_via": "portfolio:protocol-labs",
+   "enabled": 1,
+   "note": "Protocol Labs network directory https://os.pl.xyz/jobs (read once on 2026-09-14) lists this team's roles at ashby:fleek (11 open on 2026-09-14)"
   },
   {
    "slug": "flowdesk",
@@ -1407,6 +1551,15 @@
    "note": null
   },
   {
+   "slug": "hadronlabs",
+   "name": "Neutron",
+   "ats_provider": "teamtailor",
+   "ats_slug": "hadronlabs",
+   "discovered_via": "getro:9035",
+   "enabled": 1,
+   "note": "found via getro:9035 (cyber.fund board, also delphi): its jobs link teamtailor:hadronlabs (2 open on 2026-09-14)"
+  },
+  {
    "slug": "halborn",
    "name": "Halborn",
    "ats_provider": "rippling",
@@ -1450,6 +1603,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "helium",
+   "name": "Nova Labs (Helium)",
+   "ats_provider": "greenhouse",
+   "ats_slug": "helium",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/; company site https://nova.xyz/ careers page https://nova.xyz/ links greenhouse:helium (0 open on 2026-09-14)"
   },
   {
    "slug": "helius",
@@ -1533,6 +1695,24 @@
    "note": null
   },
   {
+   "slug": "impossiblecloud",
+   "name": "Impossible Cloud Network",
+   "ats_provider": "lever",
+   "ats_slug": "impossiblecloud",
+   "discovered_via": "portfolio:1kx",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://1kx.capital/portfolio; company site https://www.icn.global/ careers page https://www.icn.global/careers links lever:impossiblecloud (11 open on 2026-09-14)"
+  },
+  {
+   "slug": "incadigitalinc",
+   "name": "Inca Digital",
+   "ats_provider": "greenhouse",
+   "ats_slug": "incadigitalinc",
+   "discovered_via": "getro:9134",
+   "enabled": 1,
+   "note": "found via getro:9134 (Galaxy Ventures board, only there): the company careers page https://grnh.se/2vaoaexk9us links greenhouse:incadigitalinc (11 open on 2026-09-14)"
+  },
+  {
    "slug": "inco",
    "name": "Inco",
    "ats_provider": "bamboohr",
@@ -1585,6 +1765,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "io-global",
+   "name": "IO Global (IOG)",
+   "ats_provider": "workable",
+   "ats_slug": "io-global",
+   "discovered_via": "curated",
+   "enabled": 1,
+   "note": "Cardano ecosystem check 2026-09-14: iog.io/careers links apply.workable.com/io-global (board name 'IO Global') (4 open on 2026-09-14)"
   },
   {
    "slug": "jito",
@@ -1659,6 +1848,15 @@
    "note": null
   },
   {
+   "slug": "kiln.fi",
+   "name": "Kiln",
+   "ats_provider": "ashby",
+   "ats_slug": "kiln.fi",
+   "discovered_via": "getro:869",
+   "enabled": 1,
+   "note": "found via getro:869 (Blockchain Association board, only there): the company careers page https://www.kiln.fi/careers# links ashby:kiln.fi (0 open on 2026-09-14)"
+  },
+  {
    "slug": "kraken",
    "name": "Kraken",
    "ats_provider": "ashby",
@@ -1713,6 +1911,15 @@
    "note": null
   },
   {
+   "slug": "legend-xyz",
+   "name": "Legend",
+   "ats_provider": "ashby",
+   "ats_slug": "legend-xyz",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/; company site https://legend.xyz/ careers page https://legend.xyz/ links ashby:legend-xyz (2 open on 2026-09-14)"
+  },
+  {
    "slug": "li.fi",
    "name": "LI.FI",
    "ats_provider": "ashby",
@@ -1765,6 +1972,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "liquid",
+   "name": "Liquid",
+   "ats_provider": "ashby",
+   "ats_slug": "liquid",
+   "discovered_via": "portfolio:paradigm",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.paradigm.xyz/investments; company site https://tryliquid.xyz/ careers page https://tryliquid.xyz/ links ashby:liquid (2 open on 2026-09-14)"
   },
   {
    "slug": "localcoin",
@@ -2064,6 +2280,15 @@
    "note": null
   },
   {
+   "slug": "o1-labs-operating-corporation",
+   "name": "O(1) Labs",
+   "ats_provider": "rippling",
+   "ats_slug": "o1-labs-operating-corporation",
+   "discovered_via": "portfolio:paradigm",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.paradigm.xyz/investments; company site https://o1labs.org/ careers page https://o1labs.org/about-us links rippling:o1-labs-operating-corporation (0 open on 2026-09-14)"
+  },
+  {
    "slug": "offchainlabs",
    "name": "Offchain Labs",
    "ats_provider": "lever",
@@ -2134,6 +2359,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "optimum",
+   "name": "Optimum",
+   "ats_provider": "ashby",
+   "ats_slug": "optimum",
+   "discovered_via": "portfolio:1kx",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://1kx.capital/portfolio; company site https://www.getoptimum.xyz/ careers page https://www.getoptimum.xyz/ links ashby:optimum (0 open on 2026-09-14)"
   },
   {
    "slug": "orca",
@@ -2244,6 +2478,15 @@
    "note": null
   },
   {
+   "slug": "pixiongames",
+   "name": "Pixion Games",
+   "ats_provider": "teamtailor",
+   "ats_slug": "pixiongames",
+   "discovered_via": "getro:1440",
+   "enabled": 1,
+   "note": "found via getro:1440 (Delphi Ventures board, only there): its jobs link teamtailor:pixiongames (3 open on 2026-09-14)"
+  },
+  {
    "slug": "plasma",
    "name": "Plasma",
    "ats_provider": "ashby",
@@ -2278,6 +2521,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "pod-network",
+   "name": "pod",
+   "ats_provider": "ashby",
+   "ats_slug": "pod-network",
+   "discovered_via": "portfolio:1kx",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://1kx.capital/portfolio; company site https://pod.network/ careers page https://pod.network/ links ashby:pod-network (4 open on 2026-09-14)"
   },
   {
    "slug": "polychaincapital",
@@ -2361,6 +2613,15 @@
    "note": null
   },
   {
+   "slug": "puffer-finance",
+   "name": "Puffer Finance",
+   "ats_provider": "workable",
+   "ats_slug": "puffer-finance",
+   "discovered_via": "portfolio:mechanism",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://www.mechanism.capital/portfolio; company site https://puffer.fi/ careers page https://puffer.fi/ links workable:puffer-finance (0 open on 2026-09-14)"
+  },
+  {
    "slug": "pythnetwork",
    "name": "Pyth Network",
    "ats_provider": "ashby",
@@ -2431,6 +2692,15 @@
    "discovered_via": "seed",
    "enabled": 0,
    "note": "disabled at seed: the ATS board did not answer on 2026-09-14"
+  },
+  {
+   "slug": "rated-roles",
+   "name": "Rated Labs",
+   "ats_provider": "rippling",
+   "ats_slug": "rated-roles",
+   "discovered_via": "getro:9035",
+   "enabled": 1,
+   "note": "found via getro:9035 (cyber.fund board, only there): its jobs link rippling:rated-roles (1 open on 2026-09-14)"
   },
   {
    "slug": "recall",
@@ -2676,6 +2946,15 @@
    "note": "disabled at seed: the ATS board did not answer on 2026-09-14"
   },
   {
+   "slug": "solana-foundation",
+   "name": "Solana Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "Solana%20Foundation",
+   "discovered_via": "getro:858",
+   "enabled": 1,
+   "note": "found via getro:858 (Solana board, also jump-crypto): its jobs link ashby:Solana%20Foundation (6 open on 2026-09-14); the same company is in the registry only with a disabled board; the same company is in the registry only with a disabled board"
+  },
+  {
    "slug": "solanalabs",
    "name": "Solana Labs",
    "ats_provider": "ashby",
@@ -2728,6 +3007,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "sovrun",
+   "name": "Sovrun",
+   "ats_provider": "workable",
+   "ats_slug": "sovrun",
+   "discovered_via": "portfolio:a16z-crypto",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://a16zcrypto.com/portfolio/ (also mechanism); company site https://www.sovrun.org/ careers page https://www.sovrun.org/ links workable:sovrun (0 open on 2026-09-14)"
   },
   {
    "slug": "spectral",
@@ -2872,6 +3160,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "sweatcoin",
+   "name": "Sweatcoin",
+   "ats_provider": "teamtailor",
+   "ats_slug": "sweatcoin",
+   "discovered_via": "getro:1640",
+   "enabled": 1,
+   "note": "found via getro:1640 (Electric Capital board, only there): its jobs link teamtailor:sweatcoin (2 open on 2026-09-14)"
   },
   {
    "slug": "symbiotic",
@@ -3313,6 +3610,15 @@
    "discovered_via": "seed",
    "enabled": 1,
    "note": null
+  },
+  {
+   "slug": "zircuit",
+   "name": "Zircuit",
+   "ats_provider": "ashby",
+   "ats_slug": "Zircuit",
+   "discovered_via": "portfolio:robot-ventures",
+   "enabled": 1,
+   "note": "listed on the public portfolio page https://robvc.com/; company site https://www.zircuit.com/ careers page https://www.zircuit.com/ links ashby:Zircuit (0 open on 2026-09-14)"
   },
   {
    "slug": "zodl",

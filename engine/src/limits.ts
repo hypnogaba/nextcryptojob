@@ -212,8 +212,8 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   remote3: { concurrency: 1, minIntervalMs: 1_000 },
   "speedrun-talent-network.com": { concurrency: 2, minIntervalMs: 250 },
   "superteam.fun": { concurrency: 1, minIntervalMs: 1_000 },
-  // Getro лише в розвідці й лише з JOBS_GETRO_DISCOVERY=1; тротлить агресивно.
-  "api.getro.com": { concurrency: 1, minIntervalMs: 600 },
+  // Getro лише в розвідці (раз на тиждень, JOBS_GETRO_DISCOVERY=1): по одному запиту раз на 1,5 с, тротлить агресивно.
+  "api.getro.com": { concurrency: 1, minIntervalMs: 1_500 },
 };
 const OTHER_HOST: LimiterOptions = { concurrency: 4, minIntervalMs: 0 };
 
