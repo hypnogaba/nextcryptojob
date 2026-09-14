@@ -57,7 +57,7 @@ describe("home page", () => {
     expect(t).toContain("Free. About 5 clicks.");
     // Анкета ланцюжком, у кінці «Done».
     const brief = /<ol aria-label="The brief, about 5 clicks"[^>]*>(.*?)<\/ol>/.exec(html)![1];
-    expect(text(brief)).toBe("XWalletsRolesWhereDone");
+    expect(text(brief)).toBe("BriefRolesXWalletsDone");
   });
 
   it("shows today's 5 as an example list with an Apply button on each row", async () => {
