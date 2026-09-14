@@ -42,6 +42,8 @@ const Envelope = z.object({
   user_id: z.string().min(1).max(64),
   local_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   ts: z.number().int(),
+  /** Скільки живих вакансій переглянув підбір (з 14.09.2026); старий engine поля не шле. */
+  pool_jobs: z.number().int().min(0).max(10_000_000).optional(),
   // Кожну вакансію перевіряємо окремо (Job нижче): крива вакансія не топить решту листа.
   jobs: z.array(z.unknown()).min(1).max(10),
 });
@@ -58,6 +60,8 @@ const Job = z.object({
   source: z.enum(["nextrole", "company"]),
   /** Оцінка дошки підписом («est. … (web3.career estimate)»); старий engine поля не шле. */
   salary_estimate: Maybe(200).optional(),
+  /** Одне-два речення про компанію (з 14.09.2026); старий engine поля не шле. */
+  about: Maybe(400).optional(),
 });
 
 export type DigestEmailPayload = Omit<z.infer<typeof Envelope>, "jobs"> & { jobs: z.infer<typeof Job>[] };
@@ -233,6 +237,7 @@ export async function digestEmailResponse(request: Request, deps: DigestEmailDep
   const message = digestEmail({
     localDate: body.local_date,
     jobs: body.jobs,
+    checked: body.pool_jobs ?? null,
     site,
     unsubscribeUrl: await unsubscribeUrl(site, unsubscribeKey(deps.env) ?? secret, body.user_id),
   });

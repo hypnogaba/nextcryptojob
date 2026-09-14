@@ -54,3 +54,23 @@ export function externalJobLink(raw: string | null | undefined): ExternalLink | 
   if (!href) return null;
   return { href, rel: externalRel(href), via: jobVia(href) };
 }
+
+/** Кнопка "Apply" на картці вакансії: куди, чи в новій вкладці, з яким rel. */
+export type ApplyLink = { href: string; newTab: boolean; rel: string | null; label: string; via: string | null };
+
+/**
+ * "Apply" одразу з картки (/jobs):
+ * - вакансія компанії (адреса її сторінки на сайті `/jobs/<id>`): наш перехід `/jobs/<id>/apply`,
+ *   що рахує подачу й веде на apply_url компанії (специфікація CRM 5.6);
+ * - пошта (mailto:): лист, без нової вкладки;
+ * - чужа дошка: рівно адреса з бази, rel за правилом вище (externalJobLink), нова вкладка.
+ * null, якщо адреса крива.
+ */
+export function applyLink(url: string | null | undefined): ApplyLink | null {
+  if (!url) return null;
+  if (/^\/jobs\/[^/?#]+$/.test(url)) return { href: `${url}/apply`, newTab: true, rel: "noopener", label: "Apply", via: null };
+  const link = externalJobLink(url);
+  if (!link) return null;
+  if (link.href.startsWith("mailto:")) return { href: link.href, newTab: false, rel: null, label: "Apply by email", via: null };
+  return { href: link.href, newTab: true, rel: link.rel, label: "Apply", via: link.via };
+}

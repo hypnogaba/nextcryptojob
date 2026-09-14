@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { safeUrl } from "@/lib/digest/format";
-import { EXTERNAL_JOB_REL, externalJobLink, externalRel, isWeb3CareerUrl, jobVia, WEB3CAREER_REL } from "./link";
+import { applyLink, EXTERNAL_JOB_REL, externalJobLink, externalRel, isWeb3CareerUrl, jobVia, WEB3CAREER_REL } from "./link";
 import { crawlJob } from "./pool";
 
 /**
@@ -62,9 +62,33 @@ describe("externalJobLink", () => {
   });
 });
 
-/** Файли, що показують вакансії зі сканування: сайт, лист, search_jobs, адмінка. */
+describe("applyLink (the Apply button on /jobs)", () => {
+  it("web3.career: the apply_url byte for byte, followed (noopener only), in a new tab, web3.career named", () => {
+    for (const url of APPLY) {
+      expect(applyLink(url)).toEqual({ href: url, newTab: true, rel: WEB3CAREER_REL, label: "Apply", via: "web3.career" });
+    }
+  });
+
+  it("other boards: the address as is with noopener noreferrer nofollow", () => {
+    expect(applyLink("https://jobs.lever.co/acme/1?lever-source=x")).toEqual({
+      href: "https://jobs.lever.co/acme/1?lever-source=x", newTab: true, rel: EXTERNAL_JOB_REL, label: "Apply", via: null });
+  });
+
+  it("a company job goes through our counted apply route; email applies open the mail app", () => {
+    expect(applyLink("/jobs/job_abc")).toEqual({ href: "/jobs/job_abc/apply", newTab: true, rel: "noopener", label: "Apply", via: null });
+    expect(applyLink("mailto:jobs@example.com")).toEqual({ href: "mailto:jobs@example.com", newTab: false, rel: null, label: "Apply by email", via: null });
+  });
+
+  it("no button for a broken address", () => {
+    for (const bad of [null, undefined, "", "javascript:alert(1)", "/jobs/../admin", "https://web3.career/r/a b"]) expect(applyLink(bad)).toBeNull();
+  });
+});
+
+/** Файли, що показують вакансії зі сканування: сайт, лист, Telegram-бот, search_jobs, адмінка. */
 const JOB_LINK_FILES = [
   "app/jobs/page.tsx",
+  "components/jobs/job-card.tsx",
+  "lib/telegram/bot.ts",
   "app/admin/sources/page.tsx",
   "components/landing/job-ticker.tsx",
   "lib/jobs/home-board.ts",
