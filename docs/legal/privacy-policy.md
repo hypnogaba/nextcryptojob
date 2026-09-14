@@ -13,10 +13,11 @@ information required by articles 13 and 14 of the GDPR
 
 - Candidates never pay. Companies pay.
 - There are no boxes to tick. At the end of setup we write "By continuing you agree to the Terms and Privacy." Pressing Continue, and using the service, means you accept the Terms for Candidates and this policy. We record the version and the date.
+- This is not a one-time step: continuing to use NextCryptoJob at any point, including changing a toggle in Settings, means you still accept the current Terms for Candidates and this policy.
 - When you finish setting up, "Show me to companies" and "Show my Telegram directly" are on. Companies with access can then find you and see your score and Telegram handle. You can turn either off at any time in Settings.
 - Computing a score from public data about the accounts and wallets you add is part of the service. If you add none, there is nothing to score.
 - The formula is written by people and is the same for everyone. A language model writes explanation text only. It does not set your score.
-- Companies never see your wallet addresses or raw data.
+- While "Show my Telegram directly" is on, companies also see your Telegram, X, GitHub, YouTube, website and wallet addresses at once, not only your score. Companies never see your email without your approval, or raw data such as your posts or transaction history.
 - You can appeal your score, export your data and delete your account at any time.
 - We use one session cookie. We use no advertising trackers.
 
@@ -176,7 +177,7 @@ the formula and publish a new version.
 
 ## 6. Who receives your data
 
-- **Companies**, while "Show me to companies" is on. It is on for new candidates unless they untick it on the last setup step, and you can turn it off at any time. They see your score, roles, level, networks and verification badges. They never see your wallet addresses, links to your accounts, or raw data. They see your Telegram handle at once while "Show my Telegram directly" is on (also on unless you untick it). Otherwise, or if you have no Telegram username, they see your contact only after you approve their request. We never show your email without your approval.
+- **Companies**, while "Show me to companies" is on. It is on for new candidates unless they untick it on the last setup step, and you can turn it off at any time. They see your score, roles, level, networks and verification badges. While "Show my Telegram directly" is also on (also on unless you untick it), they see your Telegram handle at once, and your X, GitHub, YouTube, website and wallet addresses too, so they can look at your public work themselves. If you turn "Show my Telegram directly" off, they see none of these until you approve a request: only your contact appears then, never your links or wallet addresses. We never show your email without your approval, and never your raw data such as your posts or transaction history.
 - **The public**, only for your card page if you publish it. The card shows score, role and level. It shows no wallets and no links. [to confirm product behaviour: whether the card shows your X handle and whether search engines may index it]
 - **Our service providers** (processors), listed in section 7. They act on our instructions.
 - **Data sources.** To collect public data, we send your handle or address to the source (for example your wallet address to Etherscan). We do not send your name or email.

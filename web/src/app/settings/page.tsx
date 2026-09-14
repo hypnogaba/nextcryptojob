@@ -94,11 +94,16 @@ export default async function SettingsPage() {
       </Section>
 
       <p className={HINT}>
-        Read the{" "}
-        <Link href="/privacy" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
-          privacy policy
+        There are no boxes to tick here either: using NextCryptoJob, including changing a setting on this page, means
+        you accept the{" "}
+        <Link href="/terms" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+          Terms
         </Link>{" "}
-        and{" "}
+        and the{" "}
+        <Link href="/privacy" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+          Privacy Policy
+        </Link>
+        . Read{" "}
         <Link href="/how-scoring-works" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
           how scoring works
         </Link>
