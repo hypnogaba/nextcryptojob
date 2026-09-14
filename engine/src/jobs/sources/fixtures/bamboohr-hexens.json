@@ -1,0 +1,67 @@
+{
+ "meta": {
+  "totalCount": 3
+ },
+ "result": [
+  {
+   "id": "29",
+   "jobOpeningName": "Senior Security Researcher",
+   "departmentId": null,
+   "departmentLabel": null,
+   "employmentStatusLabel": "Full-Time",
+   "employmentType": null,
+   "location": {
+    "city": null,
+    "state": null
+   },
+   "atsLocation": {
+    "country": null,
+    "state": null,
+    "province": null,
+    "city": null
+   },
+   "isRemote": null,
+   "locationType": "1"
+  },
+  {
+   "id": "36",
+   "jobOpeningName": "Senior Information Security Engineer- Application Security Focus",
+   "departmentId": "18598",
+   "departmentLabel": "Security",
+   "employmentStatusLabel": "Full-Time",
+   "employmentType": null,
+   "location": {
+    "city": null,
+    "state": null
+   },
+   "atsLocation": {
+    "country": "United Kingdom",
+    "state": "Newham",
+    "province": null,
+    "city": "London"
+   },
+   "isRemote": null,
+   "locationType": "1"
+  },
+  {
+   "id": "40",
+   "jobOpeningName": "Senior Red Team Operator - Social Engineering Focus",
+   "departmentId": "18598",
+   "departmentLabel": "Security",
+   "employmentStatusLabel": "Full-Time",
+   "employmentType": null,
+   "location": {
+    "city": null,
+    "state": null
+   },
+   "atsLocation": {
+    "country": null,
+    "state": null,
+    "province": null,
+    "city": null
+   },
+   "isRemote": null,
+   "locationType": "1"
+  }
+ ]
+}

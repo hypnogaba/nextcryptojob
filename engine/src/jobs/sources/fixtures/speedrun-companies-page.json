@@ -1,0 +1,51 @@
+{
+ "companies": [
+  {
+   "slug": "anchorage",
+   "name": "Anchorage",
+   "tier": "a16z",
+   "open_roles": 26,
+   "location": "San Francisco, California",
+   "industries": [
+    "Crypto/Web3"
+   ]
+  },
+  {
+   "slug": "alchemy",
+   "name": "Alchemy",
+   "tier": "a16z",
+   "open_roles": 20,
+   "location": "San Francisco, California",
+   "industries": [
+    "Crypto/Web3"
+   ]
+  },
+  {
+   "slug": "anduril-industries",
+   "name": "Anduril Industries",
+   "tier": "a16z",
+   "open_roles": 2294,
+   "location": "Costa Mesa, California",
+   "industries": [
+    "American Dynamism",
+    "Enterprise"
+   ]
+  },
+  {
+   "slug": "shield-ai",
+   "name": "Shield AI",
+   "tier": "a16z",
+   "open_roles": 472,
+   "location": "San Diego, California",
+   "industries": [
+    "American Dynamism",
+    "Enterprise"
+   ]
+  }
+ ],
+ "total": 781,
+ "page": 0,
+ "page_size": 100,
+ "total_pages": 1,
+ "source": "nextcryptojob"
+}

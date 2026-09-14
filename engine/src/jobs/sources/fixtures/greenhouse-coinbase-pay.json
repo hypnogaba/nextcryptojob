@@ -1,0 +1,104 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://www.coinbase.com/careers/positions/8093264?gh_jid=8093264",
+   "education": "education_required",
+   "employment": "employment_required",
+   "internal_job_id": 3405418,
+   "location": {
+    "name": "Remote - USA"
+   },
+   "id": 8093264,
+   "updated_at": "2026-08-03T14:09:55-04:00",
+   "requisition_id": "P76672",
+   "title": "Accounting Manager, GL Operations & Intercompany",
+   "pay_input_ranges": [
+    {
+     "min_cents": 16634500,
+     "max_cents": 19570000,
+     "currency_type": "USD",
+     "title": "Annual base salary range (excluding equity and bonus):",
+     "blurb": "<p><strong>Pay Transparency Notice:</strong><strong><em> </em></strong>Base salary varies by location (see range below). Total compensation may also include equity and bonus eligibility, and benefits (medical, dental, vision, 401(k)).&nbsp;</p>\n<p>&nbsp;</p>"
+    }
+   ],
+   "company_name": "Coinbase",
+   "first_published": "2026-07-28T20:03:36-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://www.coinbase.com/careers/positions/8175363?gh_jid=8175363",
+   "education": "education_required",
+   "employment": "employment_required",
+   "internal_job_id": 3538143,
+   "location": {
+    "name": "Hybrid - New York, NY"
+   },
+   "id": 8175363,
+   "updated_at": "2026-09-08T18:53:27-04:00",
+   "requisition_id": "P78056",
+   "title": "Accelerations Programs Intern",
+   "pay_input_ranges": [
+    {
+     "min_cents": 4000,
+     "max_cents": 4000,
+     "currency_type": "USD",
+     "title": "Hourly Rate:",
+     "blurb": "<div class=\"c-message_kit__blocks c-message_kit__blocks--rich_text\">\n<div class=\"c-message__message_blocks c-message__message_blocks--rich_text\" data-qa=\"message-text\">\n<div class=\"p-block_kit_renderer\" data-qa=\"block-kit-renderer\">\n<div class=\"p-block_kit_renderer__block_wrapper p-block_kit_renderer__block_wrapper--first\">\n<div class=\"p-rich_text_block\">\n<div class=\"p-rich_text_section\"><strong d…"
+    }
+   ],
+   "company_name": "Coinbase",
+   "first_published": "2026-09-08T18:53:27-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://www.coinbase.com/careers/positions/8013889?gh_jid=8013889",
+   "education": "education_required",
+   "employment": "employment_required",
+   "internal_job_id": 3474482,
+   "location": {
+    "name": "Hybrid - Bangalore, India"
+   },
+   "id": 8013889,
+   "updated_at": "2026-06-20T21:48:42-04:00",
+   "requisition_id": "P77108",
+   "title": "Capacity Planning Lead",
+   "pay_input_ranges": [
+    {
+     "min_cents": 275530000,
+     "max_cents": 275530000,
+     "currency_type": "INR",
+     "title": "Annual base salary range (excluding equity and bonus):",
+     "blurb": "<p><strong>Pay Transparency Notice:</strong> The target annual <strong>base</strong> salary for this position can range as detailed below. Total compensation may<strong> </strong>also include equity and bonus eligibility and benefits (including medical, dental, and vision).</p>\n<div id=\"fortidlp-input-element-parent\"></div>"
+    }
+   ],
+   "company_name": "Coinbase",
+   "first_published": "2026-06-20T21:48:42-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://www.coinbase.com/careers/positions/8097444?gh_jid=8097444",
+   "education": "education_required",
+   "employment": "employment_required",
+   "internal_job_id": 3507936,
+   "location": {
+    "name": "Remote - USA"
+   },
+   "id": 8097444,
+   "updated_at": "2026-09-11T20:36:42-04:00",
+   "requisition_id": "P77732",
+   "title": "Derivative Sales Analyst",
+   "pay_input_ranges": [],
+   "company_name": "Coinbase",
+   "first_published": "2026-09-11T20:36:42-04:00",
+   "language": "en",
+   "application_deadline": null
+  }
+ ],
+ "meta": {
+  "total": 4
+ },
+ "_captured": "2026-09-13 boards-api.greenhouse.io/v1/boards/coinbase/jobs?pay_transparency=true, 4 of 218 jobs"
+}

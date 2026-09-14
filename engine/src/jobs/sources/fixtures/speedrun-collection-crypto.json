@@ -1,0 +1,31 @@
+{
+ "collection": {
+  "slug": "crypto-web3",
+  "title": "Crypto & Web3",
+  "description": "Crypto, blockchain, and web3.",
+  "group": "industries",
+  "url": "https://speedrun-talent-network.com/collections/crypto-web3",
+  "companies": 21,
+  "roles": 123,
+  "portfolio_members": 21,
+  "members": [
+   {
+    "slug": "talos",
+    "name": "Talos"
+   },
+   {
+    "slug": "alchemy",
+    "name": "Alchemy"
+   },
+   {
+    "slug": "morpho-labs",
+    "name": "Morpho Labs"
+   }
+  ],
+  "members_total": 21,
+  "page": 0,
+  "page_size": 100,
+  "total_pages": 1
+ },
+ "source": "nextcryptojob"
+}

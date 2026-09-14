@@ -6,7 +6,10 @@
 //   node dist/cli.js quality-gate <people.json> [raw-cache-dir] [--no-db] [--cache-only] [--note <text>] [--deadline-ms N]
 //   node dist/cli.js score-facts --x <h> --github <l> --site <url> --evm <a,...> --solana <a,...> [--sherlock <h>]
 //   node dist/cli.js digest-due [--dry-run [--user <id> | --profile <json>]]
-import { readFileSync, realpathSync } from "node:fs";
+//   node dist/cli.js jobs-scan [--dry] [--registry <file>] [--out <file>]
+//   node dist/cli.js jobs-discover [--dry]
+//   node dist/cli.js jobs-prune [--dry] [--days N]
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { jobsDbFromEnv, type JobsDb } from "./digest/jobs-db.js";
 import type { DigestProfile } from "./digest/match.js";
@@ -23,6 +26,12 @@ import type { CollectorRegistry, EngineEnv } from "./pipeline/registry.js";
 import { FORMULA_VERSION } from "./formula/score.js";
 import { scoreUser } from "./pipeline/run-person.js";
 import { formatScoreFacts, type ScoreFactsArgs, scoreFacts } from "./pipeline/score-facts.js";
+import { runJobsDiscover } from "./jobs/discover.js";
+import { JOBS_DB_ENV, jobsD1FromEnv } from "./jobs/env.js";
+import { runJobsPrune } from "./jobs/prune.js";
+import { runJobsScan } from "./jobs/scan.js";
+import { loadSeed, SEED_PATH } from "./jobs/seed.js";
+import { type JobsBackend, JobsStore } from "./jobs/store.js";
 
 export const USAGE = `usage: nextcryptojob-engine <command>
   worker                                   run the score_jobs worker until SIGTERM
@@ -43,15 +52,24 @@ export const USAGE = `usage: nextcryptojob-engine <command>
       [--dry-run]                          pick the jobs and print them; write nothing, send nothing
       [--user <id>]                        with --dry-run: this person, whatever the hour
       [--profile <json>]                   with --dry-run: a made-up profile, e.g.
-                                           '{"roles":["engineer"],"remote_mode":"remote,city","city":"Paris"}'`;
+                                           '{"roles":["engineer"],"remote_mode":"remote,city","city":"Paris"}'
+  jobs-scan                                read every crypto job source, write the jobs DB (daily timer)
+      [--dry]                              read the sources, write nothing, print what would be written
+      [--registry <file>]                  with --dry and no CF_JOBS_D1_DATABASE_ID: companies and boards from
+                                           this JSON (default db/jobs/seed/registry.json)
+      [--out <file>]                       also write the report and the rows as JSON
+  jobs-discover [--dry]                    add new crypto companies with a public ATS to the registry (weekly)
+  jobs-prune [--dry] [--days N]            delete jobs the scan has not seen for N days (default 30; weekly)`;
 
 /** Залежності команд: у тестах підставні, у продукті з оточення. */
 export interface CliDeps {
   env: EngineEnv;
   db?: () => Db;
   registry?: () => CollectorRegistry;
-  /** База вакансій NextRole (лише читання). */
+  /** База вакансій NextCryptoJob для добірки (лише читання). */
   jobs?: () => JobsDb;
+  /** База вакансій для сканера (запис); без неї CF_JOBS_D1_DATABASE_ID. */
+  jobsBackend?: () => JobsBackend;
   fetchImpl?: typeof fetch;
   out?: (line: string) => void;
   err?: (line: string) => void;
@@ -170,6 +188,30 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
         if (dryRun) for (const line of formatDryRun(summary)) out(line);
         return summary.failed > 0 && !dryRun ? 1 : 0;
       }
+      case "jobs-scan": {
+        const dry = has(args, "--dry");
+        const registry = flag(args, "--registry");
+        const outFile = flag(args, "--out");
+        if (args.length || (registry && !dry)) { err(USAGE); return 2; }
+        const store = jobsStore(deps, dry, registry);
+        const report = await runJobsScan({ store, env: deps.env, log: out, fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
+        if (outFile) writeFileSync(outFile, JSON.stringify(report, null, 1));
+        return 0;
+      }
+      case "jobs-discover": {
+        const dry = has(args, "--dry");
+        if (args.length) { err(USAGE); return 2; }
+        await runJobsDiscover({ store: jobsStore(deps, dry), env: deps.env, log: out,
+          fetch: deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined });
+        return 0;
+      }
+      case "jobs-prune": {
+        const dry = has(args, "--dry");
+        const days = posInt(flag(args, "--days"), "--days");
+        if (args.length) { err(USAGE); return 2; }
+        await runJobsPrune({ store: jobsStore(deps, dry), env: deps.env, days, log: out });
+        return 0;
+      }
       case undefined: case "help": case "--help": case "-h":
         out(USAGE);
         return cmd === undefined ? 2 : 0;
@@ -181,6 +223,17 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
     err(`${cmd}: ${shortError(e, 400)}`);
     return 1;
   }
+}
+
+/**
+ * Сховище сканера. З CF_JOBS_D1_DATABASE_ID: база вакансій (насухо лише SELECT). Без неї можна лише
+ * насухо, і тоді реєстр з засіву (db/jobs/seed/registry.json або --registry).
+ */
+function jobsStore(deps: CliDeps, dry: boolean, registry?: string): JobsStore {
+  if (deps.jobsBackend) return new JobsStore(deps.jobsBackend(), dry);
+  if (deps.env[JOBS_DB_ENV]?.trim() && !registry) return new JobsStore(jobsD1FromEnv(deps.env), dry);
+  if (!dry) throw new Error(`немає ${JOBS_DB_ENV}: без бази вакансій можна лише --dry`);
+  return new JobsStore(null, true, loadSeed(registry ?? SEED_PATH));
 }
 
 /** --profile для сухого прогону: ролі й місце як у users (docs/contracts.md §1). */

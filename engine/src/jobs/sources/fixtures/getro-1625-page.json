@@ -1,0 +1,216 @@
+{
+ "results": {
+  "count": 4,
+  "jobs": [
+   {
+    "compensation_public": true,
+    "featured": false,
+    "compensation_amount_max_cents": 25000000,
+    "searchable_locations": [
+     "Seattle, WA, USA",
+     "King County, WA, USA",
+     "Washington, USA",
+     "United States",
+     "North America"
+    ],
+    "created_at": 1789219384,
+    "weight": 0,
+    "compensation_amount_min_cents": 17000000,
+    "source": "career_page",
+    "title": "Staff Software Engineer, Cloud Infrastructure & Systems Engineering",
+    "work_mode": "on_site",
+    "url": "https://boards.greenhouse.io/taxbit/jobs/6188716004",
+    "compensation_offers_equity": true,
+    "compensation_currency": "USD",
+    "compensation_period": "year",
+    "organization": {
+     "stage": "acquisition",
+     "topics": [
+      "Platform & developer tools"
+     ],
+     "name": "Tactic",
+     "head_count": 1,
+     "id": 72886,
+     "industry_tags": [
+      "Application Software",
+      "Blockchain and Cryptocurrency",
+      "Business/Productivity Software",
+      "Cryptocurrency",
+      "Financial Services",
+      "Financial Software",
+      "Fintech",
+      "Payments",
+      "Software",
+      "Software Development",
+      "Systems Integrator",
+      "Technology"
+     ],
+     "slug": "tactic-2"
+    },
+    "locations": [
+     "Seattle, WA, USA"
+    ],
+    "has_description": true,
+    "slug": "93033045-staff-software-engineer-cloud-infrastructure-systems-engineering",
+    "seniority": "mid_senior",
+    "id": 93033045
+   },
+   {
+    "compensation_public": true,
+    "featured": false,
+    "compensation_amount_max_cents": 3500000,
+    "searchable_locations": [
+     "Bulgaria"
+    ],
+    "created_at": 1789034072,
+    "weight": 0,
+    "compensation_amount_min_cents": 2500000,
+    "source": "career_page",
+    "title": "Ongoing Monitoring Analyst",
+    "work_mode": "on_site",
+    "url": "https://boards.greenhouse.io/bvnk/jobs/4972656101",
+    "compensation_offers_equity": false,
+    "compensation_currency": "EUR",
+    "compensation_period": "year",
+    "organization": {
+     "stage": "acquisition",
+     "topics": [],
+     "name": "BVNK",
+     "head_count": 2,
+     "id": 118443,
+     "industry_tags": [
+      "Application Software",
+      "B2B",
+      "Banking",
+      "Cloud platforms(PaaS)",
+      "Cryptocurrency",
+      "Enterprise Software",
+      "Financial Services",
+      "Financial Software",
+      "Fintech",
+      "Information Technology",
+      "IT Infrastructure",
+      "Lending and Investments",
+      "Other Financial Services",
+      "Payments",
+      "Software",
+      "Technology"
+     ],
+     "slug": "bvnk"
+    },
+    "locations": [
+     "Bulgaria"
+    ],
+    "has_description": true,
+    "slug": "92700732-ongoing-monitoring-analyst",
+    "seniority": "mid_senior",
+    "id": 92700732
+   },
+   {
+    "compensation_public": true,
+    "featured": false,
+    "compensation_amount_max_cents": null,
+    "searchable_locations": [
+     "Nigeria"
+    ],
+    "created_at": 1789212771,
+    "weight": 0,
+    "compensation_amount_min_cents": null,
+    "source": "career_page",
+    "title": "Country Manager - Nigeria",
+    "work_mode": "on_site",
+    "url": "https://valr.careers.hibob.com/jobs/6d9055cd-af23-41ec-be74-918d9798b036",
+    "compensation_offers_equity": null,
+    "compensation_currency": null,
+    "compensation_period": "period_not_defined",
+    "organization": {
+     "stage": "series_b",
+     "topics": [
+      "cefi"
+     ],
+     "name": "VALR",
+     "head_count": 2,
+     "id": 66220,
+     "industry_tags": [
+      "Bitcoin",
+      "Blockchain",
+      "Blockchain and Cryptocurrency",
+      "Blockchain Technology",
+      "Cryptocurrencies",
+      "Cryptocurrency",
+      "Cryptocurrency Exchange",
+      "Ethereum",
+      "Financial Services",
+      "Financial Software",
+      "Fintech",
+      "Innovation",
+      "Lending and Investments",
+      "Mobile App",
+      "Other Financial Services",
+      "Payments",
+      "Platform",
+      "Software",
+      "Technology",
+      "Trading",
+      "Trading Platform"
+     ],
+     "slug": "valr"
+    },
+    "locations": [
+     "Nigeria"
+    ],
+    "has_description": true,
+    "slug": "92988562-country-manager-nigeria",
+    "seniority": "director",
+    "id": 92988562
+   },
+   {
+    "compensation_public": true,
+    "featured": false,
+    "compensation_amount_max_cents": 14700000,
+    "searchable_locations": [
+     "New York, NY, USA",
+     "New York, USA",
+     "United States",
+     "North America"
+    ],
+    "created_at": 1789211333,
+    "weight": 0,
+    "compensation_amount_min_cents": 11800000,
+    "source": "career_page",
+    "title": "Technical Education Specialist",
+    "work_mode": "on_site",
+    "url": "https://jobs.ashbyhq.com/notion/6f7c5ae6-9632-4436-8b1c-a1e4c1050633",
+    "compensation_offers_equity": false,
+    "compensation_currency": "USD",
+    "compensation_period": "year",
+    "organization": {
+     "stage": "other",
+     "topics": [],
+     "name": "Notion",
+     "head_count": 5,
+     "id": 29765,
+     "industry_tags": [
+      "Apps",
+      "Collaboration",
+      "Mobile Apps",
+      "Product Management",
+      "Productivity Tools",
+      "Project Management",
+      "Real Time",
+      "Software"
+     ],
+     "slug": "notion-2"
+    },
+    "locations": [
+     "New York, NY, USA"
+    ],
+    "has_description": true,
+    "slug": "92980647-technical-education-specialist",
+    "seniority": "mid_senior",
+    "id": 92980647
+   }
+  ]
+ },
+ "_captured": "2026-09-13 api.getro.com collection 1625 page 0, 4 of 20 jobs; count set to 4"
+}

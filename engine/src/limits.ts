@@ -145,10 +145,21 @@ const ALIASES: Record<string, string> = {
   "ai.6551.io": "6551",
   "api.helius.xyz": "helius",
   "api.cloudflare.com": "cloudflare",
+  // Сканер вакансій (src/jobs): хости однієї дошки під різними іменами.
+  "remote3.co": "remote3",
+  "www.remote3.co": "remote3",
+  "web3.career": "web3career",
+  "www.web3.career": "web3career",
 };
 const SUFFIX_ALIASES: Array<[suffix: string, budget: string]> = [
   [".blockscout.com", "blockscout"],
   [".helius-rpc.com", "helius"],
+  // ATS, де компанія живе на своєму піддомені: бюджет один на провайдера, а не на компанію.
+  [".recruitee.com", "recruitee"],
+  [".breezy.hr", "breezy"],
+  [".bamboohr.com", "bamboohr"],
+  [".jobs.personio.de", "personio"],
+  [".teamtailor.com", "teamtailor"],
 ];
 
 /** Бюджет пошуку GitHub (api.github.com/search/...). */
@@ -179,6 +190,28 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   "api.openchain.xyz": { concurrency: 2, minIntervalMs: 0 },
   // Добірка (digest/deliver.ts): Bot API дозволяє близько 30 повідомлень на секунду на бота; ми йдемо ≤ 25.
   "api.telegram.org": { concurrency: 1, minIntervalMs: 40 },
+  // Сканер вакансій (src/jobs, jobs-scan раз на добу). Публічні API дошок вакансій терплять
+  // паралельні запити, але кожен провайдер бачить нас однією адресою: не більше кількох водночас.
+  "boards-api.greenhouse.io": { concurrency: 4, minIntervalMs: 100 },
+  "api.ashbyhq.com": { concurrency: 4, minIntervalMs: 100 },
+  "api.lever.co": { concurrency: 3, minIntervalMs: 150 },
+  "api.eu.lever.co": { concurrency: 2, minIntervalMs: 150 },
+  "apply.workable.com": { concurrency: 2, minIntervalMs: 300 },
+  "api.smartrecruiters.com": { concurrency: 2, minIntervalMs: 300 },
+  "api.rippling.com": { concurrency: 2, minIntervalMs: 300 },
+  recruitee: { concurrency: 2, minIntervalMs: 300 },
+  breezy: { concurrency: 2, minIntervalMs: 300 },
+  bamboohr: { concurrency: 2, minIntervalMs: 300 },
+  personio: { concurrency: 2, minIntervalMs: 300 },
+  teamtailor: { concurrency: 1, minIntervalMs: 500 },
+  // Дошки гортаються сторінками: по одній і з паузою, як людина, що гортає список.
+  web3career: { concurrency: 1, minIntervalMs: 1_000 },
+  "jobstash.xyz": { concurrency: 1, minIntervalMs: 500 },
+  remote3: { concurrency: 1, minIntervalMs: 1_000 },
+  "speedrun-talent-network.com": { concurrency: 2, minIntervalMs: 250 },
+  "superteam.fun": { concurrency: 1, minIntervalMs: 1_000 },
+  // Getro лише в розвідці й лише з JOBS_GETRO_DISCOVERY=1; тротлить агресивно.
+  "api.getro.com": { concurrency: 1, minIntervalMs: 600 },
 };
 const OTHER_HOST: LimiterOptions = { concurrency: 4, minIntervalMs: 0 };
 

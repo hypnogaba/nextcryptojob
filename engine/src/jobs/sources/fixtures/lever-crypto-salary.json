@@ -1,0 +1,62 @@
+[
+ {
+  "categories": {
+   "commitment": "Full-time",
+   "department": "NADEX",
+   "location": "Chicago,IL",
+   "team": "Exchange",
+   "allLocations": [
+    "Chicago,IL",
+    "New York",
+    "San Francisco"
+   ]
+  },
+  "createdAt": 1782323289112,
+  "descriptionPlain": "We are looking for a skilled Application Support Engineer to join our team supporting Nadex, a regulated derivatives trading exchange for TradeFi and Prediction…",
+  "id": "68828c2d-c57e-46d2-aef9-3802ef0fa85e",
+  "lists": [
+   {
+    "text": "Responsibilities ",
+    "content": "\n<li><strong>Partner Support: </strong>Serve as a technical point of contact for partner channels, including FCMs, trading service providers, and market makers.…"
+   }
+  ],
+  "salaryRange": {
+   "min": 70000,
+   "max": 110000,
+   "currency": "USD",
+   "interval": "per-year-salary"
+  },
+  "text": "Application Support Engineer (US)",
+  "country": "US",
+  "workplaceType": "hybrid",
+  "descriptionBodyPlain": "We are looking for a skilled Application Support Engineer to join our team supporting Nadex, a regulated derivatives trading exchange for TradeFi and Prediction…",
+  "hostedUrl": "https://jobs.lever.co/crypto/68828c2d-c57e-46d2-aef9-3802ef0fa85e",
+  "applyUrl": "https://jobs.lever.co/crypto/68828c2d-c57e-46d2-aef9-3802ef0fa85e/apply"
+ },
+ {
+  "categories": {
+   "commitment": "Full-time",
+   "department": "Engineering",
+   "location": "Dubai",
+   "team": "Exchange",
+   "allLocations": [
+    "Dubai"
+   ]
+  },
+  "createdAt": 1787710194370,
+  "descriptionPlain": "The exchange team develops and maintain a cutting-edge trading platform. With a global presence across APAC, EMEA and North America, the team has since grown wi…",
+  "id": "617074bc-c200-419d-8abd-f6d90e84a2c1",
+  "lists": [
+   {
+    "text": "Responsibilities",
+    "content": "<div>Primary responsibility includes but not limited to</div>\n\n<li>User Management: Provide technical support to Sales, Business Users, Institutional and Retail…"
+   }
+  ],
+  "text": "Application Support Engineer, Dubai, OEX",
+  "country": "AE",
+  "workplaceType": "hybrid",
+  "descriptionBodyPlain": "Exchange Support team is responsible for maintaining global system for the firm’s cryptocurrency trading business which operates 24x7. This team provides L2/L3 …",
+  "hostedUrl": "https://jobs.lever.co/crypto/617074bc-c200-419d-8abd-f6d90e84a2c1",
+  "applyUrl": "https://jobs.lever.co/crypto/617074bc-c200-419d-8abd-f6d90e84a2c1/apply"
+ }
+]

@@ -1,0 +1,185 @@
+{
+ "apiVersion": "1",
+ "jobs": [
+  {
+   "id": "2e598500-2cc6-4273-ba4c-69f5ed457bb7",
+   "title": "Assistant General Counsel - Commercial (Partnerships)",
+   "department": "Legal",
+   "team": "Legal",
+   "employmentType": "FullTime",
+   "location": "United States",
+   "shouldDisplayCompensationOnJobPostings": true,
+   "secondaryLocations": [],
+   "publishedAt": "2026-08-19T16:51:40.426+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "United States"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/kraken.com/2e598500-2cc6-4273-ba4c-69f5ed457bb7",
+   "applyUrl": "https://jobs.ashbyhq.com/kraken.com/2e598500-2cc6-4273-ba4c-69f5ed457bb7/application",
+   "descriptionPlain": "BUILDING THE FUTURE OF OPEN FINANCE\n\n\nPayward - the parent company behind Kraken, NinjaTrader, Breakout,  xStocks, Payward Services and CF Benchmarks - has spen…",
+   "compensation": {
+    "compensationTierSummary": "$175.8K – $351.6K",
+    "scrapeableCompensationSalarySummary": "$175.8K - $351.6K",
+    "compensationTiers": [
+     {
+      "id": "01c85a33-c4d2-476d-8a27-845446f9e7d5",
+      "tierSummary": "$175.8K – $351.6K",
+      "title": null,
+      "additionalInformation": null,
+      "components": [
+       {
+        "id": "db458f5a-df7a-4162-b766-7327bd904d76",
+        "summary": "$175.8K – $351.6K",
+        "compensationType": "Salary",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": 175800,
+        "maxValue": 351600
+       }
+      ]
+     }
+    ],
+    "summaryComponents": [
+     {
+      "compensationType": "Salary",
+      "interval": "1 YEAR",
+      "currencyCode": "USD",
+      "minValue": 175800,
+      "maxValue": 351600
+     }
+    ]
+   }
+  },
+  {
+   "id": "8f237e3a-9f73-451f-a210-2cea7442fc52",
+   "title": "Senior Analyst, Security Compliance",
+   "department": "Security & IT",
+   "team": "Security & IT",
+   "employmentType": "FullTime",
+   "location": "United States",
+   "shouldDisplayCompensationOnJobPostings": true,
+   "secondaryLocations": [],
+   "publishedAt": "2026-02-13T22:39:07.134+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "United States"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/kraken.com/8f237e3a-9f73-451f-a210-2cea7442fc52",
+   "applyUrl": "https://jobs.ashbyhq.com/kraken.com/8f237e3a-9f73-451f-a210-2cea7442fc52/application",
+   "descriptionPlain": "BUILDING THE FUTURE OF OPEN FINANCE\n\n\nPayward - the parent company behind Kraken, NinjaTrader, Breakout,  xStocks, Payward Services and CF Benchmarks - has spen…",
+   "compensation": {
+    "compensationTierSummary": "$83.4K – $166.8K • Offers Equity • Offers Bonus",
+    "scrapeableCompensationSalarySummary": "$83.4K - $166.8K",
+    "compensationTiers": [
+     {
+      "id": "9fb09b62-810b-494e-bc8f-18a84c09a1c1",
+      "tierSummary": "Estimated Base Salary $83.4K – $166.8K • Offers Equity • Offers Bonus",
+      "title": null,
+      "additionalInformation": null,
+      "components": [
+       {
+        "id": "728a0334-6561-4fb4-9a04-c858e9977914",
+        "summary": "Estimated Base Salary $83.4K – $166.8K",
+        "compensationType": "Salary",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": 83400,
+        "maxValue": 166800
+       },
+       {
+        "id": "2e689b8a-b325-4d38-b2e3-cb17c05512a8",
+        "summary": "Offers Equity",
+        "compensationType": "EquityPercentage",
+        "interval": "NONE",
+        "currencyCode": null,
+        "minValue": null,
+        "maxValue": null
+       },
+       {
+        "id": "19a76954-d294-4707-afa2-a0597d9c6ed3",
+        "summary": "Offers Bonus",
+        "compensationType": "Bonus",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": null,
+        "maxValue": null
+       }
+      ]
+     }
+    ],
+    "summaryComponents": [
+     {
+      "compensationType": "Salary",
+      "interval": "1 YEAR",
+      "currencyCode": "USD",
+      "minValue": 83400,
+      "maxValue": 166800
+     },
+     {
+      "compensationType": "EquityPercentage",
+      "interval": "NONE",
+      "currencyCode": null,
+      "minValue": null,
+      "maxValue": null
+     },
+     {
+      "compensationType": "Bonus",
+      "interval": "1 YEAR",
+      "currencyCode": "USD",
+      "minValue": null,
+      "maxValue": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "506de4d6-4f93-4db6-89c0-8539edbae4ae",
+   "title": "Assistant General Counsel - Commercial (Partnerships)",
+   "department": "Legal",
+   "team": "Legal",
+   "employmentType": "FullTime",
+   "location": "United Kingdom",
+   "shouldDisplayCompensationOnJobPostings": false,
+   "secondaryLocations": [
+    {
+     "location": "Ireland",
+     "address": {
+      "postalAddress": {
+       "addressCountry": "Ireland"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2026-08-19T16:52:04.153+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressRegion": "United Kingdom",
+     "addressCountry": "United Kingdom",
+     "addressLocality": "London"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/kraken.com/506de4d6-4f93-4db6-89c0-8539edbae4ae",
+   "applyUrl": "https://jobs.ashbyhq.com/kraken.com/506de4d6-4f93-4db6-89c0-8539edbae4ae/application",
+   "descriptionPlain": "BUILDING THE FUTURE OF OPEN FINANCE\n\n\nPayward - the parent company behind Kraken, NinjaTrader, Breakout,  xStocks, Payward Services and CF Benchmarks - has spen…",
+   "compensation": {
+    "compensationTierSummary": null,
+    "scrapeableCompensationSalarySummary": null,
+    "compensationTiers": [],
+    "summaryComponents": []
+   }
+  }
+ ],
+ "_captured": "2026-09-13 api.ashbyhq.com/posting-api/job-board/kraken.com?includeCompensation=true, 3 of 74 jobs"
+}

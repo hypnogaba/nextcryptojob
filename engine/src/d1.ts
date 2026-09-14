@@ -122,11 +122,29 @@ export class D1Client {
   }
 
   async batch(statements: D1Statement[], opts: StatementOptions = {}): Promise<void> {
+    await this.batchWithMeta(statements, opts);
+  }
+
+  /**
+   * Як batch, але ще й скільки рядків D1 записав і прочитав (сума meta всіх інструкцій).
+   * null, якщо хоч одна відповідь прийшла без числа: краще «невідомо», ніж заниження.
+   * Рахунок D1 роблять саме записи, тож сканер вакансій пише це число в журнал прогону.
+   */
+  async batchWithMeta(statements: D1Statement[], opts: StatementOptions = {}): Promise<{ rowsWritten: number | null; rowsRead: number | null }> {
+    let written: number | null = 0;
+    let read: number | null = 0;
     for (let i = 0; i < statements.length; i += MAX_PER_CALL) {
       const chunk = statements.slice(i, i + MAX_PER_CALL);
       const idempotent = opts.idempotent ?? chunk.every((s) => isReadOnly(s.sql));
-      await this.post({ batch: chunk.map((s) => ({ sql: s.sql, params: s.params ?? [] })) }, idempotent);
+      const env = await this.post({ batch: chunk.map((s) => ({ sql: s.sql, params: s.params ?? [] })) }, idempotent);
+      for (const r of env.result) {
+        const w = r.meta?.rows_written;
+        const rd = r.meta?.rows_read;
+        written = written !== null && typeof w === "number" && Number.isFinite(w) ? written + w : null;
+        read = read !== null && typeof rd === "number" && Number.isFinite(rd) ? read + rd : null;
+      }
     }
+    return { rowsWritten: written, rowsRead: read };
   }
 
   /**

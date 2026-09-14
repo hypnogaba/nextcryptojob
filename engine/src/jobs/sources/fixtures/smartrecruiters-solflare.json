@@ -1,0 +1,224 @@
+{
+ "offset": 0,
+ "limit": 100,
+ "totalFound": 6,
+ "content": [
+  {
+   "id": "744000138293725",
+   "name": "Backend Developer",
+   "uuid": "b320254c-7d74-40fd-9537-6a9acd0a15ba",
+   "jobAdId": "6a9526e1-2872-491e-bc48-c952bea421ab",
+   "defaultJobAd": false,
+   "refNumber": "REF12T",
+   "company": {
+    "identifier": "Solflare",
+    "name": "Solflare"
+   },
+   "releasedDate": "2026-07-17T09:57:00.815Z",
+   "location": {
+    "city": "Novi Sad",
+    "region": "Vojvodina",
+    "country": "rs",
+    "remote": true,
+    "hybrid": false,
+    "latitude": "45.2396085",
+    "longitude": "19.8227056",
+    "fullLocation": "Novi Sad, Vojvodina, Serbia"
+   },
+   "industry": {
+    "id": "financial_services",
+    "label": "Financial Services"
+   },
+   "department": {
+    "id": "12736611",
+    "label": "Backend Development"
+   },
+   "function": {
+    "id": "engineering",
+    "label": "Engineering"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "684810b8b2331e3ef67f16cf",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Solflare"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "hr",
+     "valueLabel": "Croatia"
+    },
+    {
+     "fieldId": "684810b8b2331e3ef67f16d0",
+     "fieldLabel": "Department",
+     "valueId": "12736611",
+     "valueLabel": "Backend Development"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/solflare/postings/744000138293725",
+   "creator": {
+    "name": "Nika Starcevic"
+   },
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "744000138294309",
+   "name": "Backend Developer",
+   "uuid": "688bfeb7-1858-436d-a7d0-fed08cbf7500",
+   "jobAdId": "c64456c1-8788-450b-bfcf-129805bcd025",
+   "defaultJobAd": false,
+   "refNumber": "REF12T",
+   "company": {
+    "identifier": "Solflare",
+    "name": "Solflare"
+   },
+   "releasedDate": "2026-07-17T09:56:40.228Z",
+   "location": {
+    "city": "Belgrade",
+    "country": "rs",
+    "remote": true,
+    "hybrid": false,
+    "latitude": "44.8125449",
+    "longitude": "20.46123",
+    "fullLocation": "Belgrade, , Serbia"
+   },
+   "industry": {
+    "id": "financial_services",
+    "label": "Financial Services"
+   },
+   "department": {
+    "id": "12736611",
+    "label": "Backend Development"
+   },
+   "function": {
+    "id": "engineering",
+    "label": "Engineering"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "684810b8b2331e3ef67f16cf",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Solflare"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "hr",
+     "valueLabel": "Croatia"
+    },
+    {
+     "fieldId": "684810b8b2331e3ef67f16d0",
+     "fieldLabel": "Department",
+     "valueId": "12736611",
+     "valueLabel": "Backend Development"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/solflare/postings/744000138294309",
+   "creator": {
+    "name": "Nika Starcevic"
+   },
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "744000138294181",
+   "name": "Backend Developer",
+   "uuid": "8ffb7bbf-3a3c-4f78-894e-33aead163946",
+   "jobAdId": "43033cd1-35c9-47d4-b583-32ef761edb3b",
+   "defaultJobAd": true,
+   "refNumber": "REF12T",
+   "company": {
+    "identifier": "Solflare",
+    "name": "Solflare"
+   },
+   "releasedDate": "2026-07-17T09:56:07.643Z",
+   "location": {
+    "city": "Zagreb",
+    "country": "hr",
+    "remote": true,
+    "hybrid": false,
+    "latitude": "45.8150108",
+    "longitude": "15.981919",
+    "fullLocation": "Zagreb, , Croatia"
+   },
+   "industry": {
+    "id": "financial_services",
+    "label": "Financial Services"
+   },
+   "department": {
+    "id": "12736611",
+    "label": "Backend Development"
+   },
+   "function": {
+    "id": "engineering",
+    "label": "Engineering"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "684810b8b2331e3ef67f16cf",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Solflare"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "hr",
+     "valueLabel": "Croatia"
+    },
+    {
+     "fieldId": "684810b8b2331e3ef67f16d0",
+     "fieldLabel": "Department",
+     "valueId": "12736611",
+     "valueLabel": "Backend Development"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/solflare/postings/744000138294181",
+   "creator": {
+    "name": "Nika Starcevic"
+   },
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  }
+ ]
+}

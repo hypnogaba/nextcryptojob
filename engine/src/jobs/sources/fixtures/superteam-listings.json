@@ -1,0 +1,118 @@
+[
+ {
+  "id": "b6fb5b64-9755-4e6d-8b86-1573f35e33a1",
+  "rewardAmount": 1000,
+  "deadline": "2026-09-14T22:59:59.000Z",
+  "type": "bounty",
+  "title": "NectarFi x Dominion Market",
+  "token": "USDG",
+  "winnersAnnouncedAt": null,
+  "slug": "nectarfi-x-dominion-market",
+  "isWinnersAnnounced": false,
+  "isFeatured": false,
+  "compensationType": "fixed",
+  "minRewardAsk": null,
+  "maxRewardAsk": null,
+  "agentAccess": "HUMAN_ONLY",
+  "status": "OPEN",
+  "isPro": false,
+  "_count": {
+   "Comments": 16,
+   "Submission": 28
+  },
+  "sponsor": {
+   "name": "NectarFi",
+   "slug": "nectarfinance",
+   "logo": "https://res.cloudinary.com/dgvnuwspr/image/upload/v1787326311/earn-sponsor/i52opnowkslbonx4mlnp.webp",
+   "isVerified": false,
+   "chapter": null
+  }
+ },
+ {
+  "id": "32bb1c8e-2878-41c7-ae5e-9b8881baae7a",
+  "rewardAmount": 500,
+  "deadline": "2026-09-15T06:59:59.000Z",
+  "type": "bounty",
+  "title": "X Post About Grow App",
+  "token": "USDG",
+  "winnersAnnouncedAt": null,
+  "slug": "x-post-about-grow-app",
+  "isWinnersAnnounced": false,
+  "isFeatured": false,
+  "compensationType": "fixed",
+  "minRewardAsk": null,
+  "maxRewardAsk": null,
+  "agentAccess": "HUMAN_ONLY",
+  "status": "OPEN",
+  "isPro": false,
+  "_count": {
+   "Comments": 12,
+   "Submission": 67
+  },
+  "sponsor": {
+   "name": "Grow",
+   "slug": "grow",
+   "logo": "https://res.cloudinary.com/dgvnuwspr/image/upload/v1787613233/earn-sponsor/lm9l7lwkncbyz2z4y3c6.webp",
+   "isVerified": false,
+   "chapter": null
+  }
+ },
+ {
+  "id": "657bf11b-89e4-42ea-bd96-c4339df44f2e",
+  "rewardAmount": 290,
+  "deadline": "2026-09-16T15:59:59.999Z",
+  "type": "bounty",
+  "title": "Try out new docs to build a trusted agent with T3N that we can distribute / host",
+  "token": "USDC",
+  "winnersAnnouncedAt": null,
+  "slug": "t3n-agent-build-challenge",
+  "isWinnersAnnounced": false,
+  "isFeatured": false,
+  "compensationType": "fixed",
+  "minRewardAsk": null,
+  "maxRewardAsk": null,
+  "agentAccess": "HUMAN_ONLY",
+  "status": "OPEN",
+  "isPro": false,
+  "_count": {
+   "Comments": 15,
+   "Submission": 168
+  },
+  "sponsor": {
+   "name": "Terminal 3 Network",
+   "slug": "terminal3io",
+   "logo": "https://res.cloudinary.com/dgvnuwspr/image/upload/v1787711355/earn-sponsor/unljc7likqpxj4li2xc2.webp",
+   "isVerified": false,
+   "chapter": null
+  }
+ },
+ {
+  "id": "7cbd11ac-267f-48f9-b972-030b3ee5682c",
+  "rewardAmount": null,
+  "deadline": "2026-09-30T20:59:59.000Z",
+  "type": "project",
+  "title": "Trading Content Partner for KriptoK League | 2-Month Project",
+  "token": "USDC",
+  "winnersAnnouncedAt": null,
+  "slug": "kriptok-league-trading-content-partner",
+  "isWinnersAnnounced": false,
+  "isFeatured": false,
+  "compensationType": "range",
+  "minRewardAsk": 1000,
+  "maxRewardAsk": 2000,
+  "agentAccess": "HUMAN_ONLY",
+  "status": "OPEN",
+  "isPro": false,
+  "_count": {
+   "Comments": 7,
+   "Submission": 57
+  },
+  "sponsor": {
+   "name": "KriptoK",
+   "slug": "kriptok",
+   "logo": "https://res.cloudinary.com/dgvnuwspr/image/upload/v1786969291/earn-sponsor/lymxhwdwvh5iuimk7kwj.webp",
+   "isVerified": false,
+   "chapter": null
+  }
+ }
+]

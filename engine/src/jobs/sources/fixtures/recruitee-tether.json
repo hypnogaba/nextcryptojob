@@ -1,0 +1,56 @@
+{
+ "offers": [
+  {
+   "id": 2744026,
+   "title": "Technical Lead - GPU Infrastructure (100% Remote - Worldwide)",
+   "careers_url": "https://careers.tether.io/o/technical-lead-gpu-infrastructure-worldwide",
+   "slug": "technical-lead-gpu-infrastructure-worldwide",
+   "location": "Remote job",
+   "city": "Tiranë",
+   "country_code": "AL",
+   "remote": true,
+   "hybrid": false,
+   "on_site": false,
+   "published_at": "2026-09-11 17:49:23 UTC",
+   "created_at": "2026-09-11 17:45:55 UTC",
+   "department": "Data",
+   "employment_type_code": "fulltime_permanent",
+   "status": "published",
+   "company_name": "Tether Operations Limited",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   },
+   "description": "<p><strong><em>Join Tether and Shape the Future of Digital Finance</em></strong></p><p>At Tether, we’re not just building products, we’re pioneering a global financial revolution. Our cutting-edge solutions empower businesses—from exchanges and wallets to payment processors and ATMs—to seamlessly in",
+   "requirements": "<p><strong>Must have</strong></p><ul><li><p><strong>Experience.</strong> Eight or more years of hands-on engineering, including at least three leading teams that build and operate infrastructure platf"
+  },
+  {
+   "id": 2739630,
+   "title": "USAT Institutional Associate",
+   "careers_url": "https://careers.tether.io/o/usat-institutional-associate-5",
+   "slug": "usat-institutional-associate-5",
+   "location": "Remote job",
+   "city": "South Carolina",
+   "country_code": "US",
+   "remote": true,
+   "hybrid": false,
+   "on_site": false,
+   "published_at": "2026-09-09 07:29:58 UTC",
+   "created_at": "2026-09-09 07:29:32 UTC",
+   "department": null,
+   "employment_type_code": "fulltime_permanent",
+   "status": "published",
+   "company_name": "Tether Operations Limited",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   },
+   "description": "<p><strong><em>Join Tether and Shape the Future of Digital Finance</em></strong></p><p>At Tether, we’re not just building products, we’re pioneering a global financial revolution. Our cutting-edge solutions empower businesses—from exchanges and wallets to payment processors and ATMs—to seamlessly in",
+   "requirements": "<ul><li><p><strong><span style=\"color:#000000\">Education &amp; Experience:</span></strong><span style=\"color:#000000\"> Bachelor’s degree in Business, Finance, Economics, or a related field. 3–6 years "
+  }
+ ]
+}

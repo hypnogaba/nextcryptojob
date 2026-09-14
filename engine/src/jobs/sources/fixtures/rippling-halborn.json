@@ -1,0 +1,41 @@
+[
+ {
+  "uuid": "ce20f825-cbb4-4645-a8fc-a44907694fff",
+  "name": "Full Stack Software Developer (Remote)",
+  "department": {
+   "id": "Solutions & Technology",
+   "label": "Solutions & Technology"
+  },
+  "url": "https://ats.rippling.com/halborn/jobs/ce20f825-cbb4-4645-a8fc-a44907694fff",
+  "workLocation": {
+   "label": "Miami, FL",
+   "id": "Miami, FL"
+  }
+ },
+ {
+  "uuid": "00ed7ae5-543e-4b1c-8fbf-a7beaaa882d5",
+  "name": "Full Stack Software Developer (Remote locations)",
+  "department": {
+   "id": "Solutions & Technology",
+   "label": "Solutions & Technology"
+  },
+  "url": "https://ats.rippling.com/halborn/jobs/00ed7ae5-543e-4b1c-8fbf-a7beaaa882d5",
+  "workLocation": {
+   "label": "Remote, OR",
+   "id": "Remote, OR"
+  }
+ },
+ {
+  "uuid": "d72cede6-78c7-420c-8e72-b12536318461",
+  "name": " Head of BD & Strategic Partnerships",
+  "department": {
+   "id": "Go To Market",
+   "label": "Go To Market"
+  },
+  "url": "https://ats.rippling.com/halborn/jobs/d72cede6-78c7-420c-8e72-b12536318461",
+  "workLocation": {
+   "label": "Remote (United States)",
+   "id": "Remote (United States)"
+  }
+ }
+]

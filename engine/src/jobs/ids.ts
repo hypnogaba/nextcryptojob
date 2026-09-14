@@ -1,0 +1,33 @@
+// Ключі рядка jobs_cache: id з адреси і ключ змісту (компанія + назва).
+// titleKey перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.ts.
+import { createHash } from "node:crypto";
+import { companyKey } from "../digest/clean.js";
+
+/**
+ * id вакансії з її адреси: 'j' + 24 hex від sha256. Та сама адреса завжди дає той самий id, тож:
+ * - окремий UNIQUE на url не потрібен (менше записів D1, db/jobs/0001_schema.sql);
+ * - вакансія, яку прибрав jobs-prune, а скан потім побачив знову, повертається з тим самим id,
+ *   і `sent.job_ref` (nr:<id>) не дасть надіслати її людині вдруге.
+ * 96 біт: на сотні тисяч адрес ймовірність збігу нехтовна.
+ */
+export function jobId(url: string): string {
+  return `j${createHash("sha256").update(url.trim()).digest("hex").slice(0, 24)}`;
+}
+
+/** Шум, який відрізняє публікації тієї самої ролі в різних країнах. */
+const TITLE_NOISE = /\((?:m\/f\/d|m\/w\/d|m\/f\/x|w\/m\/d|h\/f|f\/h|m\/f|remote|hybrid|onsite|contract|fixed[- ]term)\)/gi;
+
+const collapse = (v: string): string => v.replace(/\s+/g, " ").trim();
+
+export function titleKey(title: string): string {
+  const latin = collapse(title.toLowerCase().replace(TITLE_NOISE, " ").replace(/[^a-z0-9\s]/g, " "));
+  // Назва без латиниці («Розробник Solidity» лишив би «solidity», а суто кирилична порожнє):
+  // порожній ключ склеїв би всі такі вакансії компанії в одну.
+  return latin || collapse(title.toLowerCase());
+}
+
+/**
+ * Ключ змісту: компанія + роль без локації, тож геоклони й та сама вакансія на дошці та в ATS
+ * схлопуються. Ключ компанії той самий, що в добірці й на сайті (engine/src/digest/clean.ts).
+ */
+export const dedupeKey = (company: string, title: string): string => `${companyKey(company)}|${titleKey(title)}`;

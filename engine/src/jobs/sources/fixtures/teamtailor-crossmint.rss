@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:tt="https://teamtailor.com/locations">
+  <channel>
+    <title>Crossmint</title>
+    <description>Open Roles</description>
+    <link>https://crossmint.na.teamtailor.com/jobs</link>
+    <item>
+      <title>Anti-Fraud Engineer (NYC / MIA)</title>
+      <description>&lt;h3&gt;&lt;strong&gt;About Crossmint&lt;/strong&gt;&lt;/h3&gt;&lt;p&gt;Global financial rails are undergoing a once-in-a-generation transformation. Instant settlement. Programmable. Agent-first. Cr … Compensation&lt;/strong&gt;&lt;/h4&gt;&lt;p&gt;Base salary range: $185,000 - $220,000&lt;/p&gt;&lt;p&gt;&lt;em&gt;Note: This range reflects base salary only. Final level, team assignment, and compensation are determined during the interview process based on ex</description>
+      <pubDate>Tue, 08 Sep 2026 07:54:54 -0400</pubDate>
+      <link>https://crossmint.na.teamtailor.com/jobs/697262-anti-fraud-engineer-nyc-mia</link>
+      <remoteStatus>hybrid</remoteStatus>
+      <guid>01e7eaa2-7e64-4b85-823c-4b877eb16e07</guid>
+      <tt:locations>
+      </tt:locations>
+      <tt:department/>
+      <tt:role/>
+    </item>
+<item>
+      <title>Engineering Manager - Identity, Compliance &amp; Risk (NYC / MIA)</title>
+      <description>&lt;h3&gt;&lt;strong&gt;About Crossmint&lt;/strong&gt;&lt;/h3&gt;&lt;p&gt;Global financial rails are undergoing a once-in-a-generation transformation. Instant settlement. Programmable. Agent-first. Cr … Compensation&lt;/strong&gt;&lt;/h4&gt;&lt;p&gt;Base salary range: $250,000 - $280,000&lt;/p&gt;&lt;p&gt;&lt;em&gt;Note: This range reflects base salary only. Final level, team assignment, and compensation are determined during the interview process based on ex</description>
+      <pubDate>Tue, 01 Sep 2026 12:50:41 -0400</pubDate>
+      <link>https://crossmint.na.teamtailor.com/jobs/693944-engineering-manager-identity-compliance-risk-nyc-mia</link>
+      <remoteStatus>hybrid</remoteStatus>
+      <guid>fa96dac4-3ce2-4419-8493-c52b794cde79</guid>
+      <tt:locations>
+        <tt:location>
+          <tt:name>New York City</tt:name>
+          <tt:address>270 Lafayette St</tt:address>
+          <tt:zip>10012-0046</tt:zip>
+          <tt:city>New York</tt:city>
+          <tt:country>United States</tt:country>
+        </tt:location>
+        <tt:location>
+          <tt:name>Miami</tt:name>
+          <tt:address>Brickell City Tower</tt:address>
+          <tt:zip>33130-3000</tt:zip>
+          <tt:city>Miami</tt:city>
+          <tt:country>United States</tt:country>
+        </tt:location>
+      </tt:locations>
+      <tt:department>Engineering</tt:department>
+      <tt:role/>
+    </item>
+  </channel>
+</rss>

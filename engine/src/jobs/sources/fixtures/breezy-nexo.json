@@ -1,0 +1,237 @@
+[
+ {
+  "id": "7321236e022701",
+  "friendly_id": "7321236e022701-account-manager",
+  "name": "Account Manager",
+  "url": "https://nexo.breezy.hr/p/7321236e022701-account-manager",
+  "published_date": "2026-09-01T10:47:23.136Z",
+  "type": {
+   "id": "fullTime",
+   "name": "Full-Time"
+  },
+  "location": {
+   "country": {
+    "name": "United States",
+    "id": "US"
+   },
+   "primary": true,
+   "is_remote": true,
+   "remote_details": {
+    "value": "remote",
+    "label": "Fully remote, no location restrictions"
+   },
+   "name": "United States",
+   "id": "2f80e6343465"
+  },
+  "department": "Client Sales",
+  "salary": "",
+  "company": {
+   "name": "Nexo",
+   "logo_url": null,
+   "friendly_id": "nexo",
+   "isMultipleLocationsEnabled": true
+  },
+  "locations": [
+   {
+    "country": {
+     "name": "United States",
+     "id": "US"
+    },
+    "primary": true,
+    "is_remote": true,
+    "remote_details": {
+     "value": "remote",
+     "label": "Fully remote, no location restrictions"
+    },
+    "name": "United States",
+    "id": "2f80e6343465"
+   }
+  ]
+ },
+ {
+  "id": "8cf9935696e001",
+  "friendly_id": "8cf9935696e001-account-manager",
+  "name": "Account Manager",
+  "url": "https://nexo.breezy.hr/p/8cf9935696e001-account-manager",
+  "published_date": "2026-09-01T10:47:24.160Z",
+  "type": {
+   "id": "fullTime",
+   "name": "Full-Time"
+  },
+  "location": {
+   "country": {
+    "name": "United States",
+    "id": "US"
+   },
+   "state": {
+    "id": "FL",
+    "name": "Florida"
+   },
+   "primary": true,
+   "is_remote": true,
+   "name": "United States",
+   "id": "f43a5022a639",
+   "remote_details": {
+    "value": "remote",
+    "label": "Fully remote, no location restrictions"
+   }
+  },
+  "department": "Client Sales",
+  "salary": "",
+  "company": {
+   "name": "Nexo",
+   "logo_url": null,
+   "friendly_id": "nexo",
+   "isMultipleLocationsEnabled": true
+  },
+  "locations": [
+   {
+    "country": {
+     "name": "United States",
+     "id": "US"
+    },
+    "state": {
+     "id": "FL",
+     "name": "Florida"
+    },
+    "primary": true,
+    "is_remote": true,
+    "name": "FL, US",
+    "id": "f43a5022a639",
+    "remote_details": {
+     "value": "remote",
+     "label": "Fully remote, no location restrictions"
+    }
+   }
+  ]
+ },
+ {
+  "id": "a6918c9c5e1801",
+  "friendly_id": "a6918c9c5e1801-account-manager-german-english",
+  "name": "Account Manager, German & English",
+  "url": "https://nexo.breezy.hr/p/a6918c9c5e1801-account-manager-german-english",
+  "published_date": "2026-09-01T10:47:16.605Z",
+  "type": {
+   "id": "fullTime",
+   "name": "Full-Time"
+  },
+  "location": {
+   "country": {
+    "name": "Bulgaria",
+    "id": "BG"
+   },
+   "city": "Sofia",
+   "primary": true,
+   "is_remote": false,
+   "name": "Sofia, BG",
+   "id": "a0d0a1338b83",
+   "streetAddress": {
+    "location": "ul. Atanas Dukov, 1407 Sofia, Bulgaria",
+    "components": [
+     {
+      "long_name": "ulitsa Atanas Dukov",
+      "short_name": "ul. Atanas Dukov",
+      "types": [
+       "route"
+      ]
+     },
+     {
+      "long_name": "Sofia",
+      "short_name": "Sofia",
+      "types": [
+       "locality",
+       "political"
+      ]
+     },
+     {
+      "long_name": "Sofia City Province",
+      "short_name": "Sofia City Province",
+      "types": [
+       "administrative_area_level_1",
+       "political"
+      ]
+     },
+     {
+      "long_name": "Bulgaria",
+      "short_name": "BG",
+      "types": [
+       "country",
+       "political"
+      ]
+     },
+     {
+      "long_name": "1407",
+      "short_name": "1407",
+      "types": [
+       "postal_code"
+      ]
+     }
+    ]
+   }
+  },
+  "department": "Client Sales",
+  "salary": "",
+  "company": {
+   "name": "Nexo",
+   "logo_url": null,
+   "friendly_id": "nexo",
+   "isMultipleLocationsEnabled": true
+  },
+  "locations": [
+   {
+    "country": {
+     "name": "Bulgaria",
+     "id": "BG"
+    },
+    "city": "Sofia",
+    "primary": true,
+    "is_remote": false,
+    "name": "Sofia, BG",
+    "id": "a0d0a1338b83",
+    "streetAddress": {
+     "location": "ul. Atanas Dukov, 1407 Sofia, Bulgaria",
+     "components": [
+      {
+       "long_name": "ulitsa Atanas Dukov",
+       "short_name": "ul. Atanas Dukov",
+       "types": [
+        "route"
+       ]
+      },
+      {
+       "long_name": "Sofia",
+       "short_name": "Sofia",
+       "types": [
+        "locality",
+        "political"
+       ]
+      },
+      {
+       "long_name": "Sofia City Province",
+       "short_name": "Sofia City Province",
+       "types": [
+        "administrative_area_level_1",
+        "political"
+       ]
+      },
+      {
+       "long_name": "Bulgaria",
+       "short_name": "BG",
+       "types": [
+        "country",
+        "political"
+       ]
+      },
+      {
+       "long_name": "1407",
+       "short_name": "1407",
+       "types": [
+        "postal_code"
+       ]
+      }
+     ]
+    }
+   }
+  ]
+ }
+]
