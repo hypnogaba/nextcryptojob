@@ -48,6 +48,7 @@ function job(p: Partial<PoolJob> = {}): PoolJob {
     seenMs: T - 5 * H,
     dedupeKey: null,
     origin: "greenhouse:a",
+    salaryEstimate: null,
     ...p,
   };
 }
@@ -168,6 +169,24 @@ describe("ticker", () => {
     }
     const [t] = tickerJobs([job({ url: "https://web3.career/r/wczNxUTM__U4HFyv", salary: pay })]);
     expect(t).toMatchObject({ href: "https://web3.career/r/wczNxUTM__U4HFyv", rel: "noopener", via: "web3.career" });
+  });
+
+  it("a web3.career estimate: never counted as a salary, in the ticker only after real salaries and marked as an estimate", () => {
+    const est = { ...usd(180_000, 225_000), by: "web3.career" };
+    const w3 = (p: Partial<PoolJob>) => job({ url: "https://web3.career/r/x__U4HFyv", origin: "board:web3career", salaryEstimate: est, ...p });
+    // Лічильник «з зарплатою» оцінки не бачить.
+    expect(homeStats([w3({}), job({ salary: usd(100_000, 120_000) })], [], NOW).withSalary).toBe(1);
+    // Роль лише з оцінкою (Community) не зникає; оцінка після всіх вакансій із зарплатою у своїй ролі.
+    const jobs = tickerJobs([
+      w3({ title: "Community Manager", roles: ["community"], postedMs: T - H }),
+      w3({ title: "Rust Engineer (est)", postedMs: T - H }),
+      job({ title: "Solidity Engineer", salary: usd(150_000, 190_000), postedMs: T - 48 * H }),
+    ]);
+    expect(jobs.map((j) => [j.title, j.salary, j.estimate])).toEqual([
+      ["Solidity Engineer", "$150k to $190k", false],
+      ["Community Manager", "est. $180k to $225k (web3.career estimate)", true],
+      ["Rust Engineer (est)", "est. $180k to $225k (web3.career estimate)", true],
+    ]);
   });
 
   it("leaves out national boards and clips long text", () => {

@@ -697,6 +697,8 @@
   .ncj-ticker-title { font-weight: 600; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 0.25em; transition: text-decoration-color 150ms ease; }
   .ncj-ticker-meta { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--board-muted); font-size: 0.9375rem; }
   .ncj-ticker-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+  /* Оцінка дошки (web3.career), не зарплата: приглушено, звичайним шрифтом, без акценту. */
+  .ncj-ticker-est { color: var(--board-muted); font-size: 0.875rem; font-style: italic; }
   .ncj-ticker-pay {
     font-family: var(--font-display);
     font-weight: 800;

@@ -2,7 +2,8 @@ import type { JobsDb } from "@/lib/jobs-db";
 import type { BriefRow } from "@/lib/jobs/instant";
 import { normalizeSavedStep, parseSavedStep, type SavedStep } from "@/lib/onboarding/steps";
 import type { Channel } from "@/lib/telegram/channel";
-import { cleanText, companyJobLocation, formatSalary, safeUrl } from "./format";
+import { salaryEstimateOf } from "@/lib/jobs/pool";
+import { cleanText, companyJobLocation, estimateText, formatSalary, safeUrl } from "./format";
 
 /**
  * Дані сторінки /jobs: вакансії, які добірка вже надіслала людині (`sent`, 0006),
@@ -39,6 +40,8 @@ export type JobDetails = {
   url: string | null;
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
+  /** Оцінка дошки підписом («est. … (web3.career estimate)»), лише без зарплати; null для решти. */
+  salaryEstimate?: string | null;
 };
 
 export type SentJob = {
@@ -115,6 +118,10 @@ type NrRow = {
   salary_min: number | null;
   salary_max: number | null;
   salary_currency: string | null;
+  salary_est_min: number | null;
+  salary_est_max: number | null;
+  salary_est_currency: string | null;
+  source: string | null;
 };
 
 type CoRow = {
@@ -184,7 +191,8 @@ async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, Jo
   let rows: NrRow[];
   try {
     rows = await jobs.all<NrRow>(
-      `SELECT id, url, company, title, location, remote, salary_min, salary_max, salary_currency
+      `SELECT id, url, company, title, location, remote, salary_min, salary_max, salary_currency,
+              salary_est_min, salary_est_max, salary_est_currency, source
          FROM jobs_cache WHERE id IN (${placeholders(ids.length)})`,
       ...ids,
     );
@@ -194,7 +202,9 @@ async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, Jo
     return null;
   }
   return new Map(
-    rows.map((r) => [
+    rows.map((r) => {
+      const estimate = estimateText(salaryEstimateOf(r));
+      return [
       `nr:${r.id}`,
       {
         title: cleanText(r.title, 200),
@@ -203,8 +213,10 @@ async function crawlDetails(jobs: JobsDb, ids: string[]): Promise<Map<string, Jo
         salary: formatSalary({ min: r.salary_min, max: r.salary_max, currency: r.salary_currency, period: "year" }),
         url: safeUrl(r.url),
         postedBy: null,
+        ...(estimate ? { salaryEstimate: estimate } : {}),
       },
-    ]),
+      ];
+    }),
   );
 }
 

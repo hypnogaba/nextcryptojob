@@ -30,6 +30,7 @@ const job = (i: number, over: Partial<TickerJob> = {}): TickerJob => ({
   external: true,
   rel: "noopener noreferrer nofollow",
   via: null,
+  estimate: false,
   ...over,
 });
 
@@ -51,6 +52,14 @@ describe("JobTicker", () => {
     );
     expect(html).toMatch(/<a[^>]*href="\/jobs\/job_a"(?![^>]*target)[^>]*>/);
     expect(html).toContain('href="https://boards.example.com/2" target="_blank" rel="noopener noreferrer nofollow"');
+  });
+
+  it("shows a board estimate muted, never in the accent style of a real salary", () => {
+    const html = renderToStaticMarkup(
+      <JobTicker jobs={[job(1, { salary: "est. $180k to $225k (web3.career estimate)", estimate: true }), job(2)]} />,
+    );
+    expect(html).toContain('<span class="ncj-ticker-est">est. $180k to $225k (web3.career estimate)</span>');
+    expect(html).toContain('<span class="ncj-ticker-pay">$100k to $120k</span>');
   });
 
   it("web3.career: the exact apply_url, a followed link without noreferrer, and web3.career named as the source", () => {

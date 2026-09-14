@@ -11,6 +11,7 @@ import {
   selectJobs,
   workModes,
 } from "./match";
+import { estimateText } from "@/lib/digest/format";
 import { crawlPool, type PoolJob } from "./pool";
 import { parseRoles, ROLE_NAMES } from "./roles";
 
@@ -37,6 +38,8 @@ export type ShownJob = {
   url: string | null;
   /** «Posted by {Company} on NextCryptoJob» для вакансій компаній. */
   postedBy: string | null;
+  /** «est. $Xk to $Yk (web3.career estimate)»: оцінка дошки, лише без зарплати; у підборі не бере участі. */
+  salaryEstimate: string | null;
 };
 
 /** Колонки users, з яких складається анкета добірки. */
@@ -80,18 +83,20 @@ export function digestJobOf(job: PoolJob): DigestJob {
   };
 }
 
-function shown(pick: DigestPick): ShownJob {
+function shown(pick: DigestPick, estimates: ReadonlyMap<string, string>): ShownJob {
   const j = pick.job;
   const company = j.source === "company";
+  const salary = formatSalary(j.salary);
   return {
     ref: j.ref,
     title: j.title,
     company: j.company,
     location: j.location,
-    salary: formatSalary(j.salary),
+    salary,
     why: pick.why,
     url: j.url,
     postedBy: company ? j.company : null,
+    salaryEstimate: salary ? null : (estimates.get(j.ref) ?? null),
   };
 }
 
@@ -167,7 +172,13 @@ export async function instantMatches(deps: InstantDeps, brief: BriefRow, exclude
   if (!crawl) return { state: "unavailable" };
   const pool: Pool = { crawl: crawl.map(digestJobOf), company: company.map(digestJobOf) };
   const picks = selectJobs(pool, profile, { now: deps.now, exclude });
-  if (picks.length > 0) return { state: "ok", jobs: picks.map(shown) };
+  // Оцінки дошки поза DigestJob: підбір їх не бачить, лише підпис поруч із вибраним.
+  const estimates = new Map<string, string>();
+  for (const j of crawl) {
+    const text = estimateText(j.salaryEstimate);
+    if (text) estimates.set(digestJobOf(j).ref, text);
+  }
+  if (picks.length > 0) return { state: "ok", jobs: picks.map((p) => shown(p, estimates)) };
   return { state: "none", reason: noMatchReason(pool, profile, deps.now) };
 }
 

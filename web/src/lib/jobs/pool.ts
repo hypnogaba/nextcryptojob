@@ -27,16 +27,16 @@ import { titleRoles } from "./roles";
 export const LIVE_WINDOW_DAYS = 3;
 export const POSTED_WINDOW_DAYS = 30;
 export const POOL_SQL = `SELECT id, url, company, company_key, title, location, remote, salary_min, salary_max,
-       salary_currency, tags, posted_at, fetched_at, country, dedupe_key
+       salary_currency, tags, posted_at, fetched_at, country, dedupe_key, salary_est_min, salary_est_max, salary_est_currency,
+       source
   FROM jobs_cache
  WHERE fetched_at >= ? AND tags LIKE '%"web3"%' AND (posted_at IS NULL OR posted_at >= ?)`;
 
 /**
- * Запит пулу на сайті: той самий, що в engine (POOL_SQL, тест звіряє), плюс
- * стовпець source для рядка «N live crypto jobs from M sources» на головній. Умова WHERE
- * та сама, тож і рядки ті самі.
+ * Запит пулу на сайті: той самий, що в engine (POOL_SQL, тест звіряє). Стовпець source дає рядок
+ * «N live crypto jobs from M sources» на головній і підпис оцінки («web3.career estimate»).
  */
-export const POOL_READ_SQL = POOL_SQL.replace("country, dedupe_key\n", "country, dedupe_key, source\n");
+export const POOL_READ_SQL = POOL_SQL;
 
 /** Скільки рядків пул бере найбільше (скан насухо 14.09: ~1 600 живих крипто-вакансій). */
 export const POOL_ROW_CAP = 10_000;
@@ -85,7 +85,15 @@ export interface PoolJob {
   dedupeKey: string | null;
   /** jobs_cache.source (дошка, з якої скан узяв вакансію); null для вакансій компаній. */
   origin: string | null;
+  /**
+   * Оцінка зарплати від дошки (web3.career), лише коли вилки роботодавця немає. НЕ зарплата: підбір,
+   * фільтр salary_min, лічильник «з зарплатою» і JobPosting беруть лише `salary`.
+   */
+  salaryEstimate: SalaryEstimate | null;
 }
+
+/** Оцінка дошки: суми як PublicSalary і хто оцінив («web3.career»). */
+export type SalaryEstimate = PublicSalary & { by: string };
 
 type PoolRow = {
   id: string;
@@ -103,9 +111,23 @@ type PoolRow = {
   fetched_at: string;
   country: string | null;
   dedupe_key: string | null;
-  /** Є в POOL_READ_SQL; у запиті engine його немає. */
   source?: string | null;
+  salary_est_min?: number | null;
+  salary_est_max?: number | null;
+  salary_est_currency?: string | null;
 };
+
+/** Хто оцінив: «web3.career» для board:web3career, інакше назва джерела без префікса (як estimateSourceOf в engine). */
+export function estimateSourceOf(source: string | null | undefined): string {
+  return source === "board:web3career" ? "web3.career" : (source ?? "board").replace(/^(board|aggregator):/, "");
+}
+
+/** Оцінка дошки для рядка без вилки роботодавця; null, якщо її немає або вона неправдоподібна. */
+export function salaryEstimateOf(r: Pick<PoolRow, "salary_min" | "salary_max" | "salary_est_min" | "salary_est_max" | "salary_est_currency" | "source">): SalaryEstimate | null {
+  if (r.salary_min !== null || r.salary_max !== null) return null;
+  const est = publicSalary(r.salary_est_min ?? null, r.salary_est_max ?? null, r.salary_est_currency ?? null, "year");
+  return est ? { ...est, by: estimateSourceOf(r.source) } : null;
+}
 
 /** Дата з бази: ISO ('…T…Z') або SQLite ('YYYY-MM-DD HH:MM:SS', UTC), як parseDbTime в engine. */
 export function parseDbTime(v: string | null | undefined): number | null {
@@ -187,6 +209,7 @@ export function crawlJob(r: PoolRow): PoolJob | null {
     seenMs: parseDbTime(r.fetched_at),
     dedupeKey: r.dedupe_key,
     origin: r.source ?? null,
+    salaryEstimate: salaryEstimateOf(r),
   };
 }
 

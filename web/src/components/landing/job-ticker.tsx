@@ -25,7 +25,7 @@ function Item({ job, copy }: { job: TickerJob; copy: boolean }) {
           </>
         ) : null}
       </span>
-      <span className="ncj-ticker-pay">{job.salary}</span>
+      <span className={job.estimate ? "ncj-ticker-est" : "ncj-ticker-pay"}>{job.salary}</span>
     </>
   );
   // Копія доріжки лише для безшовного кола: з клавіатури й для читачів екрана її немає.

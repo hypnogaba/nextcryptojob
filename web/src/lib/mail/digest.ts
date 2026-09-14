@@ -20,6 +20,8 @@ export type DigestEmailJob = {
   url: string;
   /** Не null лише для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   posted_by: string | null;
+  /** Оцінка дошки («est. $180k to $225k (web3.career estimate)»), лише без зарплати; не зарплата. */
+  salary_estimate?: string | null;
 };
 
 /** Екранування для тексту й атрибутів у лапках. */
@@ -34,7 +36,10 @@ export function escapeHtml(text: string): string {
 
 export const DIGEST_FOOTER_REASON = "You get this because you turned on daily jobs on NextCryptoJob.";
 
-type Job = { title: string; meta: string; why: string; url: string | null; postedBy: string | null; via: string | null };
+type Job = {
+  title: string; meta: string; why: string; url: string | null; postedBy: string | null; via: string | null;
+  estimate: string | null;
+};
 
 function tidy(j: DigestEmailJob): Job {
   const meta = [cleanText(j.company, 100), j.location ? cleanText(j.location, 100) : null, j.salary ? cleanText(j.salary, 60) : null];
@@ -46,6 +51,7 @@ function tidy(j: DigestEmailJob): Job {
     url: safeUrl(j.url),
     postedBy: j.posted_by ? cleanText(j.posted_by, 100) : null,
     via: j.posted_by ? null : jobVia(j.url),
+    estimate: !j.salary && j.salary_estimate ? cleanText(j.salary_estimate, 120) : null,
   };
 }
 
@@ -75,6 +81,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
     [
       `${i + 1}. ${j.title}`,
       j.meta,
+      j.estimate,
       j.why,
       j.postedBy ? `Posted by ${j.postedBy} on NextCryptoJob` : null,
       j.via ? `via ${j.via}` : null,
@@ -104,6 +111,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         `<div style="border:1px solid ${LINE};border-radius:8px;padding:16px;margin:0 0 12px;background:#ffffff">` +
         `<p style="margin:0 0 4px;font-size:16px;font-weight:600">${titleHtml}</p>` +
         (j.meta ? `<p style="margin:0 0 8px;color:${MUTED}">${escapeHtml(j.meta)}</p>` : "") +
+        (j.estimate ? `<p style="margin:0 0 8px;color:${MUTED};font-size:13px">${escapeHtml(j.estimate)}</p>` : "") +
         `<p style="margin:0">${escapeHtml(j.why)}</p>` +
         (j.postedBy
           ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob</p>`

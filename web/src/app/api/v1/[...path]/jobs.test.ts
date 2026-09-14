@@ -451,6 +451,23 @@ describe("search_jobs", () => {
     expect(tool.structuredContent.data[0]).toMatchObject({ url: apply, via: "web3.career" });
   });
 
+  it("a web3.career estimate is a separate salary_estimate with its source, never the salary, and the salary filter ignores it", async () => {
+    const est = crawlJob({ title: "Community Manager", remote: true, url: "https://web3.career/r/wczNxUTM__U4HFyv" });
+    run(nr.raw, "UPDATE jobs_cache SET source = 'board:web3career', salary_est_min = 180000, salary_est_max = 225000, salary_est_currency = 'USD' WHERE id = ?", est);
+    const paid = crawlJob({ title: "Community Lead", remote: true, salaryMin: 90000, salaryMax: 100000, currency: "USD" });
+    run(nr.raw, "UPDATE jobs_cache SET salary_est_min = 300000, salary_est_max = 400000, salary_est_currency = 'USD' WHERE id = ?", paid);
+    const res = await call("GET", "/public/jobs?role=community");
+    expect(schemaErrors("GET", "/public/jobs", res)).toEqual([]);
+    const by = (id: string) => res.body.data.find((j: { job_id: string }) => j.job_id === `nr_${id}`);
+    expect(by(est)).toMatchObject({ salary: null, salary_estimate: { min: 180000, max: 225000, currency: "USD", period: "year", source: "web3.career" } });
+    // Є вилка роботодавця: оцінки у відповіді немає.
+    expect(by(paid).salary).toMatchObject({ min: 90000, max: 100000 });
+    expect(by(paid)).not.toHaveProperty("salary_estimate");
+    // Фільтр зарплати бачить лише вилку роботодавця.
+    const ids = (await call("GET", "/public/jobs?salary_min=150000")).body.data.map((j: { job_id: string }) => j.job_id);
+    expect(ids).not.toContain(`nr_${est}`);
+  });
+
   it("pages with a cursor and reads the job pool once per isolate, not once per search", async () => {
     for (let i = 0; i < 5; i++) crawlJob({ title: `Blockchain Engineer ${i}`, remote: true, postedAt: iso((i + 1) * 3_600_000) });
     const first = await call("GET", "/public/jobs?limit=2");

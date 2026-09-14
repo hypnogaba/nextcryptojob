@@ -60,6 +60,8 @@ function JobRow({ d, why }: { d: JobDetails; why: string | null }) {
         <JobTitle d={d} />
       </h3>
       {meta ? <p className={`text-sm text-ink-muted ${WRAP}`}>{meta}</p> : null}
+      {/* Оцінка дошки, не зарплата: приглушено й окремо від рядка з зарплатою. */}
+      {!d.salary && d.salaryEstimate ? <p className={`text-xs text-ink-muted ${WRAP}`}>{d.salaryEstimate}</p> : null}
       {why ? <p className={`text-sm text-ink ${WRAP}`}>{why}</p> : null}
       {d.postedBy ? <p className={`text-xs text-ink-muted ${WRAP}`}>Posted by {d.postedBy} on NextCryptoJob</p> : null}
       {via ? <p className="text-xs text-ink-muted">via {via}</p> : null}

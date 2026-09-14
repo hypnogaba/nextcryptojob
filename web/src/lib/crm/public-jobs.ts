@@ -104,6 +104,7 @@ function companyPoolJob(r: LiveRow, env: { SITE_URL?: string }): PoolJob {
     seenMs: null,
     dedupeKey: null,
     origin: null,
+    salaryEstimate: null,
   };
 }
 
@@ -212,6 +213,11 @@ function toPublic(job: PoolJob): PublicJob {
     url: job.url,
     posted_at: job.postedAt,
     ...(via ? { via } : {}),
+    // Оцінка дошки окремим полем і лише без зарплати роботодавця; фільтр salary_min (matches) її не бачить.
+    ...(job.salaryEstimate && !job.salary
+      ? { salary_estimate: { min: job.salaryEstimate.min, max: job.salaryEstimate.max, currency: job.salaryEstimate.currency,
+          period: job.salaryEstimate.period, source: job.salaryEstimate.by } }
+      : {}),
   };
 }
 

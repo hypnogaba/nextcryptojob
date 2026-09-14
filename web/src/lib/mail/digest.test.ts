@@ -79,6 +79,19 @@ describe("digestEmail", () => {
     expect(mail.text.match(/via web3\.career/g)).toHaveLength(1);
   });
 
+  it("a board estimate is a muted line of its own, only without a salary", () => {
+    const estimate = "est. $180k to $225k (web3.career estimate)";
+    const mail = digestEmail({
+      localDate: "2026-09-12",
+      jobs: [job({ salary: null, salary_estimate: estimate }), job({ position: 2, salary_estimate: "est. $300k (web3.career estimate)" })],
+      site: ORIGIN, unsubscribeUrl: UNSUB,
+    });
+    expect(mail.html).toContain(`<p style="margin:0 0 8px;color:#58646a;font-size:13px">${estimate.replace(/\$/g, "$")}</p>`);
+    expect(mail.text).toContain(`Paying Labs · Remote\n${estimate}\n`);
+    expect(mail.html).not.toContain("$300k");
+    expect(mail.text).not.toContain("$300k");
+  });
+
   it("adds List-Unsubscribe headers only for an https pause link", () => {
     const https = digestEmail({ localDate: "2026-09-12", jobs: [job()], site: ORIGIN, unsubscribeUrl: UNSUB });
     expect(https.headers).toEqual({ "List-Unsubscribe": `<${UNSUB}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });

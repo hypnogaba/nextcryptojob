@@ -1,5 +1,5 @@
 import { loadCompanyJobs } from "@/lib/crm/public-jobs";
-import { cleanText } from "@/lib/digest/format";
+import { cleanText, estimateText } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
 import { externalJobLink } from "./link";
 import { formatSalary } from "./match";
@@ -45,7 +45,10 @@ export type TickerJob = {
   title: string;
   company: string;
   place: string | null;
+  /** Зарплата роботодавця («$120k to $150k») або, якщо `estimate`, оцінка дошки підписом. */
   salary: string;
+  /** true: у `salary` оцінка дошки («est. … (web3.career estimate)»), показується приглушено. */
+  estimate: boolean;
   /** Вакансія компанії: /jobs/<id> на сайті; зі сканування: http(s) адреса дошки рівно як у базі. */
   href: string;
   external: boolean;
@@ -115,22 +118,31 @@ export function tickerHref(job: PoolJob): TickerLink | null {
  * (у кожній ролі найсвіжіші першими), щоб стрічка не була самими інженерами.
  * Не беремо: без зарплати чи без валюти («150k» без валюти нічого не каже), з кривим чи
  * не http(s) посиланням, з національних дощок (country: назви мовою країни).
+ * Вакансія лише з оцінкою дошки (web3.career) іде в чергу своєї ролі ПІСЛЯ всіх із зарплатою
+ * роботодавця і показується підписом «est. … (web3.career estimate)»: так роль без жодної вилки
+ * (Community, Creator) не зникає зі стрічки, а оцінка ніколи не випереджає справжню зарплату.
  */
 export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJob[] {
-  type Cand = { job: PoolJob; salary: string; link: TickerLink };
+  type Cand = { job: PoolJob; salary: string; estimate: boolean; link: TickerLink };
   const cands: Cand[] = [];
   for (const job of all) {
-    if (job.country || !job.salary?.currency || job.roles.length === 0) continue;
-    const salary = formatSalary(job.salary);
+    if (job.country || job.roles.length === 0) continue;
     const link = tickerHref(job);
-    if (!salary || !link) continue;
-    cands.push({ job, salary, link });
+    if (!link) continue;
+    const salary = job.salary?.currency ? formatSalary(job.salary) : null;
+    if (salary) {
+      cands.push({ job, salary, estimate: false, link });
+      continue;
+    }
+    const est = !job.salary && job.salaryEstimate?.currency ? estimateText(job.salaryEstimate) : null;
+    if (est) cands.push({ job, salary: est, estimate: true, link });
   }
-  // Новіші за датою публікації спершу; без дати після всіх датованих (відсутнє значення
-  // не випереджає справжнє), серед них за тим, коли скан бачив; далі за jobId.
+  // Зарплата роботодавця перед оцінкою; новіші за датою публікації спершу; без дати після всіх
+  // датованих (відсутнє значення не випереджає справжнє), серед них за тим, коли скан бачив; далі за jobId.
   const at = (j: PoolJob) => j.postedMs ?? j.seenMs ?? 0;
   cands.sort(
     (a, b) =>
+      Number(a.estimate) - Number(b.estimate) ||
       Number(a.job.postedMs === null) - Number(b.job.postedMs === null) ||
       at(b.job) - at(a.job) ||
       (a.job.jobId < b.job.jobId ? -1 : a.job.jobId > b.job.jobId ? 1 : 0),
@@ -161,6 +173,7 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
         company: cleanText(c.job.company, 40),
         place: c.job.location ? cleanText(c.job.location, 36) : null,
         salary: c.salary,
+        estimate: c.estimate,
         href: c.link.href,
         external: c.link.external,
         rel: c.link.rel,

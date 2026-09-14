@@ -524,6 +524,19 @@ export const PublicJob = z.object({
   posted_at: IsoDateTime.nullable(),
   /** Дошка, яку треба назвати джерелом (зараз лише «web3.career», умови їхнього API); без поля для решти. */
   via: z.string().optional(),
+  /**
+   * Оцінка зарплати від дошки (web3.career), лише коли `salary` немає. Не зарплата роботодавця:
+   * фільтр salary_min її не бачить. `source` каже, чия оцінка.
+   */
+  salary_estimate: z
+    .object({
+      min: z.number().int().nullable(),
+      max: z.number().int().nullable(),
+      currency: z.string().nullable(),
+      period: z.enum(["year", "month"]),
+      source: z.string(),
+    })
+    .optional(),
 });
 
 export const PublicJobList = z.object({ data: z.array(PublicJob), next_cursor: z.string().nullable() });

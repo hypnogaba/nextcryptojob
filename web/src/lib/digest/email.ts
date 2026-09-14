@@ -56,6 +56,8 @@ const Job = z.object({
   url: z.string().min(1).max(2048),
   posted_by: Maybe(300),
   source: z.enum(["nextrole", "company"]),
+  /** Оцінка дошки підписом («est. … (web3.career estimate)»); старий engine поля не шле. */
+  salary_estimate: Maybe(200).optional(),
 });
 
 export type DigestEmailPayload = Omit<z.infer<typeof Envelope>, "jobs"> & { jobs: z.infer<typeof Job>[] };

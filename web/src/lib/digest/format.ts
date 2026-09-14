@@ -88,6 +88,15 @@ export function formatSalary(s: Salary | null): string | null {
   return null;
 }
 
+/**
+ * Оцінка дошки підписом: «est. $180k to $225k (web3.career estimate)»; null, якщо показати нічого.
+ * Лише для показу (приглушено) там, де вилки роботодавця немає; як і estimateText в engine/src/digest/jobs.ts.
+ */
+export function estimateText(e: (Salary & { by: string }) | null | undefined): string | null {
+  const money = e ? formatSalary(e) : null;
+  return e && money ? `est. ${money} (${e.by} estimate)` : null;
+}
+
 /** Місце вакансії компанії, як у engine (companyJob): «Remote», «Lisbon», «Remote or Lisbon». */
 export function companyJobLocation(remoteMode: string, city: string | null): string | null {
   const modes = remoteMode.split(",").map((m) => m.trim());

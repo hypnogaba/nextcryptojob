@@ -187,10 +187,9 @@ describe("Jobs for you now", () => {
 });
 
 describe("the site pool", () => {
-  it("reads the same rows as the engine, plus the source of each", () => {
-    expect(POOL_READ_SQL).toBe(POOL_SQL.replace("dedupe_key\n", "dedupe_key, source\n"));
-    expect(POOL_READ_SQL).not.toBe(POOL_SQL);
-    expect(POOL_READ_SQL.slice(POOL_READ_SQL.indexOf("FROM"))).toBe(POOL_SQL.slice(POOL_SQL.indexOf("FROM")));
+  it("reads the same rows as the engine, with the source and the board estimate of each", () => {
+    expect(POOL_READ_SQL).toBe(POOL_SQL);
+    for (const col of ["source", "salary_est_min", "salary_est_max", "salary_est_currency"]) expect(POOL_SQL).toContain(col);
   });
 });
 

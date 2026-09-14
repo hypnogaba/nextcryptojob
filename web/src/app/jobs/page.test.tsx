@@ -29,8 +29,8 @@ beforeEach(() => {
   harness.raw = raw;
   harness.env.DB = d1;
   const nr = migratedD1([]);
-  nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT)");
-  nr.raw.exec(`INSERT INTO jobs_cache VALUES
+  nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT)");
+  nr.raw.exec(`INSERT INTO jobs_cache (id, url, company, title, location, remote, salary_min, salary_max, salary_currency) VALUES
     ('mine', 'https://jobs.example.com/mine', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, NULL, NULL, NULL),
     ('theirs', 'https://jobs.example.com/theirs', 'Other Labs', 'Secret Role', 'Remote', 1, NULL, NULL, NULL)`);
   jobsHolder.db = readOnlyJobsDb(nr.d1);
@@ -70,8 +70,8 @@ describe("/jobs", () => {
   it("a web3.career job links to their apply_url as is, followed, with the referrer, and names web3.career", async () => {
     const apply = "https://web3.career/r/wczNxUTM__U4HFyv?ref=U4HFyv&utm_source=w3c";
     const nr = migratedD1([]);
-    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT)");
-    nr.raw.prepare("INSERT INTO jobs_cache VALUES ('w3', ?, 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL), ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, NULL, NULL, NULL)").run(apply);
+    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT)");
+    nr.raw.prepare("INSERT INTO jobs_cache (id, url, company, title, location, remote, salary_min, salary_max, salary_currency) VALUES ('w3', ?, 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL), ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, NULL, NULL, NULL)").run(apply);
     jobsHolder.db = readOnlyJobsDb(nr.d1);
     run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_a', 'ada', '2026-09-12', 'sent', 2, 'email')");
     run(harness.raw, `INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES
@@ -86,6 +86,26 @@ describe("/jobs", () => {
     expect(html).toContain("via web3.career");
     expect(html.match(/via web3\.career/g)).toHaveLength(1);
     expect(html).toContain('href="https://jobs.example.com/gh" target="_blank" rel="noopener noreferrer nofollow"');
+  });
+
+  it("a board estimate shows as a muted estimate line, never as the salary", async () => {
+    const nr = migratedD1([]);
+    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT)");
+    nr.raw.exec(`INSERT INTO jobs_cache VALUES
+      ('w3', 'https://web3.career/r/wczNxUTM__U4HFyv', 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL, 180000, 225000, 'USD', 'board:web3career'),
+      ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, 120000, 150000, 'USD', 300000, 400000, 'USD', 'greenhouse:x')`);
+    jobsHolder.db = readOnlyJobsDb(nr.d1);
+    run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_a', 'ada', '2026-09-12', 'sent', 2, 'email')");
+    run(harness.raw, `INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES
+      ('ada', 'nr:w3', 'nextrole', 'dg_a', 1, 'sent', 'email', 'Matches your Community role.'),
+      ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
+    await signIn("ada");
+    const html = await render();
+    expect(html).toContain('<p class="text-xs text-ink-muted min-w-0 wrap-anywhere">est. $180k to $225k (web3.career estimate)</p>');
+    expect(html).toContain("Koinly · Remote</p>");
+    // Зарплата роботодавця є: оцінки не видно.
+    expect(html).toContain("Paying Labs · Remote · $120k to $150k");
+    expect(html).not.toContain("$300k");
   });
 
   it("a company job links to its page on the site in the same tab, not to the company's address", async () => {

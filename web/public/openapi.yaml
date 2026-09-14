@@ -1595,6 +1595,19 @@ components:
         via:
           type: string
           description: The job board to name as the source of this job (today only "web3.career"). Absent for other jobs.
+        salary_estimate:
+          type: object
+          description: >-
+            The job board's own salary estimate (today only from web3.career), given only when the employer
+            listed no salary. It is not the employer's offer: show it as an estimate, never as the salary.
+            The salary_min filter does not use it.
+          required: [min, max, currency, period, source]
+          properties:
+            min: { type: [integer, "null"] }
+            max: { type: [integer, "null"] }
+            currency: { type: [string, "null"] }
+            period: { type: string, enum: [year, month] }
+            source: { type: string, description: 'Who made the estimate, e.g. "web3.career"' }
     PublicJobList:
       type: object
       required: [data, next_cursor]

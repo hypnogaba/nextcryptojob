@@ -525,7 +525,7 @@ export const ACTIONS = [
   }),
   defineAction({
     name: "search_jobs",
-    description: "Search open crypto jobs (company jobs and our crypto job crawl). Jobs only, never people. Link each job to its url exactly as returned (add no parameters, no rel=nofollow) and name the board in via as the source.",
+    description: "Search open crypto jobs (company jobs and our crypto job crawl). Jobs only, never people. Link each job to its url exactly as returned (add no parameters, no rel=nofollow) and name the board in via as the source. salary_estimate is that board's estimate, not the employer's salary.",
     rest: { method: "GET", path: "/public/jobs", status: 200, operationId: "searchJobs" },
     mcp: { tool: "search_jobs", annotations: READ },
     input: z.strictObject({
