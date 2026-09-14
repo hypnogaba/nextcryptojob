@@ -1,0 +1,2856 @@
+{
+ "exported_at": "2026-09-14T06:38:27.489Z",
+ "database": "crypto-jobs-agent (NextRole), read once with SELECT only",
+ "queries": {
+  "companies": "SELECT slug, name, ats_provider, ats_slug, discovered_via FROM companies\n WHERE tags LIKE '%\"web3\"%' ORDER BY slug",
+  "boards": "SELECT name, label, feed_url, kind, enabled FROM country_boards WHERE country = '*' ORDER BY name",
+  "getro_collections": "SELECT collection_id, label, url, enabled FROM getro_collections\n WHERE tags LIKE '%\"web3\"%' ORDER BY collection_id"
+ },
+ "companies": [
+  {
+   "slug": "0g",
+   "name": "Zero Gravity",
+   "ats_provider": "ashby",
+   "ats_slug": "0g",
+   "discovered_via": "getro:1440"
+  },
+  {
+   "slug": "0x",
+   "name": "0x",
+   "ats_provider": "ashby",
+   "ats_slug": "0x",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "1inch",
+   "name": "1inch Network",
+   "ats_provider": "lever",
+   "ats_slug": "1inch",
+   "discovered_via": "getro:1179"
+  },
+  {
+   "slug": "1kosmos",
+   "name": "1Kosmos - BlockID",
+   "ats_provider": "workable",
+   "ats_slug": "1kosmos",
+   "discovered_via": "getro:1369"
+  },
+  {
+   "slug": "21shares",
+   "name": "21Shares",
+   "ats_provider": "greenhouse",
+   "ats_slug": "21shares",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "a16z",
+   "name": "a16z",
+   "ats_provider": "greenhouse",
+   "ats_slug": "a16z",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "aavelabs",
+   "name": "Aave Labs",
+   "ats_provider": "lever_eu",
+   "ats_slug": "aavelabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "akashnetwork",
+   "name": "Akash Network",
+   "ats_provider": "lever",
+   "ats_slug": "akashnetwork",
+   "discovered_via": "getro:1489"
+  },
+  {
+   "slug": "alchemy",
+   "name": "Alchemy",
+   "ats_provider": "ashby",
+   "ats_slug": "alchemy",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "algorand-foundation",
+   "name": "Algorand ",
+   "ats_provider": "rippling",
+   "ats_slug": "algorand-foundation",
+   "discovered_via": "getro:1616"
+  },
+  {
+   "slug": "algorandfoundation",
+   "name": "Algorand Foundation",
+   "ats_provider": "bamboohr",
+   "ats_slug": "algorandfoundation",
+   "discovered_via": "getro:2072"
+  },
+  {
+   "slug": "alliance",
+   "name": "Alliance ",
+   "ats_provider": "breezy",
+   "ats_slug": "alliance",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "alpaca",
+   "name": "Alpaca",
+   "ats_provider": "greenhouse",
+   "ats_slug": "alpaca",
+   "discovered_via": "getro:1084"
+  },
+  {
+   "slug": "alpenlabs",
+   "name": "Alpen Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "alpenlabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "ambergroup",
+   "name": "Amber Group",
+   "ats_provider": "bamboohr",
+   "ats_slug": "ambergroup",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "anagram-ashby",
+   "name": "Anagram",
+   "ats_provider": "ashby",
+   "ats_slug": "anagram",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "anchorage",
+   "name": "Anchorage Digital",
+   "ats_provider": "lever",
+   "ats_slug": "anchorage",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "animocabrands",
+   "name": "Animoca Brands",
+   "ats_provider": "lever",
+   "ats_slug": "animocabrands",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "anomali",
+   "name": "Anomali",
+   "ats_provider": "lever",
+   "ats_slug": "anomali",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "antimetal",
+   "name": "Antimetal",
+   "ats_provider": "ashby",
+   "ats_slug": "antimetal",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "anza-xyz",
+   "name": "Anza",
+   "ats_provider": "workable",
+   "ats_slug": "anza-xyz",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "aptosfoundation",
+   "name": "Aptos Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "aptosfoundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "aptoslabs",
+   "name": "Aptos Labs",
+   "ats_provider": "greenhouse",
+   "ats_slug": "aptoslabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "arbitrumfoundation",
+   "name": "Arbitrum",
+   "ats_provider": "lever",
+   "ats_slug": "arbitrumfoundation",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "arenaclub",
+   "name": "Arena Club",
+   "ats_provider": "greenhouse",
+   "ats_slug": "arenaclub",
+   "discovered_via": "getro:318"
+  },
+  {
+   "slug": "arq",
+   "name": "DolarApp",
+   "ats_provider": "ashby",
+   "ats_slug": "arq",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "ashby",
+   "name": "Ashby",
+   "ats_provider": "ashby",
+   "ats_slug": "ashby",
+   "discovered_via": "getro:941"
+  },
+  {
+   "slug": "asula",
+   "name": "Asula ",
+   "ats_provider": "ashby",
+   "ats_slug": "asula",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "asymmetric",
+   "name": "Wormhole",
+   "ats_provider": "ashby",
+   "ats_slug": "asymmetric",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "asymmetric.re",
+   "name": "Wormhole (Asymmetric)",
+   "ats_provider": "ashby",
+   "ats_slug": "asymmetric.re",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "aurora-dev",
+   "name": "Aurora",
+   "ats_provider": "lever",
+   "ats_slug": "aurora-dev",
+   "discovered_via": "getro:1489"
+  },
+  {
+   "slug": "aurosglobal",
+   "name": "Auros",
+   "ats_provider": "greenhouse",
+   "ats_slug": "aurosglobal",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "ava-labs",
+   "name": "Ava Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "ava-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "avalanche-foundation",
+   "name": "Avalanche Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "avalanche-foundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "aven",
+   "name": "Aven",
+   "ats_provider": "ashby",
+   "ats_slug": "aven",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "axiom",
+   "name": "Axiom",
+   "ats_provider": "ashby",
+   "ats_slug": "axiom",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "azragames",
+   "name": "Azra Games",
+   "ats_provider": "greenhouse",
+   "ats_slug": "azragames",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "azragamesoa",
+   "name": "Azra Games",
+   "ats_provider": "greenhouse",
+   "ats_slug": "azragamesoa",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "aztec-labs",
+   "name": "Aztec Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "aztec-labs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "b2c2",
+   "name": "B2C2",
+   "ats_provider": "greenhouse",
+   "ats_slug": "b2c2",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "basejobs",
+   "name": "Spindl",
+   "ats_provider": "greenhouse",
+   "ats_slug": "basejobs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "basicblock-inc",
+   "name": "BasicBlock",
+   "ats_provider": "breezy",
+   "ats_slug": "basicblock-inc",
+   "discovered_via": "getro:929"
+  },
+  {
+   "slug": "bastion",
+   "name": "Dibbs",
+   "ats_provider": "ashby",
+   "ats_slug": "bastion",
+   "discovered_via": "getro:261"
+  },
+  {
+   "slug": "batoncorporation",
+   "name": "Baton Corporation",
+   "ats_provider": "ashby",
+   "ats_slug": "batoncorporation",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "biconomy",
+   "name": "Biconomy",
+   "ats_provider": "lever",
+   "ats_slug": "biconomy",
+   "discovered_via": "getro:1344"
+  },
+  {
+   "slug": "binance",
+   "name": "Binance",
+   "ats_provider": "lever",
+   "ats_slug": "binance",
+   "discovered_via": "getro:1513"
+  },
+  {
+   "slug": "bitdeer",
+   "name": "BitDeer",
+   "ats_provider": "breezy",
+   "ats_slug": "bitdeer",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "bitgo",
+   "name": "BitGo",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bitgo",
+   "discovered_via": "getro:815"
+  },
+  {
+   "slug": "bitpanda",
+   "name": "Bitpanda",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bitpanda",
+   "discovered_via": "getro:951"
+  },
+  {
+   "slug": "bitso",
+   "name": "Bitso",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bitso",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "bitvavo",
+   "name": "Bitvavo",
+   "ats_provider": "ashby",
+   "ats_slug": "bitvavo",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "bitwave",
+   "name": "Bitwave",
+   "ats_provider": "breezy",
+   "ats_slug": "bitwave",
+   "discovered_via": "getro:1628"
+  },
+  {
+   "slug": "bitwise-asset-management-inc",
+   "name": "Bitwise Asset Management",
+   "ats_provider": "rippling",
+   "ats_slug": "bitwise-asset-management-inc",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "blackbird-labs-inc",
+   "name": "Blackbird Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "blackbird-labs-inc",
+   "discovered_via": "getro:1508"
+  },
+  {
+   "slug": "blockchain",
+   "name": "Blockchain.com",
+   "ats_provider": "greenhouse",
+   "ats_slug": "blockchain",
+   "discovered_via": "getro:1259"
+  },
+  {
+   "slug": "blockdaemon",
+   "name": "Blockdaemon",
+   "ats_provider": "ashby",
+   "ats_slug": "blockdaemon",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "blockstream",
+   "name": "Blockstream",
+   "ats_provider": "ashby",
+   "ats_slug": "blockstream",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "blockworks",
+   "name": "Blockworks",
+   "ats_provider": "ashby",
+   "ats_slug": "blockworks",
+   "discovered_via": "getro:1127"
+  },
+  {
+   "slug": "bluenote",
+   "name": "Bluenote Health",
+   "ats_provider": "ashby",
+   "ats_slug": "bluenote",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "branch",
+   "name": "Branch",
+   "ats_provider": "lever",
+   "ats_slug": "branch",
+   "discovered_via": "getro:948"
+  },
+  {
+   "slug": "brave",
+   "name": "Basic Attention Token",
+   "ats_provider": "greenhouse",
+   "ats_slug": "brave",
+   "discovered_via": "getro:941"
+  },
+  {
+   "slug": "breezecash",
+   "name": "Breeze",
+   "ats_provider": "greenhouse",
+   "ats_slug": "breezecash",
+   "discovered_via": "getro:390"
+  },
+  {
+   "slug": "bugcrowd",
+   "name": "Bugcrowd",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bugcrowd",
+   "discovered_via": "getro:1613"
+  },
+  {
+   "slug": "busha",
+   "name": "Busha",
+   "ats_provider": "breezy",
+   "ats_slug": "busha",
+   "discovered_via": "getro:116"
+  },
+  {
+   "slug": "button",
+   "name": "Button",
+   "ats_provider": "ashby",
+   "ats_slug": "button",
+   "discovered_via": "getro:616"
+  },
+  {
+   "slug": "bvnk",
+   "name": "BVNK",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bvnk",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "bybit",
+   "name": "Bybit",
+   "ats_provider": "greenhouse",
+   "ats_slug": "bybit",
+   "discovered_via": "getro:1118"
+  },
+  {
+   "slug": "caladan",
+   "name": "Caladan",
+   "ats_provider": "greenhouse",
+   "ats_slug": "caladan",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "casa",
+   "name": "Casa",
+   "ats_provider": "greenhouse",
+   "ats_slug": "casa",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "category-labs",
+   "name": "Category Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "category-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "celestia",
+   "name": "Celestia Labs",
+   "ats_provider": "lever",
+   "ats_slug": "celestia",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "centrifuge",
+   "name": "Centrifuge",
+   "ats_provider": "lever",
+   "ats_slug": "centrifuge",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "certik",
+   "name": "CertiK",
+   "ats_provider": "lever",
+   "ats_slug": "certik",
+   "discovered_via": "getro:1625"
+  },
+  {
+   "slug": "chainalysis-careers",
+   "name": "Chainalysis",
+   "ats_provider": "ashby",
+   "ats_slug": "chainalysis-careers",
+   "discovered_via": "getro:869"
+  },
+  {
+   "slug": "chainalysis-government-solutions",
+   "name": "Chainalysis Government Solutions",
+   "ats_provider": "ashby",
+   "ats_slug": "chainalysis-government-solutions",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "chainlink-labs",
+   "name": "Chainlink Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "chainlink-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "chainstack",
+   "name": "Chainstack",
+   "ats_provider": "bamboohr",
+   "ats_slug": "chainstack",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "chakra-labs",
+   "name": "Chakra Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "chakra-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "codex",
+   "name": "Codex",
+   "ats_provider": "ashby",
+   "ats_slug": "codex",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "coin-metrics",
+   "name": "Coin Metrics",
+   "ats_provider": "rippling",
+   "ats_slug": "coin-metrics",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "coinbase",
+   "name": "Coinbase",
+   "ats_provider": "greenhouse",
+   "ats_slug": "coinbase",
+   "discovered_via": "getro:815"
+  },
+  {
+   "slug": "coinflow",
+   "name": "Coinflow Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "coinflow",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "coingecko",
+   "name": "CoinGecko",
+   "ats_provider": "lever",
+   "ats_slug": "coingecko",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "coinhako",
+   "name": "CoinHako",
+   "ats_provider": "ashby",
+   "ats_slug": "coinhako",
+   "discovered_via": "getro:321"
+  },
+  {
+   "slug": "coinme",
+   "name": "Coinme",
+   "ats_provider": "greenhouse",
+   "ats_slug": "coinme",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "coins",
+   "name": "Coins.ph",
+   "ats_provider": "lever",
+   "ats_slug": "coins",
+   "discovered_via": "getro:1513"
+  },
+  {
+   "slug": "cointracker",
+   "name": "CoinTracker",
+   "ats_provider": "ashby",
+   "ats_slug": "cointracker",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "commonware",
+   "name": "Commonware",
+   "ats_provider": "ashby",
+   "ats_slug": "commonware",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "compass-mining",
+   "name": "Compass Mining",
+   "ats_provider": "rippling",
+   "ats_slug": "compass-mining",
+   "discovered_via": "getro:1032"
+  },
+  {
+   "slug": "conduit",
+   "name": "Conduit",
+   "ats_provider": "ashby",
+   "ats_slug": "conduit",
+   "discovered_via": "getro:2039"
+  },
+  {
+   "slug": "consensys",
+   "name": "Consensys",
+   "ats_provider": "greenhouse",
+   "ats_slug": "consensys",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "contro",
+   "name": "Controverse",
+   "ats_provider": "breezy",
+   "ats_slug": "contro",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "copperco",
+   "name": "Copper",
+   "ats_provider": "greenhouse",
+   "ats_slug": "copperco",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "cosmoslabs",
+   "name": "Cosmos Labs",
+   "ats_provider": "greenhouse",
+   "ats_slug": "cosmoslabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "cow-dao",
+   "name": "CoW DAO",
+   "ats_provider": "ashby",
+   "ats_slug": "cow-dao",
+   "discovered_via": "getro:1396"
+  },
+  {
+   "slug": "crusoe",
+   "name": "Crusoe",
+   "ats_provider": "ashby",
+   "ats_slug": "crusoe",
+   "discovered_via": "getro:801"
+  },
+  {
+   "slug": "cryptio",
+   "name": "Cryptio",
+   "ats_provider": "ashby",
+   "ats_slug": "cryptio",
+   "discovered_via": "getro:1396"
+  },
+  {
+   "slug": "crypto",
+   "name": "Crypto.com",
+   "ats_provider": "lever",
+   "ats_slug": "crypto",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "cubesoftware",
+   "name": "Cube",
+   "ats_provider": "ashby",
+   "ats_slug": "cubesoftware",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "d3",
+   "name": "D3",
+   "ats_provider": "greenhouse",
+   "ats_slug": "d3",
+   "discovered_via": "getro:944"
+  },
+  {
+   "slug": "dakota",
+   "name": "Dakota",
+   "ats_provider": "ashby",
+   "ats_slug": "dakota",
+   "discovered_via": "getro:1032"
+  },
+  {
+   "slug": "daylight",
+   "name": "Daylight Energy",
+   "ats_provider": "greenhouse",
+   "ats_slug": "daylight",
+   "discovered_via": "speedrun"
+  },
+  {
+   "slug": "deblock",
+   "name": "Deblock",
+   "ats_provider": "workable",
+   "ats_slug": "deblock",
+   "discovered_via": "getro:947"
+  },
+  {
+   "slug": "deepwatchinc",
+   "name": "Dassana",
+   "ats_provider": "greenhouse",
+   "ats_slug": "deepwatchinc",
+   "discovered_via": "getro:1004"
+  },
+  {
+   "slug": "delphi",
+   "name": "Delphi Digital",
+   "ats_provider": "ashby",
+   "ats_slug": "delphi",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "dex-labs",
+   "name": "DerivaDEX",
+   "ats_provider": "breezy",
+   "ats_slug": "dex-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "divineresearch",
+   "name": "Divine",
+   "ats_provider": "ashby",
+   "ats_slug": "divineresearch",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "doublezero",
+   "name": "DoubleZero",
+   "ats_provider": "ashby",
+   "ats_slug": "doublezero",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "dourolabs",
+   "name": "Douro Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "dourolabs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "dourolabs.xyz",
+   "name": "Douro Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "dourolabs.xyz",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "drivewealth",
+   "name": "DriveWealth",
+   "ats_provider": "greenhouse",
+   "ats_slug": "drivewealth",
+   "discovered_via": "getro:118"
+  },
+  {
+   "slug": "drweng",
+   "name": "Cumberland",
+   "ats_provider": "greenhouse",
+   "ats_slug": "drweng",
+   "discovered_via": "getro:869"
+  },
+  {
+   "slug": "dune",
+   "name": "Dune",
+   "ats_provider": "ashby",
+   "ats_slug": "dune",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "dynamo-ai",
+   "name": "Dynamo AI",
+   "ats_provider": "rippling",
+   "ats_slug": "dynamo-ai",
+   "discovered_via": "getro:1000"
+  },
+  {
+   "slug": "eclipse",
+   "name": "Eclipse",
+   "ats_provider": "greenhouse",
+   "ats_slug": "eclipse",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "edisyl",
+   "name": "Flipside",
+   "ats_provider": "ashby",
+   "ats_slug": "edisyl",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "eigen-labs",
+   "name": "EigenLayer",
+   "ats_provider": "ashby",
+   "ats_slug": "eigen-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "eisen",
+   "name": "Eisen",
+   "ats_provider": "ashby",
+   "ats_slug": "eisen",
+   "discovered_via": "getro:1629"
+  },
+  {
+   "slug": "electriccapital",
+   "name": "Electric Capital",
+   "ats_provider": "rippling",
+   "ats_slug": "electriccapital",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "ellipsislabs",
+   "name": "Ellipsis Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "ellipsislabs",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "elliptic",
+   "name": "Elliptic",
+   "ats_provider": "ashby",
+   "ats_slug": "elliptic",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "eluvio",
+   "name": "Eluvio",
+   "ats_provider": "workable",
+   "ats_slug": "eluvio",
+   "discovered_via": "speedrun"
+  },
+  {
+   "slug": "elwoodtechnologies",
+   "name": "Elwood Technologies",
+   "ats_provider": "greenhouse",
+   "ats_slug": "elwoodtechnologies",
+   "discovered_via": "getro:116"
+  },
+  {
+   "slug": "ergonia",
+   "name": "Ergonia",
+   "ats_provider": "workable",
+   "ats_slug": "ergonia",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "espresso",
+   "name": "Espresso Systems",
+   "ats_provider": "lever",
+   "ats_slug": "espresso",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "ethena",
+   "name": "Ethena",
+   "ats_provider": "lever",
+   "ats_slug": "ethena",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "ether.fi",
+   "name": "Ether.fi",
+   "ats_provider": "ashby",
+   "ats_slug": "ether.fi",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "ethereum-foundation",
+   "name": "Ethereum Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "ethereum-foundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "everstake",
+   "name": "Everstake",
+   "ats_provider": "bamboohr",
+   "ats_slug": "everstake",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "exodus54",
+   "name": "Exodus",
+   "ats_provider": "greenhouse",
+   "ats_slug": "exodus54",
+   "discovered_via": "getro:1521"
+  },
+  {
+   "slug": "falconx",
+   "name": "FalconX",
+   "ats_provider": "greenhouse",
+   "ats_slug": "falconx",
+   "discovered_via": "getro:258"
+  },
+  {
+   "slug": "figment",
+   "name": "Figment",
+   "ats_provider": "greenhouse",
+   "ats_slug": "figment",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "figure",
+   "name": "Figure Markets",
+   "ats_provider": "greenhouse",
+   "ats_slug": "figure",
+   "discovered_via": "getro:116"
+  },
+  {
+   "slug": "filecoinfoundation",
+   "name": "Filecoin",
+   "ats_provider": "greenhouse",
+   "ats_slug": "filecoinfoundation",
+   "discovered_via": "getro:1486"
+  },
+  {
+   "slug": "fin",
+   "name": "Fin",
+   "ats_provider": "ashby",
+   "ats_slug": "fin",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "fireblocks",
+   "name": "Fireblocks",
+   "ats_provider": "greenhouse",
+   "ats_slug": "fireblocks",
+   "discovered_via": "getro:944"
+  },
+  {
+   "slug": "flowdesk",
+   "name": "Flowdesk",
+   "ats_provider": "workable",
+   "ats_slug": "flowdesk",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "flowtraders",
+   "name": "Flow Traders",
+   "ats_provider": "greenhouse",
+   "ats_slug": "flowtraders",
+   "discovered_via": "speedrun"
+  },
+  {
+   "slug": "fomo-labs",
+   "name": "Fomo",
+   "ats_provider": "ashby",
+   "ats_slug": "fomo-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "fsl",
+   "name": "STEPN",
+   "ats_provider": "bamboohr",
+   "ats_slug": "fsl",
+   "discovered_via": "getro:1348"
+  },
+  {
+   "slug": "fuellabs",
+   "name": "Fuel Labs",
+   "ats_provider": "lever",
+   "ats_slug": "fuellabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "fulcrumpro",
+   "name": "Fulcrum",
+   "ats_provider": "lever",
+   "ats_slug": "fulcrumpro",
+   "discovered_via": "getro:105"
+  },
+  {
+   "slug": "fuseenergy",
+   "name": "Fuse Energy",
+   "ats_provider": "workable",
+   "ats_slug": "fuseenergy",
+   "discovered_via": "getro:390"
+  },
+  {
+   "slug": "futureverse",
+   "name": "Altered State Machine",
+   "ats_provider": "workable",
+   "ats_slug": "futureverse",
+   "discovered_via": "getro:2304"
+  },
+  {
+   "slug": "galaxydigitalservices",
+   "name": "Galaxy Digital",
+   "ats_provider": "greenhouse",
+   "ats_slug": "galaxydigitalservices",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "gamesight",
+   "name": "Gamesight",
+   "ats_provider": "rippling",
+   "ats_slug": "gamesight",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "gate",
+   "name": "Gate",
+   "ats_provider": "lever",
+   "ats_slug": "gate",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "gauntlet",
+   "name": "Gauntlet",
+   "ats_provider": "lever",
+   "ats_slug": "gauntlet",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "gelato-digital",
+   "name": "Gelato",
+   "ats_provider": "workable",
+   "ats_slug": "gelato-digital",
+   "discovered_via": "getro:1489"
+  },
+  {
+   "slug": "gemini",
+   "name": "Gemini",
+   "ats_provider": "greenhouse",
+   "ats_slug": "gemini",
+   "discovered_via": "getro:825"
+  },
+  {
+   "slug": "generalcatalyst",
+   "name": "General Catalyst",
+   "ats_provider": "greenhouse",
+   "ats_slug": "generalcatalyst",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "genies",
+   "name": "Genies",
+   "ats_provider": "ashby",
+   "ats_slug": "genies",
+   "discovered_via": "getro:88"
+  },
+  {
+   "slug": "gensyn",
+   "name": "Gensyn",
+   "ats_provider": "greenhouse",
+   "ats_slug": "gensyn",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "gnosis",
+   "name": "Gnosis",
+   "ats_provider": "personio",
+   "ats_slug": "gnosis",
+   "discovered_via": "getro:345"
+  },
+  {
+   "slug": "goldsky",
+   "name": "Goldsky",
+   "ats_provider": "ashby",
+   "ats_slug": "goldsky",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "gotenna-inc",
+   "name": "goTenna",
+   "ats_provider": "rippling",
+   "ats_slug": "gotenna-inc",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "grayscaleinvestments",
+   "name": "Grayscale",
+   "ats_provider": "greenhouse",
+   "ats_slug": "grayscaleinvestments",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "greenhouse",
+   "name": "Greenhouse",
+   "ats_provider": "greenhouse",
+   "ats_slug": "greenhouse",
+   "discovered_via": "getro:1625"
+  },
+  {
+   "slug": "groma",
+   "name": "Groma",
+   "ats_provider": "greenhouse",
+   "ats_slug": "groma",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "gsrmarkets",
+   "name": "GSR",
+   "ats_provider": "greenhouse",
+   "ats_slug": "gsrmarkets",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "halborn",
+   "name": "Halborn",
+   "ats_provider": "rippling",
+   "ats_slug": "halborn",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "halborn-inc",
+   "name": "Halborn",
+   "ats_provider": "rippling",
+   "ats_slug": "halborn-inc",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "halliday",
+   "name": "Halliday",
+   "ats_provider": "ashby",
+   "ats_slug": "halliday",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "hang",
+   "name": "Hang",
+   "ats_provider": "ashby",
+   "ats_slug": "hang",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "hashgraph",
+   "name": "Hedera Hashgraph",
+   "ats_provider": "ashby",
+   "ats_slug": "hashgraph",
+   "discovered_via": "getro:1196"
+  },
+  {
+   "slug": "hashgraph-ashby",
+   "name": "Hashgraph",
+   "ats_provider": "ashby",
+   "ats_slug": "hashgraph",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "helius",
+   "name": "Helius",
+   "ats_provider": "ashby",
+   "ats_slug": "helius",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "hexens",
+   "name": "Hexens",
+   "ats_provider": "bamboohr",
+   "ats_slug": "hexens",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "hiro",
+   "name": "Hiro",
+   "ats_provider": "greenhouse",
+   "ats_slug": "hiro",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "hivemapper",
+   "name": "Hivemapper",
+   "ats_provider": "lever",
+   "ats_slug": "hivemapper",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "hivemind-capital",
+   "name": "Hivemind Capital Partners",
+   "ats_provider": "lever",
+   "ats_slug": "hivemind-capital",
+   "discovered_via": "getro:1298"
+  },
+  {
+   "slug": "hut8",
+   "name": "Hut 8",
+   "ats_provider": "greenhouse",
+   "ats_slug": "hut8",
+   "discovered_via": "getro:1513"
+  },
+  {
+   "slug": "hyperbolic",
+   "name": "Hyperbolic",
+   "ats_provider": "ashby",
+   "ats_slug": "hyperbolic",
+   "discovered_via": "getro:1508"
+  },
+  {
+   "slug": "hyperliquid-labs",
+   "name": "Hyperliquid Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "Hyperliquid%20Labs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "immunefi",
+   "name": "Immunefi",
+   "ats_provider": "greenhouse",
+   "ats_slug": "immunefi",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "immutable",
+   "name": "Immutable Systems",
+   "ats_provider": "lever",
+   "ats_slug": "immutable",
+   "discovered_via": "getro:1348"
+  },
+  {
+   "slug": "inco",
+   "name": "Inco",
+   "ats_provider": "bamboohr",
+   "ats_slug": "inco",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "inference",
+   "name": "Inference",
+   "ats_provider": "ashby",
+   "ats_slug": "inference",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "informal",
+   "name": "Informal Systems",
+   "ats_provider": "greenhouse",
+   "ats_slug": "informal",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "infstones",
+   "name": "InfStones",
+   "ats_provider": "lever",
+   "ats_slug": "infstones",
+   "discovered_via": "getro:1738"
+  },
+  {
+   "slug": "injective",
+   "name": "Injective Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "injective",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "injective-labs",
+   "name": "Injective Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "injective-labs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "jito",
+   "name": "Jito Labs",
+   "ats_provider": "lever",
+   "ats_slug": "jito",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "jito-labs",
+   "name": "Jito Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "jito-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "jumpcrypto",
+   "name": "Jump Crypto",
+   "ats_provider": "greenhouse",
+   "ats_slug": "jumpcrypto",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "jumptrading",
+   "name": "Jump Crypto",
+   "ats_provider": "greenhouse",
+   "ats_slug": "jumptrading",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "kaiko",
+   "name": "Kaiko",
+   "ats_provider": "lever_eu",
+   "ats_slug": "kaiko",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "kalshi",
+   "name": "Kalshi",
+   "ats_provider": "greenhouse",
+   "ats_slug": "kalshi",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "kalshi-ashby",
+   "name": "Kalshi",
+   "ats_provider": "ashby",
+   "ats_slug": "kalshi",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "keyrock",
+   "name": "Keyrock",
+   "ats_provider": "ashby",
+   "ats_slug": "keyrock",
+   "discovered_via": "getro:1273"
+  },
+  {
+   "slug": "kraken",
+   "name": "Kraken",
+   "ats_provider": "ashby",
+   "ats_slug": "kraken",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "kraken.com",
+   "name": "Kraken",
+   "ats_provider": "ashby",
+   "ats_slug": "kraken.com",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "kronosresearch",
+   "name": "Kronos Research",
+   "ats_provider": "greenhouse",
+   "ats_slug": "kronosresearch",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "kwil",
+   "name": "Kwil",
+   "ats_provider": "breezy",
+   "ats_slug": "kwil",
+   "discovered_via": "getro:1545"
+  },
+  {
+   "slug": "layerzerolabs",
+   "name": "LayerZero",
+   "ats_provider": "greenhouse",
+   "ats_slug": "layerzerolabs",
+   "discovered_via": "getro:1554"
+  },
+  {
+   "slug": "ledger",
+   "name": "Ledger",
+   "ats_provider": "ashby",
+   "ats_slug": "ledger",
+   "discovered_via": "getro:116"
+  },
+  {
+   "slug": "li.fi",
+   "name": "LI.FI",
+   "ats_provider": "ashby",
+   "ats_slug": "li.fi",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "lido",
+   "name": "Lido",
+   "ats_provider": "ashby",
+   "ats_slug": "lido",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "lido.fi",
+   "name": "Lido",
+   "ats_provider": "ashby",
+   "ats_slug": "lido.fi",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "lightning",
+   "name": "Lightning Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "lightning",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "lightspark",
+   "name": "Lightspark",
+   "ats_provider": "ashby",
+   "ats_slug": "lightspark",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "limitbreak",
+   "name": "Limit Break",
+   "ats_provider": "lever",
+   "ats_slug": "limitbreak",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "logos",
+   "name": "Logos",
+   "ats_provider": "greenhouse",
+   "ats_slug": "logos",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "luno",
+   "name": "Luno",
+   "ats_provider": "greenhouse",
+   "ats_slug": "luno",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "luxor",
+   "name": "Luxor Technology",
+   "ats_provider": "ashby",
+   "ats_slug": "luxor",
+   "discovered_via": "getro:1298"
+  },
+  {
+   "slug": "m0dbathenextthingltd",
+   "name": "M0",
+   "ats_provider": "greenhouse",
+   "ats_slug": "m0dbathenextthingltd",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "madhive",
+   "name": "MadHive",
+   "ats_provider": "ashby",
+   "ats_slug": "madhive",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "magiceden",
+   "name": "Magic Eden",
+   "ats_provider": "ashby",
+   "ats_slug": "magiceden",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "matter-labs",
+   "name": "Matter Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "matter-labs",
+   "discovered_via": "getro:815"
+  },
+  {
+   "slug": "meow",
+   "name": "Meow",
+   "ats_provider": "ashby",
+   "ats_slug": "meow",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "merklescience",
+   "name": "Merkle Science",
+   "ats_provider": "lever",
+   "ats_slug": "merklescience",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "mesh",
+   "name": "Mesh",
+   "ats_provider": "greenhouse",
+   "ats_slug": "mesh",
+   "discovered_via": "getro:781"
+  },
+  {
+   "slug": "messari",
+   "name": "Messari",
+   "ats_provider": "greenhouse",
+   "ats_slug": "messari",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "metawealth",
+   "name": "MetaWealth",
+   "ats_provider": "lever",
+   "ats_slug": "metawealth",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "moderntreasury",
+   "name": "Ansible Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "moderntreasury",
+   "discovered_via": "getro:1628"
+  },
+  {
+   "slug": "molecule",
+   "name": "Molecule",
+   "ats_provider": "ashby",
+   "ats_slug": "molecule",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "monad",
+   "name": "Monad",
+   "ats_provider": "ashby",
+   "ats_slug": "monad",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "monad.foundation",
+   "name": "Monad Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "monad.foundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "moonpay",
+   "name": "MoonPay",
+   "ats_provider": "lever",
+   "ats_slug": "moonpay",
+   "discovered_via": "getro:941"
+  },
+  {
+   "slug": "moonshot",
+   "name": "Moonshot",
+   "ats_provider": "ashby",
+   "ats_slug": "moonshot",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "morpho",
+   "name": "Morpho",
+   "ats_provider": "ashby",
+   "ats_slug": "morpho",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "mystenlabs",
+   "name": "Mysten Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "mystenlabs",
+   "discovered_via": "getro:1640"
+  },
+  {
+   "slug": "n1",
+   "name": "N1",
+   "ats_provider": "ashby",
+   "ats_slug": "n1",
+   "discovered_via": "speedrun"
+  },
+  {
+   "slug": "n3xt-jobs",
+   "name": "N3xt",
+   "ats_provider": "rippling",
+   "ats_slug": "n3xt-jobs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "nansen",
+   "name": "Nansen",
+   "ats_provider": "greenhouse",
+   "ats_slug": "nansen",
+   "discovered_via": "getro:1554"
+  },
+  {
+   "slug": "nearfoundation",
+   "name": "NEAR Foundation",
+   "ats_provider": "greenhouse",
+   "ats_slug": "nearfoundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "nearone",
+   "name": "NEAR One",
+   "ats_provider": "greenhouse",
+   "ats_slug": "nearone",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "nethermind",
+   "name": "Nethermind",
+   "ats_provider": "ashby",
+   "ats_slug": "nethermind",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "nexo",
+   "name": "Nexo",
+   "ats_provider": "breezy",
+   "ats_slug": "nexo",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "nexus",
+   "name": "NEXUS",
+   "ats_provider": "ashby",
+   "ats_slug": "nexus",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "nexus.xyz",
+   "name": "Nexus",
+   "ats_provider": "ashby",
+   "ats_slug": "nexus.xyz",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "niobium",
+   "name": "Niobium Microsystems",
+   "ats_provider": "bamboohr",
+   "ats_slug": "niobium",
+   "discovered_via": "getro:405"
+  },
+  {
+   "slug": "nomina",
+   "name": "Omni Network",
+   "ats_provider": "greenhouse",
+   "ats_slug": "nomina",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "notabene",
+   "name": "Notabene",
+   "ats_provider": "ashby",
+   "ats_slug": "notabene",
+   "discovered_via": "getro:869"
+  },
+  {
+   "slug": "notion",
+   "name": "Notion",
+   "ats_provider": "ashby",
+   "ats_slug": "notion",
+   "discovered_via": "getro:880"
+  },
+  {
+   "slug": "offchainlabs",
+   "name": "Offchain Labs",
+   "ats_provider": "lever",
+   "ats_slug": "offchainlabs",
+   "discovered_via": "getro:1179"
+  },
+  {
+   "slug": "okx",
+   "name": "OKX",
+   "ats_provider": "greenhouse",
+   "ats_slug": "okx",
+   "discovered_via": "getro:869"
+  },
+  {
+   "slug": "ondofinance",
+   "name": "Ondo Finance",
+   "ats_provider": "greenhouse",
+   "ats_slug": "ondofinance",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "openfx",
+   "name": "Openfx",
+   "ats_provider": "greenhouse",
+   "ats_slug": "openfx",
+   "discovered_via": "getro:1508"
+  },
+  {
+   "slug": "opensea",
+   "name": "OpenSea",
+   "ats_provider": "ashby",
+   "ats_slug": "opensea",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "openzeppelin",
+   "name": "OpenZeppelin",
+   "ats_provider": "greenhouse",
+   "ats_slug": "openzeppelin",
+   "discovered_via": "getro:796"
+  },
+  {
+   "slug": "opfoundation",
+   "name": "Optimism Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "opfoundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "oplabs",
+   "name": "OP Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "oplabs",
+   "discovered_via": "getro:944"
+  },
+  {
+   "slug": "orca",
+   "name": "Orca",
+   "ats_provider": "ashby",
+   "ats_slug": "orca",
+   "discovered_via": "getro:922"
+  },
+  {
+   "slug": "orderly",
+   "name": "Orderly Network",
+   "ats_provider": "greenhouse",
+   "ats_slug": "orderly",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "osmosis",
+   "name": "Osmosis",
+   "ats_provider": "greenhouse",
+   "ats_slug": "osmosis",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "oxio",
+   "name": "OXIO",
+   "ats_provider": "ashby",
+   "ats_slug": "oxio",
+   "discovered_via": "getro:1590"
+  },
+  {
+   "slug": "p2p.org",
+   "name": "P2P.org",
+   "ats_provider": "ashby",
+   "ats_slug": "p2p.org",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "panteracapitalcareers",
+   "name": "Pantera Capital",
+   "ats_provider": "greenhouse",
+   "ats_slug": "panteracapitalcareers",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "paradigm",
+   "name": "Paradigm",
+   "ats_provider": "ashby",
+   "ats_slug": "paradigm",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "parity",
+   "name": "Parity Technologies",
+   "ats_provider": "ashby",
+   "ats_slug": "parity",
+   "discovered_via": "getro:815"
+  },
+  {
+   "slug": "paxos",
+   "name": "Paxos",
+   "ats_provider": "ashby",
+   "ats_slug": "paxos",
+   "discovered_via": "getro:815"
+  },
+  {
+   "slug": "paxoslabs",
+   "name": "Paxos Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "paxoslabs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "perle",
+   "name": "Perle",
+   "ats_provider": "rippling",
+   "ats_slug": "perle",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "phantom",
+   "name": "Phantom",
+   "ats_provider": "ashby",
+   "ats_slug": "phantom",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "piplabs",
+   "name": "PIP Labs",
+   "ats_provider": "lever",
+   "ats_slug": "piplabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "plasma",
+   "name": "Plasma",
+   "ats_provider": "ashby",
+   "ats_slug": "plasma",
+   "discovered_via": "getro:1258"
+  },
+  {
+   "slug": "plume-network",
+   "name": "Plume Network",
+   "ats_provider": "rippling",
+   "ats_slug": "plume-network",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "pluralfinance",
+   "name": "Plural",
+   "ats_provider": "ashby",
+   "ats_slug": "pluralfinance",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "pluralis-research",
+   "name": "Pluralis Research",
+   "ats_provider": "ashby",
+   "ats_slug": "pluralis-research",
+   "discovered_via": "getro:1032"
+  },
+  {
+   "slug": "polychaincapital",
+   "name": "Polychain",
+   "ats_provider": "greenhouse",
+   "ats_slug": "polychaincapital",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "polygon-labs",
+   "name": "Polygon Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "polygon-labs",
+   "discovered_via": "getro:1397"
+  },
+  {
+   "slug": "polymarket",
+   "name": "Polymarket",
+   "ats_provider": "ashby",
+   "ats_slug": "polymarket",
+   "discovered_via": "getro:1118"
+  },
+  {
+   "slug": "possible-finance",
+   "name": "Possible Finance",
+   "ats_provider": "ashby",
+   "ats_slug": "possible-finance",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "pqshield",
+   "name": "PQShield",
+   "ats_provider": "greenhouse",
+   "ats_slug": "pqshield",
+   "discovered_via": "getro:221"
+  },
+  {
+   "slug": "prestolabs",
+   "name": "Presto Labs",
+   "ats_provider": "lever",
+   "ats_slug": "prestolabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "projecteleven",
+   "name": "Project Eleven",
+   "ats_provider": "ashby",
+   "ats_slug": "projecteleven",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "provable",
+   "name": "Provable",
+   "ats_provider": "ashby",
+   "ats_slug": "provable",
+   "discovered_via": "getro:1508"
+  },
+  {
+   "slug": "public",
+   "name": "Otis",
+   "ats_provider": "greenhouse",
+   "ats_slug": "public",
+   "discovered_via": "getro:935"
+  },
+  {
+   "slug": "pythnetwork",
+   "name": "Pyth Network",
+   "ats_provider": "ashby",
+   "ats_slug": "pythnetwork",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "qcp-group",
+   "name": "QCP",
+   "ats_provider": "workable",
+   "ats_slug": "qcp-group",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "quantstamp",
+   "name": "Quantstamp",
+   "ats_provider": "ashby",
+   "ats_slug": "quantstamp",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "quicknode",
+   "name": "QuickNode",
+   "ats_provider": "ashby",
+   "ats_slug": "quicknode",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "radiant-industries",
+   "name": "Radiant",
+   "ats_provider": "ashby",
+   "ats_slug": "radiant-industries",
+   "discovered_via": "getro:1074"
+  },
+  {
+   "slug": "raiku",
+   "name": "Raiku",
+   "ats_provider": "ashby",
+   "ats_slug": "raiku",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "rain",
+   "name": "Rain",
+   "ats_provider": "ashby",
+   "ats_slug": "rain",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "rarible",
+   "name": "Rarible",
+   "ats_provider": "lever",
+   "ats_slug": "rarible",
+   "discovered_via": "getro:1489"
+  },
+  {
+   "slug": "recall",
+   "name": "Recall Network",
+   "ats_provider": "greenhouse",
+   "ats_slug": "recall",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "renegade",
+   "name": "Renegade",
+   "ats_provider": "lever",
+   "ats_slug": "renegade",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "riot-platforms-careers",
+   "name": "Riot Platforms",
+   "ats_provider": "rippling",
+   "ats_slug": "riot-platforms-careers",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "ripple",
+   "name": "Ripple",
+   "ats_provider": "greenhouse",
+   "ats_slug": "ripple",
+   "discovered_via": "getro:815"
+  },
+  {
+   "slug": "risklabs",
+   "name": "Across Protocol",
+   "ats_provider": "ashby",
+   "ats_slug": "risklabs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "ritual",
+   "name": "Ritual",
+   "ats_provider": "greenhouse",
+   "ats_slug": "ritual",
+   "discovered_via": "getro:184"
+  },
+  {
+   "slug": "river",
+   "name": "River Financial",
+   "ats_provider": "ashby",
+   "ats_slug": "river",
+   "discovered_via": "getro:203"
+  },
+  {
+   "slug": "safe-labs",
+   "name": "Safe Labs",
+   "ats_provider": "personio",
+   "ats_slug": "safe-labs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "saga-xyz",
+   "name": "Saga.xyz",
+   "ats_provider": "lever",
+   "ats_slug": "saga-xyz",
+   "discovered_via": "getro:1634"
+  },
+  {
+   "slug": "sapiom",
+   "name": "Sapiom",
+   "ats_provider": "ashby",
+   "ats_slug": "sapiom",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "sardine",
+   "name": "Sardine",
+   "ats_provider": "ashby",
+   "ats_slug": "sardine",
+   "discovered_via": "getro:116"
+  },
+  {
+   "slug": "satoshilabs",
+   "name": "SatoshiLabs",
+   "ats_provider": "ashby",
+   "ats_slug": "satoshilabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "securitize",
+   "name": "Securitize",
+   "ats_provider": "greenhouse",
+   "ats_slug": "securitize",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "sei-labs",
+   "name": "Sei Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "sei-labs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "seifoundation",
+   "name": "Sei Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "seifoundation",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "selinicapital",
+   "name": "Selini Capital",
+   "ats_provider": "greenhouse",
+   "ats_slug": "selinicapital",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "sfcompute",
+   "name": "San Francisco Compute Company",
+   "ats_provider": "ashby",
+   "ats_slug": "sfcompute",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "shakepay",
+   "name": "Shakepay",
+   "ats_provider": "greenhouse",
+   "ats_slug": "shakepay",
+   "discovered_via": "getro:321"
+  },
+  {
+   "slug": "shapeways-25",
+   "name": "Shapeways",
+   "ats_provider": "workable",
+   "ats_slug": "shapeways-25",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "sigp",
+   "name": "Sigma Prime",
+   "ats_provider": "ashby",
+   "ats_slug": "sigp",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "simscale",
+   "name": "SimScale",
+   "ats_provider": "greenhouse",
+   "ats_slug": "simscale",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "simulmedia",
+   "name": "Simulmedia",
+   "ats_provider": "lever",
+   "ats_slug": "simulmedia",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "skyecosystem",
+   "name": "Sky Frontier Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "skyecosystem",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "skymavis",
+   "name": "Sky Mavis",
+   "ats_provider": "ashby",
+   "ats_slug": "skymavis",
+   "discovered_via": "getro:345"
+  },
+  {
+   "slug": "socket",
+   "name": "Socket",
+   "ats_provider": "greenhouse",
+   "ats_slug": "socket",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "sofarsounds",
+   "name": "Sofar Sounds",
+   "ats_provider": "lever",
+   "ats_slug": "sofarsounds",
+   "discovered_via": "getro:995"
+  },
+  {
+   "slug": "solana",
+   "name": "Solana Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "solana",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "solanalabs",
+   "name": "Solana Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "solanalabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "solflare",
+   "name": "Solflare",
+   "ats_provider": "smartrecruiters",
+   "ats_slug": "solflare",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "sorare",
+   "name": "Sorare",
+   "ats_provider": "ashby",
+   "ats_slug": "sorare",
+   "discovered_via": "getro:345"
+  },
+  {
+   "slug": "sorellalabs",
+   "name": "Sorella Labs",
+   "ats_provider": "greenhouse",
+   "ats_slug": "sorellalabs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "sound",
+   "name": "Sound",
+   "ats_provider": "ashby",
+   "ats_slug": "sound",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "sound.xyz",
+   "name": "Sound",
+   "ats_provider": "ashby",
+   "ats_slug": "sound.xyz",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "spectral",
+   "name": "Spectral",
+   "ats_provider": "lever",
+   "ats_slug": "spectral",
+   "discovered_via": "getro:1344"
+  },
+  {
+   "slug": "sphere",
+   "name": "Sphere",
+   "ats_provider": "ashby",
+   "ats_slug": "sphere",
+   "discovered_via": "getro:1730"
+  },
+  {
+   "slug": "sphere-laboratories",
+   "name": "Sphere",
+   "ats_provider": "lever",
+   "ats_slug": "sphere-laboratories",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "spruceid",
+   "name": "Spruce Systems",
+   "ats_provider": "ashby",
+   "ats_slug": "spruceid",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "squads",
+   "name": "Squads",
+   "ats_provider": "ashby",
+   "ats_slug": "squads",
+   "discovered_via": "getro:1554"
+  },
+  {
+   "slug": "stargate-foundation",
+   "name": "Stargate",
+   "ats_provider": "ashby",
+   "ats_slug": "stargate-foundation",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "starknetfoundation",
+   "name": "Starknet Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "starknetfoundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "startale",
+   "name": "Astar Foundation",
+   "ats_provider": "greenhouse",
+   "ats_slug": "startale",
+   "discovered_via": "getro:1625"
+  },
+  {
+   "slug": "stellar",
+   "name": "Stellar Development Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "stellar",
+   "discovered_via": "getro:997"
+  },
+  {
+   "slug": "stork",
+   "name": "Stork Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "stork",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "strike",
+   "name": "Strike",
+   "ats_provider": "greenhouse",
+   "ats_slug": "strike",
+   "discovered_via": "getro:299"
+  },
+  {
+   "slug": "stronghold",
+   "name": "Stronghold",
+   "ats_provider": "ashby",
+   "ats_slug": "stronghold",
+   "discovered_via": "getro:108"
+  },
+  {
+   "slug": "succinct",
+   "name": "Succinct",
+   "ats_provider": "ashby",
+   "ats_slug": "succinct",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "sui",
+   "name": "Sui Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "sui",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "sui-foundation",
+   "name": "Sui Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "Sui%20Foundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "superstate",
+   "name": "Superstate",
+   "ats_provider": "lever",
+   "ats_slug": "superstate",
+   "discovered_via": "getro:1396"
+  },
+  {
+   "slug": "symbiotic",
+   "name": "Symbiotic",
+   "ats_provider": "ashby",
+   "ats_slug": "symbiotic",
+   "discovered_via": "getro:944"
+  },
+  {
+   "slug": "syndica",
+   "name": "Syndica",
+   "ats_provider": "ashby",
+   "ats_slug": "syndica",
+   "discovered_via": "getro:1179"
+  },
+  {
+   "slug": "szns",
+   "name": "SZNS",
+   "ats_provider": "workable",
+   "ats_slug": "szns",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "talos-trading",
+   "name": "Talos",
+   "ats_provider": "ashby",
+   "ats_slug": "talos-trading",
+   "discovered_via": "getro:1118"
+  },
+  {
+   "slug": "taxbit",
+   "name": "TaxBit",
+   "ats_provider": "greenhouse",
+   "ats_slug": "taxbit",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "tempo-xyz",
+   "name": "Tempo",
+   "ats_provider": "ashby",
+   "ats_slug": "tempo-xyz",
+   "discovered_via": "getro:944"
+  },
+  {
+   "slug": "tenderly",
+   "name": "Tenderly",
+   "ats_provider": "ashby",
+   "ats_slug": "tenderly",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "tether",
+   "name": "Tether",
+   "ats_provider": "recruitee",
+   "ats_slug": "tether",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "the-metaplex-foundation",
+   "name": "Metaplex",
+   "ats_provider": "workable",
+   "ats_slug": "the-metaplex-foundation",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "toku",
+   "name": "Toku",
+   "ats_provider": "lever",
+   "ats_slug": "toku",
+   "discovered_via": "getro:258"
+  },
+  {
+   "slug": "tools",
+   "name": "World",
+   "ats_provider": "ashby",
+   "ats_slug": "tools",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "tools-for-humanity",
+   "name": "Tools for Humanity",
+   "ats_provider": "ashby",
+   "ats_slug": "Tools%20for%20Humanity",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "trailofbits",
+   "name": "Trail of Bits",
+   "ats_provider": "workable",
+   "ats_slug": "trailofbits",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "transak-inc",
+   "name": "Transak",
+   "ats_provider": "breezy",
+   "ats_slug": "transak-inc",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "trm-labs",
+   "name": "TRM Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "trm-labs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "turnkey",
+   "name": "Turnkey",
+   "ats_provider": "ashby",
+   "ats_slug": "turnkey",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "turnkeycareers",
+   "name": "Turnkey",
+   "ats_provider": "greenhouse",
+   "ats_slug": "turnkeycareers",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "unchained",
+   "name": "Unchained",
+   "ats_provider": "rippling",
+   "ats_slug": "unchained",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "uniswap",
+   "name": "Uniswap Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "uniswap",
+   "discovered_via": "getro:1508"
+  },
+  {
+   "slug": "uniswapfoundation",
+   "name": "Uniswap Foundation",
+   "ats_provider": "greenhouse",
+   "ats_slug": "uniswapfoundation",
+   "discovered_via": "getro:2039"
+  },
+  {
+   "slug": "unto-labs",
+   "name": "Unto Labs",
+   "ats_provider": "ashby",
+   "ats_slug": "unto-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "uphold",
+   "name": "Uphold",
+   "ats_provider": "bamboohr",
+   "ats_slug": "uphold",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "valinor",
+   "name": "Valinor",
+   "ats_provider": "workable",
+   "ats_slug": "valinor",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "valorainc",
+   "name": "Valora",
+   "ats_provider": "greenhouse",
+   "ats_slug": "valorainc",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "veda",
+   "name": "Veda",
+   "ats_provider": "ashby",
+   "ats_slug": "veda",
+   "discovered_via": "getro:858"
+  },
+  {
+   "slug": "veefriends-llc",
+   "name": "VeeFriends",
+   "ats_provider": "rippling",
+   "ats_slug": "veefriends-llc",
+   "discovered_via": "getro:120"
+  },
+  {
+   "slug": "velocity",
+   "name": "Velocity",
+   "ats_provider": "ashby",
+   "ats_slug": "velocity",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "veniceai",
+   "name": "Venice",
+   "ats_provider": "greenhouse",
+   "ats_slug": "veniceai",
+   "discovered_via": "getro:258"
+  },
+  {
+   "slug": "ventuals",
+   "name": "Ventuals",
+   "ats_provider": "ashby",
+   "ats_slug": "ventuals",
+   "discovered_via": "getro:944"
+  },
+  {
+   "slug": "veremark",
+   "name": "Veremark",
+   "ats_provider": "smartrecruiters",
+   "ats_slug": "veremark",
+   "discovered_via": "getro:1112"
+  },
+  {
+   "slug": "via99",
+   "name": "VIA",
+   "ats_provider": "greenhouse",
+   "ats_slug": "via99",
+   "discovered_via": "getro:813"
+  },
+  {
+   "slug": "walletconnect",
+   "name": "WalletConnect",
+   "ats_provider": "workable",
+   "ats_slug": "walletconnect",
+   "discovered_via": "getro:1396"
+  },
+  {
+   "slug": "walrus",
+   "name": "Walrus Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "walrus",
+   "discovered_via": "getro:1640"
+  },
+  {
+   "slug": "waterfall",
+   "name": "Waterfall",
+   "ats_provider": "lever",
+   "ats_slug": "waterfall",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "wavemm1",
+   "name": "Wave Mobile Money",
+   "ats_provider": "greenhouse",
+   "ats_slug": "wavemm1",
+   "discovered_via": "getro:1625"
+  },
+  {
+   "slug": "web3",
+   "name": "Kusama",
+   "ats_provider": "bamboohr",
+   "ats_slug": "web3",
+   "discovered_via": "getro:1734"
+  },
+  {
+   "slug": "windranger",
+   "name": "HyperPlay",
+   "ats_provider": "ashby",
+   "ats_slug": "windranger",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "wintermute-trading",
+   "name": "Wintermute",
+   "ats_provider": "lever",
+   "ats_slug": "wintermute-trading",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "woo",
+   "name": "WOO Network",
+   "ats_provider": "greenhouse",
+   "ats_slug": "woo",
+   "discovered_via": "getro:1338"
+  },
+  {
+   "slug": "world-foundation",
+   "name": "World Foundation",
+   "ats_provider": "ashby",
+   "ats_slug": "world-foundation",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "wormholelabs",
+   "name": "Wormhole",
+   "ats_provider": "ashby",
+   "ats_slug": "wormholelabs",
+   "discovered_via": "curated"
+  },
+  {
+   "slug": "wynd-labs",
+   "name": "Wynd Network",
+   "ats_provider": "ashby",
+   "ats_slug": "wynd-labs",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "xapo61",
+   "name": "Xapo",
+   "ats_provider": "greenhouse",
+   "ats_slug": "xapo61",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "xmtp",
+   "name": "XMTP",
+   "ats_provider": "ashby",
+   "ats_slug": "xmtp",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "xpansiv",
+   "name": "Xpansiv",
+   "ats_provider": "lever",
+   "ats_slug": "xpansiv",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "yellowcard",
+   "name": "Yellow Card",
+   "ats_provider": "bamboohr",
+   "ats_slug": "yellowcard",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "yieldmo",
+   "name": "Yieldmo",
+   "ats_provider": "greenhouse",
+   "ats_slug": "yieldmo",
+   "discovered_via": "getro"
+  },
+  {
+   "slug": "zerion",
+   "name": "Zerion",
+   "ats_provider": "lever",
+   "ats_slug": "zerion",
+   "discovered_via": "getro:922"
+  },
+  {
+   "slug": "zero-hash",
+   "name": "Zero Hash",
+   "ats_provider": "breezy",
+   "ats_slug": "zero-hash",
+   "discovered_via": "getro:118"
+  },
+  {
+   "slug": "zodl",
+   "name": "Zcash Open Development Lab (ZODL)",
+   "ats_provider": "ashby",
+   "ats_slug": "zodl",
+   "discovered_via": "getro"
+  }
+ ],
+ "boards": [
+  {
+   "name": "board:global-applydubjob",
+   "label": "Applydubjob",
+   "feed_url": "https://applydubjob.com/rss.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-cryptocareers",
+   "label": "Crypto Careers",
+   "feed_url": "https://crypto-careers.com/jobs",
+   "kind": "nextdata",
+   "enabled": 0
+  },
+  {
+   "name": "board:global-cryptocurrencyjobs",
+   "label": "Cryptocurrencyjobs",
+   "feed_url": "https://cryptocurrencyjobs.co/index.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-hireeing",
+   "label": "Hireeing",
+   "feed_url": "https://hireeing.com/rss.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-jobnewsfeed",
+   "label": "Jobnewsfeed",
+   "feed_url": "https://jobnewsfeed.site/rss.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-jobstash",
+   "label": "JobStash",
+   "feed_url": "https://jobstash.xyz/",
+   "kind": "nextjs",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-remote-backend-jobs",
+   "label": "Remote Backend Jobs",
+   "feed_url": "https://remotebackendjobs.com/feed.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-remote3",
+   "label": "Remote3",
+   "feed_url": "https://remote3.co/api/rss",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-remotech",
+   "label": "Remotech",
+   "feed_url": "https://remotech.ai/jobs/rss.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-we-love-product",
+   "label": "We Love Product",
+   "feed_url": "https://weloveproduct.co/feed.xml",
+   "kind": "rss",
+   "enabled": 1
+  },
+  {
+   "name": "board:global-web3career",
+   "label": "Web3.career",
+   "feed_url": "https://web3.career/",
+   "kind": "jsonld",
+   "enabled": 1
+  }
+ ],
+ "getro_collections": [
+  {
+   "collection_id": 203,
+   "label": "Polychain",
+   "url": "https://jobs.polychain.capital/jobs",
+   "enabled": 1
+  },
+  {
+   "collection_id": 390,
+   "label": "Multicoin",
+   "url": "https://jobs.multicoin.capital/jobs",
+   "enabled": 1
+  },
+  {
+   "collection_id": 815,
+   "label": "Blockchain Capital",
+   "url": "https://blockchaincapital.com",
+   "enabled": 1
+  },
+  {
+   "collection_id": 858,
+   "label": "Solana",
+   "url": "https://jobs.solana.com/jobs",
+   "enabled": 1
+  },
+  {
+   "collection_id": 869,
+   "label": "Blockchain Association",
+   "url": "https://theblockchainassociation.org",
+   "enabled": 1
+  },
+  {
+   "collection_id": 922,
+   "label": "Placeholder",
+   "url": "https://placeholder.vc",
+   "enabled": 1
+  },
+  {
+   "collection_id": 944,
+   "label": "Paradigm",
+   "url": "https://paradigm.xyz",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1118,
+   "label": "Dragonfly",
+   "url": "https://jobs.dragonfly.xyz/jobs",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1127,
+   "label": "Framework Ventures",
+   "url": "https://framework.ventures",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1179,
+   "label": "Spartan Group",
+   "url": "https://spartangroup.io",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1440,
+   "label": "Delphi Ventures",
+   "url": "https://delphiventures.io",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1508,
+   "label": "Variant Fund",
+   "url": "https://variant.fund",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1524,
+   "label": "Outlier Ventures",
+   "url": "https://outlierventures.io",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1625,
+   "label": "Coinbase",
+   "url": "https://coinbase.com",
+   "enabled": 1
+  },
+  {
+   "collection_id": 1640,
+   "label": "Electric Capital",
+   "url": "https://jobs.electriccapital.com/jobs",
+   "enabled": 1
+  },
+  {
+   "collection_id": 4184,
+   "label": "Arbitrum",
+   "url": "https://jobs.arbitrum.io",
+   "enabled": 1
+  },
+  {
+   "collection_id": 6230,
+   "label": "Animoca Brands",
+   "url": "https://careers.animocabrands.com",
+   "enabled": 1
+  },
+  {
+   "collection_id": 10223,
+   "label": "Avalanche",
+   "url": "https://jobs.avax.network/jobs",
+   "enabled": 1
+  },
+  {
+   "collection_id": 13362,
+   "label": "Castle Island Ventures",
+   "url": "https://jobs.castleisland.vc",
+   "enabled": 1
+  },
+  {
+   "collection_id": 13457,
+   "label": "Monad",
+   "url": "https://eco-jobs.monad.xyz",
+   "enabled": 1
+  },
+  {
+   "collection_id": 13490,
+   "label": "Injective",
+   "url": "https://injective.getro.com",
+   "enabled": 1
+  },
+  {
+   "collection_id": 20916,
+   "label": "Jump Crypto",
+   "url": "https://jobs.jumpcrypto.com",
+   "enabled": 1
+  }
+ ]
+}
