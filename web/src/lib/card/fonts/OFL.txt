@@ -1,9 +1,9 @@
 Fonts in this folder (static instances made with fontTools varLib.instancer from the variable
 fonts in github.com/google/fonts, then subset; glyph outlines unchanged; see scripts/card-fonts.py):
 
-- Big Shoulders 800, opsz 72 (big-shoulders-800.ts): Copyright 2019 The Big Shoulders Project Authors (https://github.com/xotypeco/big_shoulders)
-- Familjen Grotesk 500 (familjen-grotesk-500.ts): Copyright 2021 The Familjen Grotesk Project Authors (https://github.com/Familjen-Sthlm/Familjen-Grotesk)
-- NCJ Card Cyrillic (ncj-cyrillic-600.ts), a Cyrillic subset of IBM Plex Sans 600: Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
+- Funnel Display 700 (funnel-display-700.ts): Copyright 2023 The Funnel Project Authors (https://github.com/Dicotype/Funnel)
+- Funnel Sans 500 (funnel-sans-500.ts): Copyright 2023 The Funnel Project Authors (https://github.com/Dicotype/Funnel)
+- NCJ Card Cyrillic (ncj-cyrillic-600.ts), a Cyrillic and Latin Extended-A subset of IBM Plex Sans 600: Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
 
 All of them are licensed under the SIL Open Font License, Version 1.1, reproduced below.
 "Plex" is a Reserved Font Name, so the Cyrillic subset is renamed "NCJ Card Cyrillic" in its name table.

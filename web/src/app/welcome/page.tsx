@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { isAdminSession } from "@/lib/auth/admin";
@@ -11,6 +12,7 @@ import { normalizeGithub, normalizeX } from "@/lib/identity/normalize";
 import { listIdentities, type Identity } from "@/lib/identity/store";
 import { MAX_WALLETS } from "@/lib/identity/wallets";
 import { placeFromText, whereFromMode } from "@/lib/onboarding/place";
+import { BRIEF_COOKIE, readBriefCookie } from "@/lib/onboarding/brief-cookie";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { briefDone, isBriefStep, stepToShow, type Step } from "@/lib/onboarding/steps";
 import { inferRoles } from "@/lib/roles/infer";
@@ -103,7 +105,8 @@ export default async function WelcomePage({ searchParams }: Props) {
       return shell(
         step,
         "Tell us about the job you want next, the way you would tell a friend. The more you say, the better we match jobs for you.",
-        <TargetForm initial={answers.targetText} />,
+        // Порожній бриф бере чернетку з головної (кука з /start).
+        <TargetForm initial={answers.targetText || readBriefCookie((await cookies()).get(BRIEF_COOKIE)?.value)} />,
       );
 
     case "roles": {

@@ -18,13 +18,13 @@ export const metadata: Metadata = { title: "Your jobs", robots: { index: false }
 const WRAP = "min-w-0 wrap-anywhere";
 const TEXT_LINK =
   "inline-flex min-h-11 items-center text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
-const H2 = "display text-[1.75rem] leading-none sm:text-[2rem]";
-const PANEL = "grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5";
+const H2 = "font-display text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] sm:text-[2rem]";
+const PANEL = "grid gap-3 rounded-3xl bg-soft p-5 sm:p-6";
 
 function SentItem({ job }: { job: SentJob }) {
   if (!job.details) {
     return (
-      <li className="grid gap-1 rounded-xl border border-dashed border-line-strong p-4 sm:p-5">
+      <li className="grid gap-1 rounded-3xl border-[1.5px] border-dashed border-line-strong p-5 sm:p-6">
         <p className="text-base font-medium text-ink-muted">
           {job.state === "unavailable" ? "Job details are not available right now." : "This job is no longer listed."}
         </p>
@@ -42,7 +42,7 @@ function Digest({ digest }: { digest: SentDigest }) {
   return (
     <section aria-labelledby={id} className="grid gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
-        <h3 id={id} className="font-display text-[1.375rem] leading-none font-extrabold uppercase">
+        <h3 id={id} className="font-display text-[1.375rem] leading-tight font-semibold tracking-[-0.015em]">
           {dayLabel(digest.localDate)}
         </h3>
         <p className="text-sm text-ink-muted">
@@ -100,7 +100,7 @@ function Improve({ step }: { step: SavedStep }) {
   if (!briefDone(step)) return null;
   const standoutDone = step === "done";
   return (
-    <section aria-labelledby="improve-h" className="grid gap-4 rounded-xl border-2 border-ink bg-surface p-5">
+    <section aria-labelledby="improve-h" className="grid gap-4 rounded-3xl bg-lemon p-6 [&_p]:text-lemon-ink">
       <div className="grid gap-1.5">
         <h2 id="improve-h" className="font-sans text-lg leading-snug font-semibold text-ink">
           Not quite right? Improve your matches
@@ -146,7 +146,7 @@ function DailyJobs({ setup }: { setup: DigestSetup }) {
       ? `Up to 5 jobs every day at ${whenLabel(setup)}, ${setup.channel === "telegram" ? "in Telegram" : "by email"}.`
       : "We have nowhere to send them yet. Add an email or connect Telegram.";
   return (
-    <section aria-labelledby="daily-h" className="grid gap-1 rounded-xl border border-line bg-surface p-5">
+    <section aria-labelledby="daily-h" className="grid gap-1 rounded-3xl bg-soft p-6">
       <h2 id="daily-h" className="font-sans text-base font-semibold text-ink">
         Daily jobs
       </h2>
@@ -185,11 +185,11 @@ export default async function JobsPage() {
   const checked = now.state === "ok" ? checkedLine(now.checked, now.jobs.length) : null;
 
   return (
-    <div className="mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12">
+    <div className="mx-auto max-w-[1280px] px-[clamp(16px,4vw,32px)] pt-6 pb-24 sm:pt-10">
       <h1 className="display text-title">Your jobs</h1>
 
-      <div className="mt-8 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-labelledby="now-h" className="grid max-w-[760px] gap-5 lg:col-start-1 lg:row-start-1">
+      <div className="mt-8 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section aria-labelledby="now-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-1">
           <div className="grid gap-2">
             <h2 id="now-h" className={H2}>
               Your best matches today
@@ -212,7 +212,7 @@ export default async function JobsPage() {
         </aside>
 
         {setup.hasRoles || !noHistory ? (
-          <section aria-labelledby="sent-h" className="grid max-w-[760px] gap-5 lg:col-start-1 lg:row-start-2">
+          <section aria-labelledby="sent-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-2">
             <div className="grid gap-1">
               <h2 id="sent-h" className={H2}>
                 Sent to you

@@ -2,111 +2,70 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Темна тема йде за системою. data-theme="light" на <html> лишає світлу,
-   data-theme="dark" вмикає темну примусово: місце під майбутній перемикач. */
+/* Сайт лише світлий (власник 14.09: білий фон). Системна темна тема нічого не міняє;
+   data-theme="dark" на <html> лишено як місце під майбутній перемикач. */
 @custom-variant dark {
-  @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme="light"]) *) {
-      @slot;
-    }
-  }
   &:where([data-theme="dark"] *) {
     @slot;
   }
 }
 
 /* ═══════════════════════════════════════════════════════════
-   NextCryptoJob, напрям «Rookie Card» з гільошем: токени дизайну.
-   Нейтральні кольори й один акцент. Назви:
-     ground     полотно сторінки (сірий рукав для карток)
-     surface    панелі, таблиці, поля
+   NextCryptoJob, напрям 1 «Payday» (раунд 3): білий, чорнило, один лимонний колір
+   плоским полем, ніколи градієнтом. Шрифти Funnel Display (заголовки, числа) і
+   Funnel Sans (текст). Кругла гільош-печатка лишилась знаком картки й логотипа.
+   Назви:
+     ground     полотно сторінки (біле)
+     surface    панелі, таблиці, поля (теж білі, межа лінією)
+     soft       тихі блоки й наведення (#F5F6F8)
      ink        текст;  ink-muted = ink-2, другорядний текст
-     line       тонкі лінії (rule);  line-strong межа полів, >= 3:1
-     brand      єдиний акцент (табло-помаранчевий); brand-ink текст на ньому
-     brand-soft тло акценту (accent-wash): наведення, «так» у таблицях
+     line       тонкі лінії;  line-strong межа полів, >= 3:1
+     brand      головні кнопки: чорнило; brand-ink текст на ньому
+     lemon      єдиний колір: поле панелі, вилка зарплати, позначки; lemon-ink текст на ньому
+     brand-soft тло акценту (блідий лимон): наведення, «так» у таблицях
    Імена brand/line лишились від першої версії: ними користуються CRM і адмінка.
-   Картки мають власні фарби (lib/card/tiers.ts): це друкований предмет,
-   тож від теми сайту вони не залежать.
-   Контраст (перевірено): світла ink/surface 18.4, ink-muted/ground 6.0,
-   brand/ground 5.0, brand-ink/brand 5.8; темна ink/surface 14.1,
-   ink-muted/surface 7.5, brand/surface 6.2, brand-ink/brand 6.9.
+   Контраст: ink/ground 18.6, ink-muted/ground 6.4, ink/lemon 14.2, lemon-ink/lemon 10.4,
+   line-strong/ground 3.2.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
   color-scheme: light;
 
-  --ground:      #eceef1;
+  --ground:      #ffffff;
   --surface:     #ffffff;
-  --ink:         #121418;
-  --ink-muted:   #535a64;
-  --line:        #cfd4da;
-  --line-strong: #7b838d;
-  --brand:       #bb340e;
+  --soft:        #f5f6f8;
+  --ink:         #111318;
+  --ink-muted:   #5a5f6b;
+  --ink-faint:   #6b707a;
+  --line:        #e7e8ec;
+  --line-strong: #8c919b;
+  --brand:       #111318;
   --brand-ink:   #ffffff;
-  --brand-soft:  #fbe3da;
-  --brand-hover: #9f2c0b;
-  --wash:        #e3e6ea;
+  --brand-soft:  #fff4b8;
+  --brand-hover: #262a33;
+  --lemon:       #ffdb2e;
+  --lemon-2:     #ffe970;
+  --lemon-ink:   #3d3300;
+  --wash:        #f5f6f8;
   --danger:      #b3261e;
-  --sleeve:      rgb(18 20 24 / 5%);
-  --elev-lift: 0 2px 4px rgb(18 20 24 / 8%), 0 28px 50px -24px rgb(18 20 24 / 45%);
-  --elev-rest: 0 1px 2px rgb(18 20 24 / 12%);
+  --sleeve:      #f5f6f8;
+  --elev-lift: 0 20px 40px -24px rgb(17 19 24 / 30%), 0 2px 6px -2px rgb(17 19 24 / 8%);
+  --elev-rest: 0 1px 2px rgb(17 19 24 / 8%);
 
   /* Імена з макета, як синоніми. */
   --ink-2: var(--ink-muted);
   --rule: var(--line);
   --accent-wash: var(--brand-soft);
 
-  /* Радіуси за ієрархією, а не один на все. */
-  --radius: 0.625rem;
-  --radius-field: 0px;     /* поля: 0 і лінія 1 px (ConnectKit minimal) */
-  --radius-control: 6px;   /* кнопки */
-  --radius-panel: 10px;    /* панелі й таблиці */
-  --radius-card: 4.55% / 3.5%; /* картка 0.718 (pokemon-cards-css, лише числа) */
+  /* Радіуси: м'які, кнопки пігулкою (components/ui/button.tsx). */
+  --radius: 0.75rem;
+  --radius-field: 14px;
+  --radius-control: 12px;
+  --radius-panel: 24px;
+  --radius-card: 5.2% / 8.2%; /* банківська картка 1.586 */
 
-  --ease-out: cubic-bezier(0, 0, 0.3, 1);
-  --ease-enter: cubic-bezier(0, 0, 0.38, 0.9);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-
-    --ground:      #0f1829;
-    --surface:     #172237;
-    --ink:         #eef1f6;
-    --ink-muted:   #a8b3c4;
-    --line:        #2b3a55;
-    --line-strong: #7a8699;
-    --brand:       #ff7a4d;
-    --brand-ink:   #0f1829;
-    --brand-soft:  #3a2320;
-    --brand-hover: #ff9670;
-    --wash:        #1e2b42;
-    --danger:      #ff8f86;
-    --sleeve:      rgb(255 255 255 / 4%);
-    --elev-lift: 0 2px 4px rgb(0 0 0 / 30%), 0 28px 50px -24px rgb(0 0 0 / 80%);
-    --elev-rest: 0 1px 2px rgb(0 0 0 / 40%);
-  }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  --ground:      #0f1829;
-  --surface:     #172237;
-  --ink:         #eef1f6;
-  --ink-muted:   #a8b3c4;
-  --line:        #2b3a55;
-  --line-strong: #7a8699;
-  --brand:       #ff7a4d;
-  --brand-ink:   #0f1829;
-  --brand-soft:  #3a2320;
-  --brand-hover: #ff9670;
-  --wash:        #1e2b42;
-  --danger:      #ff8f86;
-  --sleeve:      rgb(255 255 255 / 4%);
-  --elev-lift: 0 2px 4px rgb(0 0 0 / 30%), 0 28px 50px -24px rgb(0 0 0 / 80%);
-  --elev-rest: 0 1px 2px rgb(0 0 0 / 40%);
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-enter: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Змінні shadcn/ui, зведені до токенів. accent у shadcn = тло наведення. */
@@ -128,26 +87,31 @@
   --destructive: var(--danger);
   --border: var(--line);
   --input: var(--line-strong);
-  --ring: var(--brand);
+  --ring: var(--ink);
 }
 
 @theme inline {
   /* Шрифти: next/font кладе змінні на <html> (див. layout.tsx). Свої імена
      --nf-*, щоб не зіткнутись із --font-* самого Tailwind. */
   --font-sans: var(--nf-text), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--nf-display), "Arial Narrow", var(--nf-text), sans-serif;
-  --font-display: var(--nf-display), "Arial Narrow", var(--nf-text), sans-serif;
+  --font-heading: var(--nf-display), var(--nf-text), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--nf-display), var(--nf-text), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Шкала: заголовок героя, розділу, сторінки. */
-  --text-hero: clamp(3.25rem, 1.4rem + 7vw, 8.5rem);
-  --text-hero--line-height: 0.86;
-  --text-section: clamp(2.5rem, 1.4rem + 3.6vw, 4.75rem);
-  --text-section--line-height: 0.9;
-  --text-title: clamp(2.25rem, 1.6rem + 2.2vw, 3.5rem);
-  --text-title--line-height: 0.92;
+  --text-hero: clamp(2.75rem, 1.6rem + 3.6vw, 4.25rem);
+  --text-hero--line-height: 1;
+  --text-section: clamp(2.25rem, 1.5rem + 2.4vw, 3rem);
+  --text-section--line-height: 1.05;
+  --text-title: clamp(2.25rem, 1.7rem + 1.6vw, 3rem);
+  --text-title--line-height: 1.02;
 
   --color-ground: var(--ground);
+  --color-soft: var(--soft);
+  --color-lemon: var(--lemon);
+  --color-lemon-2: var(--lemon-2);
+  --color-lemon-ink: var(--lemon-ink);
+  --color-ink-faint: var(--ink-faint);
   --color-surface: var(--surface);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
@@ -181,12 +145,12 @@
   --color-ring: var(--ring);
 
   /* rounded-md = поле (0), rounded-lg = кнопка, rounded-xl = панель. */
-  --radius-xs: 0px;
-  --radius-sm: 0px;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
   --radius-md: var(--radius-field);
   --radius-lg: var(--radius-control);
   --radius-xl: var(--radius-panel);
-  --radius-2xl: 14px;
+  --radius-2xl: 28px;
 
   --shadow-lift: var(--elev-lift);
   --shadow-rest: var(--elev-rest);
@@ -198,7 +162,7 @@
   }
   :focus-visible {
     outline: 3px solid var(--ring);
-    outline-offset: 2px;
+    outline-offset: 3px;
   }
   html {
     @apply font-sans;
@@ -208,13 +172,13 @@
   body {
     @apply bg-background text-foreground antialiased;
     overflow-x: clip;
-    caret-color: var(--brand);
-    accent-color: var(--brand);
+    caret-color: var(--ink);
+    accent-color: var(--ink);
     scrollbar-color: var(--line-strong) var(--ground);
   }
   ::selection {
-    background: var(--brand);
-    color: var(--brand-ink);
+    background: var(--lemon);
+    color: var(--ink);
   }
   a {
     text-underline-offset: 0.2em;
@@ -222,6 +186,7 @@
   h1, h2, h3 {
     @apply font-heading;
     text-wrap: balance;
+    letter-spacing: -0.015em;
   }
   p {
     text-wrap: pretty;
@@ -232,186 +197,201 @@
 }
 
 @layer components {
-  /* Заголовок у голосі табло: вузький, прописний. */
+  /* Великий заголовок: Funnel Display, щільно, звичайним регістром. */
   .display {
     font-family: var(--font-display);
-    font-weight: 850;
-    text-transform: uppercase;
-    letter-spacing: 0.005em;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+  /* Лимонне підкреслення маркером під словом заголовка. */
+  .ncj-mark {
+    background: linear-gradient(transparent 58%, var(--lemon) 58%);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
-  /* ─── Картка (0.718, радіус 4.55% / 3.5%) ─────────────────────
-     Розміри всередині в cqw, тож та сама картка працює і на 328 px, і на 380 px.
-     Фарби приходять змінними з tiers.ts (style на .ncj-card). */
+  /* ─── Картка у форматі банківської (1.586, напрям «Payday») ───
+     Розміри всередині в cqw, тож та сама картка працює і на 300 px, і на 520 px.
+     Фарби приходять змінними з tiers.ts (style на .ncj-face). */
   .ncj-card {
     container-type: inline-size;
     position: relative;
     width: 100%;
-    aspect-ratio: 0.718;
+    aspect-ratio: 1.586;
   }
   .ncj-face {
     position: absolute;
     inset: 0;
-    overflow: hidden;
     border-radius: var(--radius-card);
-    box-shadow: var(--card-shadow, var(--elev-lift));
     background: var(--card-frame);
     background-image: var(--card-sheen, none);
     color: var(--card-ink);
+    box-shadow: var(--card-shadow, 0 36px 50px -24px rgb(77 62 0 / 45%), 0 8px 16px -8px rgb(17 19 24 / 25%)),
+      inset 0 1px 0 rgb(255 255 255 / 10%);
+  }
+  /* Тонкі косі лінії, як тиснення пластику. */
+  .ncj-face::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: repeating-linear-gradient(100deg, var(--card-hairline) 0 1px, transparent 1px 6px);
+    opacity: 0.35;
   }
   .ncj-window {
     position: absolute;
-    inset: 5.5%;
+    inset: 0;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-    padding: 6%;
-    border-radius: 3.2% / 2.3%;
-    background: var(--card-window);
-    box-shadow: inset 0 0 0 1px var(--card-hairline);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    padding: 6.2cqw 7cqw 5.6cqw;
   }
-  .ncj-rating { display: flex; align-items: flex-start; justify-content: space-between; gap: 4cqw; }
-  .ncj-num {
+  .ncj-top { display: grid; gap: 1cqw; justify-items: start; padding-right: 30cqw; }
+  .ncj-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.8cqw;
     font-family: var(--font-display);
-    font-weight: 900;
-    font-size: 25cqw;
-    line-height: 0.8;
+    font-weight: 700;
+    font-size: 4.3cqw;
+    line-height: 1;
     letter-spacing: -0.01em;
-    font-variant-numeric: lining-nums tabular-nums;
   }
-  .ncj-pos { font-family: var(--font-display); font-weight: 800; font-size: 7.9cqw; line-height: 1; margin-top: 1.6cqw; }
-  .ncj-lvl {
-    text-align: right;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 4.2cqw;
-    line-height: 1.1;
-    text-transform: uppercase;
-    color: var(--card-ink-2);
-  }
-  .ncj-lvl b { display: block; font-size: 9cqw; line-height: 1; color: var(--card-ink); }
-  .ncj-art {
-    position: relative;
-    margin-block: 3.5cqw;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    border-radius: 1.6cqw;
-  }
-  .ncj-art > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .ncj-art > .ncj-seal { position: relative; width: auto; height: 100%; max-width: 100%; aspect-ratio: 1; }
-  .ncj-art-empty {
-    position: relative;
-    font-size: 3.4cqw;
+  .ncj-brand-mark { width: 5.6cqw; height: 5.6cqw; }
+  .ncj-set {
+    font-size: 2.5cqw;
     line-height: 1.3;
-    text-align: center;
-    color: var(--card-ink-2);
-    max-width: 70%;
-  }
-  .ncj-name {
-    font-family: var(--font-display);
-    font-weight: 850;
-    font-size: 7.4cqw;
-    line-height: 1.05;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    letter-spacing: 0.01em;
+    color: var(--card-ink-2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
   }
-  .ncj-stats {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.6cqw 2.6cqw;
-    margin-top: 2cqw;
+  .ncj-mid { align-self: end; display: flex; align-items: flex-end; gap: 3cqw; min-width: 0; }
+  .ncj-num {
     font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 24cqw;
+    line-height: 0.8;
+    letter-spacing: -0.05em;
+    font-variant-numeric: lining-nums tabular-nums;
   }
-  .ncj-stats div { display: flex; align-items: baseline; gap: 1.3cqw; border-top: 0.4cqw solid var(--card-ink); padding-top: 0.8cqw; min-width: 0; }
-  .ncj-stats b { font-size: 5.8cqw; font-weight: 850; line-height: 1; }
-  .ncj-stats span { font-size: 3.4cqw; font-weight: 700; letter-spacing: 0.04em; }
-  .ncj-stats .gap b { font-size: 3.6cqw; font-weight: 600; color: var(--card-ink-2); }
-  .ncj-setline {
-    position: absolute;
-    left: 7%;
-    right: 7%;
-    bottom: 1.4%;
-    display: flex;
-    justify-content: space-between;
-    gap: 2cqw;
+  .ncj-of {
+    min-width: 0;
+    max-width: 50cqw;
+    padding-bottom: 0.6cqw;
+    font-size: 3.9cqw;
+    line-height: 1.25;
+    color: var(--card-ink-2);
+  }
+  .ncj-of b { display: block; font-weight: 600; font-size: 4.8cqw; line-height: 1.15; color: var(--card-ink); text-wrap: balance; }
+  .ncj-bot { display: flex; justify-content: space-between; align-items: flex-end; gap: 3cqw; margin-top: 4.5cqw; min-width: 0; }
+  .ncj-name {
+    min-width: 0;
     font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 3.1cqw;
-    line-height: 1.5;
-    letter-spacing: 0.08em;
-    color: var(--card-frame-ink);
+    font-weight: 500;
+    font-size: 4.2cqw;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 0 rgb(0 0 0 / 35%), 0 -1px 0 rgb(255 255 255 / 12%);
   }
-  .ncj-setline span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ncj-stats { display: flex; flex: none; gap: 2.4cqw; font-size: 3cqw; line-height: 1.2; color: var(--card-ink-2); }
+  .ncj-stats > span { display: inline-flex; align-items: baseline; gap: 0.8cqw; }
+  .ncj-stats b { font-weight: 650; font-size: 3.5cqw; color: var(--card-ink); font-variant-numeric: tabular-nums; }
+  .ncj-stats .gap b { font-weight: 500; color: var(--card-ink-2); }
+  /* Позначка виходить за край картки зліва вгорі, як наліпка. */
   .ncj-tag {
     position: absolute;
-    top: 1.4%;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 3.1cqw;
+    top: -2.6cqw;
+    left: -1.4cqw;
+    rotate: -3deg;
+    font-size: 2.8cqw;
+    font-weight: 700;
     line-height: 1.5;
-    letter-spacing: 0.1em;
-    padding: 0 1.6cqw;
-    border-radius: 0.8cqw;
+    padding: 0.4cqw 2.2cqw;
+    border-radius: 99px;
+    white-space: nowrap;
   }
-  .ncj-tag-example { right: 7%; background: var(--brand); color: var(--brand-ink); }
-  .ncj-tag-marker { left: 7%; background: var(--card-window); color: var(--card-ink); box-shadow: inset 0 0 0 1px var(--card-hairline); }
+  .ncj-tag-example { background: #ffffff; color: #111318; box-shadow: 0 1cqw 2.4cqw -1cqw rgb(0 0 0 / 35%); }
+  .ncj-tag-marker { background: var(--card-window); color: var(--card-ink); box-shadow: inset 0 0 0 1px var(--card-hairline); }
 
-  /* Зворот: розклад балу, як статистика на звороті картки 1952 року. */
-  .ncj-back {
-    padding: 7% 7% 6%;
-    display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    background: var(--card-window);
-    box-shadow: inset 0 0 0 0.6cqw var(--card-frame-solid);
+  /* ─── Кругла печатка-жетон (components/card/seal-badge.tsx) ───
+     Розетка на весь круг, лимонне ядро з числом поверх. На картці праворуч угорі,
+     окремо (MiniCard) на колі кольору картки. */
+  .ncj-badge {
+    container-type: inline-size;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    vertical-align: middle;
   }
-  .ncj-back h3 { font-family: var(--font-display); font-weight: 850; font-size: 7.6cqw; line-height: 1; text-transform: uppercase; }
-  .ncj-back p { font-size: 3.3cqw; line-height: 1.35; color: var(--card-ink-2); margin-top: 1.4cqw; }
-  .ncj-back table { width: 100%; border-collapse: collapse; margin-top: 3.2cqw; font-size: 3.5cqw; line-height: 1.2; align-self: start; }
+  .ncj-badge > .ncj-seal { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ncj-badge-plate {
+    background: var(--badge-plate);
+    background-image: var(--badge-sheen, none);
+    box-shadow: var(--elev-rest), inset 0 0 0 1px rgb(17 19 24 / 6%);
+  }
+  .ncj-badge-plate > .ncj-seal { inset: 5%; width: 90%; height: 90%; }
+  .ncj-badge-core {
+    position: relative;
+    display: grid;
+    place-content: center;
+    width: 40%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--lemon, #ffdb2e);
+    color: #111318;
+    text-align: center;
+    box-shadow: 0 0 0 4cqw var(--badge-ring, rgb(17 19 24 / 0%));
+  }
+  .ncj-badge-core small { font-size: 8cqw; font-weight: 700; line-height: 1; letter-spacing: 0.08em; }
+  .ncj-badge-core b {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 19cqw;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .ncj-badge-core small + b { font-size: 17cqw; }
+  .ncj-face-badge { position: absolute; top: 4.4cqw; right: 4.8cqw; width: 29cqw; --badge-ring: var(--card-frame); }
+  .ncj-badge-empty { outline: 0.4cqw dashed var(--card-ink-2); outline-offset: -0.4cqw; }
+
+  /* ─── Розклад балу: панель поруч із карткою ─── */
+  .ncj-back {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border-radius: var(--radius-panel);
+    background: var(--soft);
+    color: var(--ink);
+  }
+  .ncj-back h3 { font-family: var(--font-display); font-weight: 650; font-size: 1.375rem; line-height: 1.2; }
+  .ncj-back p { font-size: 0.875rem; line-height: 1.45; color: var(--ink-muted); }
+  .ncj-back table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; line-height: 1.3; }
   .ncj-back th {
     text-align: left;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 3.4cqw;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border-bottom: 0.5cqw solid var(--card-ink);
-    padding: 0.8cqw 0;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    border-bottom: 1.5px solid var(--ink);
+    padding: 0.375rem 0;
   }
-  .ncj-back td, .ncj-back tbody th { padding: 1.1cqw 0; border-bottom: 1px solid var(--card-hairline); vertical-align: top; }
-  .ncj-back tbody th { text-align: left; font-family: var(--font-sans); font-weight: 500; font-size: 3.5cqw; letter-spacing: 0; text-transform: none; }
-  .ncj-back td:not(:first-child), .ncj-back th:not(:first-child) { text-align: right; white-space: nowrap; padding-left: 2cqw; }
-  .ncj-back .ncj-gapnote td { border-bottom: 1px solid var(--card-hairline); padding-top: 0; color: var(--card-ink-2); font-size: 3cqw; }
-  .ncj-back .ncj-sum > * { font-family: var(--font-display); font-weight: 800; font-size: 4.2cqw; letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 0; padding-top: 1.6cqw; padding-bottom: 0; }
-  .ncj-back .ncj-total > * { font-family: var(--font-display); font-weight: 900; font-size: 6.6cqw; letter-spacing: 0.02em; text-transform: uppercase; border-bottom: 0; padding-top: 1.2cqw; }
-  .ncj-back .ncj-legend { align-self: end; border-top: 1px solid var(--card-hairline); padding-top: 2cqw; }
-
-  /* Поворот і нахил (Atropos: 15°, 300 мс, перспектива 1200 px). */
-  .ncj-stage { perspective: 1200px; }
-  .ncj-flip {
-    --rx: 0deg;
-    --ry: 0deg;
-    position: relative;
-    transform-style: preserve-3d;
-    transform: rotateX(var(--rx)) rotateY(var(--ry));
-    transition: transform 300ms var(--ease-out);
-  }
-  .ncj-flip[data-flipped="true"] { transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + 180deg)); }
-  .ncj-side { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-  .ncj-side-back { transform: rotateY(180deg); }
-  .ncj-glare {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--radius-card);
-    pointer-events: none;
-    opacity: 0;
-    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 25%), transparent 55%);
-    transition: opacity 300ms var(--ease-out);
-    backface-visibility: hidden;
-  }
-  .ncj-flip[data-tilting="true"] .ncj-glare { opacity: 1; }
+  .ncj-back td, .ncj-back tbody th { padding: 0.5rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .ncj-back tbody th { font-weight: 500; font-size: 0.9375rem; }
+  .ncj-back td:not(:first-child), .ncj-back th:not(:first-child) { text-align: right; white-space: nowrap; padding-left: 0.75rem; }
+  .ncj-back .ncj-gapnote td { padding-top: 0; color: var(--ink-muted); font-size: 0.8125rem; }
+  .ncj-back .ncj-sum > * { font-weight: 600; border-bottom: 0; padding-top: 0.625rem; padding-bottom: 0; }
+  .ncj-back .ncj-total > * { font-family: var(--font-display); font-weight: 700; font-size: 1.375rem; border-bottom: 0; padding-top: 0.5rem; }
+  .ncj-back .ncj-legend { border-top: 1px solid var(--line); padding-top: 0.75rem; }
 
   /* Печатка малює себе один раз: 1.6 с, шар кожні 90 мс. */
   .ncj-seal-draw .ncj-layer {
@@ -449,163 +429,62 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ncj-flip, .ncj-glare { transition: none; }
     .ncj-seal-draw .ncj-layer { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
   }
 }
 
 @layer components {
-  /* Мала картка (драбина рівнів, дошка). */
-  .ncj-mini {
-    container-type: inline-size;
-    position: relative;
-    aspect-ratio: 0.718;
-    border-radius: var(--radius-card);
-    background: var(--card-frame);
-    background-image: var(--card-sheen);
-    box-shadow: var(--elev-rest);
-  }
-  .ncj-mini-window {
-    position: absolute;
-    inset: 7%;
-    display: grid;
-    place-items: end center;
-    padding-bottom: 8%;
-    border-radius: 5% / 3.6%;
-    background: var(--card-window);
-  }
-  .ncj-mini-seal { width: 84%; height: auto; aspect-ratio: 1; }
-  .ncj-mini b {
-    position: absolute;
-    left: 15%;
-    top: 10%;
-    font-family: var(--font-display);
-    font-weight: 900;
-    font-size: 30cqw;
-    line-height: 0.85;
-    color: var(--card-ink);
-  }
-}
-
-@layer components {
-  /* Фішка балу для рядків CRM і адмінки: рамка з обробкою рівня, вікно, бал.
-     Без печатки: у списку їх до сотень, а на 44 px печатка однаково не читається.
-     Red seal відрізняє від Black лише число кольором печатки. */
+  /* Фішка балу для рядків CRM і адмінки: коло кольору картки з балом, як жетон.
+     Без розетки: у списку їх до сотень, а на 44 px вона однаково не читається.
+     Gold seal відрізняє від Black лише лимонне число. */
   .ncj-chip {
     display: inline-grid;
+    place-items: center;
     flex-shrink: 0;
     width: 2.75rem;
-    aspect-ratio: 0.718;
-    padding: 9% 9%;
-    border-radius: var(--radius-card);
+    aspect-ratio: 1;
+    border-radius: 50%;
     background: var(--card-frame);
     background-image: var(--card-sheen);
-    box-shadow: var(--elev-rest);
+    box-shadow: var(--elev-rest), inset 0 0 0 1px rgb(17 19 24 / 8%);
     vertical-align: middle;
   }
   .ncj-chip > b {
-    display: grid;
-    place-items: center;
-    border-radius: 5% / 3.6%;
-    background: var(--card-window);
     color: var(--card-ink);
     font-family: var(--font-display);
-    font-weight: 900;
-    font-size: 1.375rem;
+    font-weight: 700;
+    font-size: 1.125rem;
     line-height: 1;
     font-variant-numeric: lining-nums tabular-nums;
   }
-  .ncj-chip[data-finish="red_seal"] > b { color: #ff7a4d; }
+  .ncj-chip[data-finish="red_seal"] > b { color: #ffdb2e; }
 
-  /* Зворот картки, що росте з вмістом (профіль кандидата в CRM): та сама верстка
-     .ncj-back, але висота не менша за картку й без обрізання. Дрібний текст має
-     нижню межу, щоб на 390 px таблиця лишалась читабельною. */
-  .ncj-sheet {
-    container-type: inline-size;
-    width: 100%;
-  }
-  .ncj-sheet > .ncj-face {
-    position: relative;
-    inset: auto;
-    overflow: visible;
-    min-height: calc(100cqw / 0.718);
-  }
-  .ncj-sheet .ncj-back h3 { font-size: max(7.6cqw, 1.5rem); }
-  .ncj-sheet .ncj-back p { font-size: max(3.3cqw, 0.8125rem); }
-  .ncj-sheet .ncj-back table { font-size: max(3.5cqw, 0.8125rem); }
-  .ncj-sheet .ncj-back th { font-size: max(3.4cqw, 0.75rem); }
-  .ncj-sheet .ncj-back tbody th { font-size: max(3.5cqw, 0.8125rem); }
-  .ncj-sheet .ncj-back .ncj-sum > * { font-size: max(4.2cqw, 0.9375rem); }
-  .ncj-sheet .ncj-back .ncj-total > * { font-size: max(6.6cqw, 1.375rem); }
+  /* Розклад у профілі кандидата в CRM: та сама панель .ncj-back. */
+  .ncj-sheet { width: 100%; }
 }
 
 @layer components {
-  /* Прев'ю картинок для X (композиція як у lib/card/og.tsx). Тло завжди темне. */
+  /* Прев'ю картинки для X (композиція як у lib/card/og.tsx): лимонне поле, картка під кутом. */
   .ncj-share {
     container-type: inline-size;
     position: relative;
     overflow: hidden;
-    background: #0f1829;
-    color: #eef1f6;
-    border-radius: 6px;
-    box-shadow: var(--elev-lift);
+    aspect-ratio: 1200 / 675;
+    background: #ffdb2e;
+    color: #111318;
+    border-radius: 20px;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 4%), 0 24px 48px -28px rgb(77 62 0 / 50%);
   }
-  .ncj-share-wide { aspect-ratio: 1200 / 675; }
-  .ncj-share { box-shadow: var(--elev-lift), 0 0 0 1px var(--line); }
-  .ncj-share-tall { aspect-ratio: 1080 / 1350; }
-  .ncj-share-rosette { position: absolute; opacity: 0.1; }
-  .ncj-share-wide .ncj-share-rosette { width: 64cqw; height: 64cqw; right: -14cqw; top: -4cqw; }
-  .ncj-share-tall .ncj-share-rosette { width: 94cqw; height: 94cqw; left: 3cqw; top: -8cqw; }
-  .ncj-share-card { position: absolute; }
-  .ncj-share-card .ncj-face { --card-shadow: 0 2cqw 4cqw rgb(0 0 0 / 45%); }
-  .ncj-share-wide .ncj-share-card { left: 5.3cqw; top: 5.4cqw; width: 32.8cqw; transform: rotate(-4deg); }
-  .ncj-share-tall .ncj-share-card { left: 50%; top: 7cqw; width: 52cqw; transform: translateX(-50%) rotate(-3deg); }
-  .ncj-share-copy { position: absolute; font-family: var(--font-display); }
-  .ncj-share-wide .ncj-share-copy { left: 45cqw; right: 5.3cqw; top: 8cqw; bottom: 7cqw; display: grid; align-content: space-between; }
-  .ncj-share-tall .ncj-share-copy { left: 7cqw; right: 7cqw; bottom: 7.5cqw; text-align: center; }
-  .ncj-share-big { font-weight: 850; line-height: 0.86; text-transform: uppercase; }
-  .ncj-share-wide .ncj-share-big { font-size: 8cqw; }
-  .ncj-share-tall .ncj-share-big { font-size: 10cqw; }
-  .ncj-share-sub { font-family: var(--font-sans); font-size: 2.1cqw; line-height: 1.35; color: #c2cbd9; margin-top: 2cqw; }
-  .ncj-share-foot { display: flex; justify-content: space-between; gap: 2cqw; font-weight: 800; letter-spacing: 0.06em; color: #c2cbd9; }
-  .ncj-share-wide .ncj-share-foot { font-size: 2cqw; }
-  .ncj-share-tall .ncj-share-foot { display: block; font-size: 3.2cqw; margin-top: 3cqw; }
-  .ncj-share-ex {
-    position: absolute;
-    top: 2.6cqw;
-    right: 3cqw;
-    font-family: var(--font-display);
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    font-size: 1.8cqw;
-    padding: 0.3cqw 1cqw;
-    border-radius: 0.5cqw;
-    background: #ff7a4d;
-    color: #0f1829;
-  }
-  .ncj-share-tall .ncj-share-ex { font-size: 3cqw; }
+  .ncj-share-card { position: absolute; left: 6cqw; top: 50%; width: 46cqw; translate: 0 -50%; rotate: -6deg; }
+  .ncj-share-card .ncj-face { --card-shadow: 0 3cqw 5cqw -2cqw rgb(77 62 0 / 55%); }
+  .ncj-share-copy { position: absolute; left: 58cqw; right: 5cqw; top: 50%; translate: 0 -50%; }
+  .ncj-share-who { font-size: 2.2cqw; font-weight: 600; color: #3d3300; }
+  .ncj-share-big { margin-top: 0.8cqw; font-family: var(--font-display); font-weight: 700; font-size: 5cqw; line-height: 1; letter-spacing: -0.035em; text-wrap: balance; }
+  .ncj-share-rt { margin-top: 1.2cqw; font-size: 2.5cqw; font-weight: 600; }
+  .ncj-share-sub { margin-top: 2.4cqw; font-size: 1.9cqw; line-height: 1.35; color: #3d3300; }
+  .ncj-share-url { margin-top: 3cqw; font-family: var(--font-display); font-weight: 650; font-size: 2.2cqw; }
 }
 @layer components {
-  .ncj-share .ncj-tag-example { display: none; }
-}
-
-@layer components {
-  /* ─── Живий рядок головної: речення з числами й стрічка ───────
-     Світла смуга кольору панелей між лініями: числа видно, але вона не важить як табло. */
-  .ncj-live {
-    background: var(--surface);
-    border-block: 1px solid var(--line);
-  }
-  .ncj-live-num {
-    font-family: var(--font-display);
-    font-weight: 850;
-    font-size: 1.5em;
-    letter-spacing: 0.005em;
-    color: var(--ink);
-    vertical-align: -0.12em;
-  }
-  .ncj-live-num:first-child { color: var(--brand); }
-
   /* Лічильник (components/landing/odometer.tsx). Вікно в один рядок; над кожною цифрою
      ::before з рядками 0, 1, 2 ...; колонка їде вгору з translateY(rows) до 0, тож цифри
      пробігають і стають на справжню. Рядки з content мають порожній alt ("" після /):
@@ -645,85 +524,92 @@
     to { transform: none; }
   }
 
-  /* Стрічка вакансій (components/landing/job-ticker.tsx). Доріжка = два однакові списки,
-     кожен з відступом справа, як між пунктами, тож зсув на -50% дає безшовне коло.
-     Рух лінійний (постійна швидкість), пауза під курсором і фокусом. З клавіатури
-     (:focus-visible всередині) стрічка стає і гортається, щоб пункт у фокусі було видно. */
-  .ncj-ticker {
-    --ticker-gap: 2.5rem;
-    position: relative;
-    border-top: 1px solid var(--line);
-    overflow: clip;
-    mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
-  }
-  .ncj-ticker-track { display: flex; width: max-content; }
-  .ncj-ticker-list { display: flex; padding-block: 1rem; }
-  /* Кожен пункт однаковий: [риска][пів проміжку][вакансія][пів проміжку], тож два списки
-     поспіль не мають шва. */
-  .ncj-ticker-list > li { display: flex; align-items: center; padding-right: calc(var(--ticker-gap) / 2); }
-  .ncj-ticker-list > li::before {
-    content: "";
-    width: 1px;
-    height: 1.25rem;
-    margin-right: calc(var(--ticker-gap) / 2);
-    background: var(--line);
-  }
-  .ncj-ticker[data-moving="false"] .ncj-ticker-list,
-  .ncj-ticker:has(:focus-visible) .ncj-ticker-list { padding-inline: clamp(16px, 4vw, 56px); }
-  .ncj-ticker[data-moving="false"] .ncj-ticker-list > li:first-child::before,
-  .ncj-ticker:has(:focus-visible) .ncj-ticker-list > li:first-child::before { display: none; }
-  .ncj-ticker-item {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    white-space: nowrap;
-    border-radius: 2px;
-    color: var(--ink);
-  }
-  .ncj-ticker-title { font-weight: 600; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 0.25em; transition: text-decoration-color 150ms ease; }
-  .ncj-ticker-meta { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--ink-muted); font-size: 0.9375rem; }
-  .ncj-ticker-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
-  /* Оцінка дошки (web3.career), не зарплата: приглушено, звичайним шрифтом, без акценту. */
-  .ncj-ticker-est { color: var(--ink-muted); font-size: 0.875rem; font-style: italic; }
-  .ncj-ticker-pay {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 1.1875rem;
-    letter-spacing: 0.01em;
-    color: var(--brand);
-    font-variant-numeric: lining-nums tabular-nums;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .ncj-ticker-item:hover .ncj-ticker-title { text-decoration-color: var(--brand); }
-  }
-  .ncj-ticker-item:focus-visible .ncj-ticker-title { text-decoration-color: var(--brand); }
+}
 
+@layer components {
+  /* ─── Головна «Payday»: лимонна панель, картка, стрічка вакансій ─── */
+  .ncj-panel {
+    position: relative;
+    background: var(--lemon);
+    border-radius: 32px;
+    padding: 40px 40px 32px;
+  }
+  .ncj-panel-card { max-width: 440px; margin-left: 8px; rotate: -4deg; }
+  .ncj-sheet-jobs {
+    margin-top: 32px;
+    padding: 20px 20px 8px;
+    border-radius: 24px;
+    background: #ffffff;
+    box-shadow: 0 20px 40px -24px rgb(77 62 0 / 45%);
+  }
+  .ncj-feed {
+    height: 236px;
+    overflow: clip;
+    mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+  }
+  .ncj-feed ul { list-style: none; }
+  .ncj-feed-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--soft);
+    border-radius: 10px;
+    color: var(--ink);
+    transition: background-color 300ms var(--ease-out);
+  }
+  .ncj-feed-row:hover { background: var(--soft); }
+  .ncj-feed-av {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--soft);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .ncj-feed-t, .ncj-feed-c { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ncj-feed-t { font-weight: 600; font-size: 15px; line-height: 20px; }
+  .ncj-feed-c { font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+  .ncj-feed-p { font-family: var(--font-display); font-weight: 600; font-size: 15px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ncj-feed-est { font-family: var(--font-sans); font-weight: 400; font-size: 13px; color: var(--ink-faint); }
   @media (prefers-reduced-motion: no-preference) {
-    .ncj-ticker[data-moving="true"] .ncj-ticker-track {
-      animation: ncj-ticker var(--ticker-dur, 120s) linear infinite;
-    }
-    .ncj-ticker:hover .ncj-ticker-track,
-    .ncj-ticker:focus-within .ncj-ticker-track { animation-play-state: paused; }
+    .ncj-feed[data-moving="true"] .ncj-feed-track { animation: ncj-feed var(--feed-dur, 45s) linear infinite; }
+    .ncj-feed:hover .ncj-feed-track,
+    .ncj-feed:focus-within .ncj-feed-track { animation-play-state: paused; }
   }
-  @keyframes ncj-ticker {
-    to { transform: translateX(-50%); }
+  @keyframes ncj-feed {
+    from { transform: translateY(-50%); }
+    to { transform: translateY(0); }
   }
-  /* Стоїть: гортається пальцем чи колесом, копії немає, краї без маски. */
-  .ncj-ticker[data-moving="false"],
-  .ncj-ticker:has(:focus-visible) {
-    overflow-x: auto;
-    mask-image: none;
-    scrollbar-width: thin;
-    scrollbar-color: var(--line-strong) transparent;
-  }
-  .ncj-ticker:has(:focus-visible) .ncj-ticker-track { animation: none; }
-  .ncj-ticker:has(:focus-visible) .ncj-ticker-list[aria-hidden],
-  .ncj-ticker[data-moving="false"] .ncj-ticker-list[aria-hidden] { display: none; }
+  .ncj-feed[data-moving="false"],
+  .ncj-feed:has(:focus-visible) { overflow-y: auto; mask-image: none; }
+  .ncj-feed:has(:focus-visible) .ncj-feed-track { animation: none; }
+  .ncj-feed:has(:focus-visible) ul[aria-hidden] { display: none; }
   @media (prefers-reduced-motion: reduce) {
-    .ncj-ticker { overflow-x: auto; mask-image: none; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-    .ncj-ticker-list[aria-hidden] { display: none; }
-    .ncj-ticker-list { padding-inline: clamp(16px, 4vw, 56px); }
-    .ncj-ticker-list > li:first-child::before { display: none; }
-    .ncj-ticker-title { transition: none; }
+    .ncj-feed { overflow-y: auto; mask-image: none; }
+    .ncj-feed ul[aria-hidden] { display: none; }
   }
+  @media (max-width: 760px) {
+    .ncj-panel { padding: 28px 20px 20px; border-radius: 26px; }
+    .ncj-panel-card { margin-left: 4px; }
+    .ncj-feed { height: 300px; }
+    .ncj-feed-row { grid-template-columns: 36px minmax(0, 1fr); }
+    .ncj-feed-p { grid-column: 2; text-align: left; }
+  }
+
+  /* Поле брифу: межа лінією, у фокусі чорнило і лимонне сяйво. */
+  .ncj-brief {
+    border: 1.5px solid var(--line-strong);
+    border-radius: 18px;
+    background: var(--surface);
+    padding: 16px 16px 12px;
+    transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out);
+  }
+  .ncj-brief:focus-within { border-color: var(--ink); box-shadow: 0 0 0 4px rgb(255 219 46 / 55%); }
+  .ncj-brief textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: 18px; line-height: 28px; min-height: 56px; }
+  .ncj-brief textarea::placeholder { color: var(--ink-faint); }
 }

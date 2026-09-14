@@ -22,7 +22,7 @@ function RoleBack({ role, score, breakdown }: { role: RoleScoreDetailed; score: 
   const name = roleText(role.role);
   return (
     <div className="ncj-sheet max-w-[26rem]">
-      <div className="ncj-face ncj-back" style={tierVars(tier) as CSSProperties}>
+      <div className="ncj-back" style={tierVars(tier) as CSSProperties}>
         <h3>{score === null ? `${name}, not scored` : `${name}, rated ${score}`}</h3>
         <p>
           How the score was built. Formula {breakdown.formula_version}, updated {DATE.format(new Date(breakdown.updated_at))}.

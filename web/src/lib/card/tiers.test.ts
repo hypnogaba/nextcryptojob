@@ -17,9 +17,10 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 /** Колір без відтінку: R, G і B різняться не більше ніж на 12 з 255. */
+/** Без відтінку: холодні сірі напряму «Payday» (#5a5f6b, #2a2e37) теж рахуються нейтральними. */
 function neutral(hex: string): boolean {
   const [r, g, b] = rgb(hex);
-  return Math.max(r, g, b) - Math.min(r, g, b) <= 12;
+  return Math.max(r, g, b) - Math.min(r, g, b) <= 20;
 }
 
 describe("levelFor", () => {
@@ -52,7 +53,7 @@ describe("levelRange", () => {
 });
 
 describe("tiers", () => {
-  it("maps levels to four finishes: paper 1-4, chrome 5-7, black 8-9, red seal 10", () => {
+  it("maps levels to four finishes: paper 1-4, chrome 5-7, black 8-9, gold seal 10", () => {
     expect(TIERS.map((t) => [t.level, t.finish])).toEqual([
       [1, "paper"], [2, "paper"], [3, "paper"], [4, "paper"],
       [5, "chrome"], [6, "chrome"], [7, "chrome"],
@@ -77,17 +78,20 @@ describe("tiers", () => {
     expect(hued.map((t) => t.level)).toEqual([10]);
   });
 
-  it.each(TIERS.map((t) => [t.level, t]))("tier %s: text on the printed window reaches 4.5:1", (_, t) => {
-    expect(contrast(t.ink, t.window)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(t.ink2, t.window)).toBeGreaterThanOrEqual(4.5);
+  // Картка банківського формату: текст лежить просто на рамці, тож міряємо на кожній точці відблиску.
+  it.each(TIERS.map((t) => [t.level, t]))("tier %s: text on the card reaches 4.5:1 on every stop of the frame", (_, t) => {
+    for (const c of [t.frame, ...(t.sheen ?? [])]) {
+      expect(contrast(t.ink, c)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(t.ink2, c)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it.each(TIERS.map((t) => [t.level, t]))("tier %s: the set line reaches 4.5:1 on every stop of the frame", (_, t) => {
     for (const c of [t.frame, ...(t.sheen ?? [])]) expect(contrast(t.frameInk, c)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(TIERS.map((t) => [t.level, t]))("tier %s: seal lines keep 3:1 on the window", (_, t) => {
-    expect(contrast(t.sealInks[0], t.window)).toBeGreaterThanOrEqual(3);
+  it.each(TIERS.map((t) => [t.level, t]))("tier %s: seal lines keep 3:1 on the card", (_, t) => {
+    expect(contrast(t.sealInks[0], t.frame)).toBeGreaterThanOrEqual(3);
   });
 
   it("clamps lookups into 1..10", () => {
@@ -95,11 +99,11 @@ describe("tiers", () => {
     expect(tierFor(11).level).toBe(10);
   });
 
-  it("describes solid and sheen frames for CSS and Satori", () => {
-    expect(tierBackground(tierFor(3))).toEqual({ backgroundColor: "#dcdedf" });
+  it("describes sheen frames for CSS and Satori", () => {
     expect(tierBackground(tierFor(6))).toEqual({
-      backgroundColor: "#bdbdbd",
-      backgroundImage: "linear-gradient(135deg, #f4f4f4 0%, #a9a9a9 42%, #eeeeee 55%, #8f8f8f 100%)",
+      backgroundColor: "#d0d3d7",
+      backgroundImage: "linear-gradient(135deg, #f4f5f6 0%, #c3c6cb 42%, #eceef0 55%, #b6babf 100%)",
     });
+    expect(tierBackground({ ...tierFor(3), sheen: null })).toEqual({ backgroundColor: "#eceef1" });
   });
 });

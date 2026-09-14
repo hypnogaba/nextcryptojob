@@ -1,13 +1,12 @@
-import type { CSSProperties } from "react";
 import type { CardBack } from "@/lib/card/back";
-import { tierVars } from "@/lib/card/tiers";
 import type { CardFace } from "@/lib/card/view";
 import { cn } from "@/lib/utils";
 
 const pts = (v: number) => v.toFixed(1);
 
 /**
- * Зворот картки: розклад балу за формулою. Джерело без даних друкується як
+ * Розклад балу за формулою: панель поруч із карткою (з раунду 3 картка банківського
+ * формату, і таблиця на її звороті не вміщалась). Джерело без даних друкується як
  * «none» і під ним причина. Нуль тут означає «дало 0 балів», а не «немає даних».
  */
 export function CardBackFace({
@@ -29,7 +28,7 @@ export function CardBackFace({
   className?: string;
 }) {
   return (
-    <div className={cn("ncj-face ncj-back", className)} style={tierVars(face.tier) as CSSProperties}>
+    <div className={cn("ncj-back", className)}>
       <h3>
         {face.roleName}, rated {face.score}
       </h3>

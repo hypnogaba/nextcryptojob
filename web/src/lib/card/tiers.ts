@@ -4,11 +4,12 @@
 // Бал на картці показуємо цілим униз (79.6 → 79), інакше 79.6 виглядав би як
 // «80, рівень 8», хоча 80 уже рівень 9.
 //
-// Рівень читається матеріалом, а не відтінком (дослідження дизайну 12.09):
-// - 1–4 Paper: сірий картон, чорнильна печатка;
-// - 5–7 Chrome: нейтральний сірий відблиск без відтінку;
-// - 8–9 Black: чорна картка, світла печатка;
-// - 10 Red seal: чорна картка, печатка єдиним акцентом.
+// Рівень читається матеріалом, а не відтінком (дослідження дизайну 12.09); з раунду 3
+// картка має формат банківської (1.586), а рівень показує кругла печатка-жетон:
+// - 1 to 4 Paper: світла картка, чорнильна печатка;
+// - 5 to 7 Chrome: сріблястий відблиск без відтінку;
+// - 8 and 9 Black: чорна картка, світла печатка;
+// - 10 Gold seal: чорна картка, печатка лимонним, єдиним кольором сайту.
 // Печатка має стільки шарів, скільки рівень (lib/card/seal.ts).
 //
 // Фарби не залежать від теми сайту: картка друкований предмет, і та сама
@@ -19,7 +20,7 @@ export type Finish = "paper" | "chrome" | "black" | "red_seal";
 export type Tier = {
   level: number;
   finish: Finish;
-  /** «Paper», «Chrome», «Black», «Red seal». */
+  /** «Paper», «Chrome», «Black», «Gold seal». Ключ "red_seal" лишився від першої версії. */
   finishName: string;
   /** Шари печатки = рівень. */
   sealLayers: number;
@@ -41,32 +42,34 @@ export type Tier = {
   sealInks: readonly [string, string];
 };
 
-const INK = "#121418";
-const PAPER_WINDOW = "#fbfbfa";
-const BLACK_WINDOW = "#151619";
-const LIGHT = "#eceef1";
+const INK = "#111318";
+const PAPER_WINDOW = "#f7f8fa";
+const BLACK_WINDOW = "#15171c";
+const LIGHT = "#f3f4f6";
 
 const paper = (level: number): Tier => ({
   level,
   finish: "paper",
   finishName: "Paper",
   sealLayers: level,
-  frame: "#dcdedf",
-  sheen: null,
+  frame: "#eceef1",
+  sheen: ["#f7f8fa", "#e6e8ec", "#f3f4f6", "#dfe2e7"],
   frameInk: INK,
   window: PAPER_WINDOW,
   ink: INK,
-  ink2: "#5d6166",
-  hairline: "#cfd2d6",
-  sealInks: [INK, "#82868b"],
+  ink2: "#5a5f6b",
+  hairline: "#d6d9df",
+  sealInks: [INK, "#7b808a"],
 });
 
 const chrome = (level: number): Tier => ({
   ...paper(level),
   finish: "chrome",
   finishName: "Chrome",
-  frame: "#bdbdbd",
-  sheen: ["#f4f4f4", "#a9a9a9", "#eeeeee", "#8f8f8f"],
+  frame: "#d0d3d7",
+  sheen: ["#f4f5f6", "#c3c6cb", "#eceef0", "#b6babf"],
+  ink2: "#3b3f47",
+  hairline: "#b3b7bd",
 });
 
 const black = (level: number): Tier => ({
@@ -74,31 +77,31 @@ const black = (level: number): Tier => ({
   finish: "black",
   finishName: "Black",
   sealLayers: level,
-  frame: "#0c0d0f",
-  sheen: ["#2a2c30", "#0e0f11", "#33363b", "#08090a"],
+  frame: "#15171c",
+  sheen: ["#2a2e37", "#15171c", "#1d2027", "#101216"],
   frameInk: LIGHT,
   window: BLACK_WINDOW,
   ink: LIGHT,
-  ink2: "#a9adb2",
-  hairline: "#2e3136",
-  sealInks: ["#e9ebee", "#90949a"],
+  ink2: "#a9aeb8",
+  hairline: "#2c3039",
+  sealInks: ["#e9ebee", "#8f949c"],
 });
 
-/** Єдиний акцент сайту в темному варіанті: на чорному він читається краще. */
-export const SEAL_ACCENT = "#ff7a4d";
+/** Єдиний колір сайту (лимонний): печатка десятого рівня. */
+export const SEAL_ACCENT = "#ffdb2e";
 
-const redSeal = (level: number): Tier => ({
+const goldSeal = (level: number): Tier => ({
   ...black(level),
   finish: "red_seal",
-  finishName: "Red seal",
-  sealInks: [SEAL_ACCENT, "#c9603e"],
+  finishName: "Gold seal",
+  sealInks: [SEAL_ACCENT, "#b89a14"],
 });
 
 export const TIERS: readonly Tier[] = [
   paper(1), paper(2), paper(3), paper(4),
   chrome(5), chrome(6), chrome(7),
   black(8), black(9),
-  redSeal(10),
+  goldSeal(10),
 ];
 
 export const MAX_LEVEL = 10;
@@ -133,7 +136,7 @@ export const FINISHES: readonly { finish: Finish; name: string; levels: string; 
   { finish: "paper", name: "Paper", levels: "Levels 1 to 4", sample: 4 },
   { finish: "chrome", name: "Chrome", levels: "Levels 5 to 7", sample: 7 },
   { finish: "black", name: "Black", levels: "Levels 8 and 9", sample: 9 },
-  { finish: "red_seal", name: "Red seal", levels: "Level 10", sample: 10 },
+  { finish: "red_seal", name: "Gold seal", levels: "Level 10", sample: 10 },
 ];
 
 /** Тло рамки для React і для next/og (Satori розуміє ці ж властивості). */

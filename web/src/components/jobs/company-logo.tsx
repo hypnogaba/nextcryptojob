@@ -28,7 +28,7 @@ export function CompanyLogo({ name, src, size = 48 }: { name: string; src: strin
     <span
       aria-hidden="true"
       style={{ width: size, height: size }}
-      className="relative grid shrink-0 place-items-center overflow-hidden rounded-lg border border-line bg-wash font-display text-xl font-extrabold text-ink-muted select-none"
+      className="relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-soft font-display text-xl font-bold text-ink shadow-[inset_0_0_0_1px_var(--line)] select-none"
     >
       {initialOf(name)}
       {src ? (
