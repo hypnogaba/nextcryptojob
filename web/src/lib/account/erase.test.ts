@@ -53,6 +53,9 @@ function seed(raw: DatabaseSync) {
     INSERT INTO consent_events (user_id, kind, granted, text_version) VALUES ('a', 'scoring', 1, 'v1'), ('b', 'scoring', 1, 'v1');
     INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES
       ('aaaaaaaaaa', 'a', 'engineer', 50, 6, 'ada', 'v5'), ('bbbbbbbbbb', 'b', 'engineer', 40, 5, 'bob', 'v5');
+    INSERT INTO testimonials (id, user_id, text, display) VALUES
+      ('tst_aaaaaaaaaaaaaaaaaaaa', 'a', 'Got a role through my card.', 'name'),
+      ('tst_bbbbbbbbbbbbbbbbbbbb', 'b', 'Got a role through my card too.', 'name');
 
     INSERT INTO companies (id, name, terms_version, terms_accepted_at, created_by) VALUES ('co_1', 'Acme', 'v1', datetime('now'), 'a');
     INSERT INTO company_members (company_id, user_id, role) VALUES ('co_1', 'a', 'owner'), ('co_1', 'b', 'member');

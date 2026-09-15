@@ -1,3 +1,4 @@
+import { recordFunnelEvent } from "@/lib/analytics/funnel";
 import type { CrmEnv } from "@/lib/crm/context";
 import { liveApplyUrl, recordApplyClick } from "@/lib/crm/public-jobs";
 import { appEnv, db } from "@/lib/db";
@@ -42,6 +43,7 @@ export async function GET(request: Request, { params }: Ctx): Promise<Response> 
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const visitor = (await countableVisit(request, env, ip)) ? await applyVisitorKey(env, ip, id) : null;
   const click = await recordApplyClick(db(), id, visitor);
+  if (click?.counted) await recordFunnelEvent(db(), "apply_click");
   return click ? to(click.url) : closed();
 }
 
