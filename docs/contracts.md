@@ -169,6 +169,7 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 ## 6. Змінні оточення (лише назви)
 - engine (`/etc/nextcryptojob-engine.env` на VPS): `CF_ACCOUNT_ID`, `CF_D1_DATABASE_ID`, `CF_API_TOKEN`,
   `TWITTER_TOKEN` (6551), `ETHERSCAN_KEY`, `BLOCKSCOUT_KEY`, `HELIUS_KEY`, `YOUTUBE_KEY`, `GITHUB_TOKEN`;
+  замість `HELIUS_KEY` можна `SOLANA_RPC_URL` (повна https-адреса вузла Solana з ключем, будь-який постачальник);
   необов'язкові: `ENGINE_CONCURRENCY` (3), `ENGINE_DEADLINE_MS` (45000), `ENGINE_SHUTDOWN_GRACE_MS` (60000),
   `SELECTOR_CACHE` (/var/lib/nextcryptojob-engine/selectors.json).
 - web (secrets Worker): `TWITTER_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,

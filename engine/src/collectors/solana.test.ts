@@ -291,6 +291,32 @@ describe("collectSolana", () => {
     }
   });
 
+  it("SOLANA_RPC_URL важить більше за HELIUS_KEY: той самий збір через адресу постачальника, секрет не в тексті", async () => {
+    const ALCHEMY = "alch-SECRET-4567890";
+    const env = { HELIUS_KEY: KEY, SOLANA_RPC_URL: ` https://solana-mainnet.g.alchemy.com/v2/${ALCHEMY} ` };
+    const f = rpcFake({ sigList: sigs(40), delayMs: 450 });
+    const res = await collectSolana([OWNER], { ...base(f.fetchImpl, env), sampleSize: 8, minSample: 5 });
+    if (!res.ok) throw new Error(res.gap);
+    expect(f.calls[0]!.url.toString()).toBe(`https://solana-mainnet.g.alchemy.com/v2/${ALCHEMY}`);
+    expect(f.of("getTransaction")).toHaveLength(8);
+    expect(f.maxTxInFlight()).toBe(4);
+
+    __resetLimiters();
+    const err = rpcFake({ sigList: [], onSigPage: () => json({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: `bad key ${ALCHEMY}` } }) });
+    const failed = await collectSolana([OWNER], base(err.fetchImpl, env));
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.gap).toMatch(/^Solana: solana-mainnet\.g\.alchemy\.com: getSignaturesForAddress: bad key \*\*\*/);
+      expect(failed.gap).not.toContain(ALCHEMY);
+    }
+  });
+
+  it("SOLANA_RPC_URL не https-адреса: береться HELIUS_KEY", async () => {
+    const f = rpcFake({ sigList: sigs(3), delayMs: 1 });
+    await collectSolana([OWNER], base(f.fetchImpl, { HELIUS_KEY: KEY, SOLANA_RPC_URL: "not a url" }));
+    expect(f.calls[0]!.url.toString()).toBe(`https://mainnet.helius-rpc.com/?api-key=${KEY}`);
+  });
+
   it("одна з двох адрес не відповіла: друга у фактах, перша в partial", async () => {
     const SECOND = "Second" + "3".repeat(34);
     const f = rpcFake({ sigList: sigs(2) });

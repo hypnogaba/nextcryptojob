@@ -154,6 +154,8 @@ const ALIASES: Record<string, string> = {
 const SUFFIX_ALIASES: Array<[suffix: string, budget: string]> = [
   [".blockscout.com", "blockscout"],
   [".helius-rpc.com", "helius"],
+  // Solana через SOLANA_RPC_URL: безкоштовний Alchemy дає 500 CU/с, а виклик історії коштує 40 CU.
+  [".alchemy.com", "alchemy"],
   // ATS, де компанія живе на своєму піддомені: бюджет один на провайдера, а не на компанію.
   [".recruitee.com", "recruitee"],
   [".breezy.hr", "breezy"],
@@ -175,6 +177,7 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   etherscan: { concurrency: 1, minIntervalMs: 250 },
   blockscout: { concurrency: 1, minIntervalMs: 250 },
   helius: { concurrency: 4, minIntervalMs: 100 },
+  alchemy: { concurrency: 4, minIntervalMs: 100 },
   cloudflare: { concurrency: 4, minIntervalMs: 250 },
   "api.hyperliquid.xyz": { concurrency: 4, minIntervalMs: 0 },
   "api.mainnet-beta.solana.com": { concurrency: 1, minIntervalMs: 300 },
