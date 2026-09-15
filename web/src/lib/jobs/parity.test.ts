@@ -39,6 +39,10 @@ describe("Job rules in web are the engine's rules", () => {
     expect(fromFirstExport(read("./fit.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/fit.ts")));
   });
 
+  it("token quotes and chip formatting (the token chip on /jobs, in the email and search_jobs): the code is the same as engine/src/digest/token.ts", () => {
+    expect(fromFirstExport(read("./token.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/token.ts")));
+  });
+
   it("the same pool query, the same live-job rule and the same windows", () => {
     expect(POOL_SQL).toBe(engineJobs.POOL_SQL);
     expect(EMPLOYER_FEED_SQL).toBe(engineJobs.EMPLOYER_FEED_SQL);
