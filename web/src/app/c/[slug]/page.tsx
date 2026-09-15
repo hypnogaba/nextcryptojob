@@ -56,7 +56,9 @@ export default async function CardPage({ params }: Props) {
   if (!view) notFound();
   // Власник бачить «Share on X» і картинки; хто він, у HTML не потрапляє.
   const owner = await loadIsOwner(slug);
-  const shareUrl = owner ? xShareUrl(view, await requestOrigin()) : null;
+  // Клік іде через /go/share-x, який рахує funnel_days ('share_click', /admin/funnel) і
+  // веде далі на x.com з тими самими параметрами (без відкритого редіректу: хост фіксований).
+  const shareUrl = owner ? `/go/share-x${new URL(xShareUrl(view, await requestOrigin())).search}` : null;
   const meta = `Formula ${view.formulaVersion}, issued ${view.issuedOn}.`;
   const recipe = isScoredRoleKey(view.role)
     ? `How ${view.roleName} is scored: ${recipeCore(view.role)}. Bonus: ${recipeBonus(view.role)}.`

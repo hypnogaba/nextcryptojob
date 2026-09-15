@@ -6,7 +6,8 @@ fresh crypto jobs every day. Companies search scored candidates in a small CRM a
 after the candidate says yes. AI agents get the same features through REST and MCP, and can pay per
 request with x402.
 
-Live: https://nextcryptojob.xyz
+Live: https://nextcryptojob.xyz. Questions: `/faq`, or write to hello@nextcryptojob.xyz through `/contact`.
+Got a job through NextCryptoJob? Tell us at `/feedback`.
 
 ## How it works
 

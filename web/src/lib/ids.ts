@@ -9,7 +9,7 @@
 const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 /** Префікси з міграцій 0003 і 0004. */
-export const ID_PREFIXES = ["co", "job", "int", "ss", "app", "sub", "key", "pay"] as const;
+export const ID_PREFIXES = ["co", "job", "int", "ss", "app", "sub", "key", "pay", "msg", "tst"] as const;
 export type IdPrefix = (typeof ID_PREFIXES)[number];
 
 export const ID_BODY_LENGTH = 20;

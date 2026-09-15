@@ -10,6 +10,10 @@ export const ADMIN_PAGES = [
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/jobs", label: "Company jobs" },
   { href: "/admin/x-queue", label: "X queue" },
+  { href: "/admin/messages", label: "Messages" },
+  { href: "/admin/testimonials", label: "Testimonials" },
+  { href: "/admin/scores", label: "Scores" },
+  { href: "/admin/funnel", label: "Funnel" },
   { href: "/admin/settings", label: "Settings" },
 ] as const;
 
