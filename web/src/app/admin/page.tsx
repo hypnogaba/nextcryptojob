@@ -787,7 +787,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
 
   return (
     <section className="mx-auto max-w-6xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12">
-      <AdminNav current="/admin" />
+      <AdminNav current="/admin" viewAsCompanyId={demo.companies.find((c) => c.ownerIsYou)?.id ?? null} />
       <h1 className="display text-title">Overview</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-muted">
         Live counts from the database as of {CLOCK.format(now)} UTC. Reload to recount.
