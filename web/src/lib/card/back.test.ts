@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { builtFrom, cardBack, frontStats, missingReason } from "./back";
+import { builtFrom, cardBack, missingReason } from "./back";
 import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, EXAMPLE_SCORE } from "./example";
 
 describe("cardBack", () => {
@@ -51,7 +51,6 @@ describe("cardBack", () => {
     const site = EXAMPLE_BACK.lines.find((l) => l.key === "site")!;
     expect(site.value).toBeNull();
     expect(site.reason).toBe("no website linked");
-    expect(frontStats(EXAMPLE_BACK)).toContainEqual({ code: "WEB", value: null });
   });
 
   it("names the reason from the gap, without the wallet address after the dot", () => {

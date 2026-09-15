@@ -3,7 +3,6 @@ import { CardBackFace } from "@/components/card/card-back";
 import { CardFront } from "@/components/card/card-front";
 import { Button } from "@/components/ui/button";
 import type { CardBack } from "@/lib/card/back";
-import { frontStats } from "@/lib/card/back";
 import type { Eligibility } from "@/lib/card/eligibility";
 import { cardPath } from "@/lib/card/share";
 import type { ActiveCard } from "@/lib/card/store";
@@ -94,7 +93,6 @@ function faceFor(view: Scored, back: CardBack | null, active: ActiveCard | null,
     tier,
     displayName: active?.displayName ?? (name || "Your name"),
     sealSeed: active ? seal : null,
-    stats: frontStats(back),
     number: active ? `No. ${active.slug}` : null,
     marker: null,
     summary: "",
@@ -149,17 +147,20 @@ export function RoleCard({
 
       {view.state === "scored" ? (
         <>
-          <div className="grid justify-items-center gap-5 md:grid-cols-2">
-            <div className="ncj-card max-w-[340px]">
+          {/* Зворот (розклад бала) не в ncj-card: його висота залежить від тексту, а фіксований
+              aspect-ratio 1.586 ncj-card обрізає зайве без overflow, і панель налазить на те, що
+              йде після неї (власник 15.09, п.1: «How the score was built» лягала на «Could not
+              read» і на кнопку біля «Name on your card» на 1280/1440). */}
+          <div className="grid items-start justify-items-center gap-5 md:grid-cols-2">
+            <div className="ncj-card w-full max-w-[340px]">
               <CardFront face={faceFor(view, back, active, sealSeed, defaultName)} />
             </div>
-            <div className="ncj-card max-w-[340px]">
-              <CardBackFace
-                face={faceFor(view, back, active, sealSeed, defaultName)}
-                back={back}
-                meta={`Formula ${view.formulaVersion}, checked ${formatIssuedOn(view.computedAt)}.`}
-              />
-            </div>
+            <CardBackFace
+              face={faceFor(view, back, active, sealSeed, defaultName)}
+              back={back}
+              meta={`Formula ${view.formulaVersion}, checked ${formatIssuedOn(view.computedAt)}.`}
+              className="w-full max-w-[340px]"
+            />
           </div>
           {view.reason ? <p className="text-sm text-ink-muted">{view.reason}</p> : null}
           <p className="text-sm text-ink-muted">We found data for {view.cover}% of what this score counts.</p>

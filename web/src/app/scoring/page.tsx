@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const WRAP = "mx-auto max-w-[1280px] px-[clamp(16px,4vw,32px)]";
-const LINK = "font-semibold text-ink underline decoration-lemon decoration-2 underline-offset-4 hover:decoration-ink";
+const LINK = "font-semibold text-ink underline decoration-line-strong decoration-2 underline-offset-4 hover:decoration-ink";
 
 /**
  * Як працює бал, коротко (власник 14.09, A3: без десяти варіантів, просто розповісти, як
@@ -73,7 +73,7 @@ export default function ScoringPage() {
               The seal is drawn from your card, so no two look alike. Every ten points adds a ring to it, and the card
               changes finish as you climb.
             </p>
-            <ol className="mt-8 grid max-w-[560px] grid-cols-4 gap-4">
+            <ol className="mt-8 grid max-w-[640px] grid-cols-3 gap-4 sm:grid-cols-5">
               {FINISHES.map((f) => (
                 <li key={f.finish} className="grid justify-items-center gap-2 text-center">
                   <MiniCard level={f.sample} seed={face.sealSeed!} value={f.sample} className="w-full max-w-[112px]" />

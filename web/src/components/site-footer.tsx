@@ -35,8 +35,8 @@ export function SiteFooter() {
           </nav>
         </div>
         <p className="max-w-[72ch] text-sm text-ink-muted">
-          Free for job seekers. Jobs come from company career pages, public job boards and companies that post here.
-          Your wallets and links never go on your card.
+          Jobs come from company career pages, public job boards and companies that post here. Your wallets and links
+          never go on your card.
         </p>
       </div>
     </footer>

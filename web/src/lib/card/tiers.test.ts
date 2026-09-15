@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayScore, FINISHES, levelFor, levelRange, tierBackground, tierFor, TIERS } from "./tiers";
+import { displayScore, FINISHES, LAVENDER_ACCENT, levelFor, levelRange, MINT_ACCENT, tierBackground, tierFor, TIERS } from "./tiers";
 
 // WCAG 2.x: відносна яскравість і контраст.
 function rgb(hex: string): number[] {
@@ -53,29 +53,39 @@ describe("levelRange", () => {
 });
 
 describe("tiers", () => {
-  it("maps levels to four finishes: paper 1-4, chrome 5-7, black 8-9, gold seal 10", () => {
+  it("maps levels to five finishes: paper 1-3, mint 4-5, lavender 6-7, chrome 8-9, black 10", () => {
     expect(TIERS.map((t) => [t.level, t.finish])).toEqual([
-      [1, "paper"], [2, "paper"], [3, "paper"], [4, "paper"],
-      [5, "chrome"], [6, "chrome"], [7, "chrome"],
-      [8, "black"], [9, "black"],
-      [10, "red_seal"],
+      [1, "paper"], [2, "paper"], [3, "paper"],
+      [4, "mint"], [5, "mint"],
+      [6, "lavender"], [7, "lavender"],
+      [8, "chrome"], [9, "chrome"],
+      [10, "black"],
     ]);
-    expect(FINISHES.map((f) => tierFor(f.sample).finish)).toEqual(["paper", "chrome", "black", "red_seal"]);
+    expect(FINISHES.map((f) => tierFor(f.sample).finish)).toEqual(["paper", "mint", "lavender", "chrome", "black"]);
   });
 
   it("gives the seal as many layers as the level", () => {
     for (const t of TIERS) expect(t.sealLayers).toBe(t.level);
   });
 
-  it("uses no hue for levels 1 to 9: frames, sheens and seals are neutral", () => {
-    for (const t of TIERS.filter((x) => x.level < 10)) {
-      for (const c of [t.frame, ...(t.sheen ?? []), t.window, t.ink, t.ink2, t.hairline, t.frameInk, ...t.sealInks]) expect(neutral(c)).toBe(true);
+  it("uses no hue for paper, chrome and black: frames, sheens and seals are neutral", () => {
+    for (const t of TIERS.filter((x) => x.finish === "paper" || x.finish === "chrome")) {
+      for (const c of [t.frame, ...(t.sheen ?? []), t.window, t.ink, t.ink2, t.hairline, t.frameInk]) expect(neutral(c)).toBe(true);
+    }
+    // Чорна (10) картка сама неутральна: колір лишень на печатці (мʼята й лаванда нижчих обробок).
+    const black = tierFor(10);
+    for (const c of [black.frame, ...(black.sheen ?? []), black.window, black.ink, black.ink2, black.hairline]) {
+      expect(neutral(c)).toBe(true);
     }
   });
 
-  it("puts the single accent colour only on the level 10 seal", () => {
-    const hued = TIERS.filter((t) => t.sealInks.some((c) => !neutral(c)));
-    expect(hued.map((t) => t.level)).toEqual([10]);
+  it("mint and lavender intentionally carry their named hue (round4: five colourful finishes)", () => {
+    expect(neutral(tierFor(4).frame)).toBe(false);
+    expect(neutral(tierFor(6).frame)).toBe(false);
+  });
+
+  it("draws the black (level 10) seal from mint and lavender, the two finishes below it", () => {
+    expect(tierFor(10).sealInks).toEqual([MINT_ACCENT, LAVENDER_ACCENT]);
   });
 
   // Картка банківського формату: текст лежить просто на рамці, тож міряємо на кожній точці відблиску.
@@ -101,8 +111,8 @@ describe("tiers", () => {
 
   it("describes sheen frames for CSS and Satori", () => {
     expect(tierBackground(tierFor(6))).toEqual({
-      backgroundColor: "#d0d3d7",
-      backgroundImage: "linear-gradient(135deg, #f4f5f6 0%, #c3c6cb 42%, #eceef0 55%, #b6babf 100%)",
+      backgroundColor: "#d9ccf7",
+      backgroundImage: "linear-gradient(135deg, #f6f2ff 0%, #d9ccf7 42%, #ece5fc 55%, #c0adf0 100%)",
     });
     expect(tierBackground({ ...tierFor(3), sheen: null })).toEqual({ backgroundColor: "#eceef1" });
   });

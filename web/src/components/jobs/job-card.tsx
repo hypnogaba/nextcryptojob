@@ -31,7 +31,7 @@ export type CardJob = {
 
 // Текст із чужих дощок буває одним довгим словом: переносимо будь-де, щоб 390 px не роз'їхались.
 const WRAP = "min-w-0 wrap-anywhere";
-const TITLE_LINK = "underline decoration-transparent decoration-2 underline-offset-4 transition-colors hover:decoration-lemon focus-visible:decoration-lemon";
+const TITLE_LINK = "underline decoration-transparent decoration-2 underline-offset-4 transition-colors hover:decoration-line-strong focus-visible:decoration-line-strong";
 
 function Title({ job }: { job: CardJob }) {
   const url = job.url;
@@ -60,11 +60,11 @@ function Title({ job }: { job: CardJob }) {
   );
 }
 
-/** Вилка лимонною пігулкою; оцінка дошки приглушено й пунктиром, бо це не зарплата. */
+/** Вилка звичайним текстом, як у макеті round4; оцінка дошки приглушено й пунктиром, бо це не зарплата. */
 function Pay({ job }: { job: CardJob }) {
   if (job.salary) {
     return (
-      <span className="rounded-full bg-lemon px-3.5 py-1.5 font-display text-lg leading-tight font-semibold whitespace-nowrap tabular-nums">
+      <span className="block text-right font-display text-lg leading-tight font-semibold whitespace-nowrap text-ink tabular-nums">
         {job.salary}
       </span>
     );
@@ -89,7 +89,7 @@ function Why({ reasons, why, note, label }: { reasons?: readonly string[]; why?:
         <ul className="grid gap-2">
           {list.map((r) => (
             <li key={r} className={`grid grid-cols-[20px_minmax(0,1fr)] gap-2 text-[0.9375rem] leading-[22px] text-ink ${WRAP}`}>
-              <span aria-hidden="true" className="mt-px grid size-5 place-items-center rounded-full bg-lemon">
+              <span aria-hidden="true" className="mt-px grid size-5 place-items-center rounded-full bg-soft">
                 <Check className="size-3 text-ink" strokeWidth={3.5} />
               </span>
               <span>{r}</span>
@@ -112,7 +112,7 @@ function Apply({ job, compact }: { job: CardJob; compact: boolean }) {
   }
   return (
     <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button asChild size={compact ? "default" : "lg"} variant={compact ? "outline" : "default"} className="w-full sm:w-auto [&_svg]:text-lemon">
+      <Button asChild size={compact ? "default" : "lg"} variant={compact ? "outline" : "default"} className="w-full sm:w-auto">
         <a href={apply.href} {...(apply.newTab ? { target: "_blank", rel: apply.rel ?? undefined } : {})}>
           {apply.label}
           {apply.newTab ? <ArrowUpRight aria-hidden="true" data-icon="inline-end" /> : null}

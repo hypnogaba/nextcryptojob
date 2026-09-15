@@ -2,7 +2,7 @@
 // і картинки для X, тож вони не розходяться в цифрах, обробці чи печатці.
 import type { IdentityKind } from "@/lib/identity/normalize";
 import { POSITION_CODE } from "@/lib/roles/recipes";
-import { cardBack, frontStats, type CardBack } from "./back";
+import { cardBack, type CardBack } from "./back";
 import { ROLES, type RoleKey } from "./roles";
 import { sealSeed } from "./seal";
 import type { PublicCard } from "./store";
@@ -25,8 +25,6 @@ export type CardFace = {
   displayName: string;
   /** Зерно печатки (FNV-1a) або null, поки картку не видано. Сам гаманець сюди не йде. */
   sealSeed: number | null;
-  /** До шести джерел ролі: код і значення, null = прогалина. */
-  stats: { code: string; value: number | null }[];
   /** «No. aB3_-x9QzK» або null. */
   number: string | null;
   /** Позначка на лицьовому боці або null. До 13.09 «Wallets not verified» у трейдера; тепер завжди null. */
@@ -109,7 +107,6 @@ export function cardView(card: PublicCard, evidence?: CardEvidence | null): Card
     tier,
     displayName: card.displayName,
     sealSeed: sealSeed({ wallet: evidence?.wallet ?? null, slug: card.slug }),
-    stats: frontStats(back),
     number: `No. ${card.slug}`,
     marker,
     summary: "",

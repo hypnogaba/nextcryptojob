@@ -65,7 +65,7 @@ export default async function CardPage({ params }: Props) {
   return (
     <section className="mx-auto grid max-w-[1280px] items-start gap-12 px-[clamp(16px,4vw,32px)] pt-6 pb-24 sm:pt-10 lg:grid-cols-[minmax(0,480px)_minmax(0,1fr)] lg:gap-16">
       <div className="grid gap-6">
-        <div className="rounded-[32px] bg-lemon p-6 sm:p-10">
+        <div className="rounded-[32px] border border-line bg-soft p-6 sm:p-10">
           <div className="ncj-card mx-auto max-w-[440px] -rotate-3">
             <CardFront face={view} draw spin />
           </div>
@@ -119,7 +119,7 @@ export default async function CardPage({ params }: Props) {
             <p className="text-sm text-ink-muted">Attach an image to your post so the card shows at full size.</p>
             <Link
               href="/profile"
-              className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-ink underline decoration-lemon decoration-2 underline-offset-4 hover:decoration-ink"
+              className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-ink underline decoration-line-strong decoration-2 underline-offset-4 hover:decoration-ink"
             >
               Back to profile
             </Link>

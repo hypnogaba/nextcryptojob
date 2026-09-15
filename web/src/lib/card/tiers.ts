@@ -4,23 +4,25 @@
 // Бал на картці показуємо цілим униз (79.6 → 79), інакше 79.6 виглядав би як
 // «80, рівень 8», хоча 80 уже рівень 9.
 //
-// Рівень читається матеріалом, а не відтінком (дослідження дизайну 12.09); з раунду 3
-// картка має формат банківської (1.586), а рівень показує кругла печатка-жетон:
-// - 1 to 4 Paper: світла картка, чорнильна печатка;
-// - 5 to 7 Chrome: сріблястий відблиск без відтінку;
-// - 8 and 9 Black: чорна картка, світла печатка;
-// - 10 Gold seal: чорна картка, печатка лимонним, єдиним кольором сайту.
+// Рівень читається матеріалом, а не відтінком (дослідження дизайну 12.09), окрім Mint
+// і Lavender (раунд 4, макет round4/dir-6): п'ять обробок картки банківського формату
+// (1.586):
+// - 1 to 3 Paper: світла картка, чорнильна печатка;
+// - 4 and 5 Mint: м'ятна картка, зелена печатка;
+// - 6 and 7 Lavender: лавандова картка, фіолетова печатка;
+// - 8 and 9 Chrome: сріблястий відблиск без відтінку;
+// - 10 Black: чорна картка, печатка м'ятою й лавандою.
 // Печатка має стільки шарів, скільки рівень (lib/card/seal.ts).
 //
 // Фарби не залежать від теми сайту: картка друкований предмет, і та сама
 // картка йде в картинку для X. Контраст перевіряє tiers.test.ts.
 
-export type Finish = "paper" | "chrome" | "black" | "red_seal";
+export type Finish = "paper" | "mint" | "lavender" | "chrome" | "black";
 
 export type Tier = {
   level: number;
   finish: Finish;
-  /** «Paper», «Chrome», «Black», «Gold seal». Ключ "red_seal" лишився від першої версії. */
+  /** «Paper», «Mint», «Lavender», «Chrome», «Black». */
   finishName: string;
   /** Шари печатки = рівень. */
   sealLayers: number;
@@ -28,7 +30,7 @@ export type Tier = {
   frame: string;
   /** Відблиск рамки (135°) або null. */
   sheen: readonly string[] | null;
-  /** Текст на рамці (рядок сезону й номера). */
+  /** Текст на рамці (рядок сезону й номера); тепер той самий, що ink. */
   frameInk: string;
   /** Друковане поле всередині рамки. */
   window: string;
@@ -42,10 +44,16 @@ export type Tier = {
   sealInks: readonly [string, string];
 };
 
-const INK = "#111318";
+const INK = "#0e0f12";
 const PAPER_WINDOW = "#f7f8fa";
-const BLACK_WINDOW = "#15171c";
-const LIGHT = "#f3f4f6";
+const BLACK_WINDOW = "#0e0f12";
+const LIGHT = "#f2f3f5";
+
+/** Печатка десятого рівня (Black): м'ята й лаванда, кольори двох обробок нижче. */
+export const MINT_ACCENT = "#a7ead0";
+export const LAVENDER_ACCENT = "#c9b8f5";
+/** Стара назва лишилась сумісною (єдиний колір сайту до раунду 4). */
+export const SEAL_ACCENT = MINT_ACCENT;
 
 const paper = (level: number): Tier => ({
   level,
@@ -53,13 +61,43 @@ const paper = (level: number): Tier => ({
   finishName: "Paper",
   sealLayers: level,
   frame: "#eceef1",
-  sheen: ["#f7f8fa", "#e6e8ec", "#f3f4f6", "#dfe2e7"],
+  sheen: ["#fdfdfd", "#eceef1", "#f7f8fa", "#e3e5e9"],
   frameInk: INK,
   window: PAPER_WINDOW,
   ink: INK,
-  ink2: "#5a5f6b",
+  ink2: "#5d616b",
   hairline: "#d6d9df",
   sealInks: [INK, "#7b808a"],
+});
+
+const mint = (level: number): Tier => ({
+  level,
+  finish: "mint",
+  finishName: "Mint",
+  sealLayers: level,
+  frame: "#bfeedb",
+  sheen: ["#effbf6", "#bfeedb", "#dcf6eb", "#9fdfc4"],
+  frameInk: "#0b3a2b",
+  window: "#eafbf3",
+  ink: "#0b3a2b",
+  ink2: "#0f5a41",
+  hairline: "#8fd4b3",
+  sealInks: ["#0b5a41", "#35a57d"],
+});
+
+const lavender = (level: number): Tier => ({
+  level,
+  finish: "lavender",
+  finishName: "Lavender",
+  sealLayers: level,
+  frame: "#d9ccf7",
+  sheen: ["#f6f2ff", "#d9ccf7", "#ece5fc", "#c0adf0"],
+  frameInk: "#2a1d5c",
+  window: "#f3effc",
+  ink: "#2a1d5c",
+  ink2: "#3d2a8c",
+  hairline: "#b7a3ec",
+  sealInks: ["#3d2a8c", "#8a6fe0"],
 });
 
 const chrome = (level: number): Tier => ({
@@ -84,24 +122,15 @@ const black = (level: number): Tier => ({
   ink: LIGHT,
   ink2: "#a9aeb8",
   hairline: "#2c3039",
-  sealInks: ["#e9ebee", "#8f949c"],
-});
-
-/** Єдиний колір сайту (лимонний): печатка десятого рівня. */
-export const SEAL_ACCENT = "#ffdb2e";
-
-const goldSeal = (level: number): Tier => ({
-  ...black(level),
-  finish: "red_seal",
-  finishName: "Gold seal",
-  sealInks: [SEAL_ACCENT, "#b89a14"],
+  sealInks: [MINT_ACCENT, LAVENDER_ACCENT],
 });
 
 export const TIERS: readonly Tier[] = [
-  paper(1), paper(2), paper(3), paper(4),
-  chrome(5), chrome(6), chrome(7),
-  black(8), black(9),
-  goldSeal(10),
+  paper(1), paper(2), paper(3),
+  mint(4), mint(5),
+  lavender(6), lavender(7),
+  chrome(8), chrome(9),
+  black(10),
 ];
 
 export const MAX_LEVEL = 10;
@@ -131,12 +160,13 @@ export function tierFor(level: number): Tier {
   return TIERS[Math.min(MAX_LEVEL, Math.max(1, Math.trunc(level))) - 1];
 }
 
-/** Чотири обробки драбини рівнів: назва, рівні, приклад рівня. */
+/** П'ять обробок драбини рівнів: назва, рівні, приклад рівня. */
 export const FINISHES: readonly { finish: Finish; name: string; levels: string; sample: number }[] = [
-  { finish: "paper", name: "Paper", levels: "Levels 1 to 4", sample: 4 },
-  { finish: "chrome", name: "Chrome", levels: "Levels 5 to 7", sample: 7 },
-  { finish: "black", name: "Black", levels: "Levels 8 and 9", sample: 9 },
-  { finish: "red_seal", name: "Gold seal", levels: "Level 10", sample: 10 },
+  { finish: "paper", name: "Paper", levels: "Levels 1 to 3", sample: 3 },
+  { finish: "mint", name: "Mint", levels: "Levels 4 and 5", sample: 5 },
+  { finish: "lavender", name: "Lavender", levels: "Levels 6 and 7", sample: 7 },
+  { finish: "chrome", name: "Chrome", levels: "Levels 8 and 9", sample: 9 },
+  { finish: "black", name: "Black", levels: "Level 10", sample: 10 },
 ];
 
 /** Тло рамки для React і для next/og (Satori розуміє ці ж властивості). */

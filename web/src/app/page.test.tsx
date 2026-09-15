@@ -57,49 +57,56 @@ describe("home page", () => {
     expect(html).toMatch(/<form id="find"[^>]*action="\/start" method="get"/);
     expect(html).toMatch(/<textarea id="brief" name="brief"[^>]*maxLength="400"/i);
     expect(html).toMatch(/<button type="submit"[^>]*>Find a job<svg/);
-    expect(t).toContain("Free for job seekers");
+    expect(t).not.toContain("Free for job seekers");
     expect(html).not.toContain("The brief, about 5 clicks");
   });
 
-  it("puts the example card on the lemon panel, with the round seal badge and the level", async () => {
+  it("puts a level 10 example card in the hero stack, tilting and spinning, with the round4 caption", async () => {
     const html = await home();
-    const panel = html.slice(html.indexOf('class="ncj-panel"'), html.indexOf('id="today"'));
-    expect(panel).toContain("ncj-face-badge");
-    expect(panel).toContain("ncj-seal ncj-seal-spin");
-    expect(text(panel)).toContain("Example card");
-    expect(text(panel)).toContain("LVL8");
-    expect(text(panel)).toContain("Built from public GitHub, X and wallet history. Yours comes with your jobs.");
+    const stage = html.slice(html.indexOf('class="ncj-stage"'), html.indexOf('id="board-h"'));
+    expect(stage).toContain("ncj-tilt");
+    expect(stage).toContain("ncj-sweep");
+    expect(stage).toContain("ncj-seal ncj-seal-spin");
+    // Позначку «Example card» на головній замінює підпис під стосом (власник 15.09, п.8).
+    expect(text(stage)).not.toContain("Example card");
+    expect(text(stage)).toContain(
+      "Your card is built from what you have done. It is unique, matches only you, and is made to share on X.",
+    );
+    // Три статичні заготовки (paper, mint, lavender), без тексту.
+    expect(stage.match(/class="ncj-slot"/g)).toHaveLength(4);
   });
 
   it("counts live jobs with a rolling counter and lists them in a vertical feed", async () => {
     const html = await home();
-    const today = html.slice(html.indexOf('id="today"'), html.indexOf("</section>", html.indexOf('id="today"')));
+    const board = html.slice(html.indexOf('class="ncj-board"'), html.indexOf("</section>", html.indexOf('class="ncj-board"')));
     // 15 рядків у пулі, 3 джерела.
-    expect(text(today)).toContain("15 live jobs");
-    expect(text(today)).toContain("3 sources");
-    expect(today).toContain('<span class="ncj-odo-col" style="--rows:11;--seq:&quot;0\\A 1\\A 2');
+    expect(text(board)).toContain("15 live jobs");
+    expect(text(board)).toContain("3 sources");
+    expect(text(board)).toContain("Updated daily");
+    expect(board).toContain('<span class="ncj-odo-col" style="--rows:11;--seq:&quot;0\\A 1\\A 2');
     // Сьогоднішні п'ять і далі стрічка: 14 рядків, одна вакансія на компанію.
-    expect(today).toContain('aria-label="Protocol Engineer, Aave, Remote, $140k to $170k"');
-    expect(today).toContain('href="https://boards.example.com/a" target="_blank" rel="noopener noreferrer nofollow"');
-    expect(today).toContain('data-moving="true"');
-    const lists = today.match(/<ul[^>]*>/g) ?? [];
+    expect(board).toContain('aria-label="Protocol Engineer, Aave, Remote, $140k to $170k"');
+    expect(board).toContain('href="https://boards.example.com/a" target="_blank" rel="noopener noreferrer nofollow"');
+    expect(board).toContain('data-moving="true"');
+    const lists = board.match(/<ul[^>]*>/g) ?? [];
     expect(lists).toHaveLength(2);
     expect(lists[1]).toContain('aria-hidden="true"');
     // Копія не ловить фокус з клавіатури.
-    const from = today.lastIndexOf("<ul");
-    const copy = today.slice(from, today.indexOf("</ul>", from));
+    const from = board.lastIndexOf("<ul");
+    const copy = board.slice(from, board.indexOf("</ul>", from));
     expect(copy.match(/<a /g)?.length).toBe(copy.match(/tabindex="-1"/g)?.length);
     expect(text(html)).not.toContain("Today's jobs did not load just now.");
   });
 
-  it("says what we read: X required, wallets and GitHub optional, delivery by Telegram or email", async () => {
+  it("says what we read: X and wallets required, GitHub optional, delivery by Telegram or email", async () => {
     const t = text(await home());
     expect(t).toContain("We read the work you've already done, and find jobs that fit it.");
     expect(t).toContain("XRequired");
-    expect(t).toContain("WalletsOptional");
+    expect(t).toContain("WalletsRequired");
     expect(t).toContain("GitHubOptional");
     expect(t).toContain("Up to 5 matching jobs a day, by Telegram or email.");
-    expect(t).toContain("Free for job seekers. Public data only.");
+    expect(t).toContain("Public data only.");
+    expect(t).not.toContain("Free for job seekers");
   });
 
   it("still renders when the jobs database fails", async () => {
@@ -142,7 +149,7 @@ describe("pages that took the old home sections", () => {
     expect(t).toContain("How your score works");
     expect(t).toContain("For an engineer, GitHub counts most. For a trader, your wallets do.");
     expect(t).toContain("Your level is a seal no one else has");
-    for (const f of ["Paper", "Chrome", "Black", "Gold seal"]) expect(t).toContain(f);
+    for (const f of ["Paper", "Mint", "Lavender", "Chrome", "Black"]) expect(t).toContain(f);
     // Власник 14.09 (A3): без десяти варіантів.
     expect(t).not.toContain("Ten positions");
     expect(html).toContain('href="/how-scoring-works"');

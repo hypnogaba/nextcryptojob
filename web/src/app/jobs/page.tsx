@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { JobCard } from "@/components/jobs/job-card";
 import { HINT } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
-import { requireUser } from "@/lib/auth/session";
+import { currentUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
 import { dayLabel } from "@/lib/digest/format";
 import { type DigestSetup, loadJobsPage, type SentDigest, type SentJob } from "@/lib/digest/history";
@@ -100,7 +100,7 @@ function Improve({ step }: { step: SavedStep }) {
   if (!briefDone(step)) return null;
   const standoutDone = step === "done";
   return (
-    <section aria-labelledby="improve-h" className="grid gap-4 rounded-3xl bg-lemon p-6 [&_p]:text-lemon-ink">
+    <section aria-labelledby="improve-h" className="grid gap-4 rounded-3xl border border-line bg-soft p-6">
       <div className="grid gap-1.5">
         <h2 id="improve-h" className="font-sans text-lg leading-snug font-semibold text-ink">
           Not quite right? Improve your matches
@@ -164,11 +164,40 @@ function DailyJobs({ setup }: { setup: DigestSetup }) {
 }
 
 /**
+ * Хто не ввійшов: «Jobs» у шапці раніше вів у порожнечу (власник 15.09, п.9). Тепер /jobs сама
+ * каже, що зробити, і веде на бриф (reuses /start, як і форма на головній).
+ */
+function SignedOutJobs() {
+  return (
+    <div className="mx-auto grid max-w-[720px] gap-4 px-[clamp(16px,4vw,32px)] py-16 text-center sm:py-24">
+      <p className="ncj-label mx-auto">Jobs</p>
+      <h1 className="display text-title">Create a profile and get your jobs right away.</h1>
+      <p className="mx-auto max-w-[52ch] text-lg text-ink-muted">
+        Tell us what you want in your own words. We read your public X, GitHub and wallets, give you a score, and
+        send jobs that match every day.
+      </p>
+      <div className="mx-auto mt-2">
+        <Button asChild size="lg">
+          <Link href="/start">Start your profile</Link>
+        </Button>
+      </div>
+      <p className="text-sm text-ink-muted">
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+          Sign in
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+/**
  * Вакансії людини: зверху найкращі п'ять «зараз» (живий вибір за анкетою, одразу після неї) з
  * причинами й "Apply", поруч «Improve your matches», нижче надіслане добіркою за 14 днів.
  */
 export default async function JobsPage() {
-  const user = await requireUser();
+  const user = await currentUser();
+  if (!user) return <SignedOutJobs />;
   const d = db();
   const page = await loadJobsPage(d, jobsDb(), user.id);
   if (!page) redirect("/login");

@@ -11,21 +11,24 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   NextCryptoJob, напрям 1 «Payday» (раунд 3): білий, чорнило, один лимонний колір
-   плоским полем, ніколи градієнтом. Шрифти Funnel Display (заголовки, числа) і
-   Funnel Sans (текст). Кругла гільош-печатка лишилась знаком картки й логотипа.
+   NextCryptoJob, раунд 4 «Frost»: білий фон, майже чорне чорнило, сірі відтінки,
+   без жодного лимонного кольору (власник 15.09: «прощаємось із жовтим»). Орієнтир
+   frontiertraders.com. Шрифти Funnel Display (заголовки, числа) і Funnel Sans (текст).
+   Кругла гільош-печатка лишилась знаком картки й логотипа.
    Назви:
      ground     полотно сторінки (біле)
      surface    панелі, таблиці, поля (теж білі, межа лінією)
-     soft       тихі блоки й наведення (#F5F6F8)
-     ink        текст;  ink-muted = ink-2, другорядний текст
-     line       тонкі лінії;  line-strong межа полів, >= 3:1
-     brand      головні кнопки: чорнило; brand-ink текст на ньому
-     lemon      єдиний колір: поле панелі, вилка зарплати, позначки; lemon-ink текст на ньому
-     brand-soft тло акценту (блідий лимон): наведення, «так» у таблицях
-   Імена brand/line лишились від першої версії: ними користуються CRM і адмінка.
-   Контраст: ink/ground 18.6, ink-muted/ground 6.4, ink/lemon 14.2, lemon-ink/lemon 10.4,
-   line-strong/ground 3.2.
+     soft       тихі блоки й наведення (#F5F6F7); soft-2 трохи темніший їхній сусід
+     ink        текст; ink-2 другорядний (світліший), ink-3 третинний (темніший за ink-2)
+     ink-muted  = ink-3 (сумісність зі старими класами); ink-faint = ink-2
+     line       тонкі лінії; line-strong межа полів, >= 3:1
+     brand      головні кнопки: чорнило; brand-ink текст на ньому; brand-hover наведення
+     brand-soft тло тихого акценту (нейтральний, не лимонний): наведення, «так» у таблицях
+     up / down  зелений / червоний: зміна ціни токена в картці вакансії
+   Імена lemon-* лишились сумісними для старих класів, але тепер це чорнило: жодного
+   жовтого пікселя на сайті (тест src/no-em-dash.test.ts стежить за тире, не за кольором,
+   але сам колір перевіряють tiers.test.ts і сторінкові тести).
+   Контраст: ink/ground 18.9, ink-3/ground 6.7, line-strong/ground 3.2.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
@@ -33,34 +36,38 @@
 
   --ground:      #ffffff;
   --surface:     #ffffff;
-  --soft:        #f5f6f8;
-  --ink:         #111318;
-  --ink-muted:   #5a5f6b;
-  --ink-faint:   #6b707a;
-  --line:        #e7e8ec;
+  --soft:        #f5f6f7;
+  --soft-2:      #eeeff1;
+  --ink:         #0e0f12;
+  --ink-2:       #8a8e97;
+  --ink-3:       #5d616b;
+  --ink-muted:   var(--ink-3);
+  --ink-faint:   var(--ink-2);
+  --line:        #e8e9ec;
   --line-strong: #8c919b;
-  --brand:       #111318;
+  --brand:       #0e0f12;
   --brand-ink:   #ffffff;
-  --brand-soft:  #fff4b8;
-  --brand-hover: #262a33;
-  --lemon:       #ffdb2e;
-  --lemon-2:     #ffe970;
-  --lemon-ink:   #3d3300;
-  --wash:        #f5f6f8;
+  --brand-soft:  var(--soft-2);
+  --brand-hover: #2a2c31;
+  --lemon:       var(--ink);
+  --lemon-2:     var(--brand-hover);
+  --lemon-ink:   #ffffff;
+  --wash:        #f5f6f7;
   --danger:      #b3261e;
-  --sleeve:      #f5f6f8;
+  --sleeve:      #f5f6f7;
+  --up:          #128a5e;
+  --down:        #c2413a;
   --elev-lift: 0 20px 40px -24px rgb(17 19 24 / 30%), 0 2px 6px -2px rgb(17 19 24 / 8%);
   --elev-rest: 0 1px 2px rgb(17 19 24 / 8%);
 
   /* Імена з макета, як синоніми. */
-  --ink-2: var(--ink-muted);
   --rule: var(--line);
   --accent-wash: var(--brand-soft);
 
-  /* Радіуси: м'які, кнопки пігулкою (components/ui/button.tsx). */
+  /* Радіуси: кнопки прямокутні (10px, макет round4), поля й панелі лишились м'якими. */
   --radius: 0.75rem;
   --radius-field: 14px;
-  --radius-control: 12px;
+  --radius-control: 10px;
   --radius-panel: 24px;
   --radius-card: 5.2% / 8.2%; /* банківська картка 1.586 */
 
@@ -108,9 +115,12 @@
 
   --color-ground: var(--ground);
   --color-soft: var(--soft);
+  --color-soft-2: var(--soft-2);
   --color-lemon: var(--lemon);
   --color-lemon-2: var(--lemon-2);
   --color-lemon-ink: var(--lemon-ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
   --color-ink-faint: var(--ink-faint);
   --color-surface: var(--surface);
   --color-ink: var(--ink);
@@ -124,6 +134,8 @@
   --color-wash: var(--wash);
   --color-danger: var(--danger);
   --color-sleeve: var(--sleeve);
+  --color-up: var(--up);
+  --color-down: var(--down);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -203,11 +215,22 @@
     font-weight: 650;
     letter-spacing: -0.035em;
   }
-  /* Лимонне підкреслення маркером під словом заголовка. */
+  /* Підкреслення маркером під словом заголовка (round4: чорнилом, не лимоном). */
   .ncj-mark {
-    background: linear-gradient(transparent 58%, var(--lemon) 58%);
+    background: linear-gradient(transparent 58%, var(--soft-2) 58%);
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
+  }
+  /* Дрібна позначка з рамкою (мокап round4: «Crypto jobs, scored from real work», «Live board» …). */
+  .ncj-label {
+    display: inline-block;
+    font: 600 11px/1 var(--font-sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    padding: 5px 7px;
+    color: var(--ink-3);
   }
 
   /* ─── Картка у форматі банківської (1.586, напрям «Payday») ───
@@ -222,12 +245,37 @@
   .ncj-face {
     position: absolute;
     inset: 0;
+    overflow: hidden;
     border-radius: var(--radius-card);
     background: var(--card-frame);
     background-image: var(--card-sheen, none);
     color: var(--card-ink);
-    box-shadow: var(--card-shadow, 0 36px 50px -24px rgb(77 62 0 / 45%), 0 8px 16px -8px rgb(17 19 24 / 25%)),
+    box-shadow: var(--card-shadow, 0 36px 50px -24px rgb(17 19 24 / 45%), 0 8px 16px -8px rgb(17 19 24 / 25%)),
       inset 0 1px 0 rgb(255 255 255 / 10%);
+  }
+  /* Світлова смуга по картці, лише на живому прикладі (головна): вимкнена під reduced-motion. */
+  .ncj-sweep::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 42%, rgb(255 255 255 / var(--sweep-op, 0.55)) 50%, transparent 58%);
+    transform: translateX(-60%);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .ncj-sweep::after { animation: ncj-sweep 7s ease-in-out 1.6s infinite; }
+  }
+  @keyframes ncj-sweep {
+    0%, 70% { transform: translateX(-60%); }
+    100% { transform: translateX(60%); }
+  }
+  /* Нахил під курсором (лише жива картка на головній). */
+  .ncj-tilt {
+    transform: perspective(1400px) rotateX(calc(var(--ty, 0) * 1deg)) rotateY(calc(var(--tx, 0) * 1deg));
+    transition: transform 0.5s var(--ease-enter);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ncj-tilt { transform: none; transition: none; }
   }
   /* Тонкі косі лінії, як тиснення пластику. */
   .ncj-face::before {
@@ -270,6 +318,17 @@
     max-width: 100%;
   }
   .ncj-mid { align-self: end; display: flex; align-items: flex-end; gap: 3cqw; min-width: 0; }
+  /* Печатка на полі: лише прикраса, без числа всередині (round4: рівень і бал стоять окремо). */
+  .ncj-mid-seal { flex: none; width: 26cqw; height: 26cqw; margin-left: auto; color: var(--card-ink); }
+  .ncj-mid-seal-empty {
+    flex: none;
+    width: 26cqw;
+    height: 26cqw;
+    margin-left: auto;
+    border-radius: 50%;
+    outline: 0.4cqw dashed var(--card-ink-2);
+    outline-offset: -0.4cqw;
+  }
   .ncj-num {
     font-family: var(--font-display);
     font-weight: 600;
@@ -287,24 +346,45 @@
     color: var(--card-ink-2);
   }
   .ncj-of b { display: block; font-weight: 600; font-size: 4.8cqw; line-height: 1.15; color: var(--card-ink); text-wrap: balance; }
-  .ncj-bot { display: flex; justify-content: space-between; align-items: flex-end; gap: 3cqw; margin-top: 4.5cqw; min-width: 0; }
-  .ncj-name {
+  /* Підпис картки: Name / Level n of 10 / Finish, три колонки з розділювачами (round4).
+     Джерела бала («GH 74 X 46») тут більше немає: лише ці три поля. */
+  .ncj-bot {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2.4cqw;
+    margin-top: 4.5cqw;
+    padding-top: 3cqw;
+    border-top: 1px solid var(--card-hairline);
     min-width: 0;
-    font-family: var(--font-display);
-    font-weight: 500;
-    font-size: 4.2cqw;
-    line-height: 1.2;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+  }
+  .ncj-bot-col { min-width: 0; }
+  .ncj-bot-col + .ncj-bot-col { border-left: 1px solid var(--card-hairline); padding-left: 3cqw; }
+  .ncj-bot-col span {
+    display: block;
+    font-size: 2.6cqw;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
+    opacity: 0.65;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .ncj-bot-col b {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 3.7cqw;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ncj-name {
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
     text-shadow: 0 1px 0 rgb(0 0 0 / 35%), 0 -1px 0 rgb(255 255 255 / 12%);
   }
-  .ncj-stats { display: flex; flex: none; gap: 2.4cqw; font-size: 3cqw; line-height: 1.2; color: var(--card-ink-2); }
-  .ncj-stats > span { display: inline-flex; align-items: baseline; gap: 0.8cqw; }
-  .ncj-stats b { font-weight: 650; font-size: 3.5cqw; color: var(--card-ink); font-variant-numeric: tabular-nums; }
-  .ncj-stats .gap b { font-weight: 500; color: var(--card-ink-2); }
   /* Позначка виходить за край картки зліва вгорі, як наліпка. */
   .ncj-tag {
     position: absolute;
@@ -322,8 +402,9 @@
   .ncj-tag-marker { background: var(--card-window); color: var(--card-ink); box-shadow: inset 0 0 0 1px var(--card-hairline); }
 
   /* ─── Кругла печатка-жетон (components/card/seal-badge.tsx) ───
-     Розетка на весь круг, лимонне ядро з числом поверх. На картці праворуч угорі,
-     окремо (MiniCard) на колі кольору картки. */
+     Розетка на весь круг, ядро кольору обробки з числом поверх (round4: без лимонного).
+     На лицьовому боці картки печатка тепер без ядра (components/card/seal.tsx, ncj-mid-seal);
+     цей жетон лишився для драбини рівнів і рядків CRM/адмінки (MiniCard), на колі кольору картки. */
   .ncj-badge {
     container-type: inline-size;
     position: relative;
@@ -348,8 +429,8 @@
     width: 40%;
     aspect-ratio: 1;
     border-radius: 50%;
-    background: var(--lemon, #ffdb2e);
-    color: #111318;
+    background: var(--card-frame, #eceef1);
+    color: var(--card-ink, #0e0f12);
     text-align: center;
     box-shadow: 0 0 0 4cqw var(--badge-ring, rgb(17 19 24 / 0%));
   }
@@ -435,8 +516,7 @@
 
 @layer components {
   /* Фішка балу для рядків CRM і адмінки: коло кольору картки з балом, як жетон.
-     Без розетки: у списку їх до сотень, а на 44 px вона однаково не читається.
-     Gold seal відрізняє від Black лише лимонне число. */
+     Без розетки: у списку їх до сотень, а на 44 px вона однаково не читається. */
   .ncj-chip {
     display: inline-grid;
     place-items: center;
@@ -457,31 +537,32 @@
     line-height: 1;
     font-variant-numeric: lining-nums tabular-nums;
   }
-  .ncj-chip[data-finish="red_seal"] > b { color: #ffdb2e; }
 
   /* Розклад у профілі кандидата в CRM: та сама панель .ncj-back. */
   .ncj-sheet { width: 100%; }
 }
 
 @layer components {
-  /* Прев'ю картинки для X (композиція як у lib/card/og.tsx): лимонне поле, картка під кутом. */
+  /* Прев'ю картинки для X (композиція як у lib/card/og.tsx): біле поле з рамкою, картка під кутом
+     (round4: без лимонного поля). */
   .ncj-share {
     container-type: inline-size;
     position: relative;
     overflow: hidden;
     aspect-ratio: 1200 / 675;
-    background: #ffdb2e;
-    color: #111318;
+    background: #ffffff;
+    color: #0e0f12;
+    border: 1.5px solid var(--line);
     border-radius: 20px;
-    box-shadow: 0 1px 0 rgb(0 0 0 / 4%), 0 24px 48px -28px rgb(77 62 0 / 50%);
+    box-shadow: 0 1px 0 rgb(0 0 0 / 4%), 0 24px 48px -28px rgb(17 19 24 / 30%);
   }
   .ncj-share-card { position: absolute; left: 6cqw; top: 50%; width: 46cqw; translate: 0 -50%; rotate: -6deg; }
-  .ncj-share-card .ncj-face { --card-shadow: 0 3cqw 5cqw -2cqw rgb(77 62 0 / 55%); }
+  .ncj-share-card .ncj-face { --card-shadow: 0 3cqw 5cqw -2cqw rgb(17 19 24 / 35%); }
   .ncj-share-copy { position: absolute; left: 58cqw; right: 5cqw; top: 50%; translate: 0 -50%; }
-  .ncj-share-who { font-size: 2.2cqw; font-weight: 600; color: #3d3300; }
+  .ncj-share-who { font-size: 2.2cqw; font-weight: 600; color: var(--ink-3); }
   .ncj-share-big { margin-top: 0.8cqw; font-family: var(--font-display); font-weight: 700; font-size: 5cqw; line-height: 1; letter-spacing: -0.035em; text-wrap: balance; }
   .ncj-share-rt { margin-top: 1.2cqw; font-size: 2.5cqw; font-weight: 600; }
-  .ncj-share-sub { margin-top: 2.4cqw; font-size: 1.9cqw; line-height: 1.35; color: #3d3300; }
+  .ncj-share-sub { margin-top: 2.4cqw; font-size: 1.9cqw; line-height: 1.35; color: var(--ink-3); }
   .ncj-share-url { margin-top: 3cqw; font-family: var(--font-display); font-weight: 650; font-size: 2.2cqw; }
 }
 @layer components {
@@ -527,20 +608,91 @@
 }
 
 @layer components {
-  /* ─── Головна «Payday»: лимонна панель, картка, стрічка вакансій ─── */
-  .ncj-panel {
-    position: relative;
-    background: var(--lemon);
-    border-radius: 32px;
-    padding: 40px 40px 32px;
+  /* ─── Головна, round4 (макет design-round4/dir-6): стос карток у героя ───
+     Три статичні картки-заготовки (лише тло і волосяна лінія, без тексту й наведення), трохи
+     зсунуті вгору-вліво, і жива картка спереду, що нахиляється за курсором (ncj-tilt) і має
+     світлову смугу (ncj-sweep). Розкладаються віялом один раз при показі; під reduced-motion
+     одразу стоять на місці. */
+  .ncj-stage { display: grid; justify-items: center; gap: 18px; }
+  .ncj-stack { position: relative; width: 460px; height: 290px; }
+  .ncj-cap { max-width: 380px; text-align: center; font-size: 14px; color: var(--ink-2); }
+  .ncj-slot {
+    position: absolute;
+    inset: 0;
+    translate: calc(var(--x, 0px) * var(--k, 1)) calc(var(--y, 0px) * var(--k, 1));
+    rotate: var(--rot, 0deg);
   }
-  .ncj-panel-card { max-width: 440px; margin-left: 8px; rotate: -4deg; }
+  @media (prefers-reduced-motion: no-preference) {
+    .ncj-slot { animation: ncj-fan 1.1s var(--ease-enter) both; animation-delay: var(--d, 0s); }
+  }
+  @keyframes ncj-fan {
+    from { translate: 0 60px; rotate: 0deg; opacity: 0; }
+    to {
+      translate: calc(var(--x, 0px) * var(--k, 1)) calc(var(--y, 0px) * var(--k, 1));
+      rotate: var(--rot, 0deg);
+      opacity: 1;
+    }
+  }
+  /* Хвилі підкладки під стосом (lib/card/seal.ts underprintDataUri), як на захищеному папері. */
+  .ncj-wave {
+    position: absolute;
+    left: -32px;
+    right: -32px;
+    bottom: 0;
+    height: 150px;
+    background-size: 480px 160px;
+    opacity: 0.07;
+    mask-image: linear-gradient(transparent, #000 40%, #000 70%, transparent);
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .ncj-wave { animation: ncj-drift 60s linear infinite; }
+  }
+  @keyframes ncj-drift {
+    to { background-position: 480px 0; }
+  }
+
+  /* ─── Дошка вакансій головної: біла панель з рамкою (round4: без лимонного тла) ─── */
+  .ncj-board { border: 1.5px solid var(--line); border-radius: 24px; background: var(--surface); overflow: hidden; }
+  .ncj-board-h {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 20px 16px;
+    border-bottom: 1.5px solid var(--line);
+  }
+  .ncj-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ncj-chip-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 999px;
+    background: var(--soft);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .ncj-pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--up);
+    box-shadow: 0 0 0 0 rgb(18 138 94 / 50%);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .ncj-pulse-dot { animation: ncj-pulse 2s infinite; }
+  }
+  @keyframes ncj-pulse {
+    70% { box-shadow: 0 0 0 8px rgb(18 138 94 / 0%); }
+    100% { box-shadow: 0 0 0 0 rgb(18 138 94 / 0%); }
+  }
   .ncj-sheet-jobs {
-    margin-top: 32px;
-    padding: 20px 20px 8px;
-    border-radius: 24px;
-    background: #ffffff;
-    box-shadow: 0 20px 40px -24px rgb(77 62 0 / 45%);
+    padding: 16px 20px 8px;
   }
   .ncj-feed {
     height: 236px;
@@ -594,14 +746,18 @@
     .ncj-feed ul[aria-hidden] { display: none; }
   }
   @media (max-width: 760px) {
-    .ncj-panel { padding: 28px 20px 20px; border-radius: 26px; }
-    .ncj-panel-card { margin-left: 4px; }
+    .ncj-board-h { padding: 16px 16px 14px; }
+    .ncj-sheet-jobs { padding: 12px 16px 8px; }
     .ncj-feed { height: 300px; }
     .ncj-feed-row { grid-template-columns: 36px minmax(0, 1fr); }
     .ncj-feed-p { grid-column: 2; text-align: left; }
+    .ncj-stack { width: 330px; height: 208px; --k: 0.7; }
+  }
+  @media (max-width: 520px) {
+    .ncj-stack { width: 290px; height: 183px; --k: 0.5; }
   }
 
-  /* Поле брифу: межа лінією, у фокусі чорнило і лимонне сяйво. */
+  /* Поле брифу: межа лінією, у фокусі чорнило. */
   .ncj-brief {
     border: 1.5px solid var(--line-strong);
     border-radius: 18px;
@@ -609,7 +765,7 @@
     padding: 16px 16px 12px;
     transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out);
   }
-  .ncj-brief:focus-within { border-color: var(--ink); box-shadow: 0 0 0 4px rgb(255 219 46 / 55%); }
+  .ncj-brief:focus-within { border-color: var(--ink); box-shadow: 0 0 0 4px rgb(14 15 18 / 10%); }
   .ncj-brief textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: 18px; line-height: 28px; min-height: 56px; }
   .ncj-brief textarea::placeholder { color: var(--ink-faint); }
 }
@@ -619,5 +775,56 @@
   @container (max-width: 72px) {
     .ncj-badge-core { width: 62%; }
     .ncj-badge-core b { font-size: 30cqw; }
+  }
+}
+
+@layer components {
+  /* ─── Кабінет (round4, /account і /settings): бічне меню + вміст ───
+     Мобільний: бічне меню стає горизонтальним рядком, що гортається (мокап dir-6). */
+  .acct { display: grid; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .acct-side {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--line);
+    background: #fcfcfd;
+    padding: 10px 12px;
+  }
+  .acct-content { min-width: 0; padding: 22px 16px; }
+  @media (min-width: 1024px) {
+    .acct { grid-template-columns: 240px 1fr; }
+    .acct-side { flex-direction: column; gap: 2px; overflow-x: visible; border-bottom: 0; border-right: 1px solid var(--line); padding: 18px 12px; }
+    .acct-content { padding: 30px 34px; }
+  }
+  .acct-item {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 9px;
+    color: var(--ink-3);
+    font-weight: 500;
+    font-size: 0.906rem;
+    white-space: nowrap;
+    position: relative;
+    transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
+  }
+  .acct-item:hover { background: var(--soft); color: var(--ink); }
+  .acct-item[aria-current="page"] { background: var(--soft-2); color: var(--ink); }
+  @media (min-width: 1024px) {
+    .acct-item { flex: none; }
+    .acct-item[aria-current="page"]::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 10px;
+      bottom: 10px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--ink);
+    }
   }
 }
