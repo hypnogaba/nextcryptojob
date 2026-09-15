@@ -385,6 +385,17 @@
     letter-spacing: 0.09em;
     text-shadow: 0 1px 0 rgb(0 0 0 / 35%), 0 -1px 0 rgb(255 255 255 / 12%);
   }
+  /* K2: довгий нік («@KESTREL.DELACROIX») не обрізається «…». --name-scale (card-front.tsx,
+     lib/card/display-name.ts nameFontScale) зменшує кегль плавно з довжиною; перенос лишається
+     запасним планом, якщо навіть найменший кегль не вміщається. */
+  .ncj-name b {
+    font-size: calc(3.7cqw * var(--name-scale, 1));
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
   /* Позначка виходить за край картки зліва вгорі, як наліпка. */
   .ncj-tag {
     position: absolute;

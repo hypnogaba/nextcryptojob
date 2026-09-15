@@ -66,6 +66,13 @@ describe("CardFront", () => {
     for (const gone of [">GH<", ">ONC<", "ncj-stats", "ncj-face-badge"]) expect(html).not.toContain(gone);
   });
 
+  it("prints a long name in full, never cut to an ellipsis (K2)", () => {
+    const longName = "@kestrel.delacroix1234";
+    const html = renderToStaticMarkup(<CardFront face={{ ...exampleFace(), displayName: longName }} />);
+    expect(html).toContain(`<b>${longName}</b>`);
+    expect(html).not.toContain("…");
+  });
+
   it("draws the seal only once the card is issued, and keeps the level in the footer either way", () => {
     const html = renderToStaticMarkup(<CardFront face={{ ...exampleFace(), sealSeed: null, kind: "draft" }} />);
     expect(html).not.toContain("ncj-seal");

@@ -60,3 +60,16 @@ export function suggestDisplayName(verifiedX: string | null, email: string | nul
 export function isAllowedDisplayNameChar(char: string): boolean {
   return ALLOWED.test(char);
 }
+
+/**
+ * Множник кегля для імені на картці (K2, раунд 5): 1 до 14 символів, далі плавно менше,
+ * до DISPLAY_NAME_MAX (32) символів. Довге ім'я лишається читабельним, а не обрізаним «…».
+ * Спільна чиста функція для HTML-картки (card-front.tsx, cqw) і PNG (lib/card/og.tsx, px).
+ */
+export function nameFontScale(name: string): number {
+  const length = [...name].length || 1;
+  const SHORT = 14;
+  const FLOOR = 0.55;
+  if (length <= SHORT) return 1;
+  return Math.max(FLOOR, 1 - ((length - SHORT) * (1 - FLOOR)) / (DISPLAY_NAME_MAX - SHORT));
+}
