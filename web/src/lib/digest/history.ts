@@ -2,12 +2,13 @@ import { SCORING_BASIS_SQL } from "@/lib/consent";
 import type { JobsDb } from "@/lib/jobs-db";
 import { isRoleKey } from "@/lib/card/roles";
 import { companyKey } from "@/lib/jobs/clean";
-import { type CompanyProfiles, companyProfiles, profileFor } from "@/lib/jobs/companies";
+import { type CompanyProfiles, companyProfiles, EMPTY_PROFILES, profileFor } from "@/lib/jobs/companies";
 import type { FitContext } from "@/lib/jobs/fit";
 import type { BriefRow } from "@/lib/jobs/instant";
 import { normalizeSavedStep, parseSavedStep, type SavedStep } from "@/lib/onboarding/steps";
 import type { Channel } from "@/lib/telegram/channel";
 import { salaryEstimateOf } from "@/lib/jobs/pool";
+import { type TokenChip, tokenChip } from "@/lib/jobs/token";
 import { cleanText, companyJobLocation, estimateText, formatSalary, safeUrl } from "./format";
 
 /**
@@ -51,6 +52,8 @@ export type JobDetails = {
   about?: string | null;
   /** Домен компанії для значка (/api/logo). */
   domain?: string | null;
+  /** Чип токена компанії (db/jobs 0004), лише свіжі ціни; лише для вакансій зі сканування. */
+  token?: TokenChip | null;
 };
 
 export type SentJob = {
@@ -198,7 +201,12 @@ async function digestRows(
 
 const placeholders = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 
-async function crawlDetails(jobs: JobsDb, ids: string[], profiles: CompanyProfiles): Promise<Map<string, JobDetails> | null> {
+async function crawlDetails(
+  jobs: JobsDb,
+  ids: string[],
+  profiles: CompanyProfiles,
+  now: Date = new Date(),
+): Promise<Map<string, JobDetails> | null> {
   if (ids.length === 0) return new Map();
   let rows: NrRow[];
   try {
@@ -227,7 +235,7 @@ async function crawlDetails(jobs: JobsDb, ids: string[], profiles: CompanyProfil
         url: safeUrl(r.url),
         postedBy: null,
         ...(estimate ? { salaryEstimate: estimate } : {}),
-        ...(known ? { about: known.about, domain: known.domain } : {}),
+        ...(known ? { about: known.about, domain: known.domain, token: tokenChip(known.token, now) } : {}),
       },
       ];
     }),
@@ -362,8 +370,6 @@ export type RecentJob = {
   details: JobDetails | null;
 };
 
-const NO_PROFILES: CompanyProfiles = { byKey: new Map(), domains: new Set() };
-
 /**
  * Останні `limit` вакансій, які добірка справді надіслала цій людині (sent.status = 'sent'), новіші
  * зверху. Лише user_id людини: і `sent`, і `digest_runs` обмежено ним. null, якщо наша база не відповіла.
@@ -386,7 +392,7 @@ export async function recentSentJobs(d: D1Database, jobs: JobsDb, userId: string
     return null;
   }
   const ids = (prefix: string) => [...new Set(rows.filter((r) => r.job_ref.startsWith(prefix)).map((r) => r.job_ref.slice(prefix.length)))];
-  const [nr, co] = await Promise.all([crawlDetails(jobs, ids("nr:"), NO_PROFILES), companyDetails(d, ids("co:"))]);
+  const [nr, co] = await Promise.all([crawlDetails(jobs, ids("nr:"), EMPTY_PROFILES), companyDetails(d, ids("co:"))]);
   return rows.map((r) => {
     const source = r.job_ref.startsWith("nr:") ? nr : co;
     const details = source?.get(r.job_ref) ?? null;

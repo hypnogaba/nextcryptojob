@@ -224,9 +224,11 @@ describe("why it fits, and how many we checked", () => {
     expect(checkedIn([], [])).toEqual({ jobs: 0, sources: 0 });
   });
 
-  it("reasons use the person's own words and score; the company sentence and logo come from the registry", async () => {
-    nr.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, about)
-                 VALUES ('aave', 'Aave', 'greenhouse', 'aave', 'manual', 'aave.com', 'Aave runs lending markets on many chains.')`);
+  it("reasons use the person's own words and score; the company sentence, logo and token come from the registry", async () => {
+    nr.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, about,
+                   token_symbol, token_confidence, token_checked_at, token_price_usd, token_mcap_usd, token_change_24h, token_updated_at)
+                 VALUES ('aave', 'Aave', 'greenhouse', 'aave', 'manual', 'aave.com', 'Aave runs lending markets on many chains.',
+                   'AAVE', 'homepage', '2026-09-12T12:00:00Z', 90.5, 1_400_000_000, -2.3, '2026-09-12T12:00:00Z')`);
     const now = await instantMatches(deps(), brief({ roles: ["engineer"], salary_min: 120_000, salary_currency: "USD" }), new Set(),
       { words: "I want senior Solidity work", scores: { engineer: 81 } });
     expect(now.state).toBe("ok");
@@ -238,12 +240,25 @@ describe("why it fits, and how many we checked", () => {
       "A senior role, the level you asked for.",
     ]);
     expect(aave).toMatchObject({ about: "Aave runs lending markets on many chains.", domain: "aave.com", note: null });
+    // Ціна свіжа (доба до NOW, межа TOKEN_STALE_DAYS=3): чип є, зі зниженням, помітно чипом.
+    expect(aave.token).toEqual({ symbol: "$AAVE", price: "$90.50", mcap: "MC $1.4B", change: "-2.3%", text: "$AAVE $90.50 · MC $1.4B · -2.3%" });
     expect(aave.why).toBe(aave.reasons.join(" "));
     // Бал людини стає причиною, коли є місце (у вакансії без зарплати й рівня).
     const uni = now.jobs.find((x) => x.ref === "nr:e6")!;
     expect(uni.reasons).toContain("Your Engineer score is 81, from your public work.");
-    // Вакансія компанії не бере чужий опис з реєстру.
-    expect(now.jobs[0]).toMatchObject({ ref: "co:job_acme", about: null, domain: null });
+    // Вакансія компанії не бере чужий опис, домен чи токен з реєстру.
+    expect(now.jobs[0]).toMatchObject({ ref: "co:job_acme", about: null, domain: null, token: null });
+  });
+
+  it("hides a token older than 3 days", async () => {
+    nr.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain,
+                   token_symbol, token_confidence, token_checked_at, token_price_usd, token_updated_at)
+                 VALUES ('aave', 'Aave', 'greenhouse', 'aave', 'manual', 'aave.com',
+                   'AAVE', 'homepage', '2026-09-01T00:00:00Z', 90.5, '2026-09-01T00:00:00Z')`);
+    const now = await instantMatches(deps(), brief({ roles: ["engineer"], salary_min: 120_000, salary_currency: "USD" }), new Set());
+    expect(now.state).toBe("ok");
+    if (now.state !== "ok") return;
+    expect(now.jobs.find((x) => x.ref === "nr:e1")).toMatchObject({ token: null });
   });
 });
 

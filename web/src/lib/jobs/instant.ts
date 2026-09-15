@@ -15,6 +15,7 @@ import { type CompanyProfiles, companyProfiles, profileFor } from "./companies";
 import { type FitContext, fitNote, fitReasons } from "./fit";
 import { crawlPool, type PoolJob } from "./pool";
 import { parseRoles, ROLE_NAMES } from "./roles";
+import { type TokenChip, tokenChip } from "./token";
 
 /**
  * «Jobs for you now» на /jobs: вакансії «зараз» для людини з сесії одразу після анкети,
@@ -49,6 +50,8 @@ export type ShownJob = {
   about: string | null;
   /** Домен компанії для значка (/api/logo); null, якщо не знаємо. */
   domain: string | null;
+  /** Чип токена компанії (db/jobs 0004), лише свіжі ціни; лише для вакансій зі сканування. */
+  token: TokenChip | null;
 };
 
 /** Колонки users, з яких складається анкета добірки. */
@@ -120,6 +123,7 @@ function shown(pick: DigestPick, estimates: ReadonlyMap<string, string>, profile
     note,
     about: known?.about ?? null,
     domain: known?.domain ?? null,
+    token: tokenChip(known?.token, now),
   };
 }
 
