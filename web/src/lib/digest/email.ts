@@ -62,6 +62,10 @@ const Job = z.object({
   salary_estimate: Maybe(200).optional(),
   /** Одне-два речення про компанію (з 14.09.2026); старий engine поля не шле. */
   about: Maybe(400).optional(),
+  /** Домен сайту компанії («arbitrum.io», з 14.09.2026); старий engine поля не шле. */
+  company_domain: Maybe(300).optional(),
+  /** Рядок токена «$ARB $0.42 · MC $1.9B · +3.1%» (з 14.09.2026), лише свіжі ціни. */
+  token: Maybe(80).optional(),
 });
 
 export type DigestEmailPayload = Omit<z.infer<typeof Envelope>, "jobs"> & { jobs: z.infer<typeof Job>[] };

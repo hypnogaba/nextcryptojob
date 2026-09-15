@@ -1,5 +1,6 @@
 import { cleanText, safeUrl, shortDate } from "@/lib/digest/format";
 import { jobVia } from "@/lib/jobs/link";
+import { companySiteUrl } from "@/lib/jobs/token";
 import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
 
@@ -24,6 +25,10 @@ export type DigestEmailJob = {
   salary_estimate?: string | null;
   /** Одне-два речення про компанію, якщо знаємо. */
   about?: string | null;
+  /** Домен сайту компанії («arbitrum.io»), з 14.09.2026, необов'язкове: лист робить з нього посилання https. */
+  company_domain?: string | null;
+  /** Рядок токена «$ARB $0.42 · MC $1.9B · +3.1%» (з 14.09.2026, необов'язкове), лише свіжі ціни. */
+  token?: string | null;
 };
 
 /** Екранування для тексту й атрибутів у лапках. */
@@ -40,7 +45,7 @@ export const DIGEST_FOOTER_REASON = "You get this because you turned on daily jo
 
 type Job = {
   title: string; meta: string; why: string; url: string | null; postedBy: string | null; via: string | null;
-  estimate: string | null; about: string | null;
+  estimate: string | null; about: string | null; companySite: string | null; token: string | null;
 };
 
 function tidy(j: DigestEmailJob): Job {
@@ -55,6 +60,9 @@ function tidy(j: DigestEmailJob): Job {
     via: j.posted_by ? null : jobVia(j.url),
     estimate: !j.salary && j.salary_estimate ? cleanText(j.salary_estimate, 120) : null,
     about: j.about ? cleanText(j.about, 240) : null,
+    // companySiteUrl ще раз перевіряє домен (захист від чужих даних, як safeUrl вище).
+    companySite: companySiteUrl(j.company_domain),
+    token: j.token ? cleanText(j.token, 80) : null,
   };
 }
 
@@ -97,6 +105,8 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
       j.estimate,
       j.why,
       j.about,
+      // Сайт компанії і токен одним рядком (db/jobs 0004/0005), як companyLineHtml в engine.
+      [j.companySite, j.token].filter(Boolean).join(" · ") || null,
       j.postedBy ? `Posted by ${j.postedBy} on NextCryptoJob` : null,
       j.via ? `via ${j.via}` : null,
       j.url,
@@ -128,6 +138,14 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         (j.estimate ? `<p style="margin:0 0 8px;color:${MUTED};font-size:13px">${escapeHtml(j.estimate)}</p>` : "") +
         `<p style="margin:0">${escapeHtml(j.why)}</p>` +
         (j.about ? `<p style="margin:8px 0 0;color:${MUTED};font-size:14px">${escapeHtml(j.about)}</p>` : "") +
+        (j.companySite || j.token
+          ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">` +
+            [j.companySite ? `<a href="${escapeHtml(j.companySite)}" style="color:${BRAND}">${escapeHtml(j.companySite.replace(/^https:\/\//, ""))}</a>` : null,
+              j.token ? escapeHtml(j.token) : null]
+              .filter(Boolean)
+              .join(" · ") +
+            `</p>`
+          : "") +
         (j.postedBy
           ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob</p>`
           : "") +

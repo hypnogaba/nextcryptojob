@@ -424,4 +424,24 @@ describe("email content", () => {
     expect(String(sent[0].text)).not.toContain("We checked");
     expect(String(sent[0].text)).not.toContain("undefined");
   });
+
+  it("shows the company's site and token line when engine sends them", async () => {
+    const p = payload();
+    p.jobs[0] = { ...p.jobs[0], company_domain: "arbitrum.io", token: "$ARB $0.42 · MC $1.9B · +3.1%" };
+    expect((await signedPost(p)).status).toBe(200);
+    const text = String(sent[0].text);
+    const html = String(sent[0].html);
+    expect(text).toContain("https://arbitrum.io");
+    expect(text).toContain("$ARB $0.42 · MC $1.9B · +3.1%");
+    expect(html).toContain('href="https://arbitrum.io"');
+    expect(html).toContain(">arbitrum.io<");
+    expect(html).toContain("$ARB $0.42");
+  });
+
+  it("drops a company_domain a jobs registry would never produce (defense in depth)", async () => {
+    const p = payload();
+    p.jobs[0] = { ...p.jobs[0], company_domain: "javascript:alert(1)" };
+    expect((await signedPost(p)).status).toBe(200);
+    expect(String(sent[0].html)).not.toContain("javascript:");
+  });
 });
