@@ -2,9 +2,11 @@ import type { z } from "zod";
 import { cleanText, companyJobLocation } from "@/lib/digest/format";
 import { jobsDb, type JobsDb } from "@/lib/jobs-db";
 import { companyKey } from "@/lib/jobs/clean";
+import { type CompanyProfiles, companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { jobVia } from "@/lib/jobs/link";
 import { crawlPool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/pool";
 import { foldText, mentionsCity } from "@/lib/jobs/place";
+import { companySiteUrl, isFreshQuote } from "@/lib/jobs/token";
 import { isoTime, sqlTime } from "@/lib/time";
 import type { ActionContext } from "./context";
 import { applyUrlOf, publicJobUrl, rolesOf, workModesOf } from "./jobs";
@@ -198,9 +200,15 @@ function openCursor(cursor: string): Cursor {
 /**
  * Вакансія для search_jobs (REST і MCP). `url` рівно та адреса, що в базі: для web3.career це їхній
  * apply_url, який не можна міняти (lib/jobs/link.ts); `via` каже, кого назвати джерелом.
+ *
+ * `company_url` і `company_token` лише для вакансій зі сканування (job.source === "crawl"): у вакансії
+ * компанії є своя сторінка на сайті, а токен реєстру (JOBS_DB companies, db/jobs 0004) зіставлений з
+ * доменом сканованих компаній, а не з нашими власними (той самий порядок, що в digest/schedule.ts engine).
  */
-function toPublic(job: PoolJob): PublicJob {
+function toPublic(job: PoolJob, profiles: CompanyProfiles, now: Date): PublicJob {
   const via = job.source === "crawl" ? jobVia(job.url) : null;
+  const known = job.source === "crawl" ? profileFor(profiles, job.companyKey, job.company) : null;
+  const quote = known?.token ?? null;
   return {
     job_id: job.jobId,
     source: job.source,
@@ -219,6 +227,11 @@ function toPublic(job: PoolJob): PublicJob {
       ? { salary_estimate: { min: job.salaryEstimate.min, max: job.salaryEstimate.max, currency: job.salaryEstimate.currency,
           period: job.salaryEstimate.period, source: job.salaryEstimate.by } }
       : {}),
+    company_url: companySiteUrl(known?.domain),
+    company_token:
+      quote && isFreshQuote(quote, now)
+        ? { symbol: quote.symbol, price_usd: quote.priceUsd, mcap_usd: quote.mcapUsd, change_24h: quote.change24h, updated_at: quote.updatedAt }
+        : null,
   };
 }
 
@@ -230,7 +243,8 @@ export async function searchJobs(
 ): Promise<PublicJobList> {
   const after = input.cursor ? openCursor(input.cursor) : null;
   const limit = input.limit ?? DEFAULT_LIMIT;
-  const [company, crawl] = await Promise.all([companyPool(ctx), crawlPool(deps.jobs ?? jobsDb, ctx.now)]);
+  const jobsOpen = deps.jobs ?? jobsDb;
+  const [company, crawl, profiles] = await Promise.all([companyPool(ctx), crawlPool(jobsOpen, ctx.now), companyProfiles(jobsOpen)]);
   const found = [...company, ...(crawl ?? [])].filter((j) => matches(j, input)).sort(compare);
   let start = 0;
   if (after) {
@@ -241,7 +255,7 @@ export async function searchJobs(
   const page = found.slice(start, start + limit);
   const last = page.at(-1);
   return {
-    data: page.map(toPublic),
+    data: page.map((j) => toPublic(j, profiles, ctx.now)),
     next_cursor: start + limit < found.length && last ? encodeCursor(last) : null,
   };
 }

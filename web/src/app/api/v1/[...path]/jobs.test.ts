@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
+import { resetCompanyProfiles } from "@/lib/jobs/companies";
 import { POOL_TTL_MS, resetCrawlPool } from "@/lib/jobs/pool";
 import { callTool, rest, schemaErrors, setupApi } from "@/test/api-fixtures";
 import { addApiKey, addCompany, addSubscription, all, run } from "@/test/crm-fixtures";
@@ -36,6 +37,7 @@ const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 beforeEach(() => {
   ({ db } = setupApi());
   resetCrawlPool();
+  resetCompanyProfiles();
   nr = jobsTestDb();
   const ro = readOnlyJobsDb(nr.d1);
   jobsHolder.reads = 0;
@@ -480,15 +482,16 @@ describe("search_jobs", () => {
     const third = await call("GET", `/public/jobs?limit=2&cursor=${second.body.next_cursor}`);
     expect(third.body.data.map((j: { title: string }) => j.title)).toEqual(["Blockchain Engineer 4"]);
     expect(third.body.next_cursor).toBeNull();
-    expect(jobsHolder.reads).toBe(1);
+    // Один на пул вакансій, один на профілі компаній (company_url/company_token): обидва свої POOL_TTL_MS.
+    expect(jobsHolder.reads).toBe(2);
 
-    // Після POOL_TTL_MS пул читається знову і бачить нові вакансії.
+    // Після POOL_TTL_MS обидва читаються знову: пул бачить нові вакансії.
     crawlJob({ title: "Blockchain Engineer new", remote: true, postedAt: iso(60_000) });
     const later = Date.now() + POOL_TTL_MS + 1000;
     vi.spyOn(Date, "now").mockReturnValue(later);
     const fresh = await call("GET", "/public/jobs?limit=1");
     expect(fresh.body.data[0].title).toBe("Blockchain Engineer new");
-    expect(jobsHolder.reads).toBe(2);
+    expect(jobsHolder.reads).toBe(4);
   });
 
   it("when the jobs database does not answer, company jobs still come back", async () => {
@@ -504,5 +507,48 @@ describe("search_jobs", () => {
     const res = await call("GET", "/public/jobs");
     expect(res.status).toBe(200);
     expect(res.body.data.map((j: { job_id: string }) => j.job_id)).toEqual([id]);
+  });
+
+  function seedCompanyToken(o: { slug?: string; name?: string; domain?: string; symbol?: string; updatedAt?: string } = {}) {
+    run(
+      nr.raw,
+      `INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, token_symbol, token_confidence,
+                              token_checked_at, token_price_usd, token_mcap_usd, token_change_24h, token_updated_at)
+       VALUES (?, ?, 'greenhouse', ?, 'seed', ?, ?, 'homepage', ?, 0.42, 1900000000, 3.1, ?)`,
+      o.slug ?? "chain-labs",
+      o.name ?? "Chain Labs",
+      o.slug ?? "chain-labs",
+      o.domain ?? "chainlabs.io",
+      o.symbol ?? "CHAIN",
+      o.updatedAt ?? new Date().toISOString(),
+      o.updatedAt ?? new Date().toISOString(),
+    );
+  }
+
+  it("gives the company's site and a fresh token for a crawled job matched by company key", async () => {
+    seedCompanyToken();
+    const id = crawlJob({ title: "Protocol Engineer", remote: true });
+    const res = await call("GET", "/public/jobs");
+    const job = res.body.data.find((j: { job_id: string }) => j.job_id === `nr_${id}`);
+    expect(job.company_url).toBe("https://chainlabs.io");
+    expect(job.company_token).toMatchObject({ symbol: "CHAIN", price_usd: 0.42, mcap_usd: 1_900_000_000, change_24h: 3.1 });
+    expect(schemaErrors("GET", "/public/jobs", res)).toEqual([]);
+
+    const tool = await callTool(mcpPost, "search_jobs", { role: "engineer" });
+    expect(tool.structuredContent.data.find((j: { job_id: string }) => j.job_id === `nr_${id}`).company_token.symbol).toBe("CHAIN");
+  });
+
+  it("hides a stale token (older than 3 days) and never gives one to a company job", async () => {
+    const { key } = await company({ name: "Chain Labs" });
+    const coId = (await call("POST", "/jobs", { key, body: OPEN })).body.job_id as string;
+    seedCompanyToken({ updatedAt: new Date(Date.now() - 4 * 86_400_000).toISOString() });
+    const id = crawlJob({ title: "Protocol Engineer", remote: true });
+    const res = await call("GET", "/public/jobs");
+    const crawled = res.body.data.find((j: { job_id: string }) => j.job_id === `nr_${id}`);
+    const companyJob = res.body.data.find((j: { job_id: string }) => j.job_id === coId);
+    expect(crawled.company_url).toBe("https://chainlabs.io");
+    expect(crawled.company_token).toBeNull();
+    expect(companyJob.company_url).toBeNull();
+    expect(companyJob.company_token).toBeNull();
   });
 });

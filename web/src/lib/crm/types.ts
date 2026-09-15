@@ -562,6 +562,24 @@ export const PublicJob = z.object({
       source: z.string(),
     })
     .optional(),
+  /**
+   * Сайт компанії («https://arbitrum.io»), знайдений у реєстрі бази вакансій (db/jobs 0005); null,
+   * якщо домену не знаємо. Лише для вакансій зі сканування: у вакансії компанії є своя сторінка на сайті.
+   */
+  company_url: z.string().nullable(),
+  /**
+   * Ринкові дані токена компанії (db/jobs 0004), лише свіжі ціни (не старші за 3 доби); null, якщо
+   * токена немає, ціна ще не свіжа, або (як і company_url) це вакансія компанії, а не зі сканування.
+   */
+  company_token: z
+    .object({
+      symbol: z.string(),
+      price_usd: z.number(),
+      mcap_usd: z.number().nullable(),
+      change_24h: z.number().nullable(),
+      updated_at: IsoDateTime,
+    })
+    .nullable(),
 });
 
 export const PublicJobList = z.object({ data: z.array(PublicJob), next_cursor: z.string().nullable() });

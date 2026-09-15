@@ -1585,7 +1585,7 @@ components:
         next_cursor: { type: [string, "null"] }
     PublicJob:
       type: object
-      required: [job_id, source, title, company, work_mode, city, salary, url, posted_at, roles]
+      required: [job_id, source, title, company, work_mode, city, salary, url, posted_at, roles, company_url, company_token]
       properties:
         job_id: { type: string, description: "job_... for company jobs, nr_<id> for jobs from our crypto job crawl" }
         source: { type: string, enum: [company, crawl] }
@@ -1631,6 +1631,25 @@ components:
             currency: { type: [string, "null"] }
             period: { type: string, enum: [year, month] }
             source: { type: string, description: 'Who made the estimate, e.g. "web3.career"' }
+        company_url:
+          type: [string, "null"]
+          description: >-
+            The company's own website (e.g. "https://arbitrum.io"), when our jobs registry knows the domain.
+            null when unknown, and always null for company jobs (they have their own page on this site).
+        company_token:
+          description: >-
+            The company's token market data, only when the price is fresh (not older than 3 days). null when
+            the company has no known token, the price is stale, or (like company_url) this is a company job.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [symbol, price_usd, mcap_usd, change_24h, updated_at]
+              properties:
+                symbol: { type: string, description: 'Ticker without the "$" (e.g. "ARB")' }
+                price_usd: { type: number }
+                mcap_usd: { type: [number, "null"], description: "Market cap; null when unknown." }
+                change_24h: { type: [number, "null"], description: "24h price change in percent; null when unknown." }
+                updated_at: { type: string, format: date-time, description: "When the price was current." }
     PublicJobList:
       type: object
       required: [data, next_cursor]
