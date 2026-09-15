@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "FAQ | NextCryptoJob",
-  description: "Answers for candidates and companies: how the score works, privacy, deleting your account, why a wallet is asked for, and pricing.",
+  description: "Answers for candidates: how the score works, privacy, deleting your account, and why a wallet is asked for.",
 };
 
 const LINK = "font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
@@ -21,9 +21,15 @@ export default function FaqPage() {
   return (
     <section className="mx-auto max-w-2xl px-[clamp(16px,4vw,32px)] pt-10 pb-24 sm:pt-16">
       <h1 className="display text-title">FAQ</h1>
+      <p className="mt-2 text-ink-muted">
+        For candidates. Hiring?{" "}
+        <Link href="/company" className={LINK}>
+          See NextCryptoJob for companies
+        </Link>
+        .
+      </p>
 
-      <h2 className="mt-10 font-display text-2xl font-extrabold">For candidates</h2>
-      <div className="mt-4 grid gap-6">
+      <div className="mt-8 grid gap-6">
         <Q q="What do you read?">
           <p>
             Only what is public: your posts on X, your GitHub activity, and your wallets&apos; on-chain history. We never read private
@@ -67,20 +73,7 @@ export default function FaqPage() {
         <Q q="How much does this cost?">
           <p>NextCryptoJob is free for candidates: connecting sources, getting a score, a card, and the daily job digest.</p>
         </Q>
-      </div>
-
-      <h2 className="mt-12 font-display text-2xl font-extrabold">For companies</h2>
-      <div className="mt-4 grid gap-6">
-        <Q q="What access do companies get?">
-          <p>
-            A subscription gives your team candidate search with the same score breakdown candidates see, direct or approval-based intro
-            requests, and posting jobs on NextCryptoJob.
-          </p>
-        </Q>
-        <Q q="What does it cost?">
-          <p>$100 per month, plus VAT where it applies, for the whole team. Checkout shows the exact price in your currency.</p>
-        </Q>
-        <Q q="How do we contact you?">
+        <Q q="How do I contact you?">
           <p>
             Write to{" "}
             <a href="mailto:hello@nextcryptojob.xyz" className={LINK}>
@@ -94,15 +87,6 @@ export default function FaqPage() {
           </p>
         </Q>
       </div>
-
-      <h2 className="mt-12 font-display text-2xl font-extrabold">Building on NextCryptoJob</h2>
-      <p className="mt-4 text-ink">
-        REST and MCP for job search and candidate search: see{" "}
-        <Link href="/agents" className={LINK}>
-          Agents
-        </Link>
-        .
-      </p>
     </section>
   );
 }

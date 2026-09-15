@@ -23,6 +23,7 @@ const NAV: { page: CrmPage; href: string; label: string }[] = [
   { page: "billing", href: "/company/billing", label: "Billing" },
   { page: "developers", href: "/company/developers", label: "Developers" },
   { page: "settings", href: "/company/settings", label: "Settings" },
+  { page: "help", href: "/company/help", label: "Help" },
 ];
 
 export default async function CrmLayout({ children }: { children: ReactNode }) {
