@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { HINT } from "@/components/form/styles";
 import { loadSettings } from "@/lib/account/settings";
 import { timezoneList } from "@/lib/account/timezones";
+import { HISTORY_DAYS } from "@/lib/digest/history";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { AddEmailForm } from "../account/add-email-form";
 import { TelegramPanel } from "../account/telegram-panel";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
-import { VisibilityForm } from "./visibility-form";
+import { LeaderboardSwitch, VisibilityForm } from "./visibility-form";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
 
@@ -77,7 +78,7 @@ export default async function SettingsPage() {
           <Link href="/jobs" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
             See the jobs we sent you
           </Link>{" "}
-          in the last 14 days.
+          in the last {HISTORY_DAYS} days.
         </p>
       </Section>
 
@@ -86,6 +87,8 @@ export default async function SettingsPage() {
         canTurnOn={s.scoringConsent}
         contact={{ mode: s.contactMode, telegramHandle: s.telegramHandle }}
       />
+
+      <LeaderboardSwitch cardPublic={s.cardPublic} />
 
       <Section id="data" title="Your data">
         <div className="grid gap-3">

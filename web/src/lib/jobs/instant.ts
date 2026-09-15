@@ -221,6 +221,24 @@ export async function instantMatches(
   return { state: "none", reason: noMatchReason(pool, profile) };
 }
 
+/**
+ * Причини підбору для ОДНІЄЇ вакансії (раунд 5, п.20, /jobs/<id>): та сама логіка, що «Jobs for
+ * you now», лише шукає конкретний ref серед усіх, кому підходить анкета, а не топ-5. null, коли
+ * людина не підходить під анкету (чи анкети нема) або пул зараз не прочитали: сторінка тоді просто
+ * не показує розділ причин, без порожнього блоку.
+ */
+export async function reasonsForRef(deps: InstantDeps, ref: string, brief: BriefRow, fit: FitContext = NO_FIT): Promise<string[] | null> {
+  const profile = profileOf(brief);
+  if (profile.roles.length === 0) return null;
+  const [company, crawl] = await Promise.all([companyJobs(deps.db, deps.env, "job reasons"), crawlPool(deps.jobs, deps.now)]);
+  if (!crawl) return null;
+  const pool: Pool = { crawl: crawl.map(digestJobOf), company: company.map(digestJobOf) };
+  const total = pool.crawl.length + pool.company.length;
+  const picks = selectJobs(pool, profile, { now: deps.now, exclude: new Set(), limit: total });
+  const pick = picks.find((p) => p.job.ref === ref);
+  return pick ? fitReasons(pick, profile, fit) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Кількість
 

@@ -385,6 +385,17 @@
     letter-spacing: 0.09em;
     text-shadow: 0 1px 0 rgb(0 0 0 / 35%), 0 -1px 0 rgb(255 255 255 / 12%);
   }
+  /* K2: довгий нік («@KESTREL.DELACROIX») не обрізається «…». --name-scale (card-front.tsx,
+     lib/card/display-name.ts nameFontScale) зменшує кегль плавно з довжиною; перенос лишається
+     запасним планом, якщо навіть найменший кегль не вміщається. */
+  .ncj-name b {
+    font-size: calc(3.7cqw * var(--name-scale, 1));
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
   /* Позначка виходить за край картки зліва вгорі, як наліпка. */
   .ncj-tag {
     position: absolute;
@@ -757,15 +768,19 @@
     .ncj-stack { width: 290px; height: 183px; --k: 0.5; }
   }
 
-  /* Поле брифу: межа лінією, у фокусі чорнило. */
+  /* Поле брифу: межа лінією, у фокусі чорнило. Раунд 5, п.13(а): фон теж міняється у фокусі й
+     коли текст уже є (:not(:placeholder-shown)), щоб було видно, що текст прийнято, навіть
+     коли поле розфокусоване. */
   .ncj-brief {
     border: 1.5px solid var(--line-strong);
     border-radius: 18px;
     background: var(--surface);
     padding: 16px 16px 12px;
-    transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out);
+    transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out), background-color 300ms var(--ease-out);
   }
-  .ncj-brief:focus-within { border-color: var(--ink); box-shadow: 0 0 0 4px rgb(14 15 18 / 10%); }
+  .ncj-brief:focus-within { border-color: var(--ink); box-shadow: 0 0 0 4px rgb(14 15 18 / 10%); background: var(--soft); }
+  .ncj-brief:has(textarea:not(:placeholder-shown)) { background: var(--soft); border-color: var(--line-strong); }
+  .ncj-brief:has(textarea:not(:placeholder-shown)):focus-within { border-color: var(--ink); }
   .ncj-brief textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: 18px; line-height: 28px; min-height: 56px; }
   .ncj-brief textarea::placeholder { color: var(--ink-faint); }
 }

@@ -6,6 +6,7 @@
 // 24 px, тож обрізання до 1.91:1 нічого не з'їдає.
 import { ImageResponse } from "next/og";
 import type { CSSProperties } from "react";
+import { nameFontScale } from "./display-name";
 import cyrillic from "./fonts/ncj-cyrillic-600";
 import funnelDisplay from "./fonts/funnel-display-700";
 import funnelSans from "./fonts/funnel-sans-500";
@@ -56,11 +57,9 @@ function cardFonts(): Fonts {
   return fonts;
 }
 
-/** Довге ім'я дрібнішим кеглем: до 32 символів без обрізання на ширшій картці. */
+/** Довге ім'я дрібнішим кеглем (K2): до 32 символів без обрізання на ширшій картці. */
 export function nameFontSize(name: string, cardWidth: number): number {
-  const length = [...name].length;
-  const base = cardWidth * 0.042;
-  return Math.round(length <= 18 ? base : length <= 24 ? base * 0.86 : base * 0.72);
+  return Math.round(cardWidth * 0.042 * nameFontScale(name));
 }
 
 const flex = (style: CSSProperties): CSSProperties => ({ display: "flex", ...style });
@@ -126,11 +125,13 @@ function ShareCard({ view, width }: { view: CardView; width: number }) {
             style={{
               fontFamily: `${DISPLAY}, ${CYRILLIC}`,
               fontSize: nameFontSize(view.displayName, width),
+              lineHeight: 1.1,
               letterSpacing: u(0.005),
               textTransform: "uppercase",
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              textOverflow: "ellipsis",
+              // K2: кегель уже підібраний під довжину (nameFontScale); перенос лишається лише
+              // запасним планом, ніколи не обрізаємо «…».
+              overflowWrap: "break-word",
+              wordBreak: "break-word",
             }}
           >
             {view.displayName}

@@ -1,5 +1,5 @@
 import { hourLabel } from "@/lib/digest/format";
-import type { DigestSetup } from "@/lib/digest/history";
+import { HISTORY_DAYS, type DigestSetup } from "@/lib/digest/history";
 import { type Checked, type NoMatchReason, roleList, roughCount } from "@/lib/jobs/instant";
 
 /**
@@ -56,7 +56,7 @@ export function emptyState(setup: DigestSetup): EmptyState {
       return { title: "Your jobs are on their way.", body: `They go out ${by} in a few minutes.`, ...settings };
     case "sent":
       return {
-        title: "No jobs in the last 14 days.",
+        title: `No jobs in the last ${HISTORY_DAYS} days.`,
         body: `Your next jobs come at ${when}, ${by}.`,
         ...settings,
       };
@@ -73,7 +73,7 @@ export function emptyState(setup: DigestSetup): EmptyState {
 export function scheduleLine(setup: DigestSetup): string {
   if (setup.paused) return "Daily jobs are paused. Jobs we sent before stay here.";
   if (!setup.channel) return "We have nowhere to send new jobs. Add an email or connect Telegram.";
-  return `Up to 5 jobs a day at ${whenLabel(setup)}, ${BY[setup.channel]}. Here are the last 14 days.`;
+  return `Up to 5 jobs a day at ${whenLabel(setup)}, ${BY[setup.channel]}. Here are the last ${HISTORY_DAYS} days.`;
 }
 
 /** Місто, як його ввела людина, без країни після коми (як cityLabel в engine). */

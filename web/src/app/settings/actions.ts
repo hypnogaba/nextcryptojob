@@ -8,6 +8,7 @@ import {
   detectTimezone,
   loadSettings,
   saveDailyJobs,
+  setCardPublic,
   setContactMode,
   setVisibility,
   validateDailyJobs,
@@ -142,6 +143,30 @@ export async function setContactModeAction(_prev: SettingsState, form: FormData)
           ? "Saved. Companies must ask you first. Companies that already saw your handle keep it under their own responsibility. They may use it only for recruiting."
           : "Saved. Companies must ask you first.",
     },
+  };
+}
+
+/** «Show my card on the leaderboard» (раунд 5, п.7): просте так/ні, без згоди й аудиту. */
+export async function setCardPublicAction(_prev: SettingsState, form: FormData): Promise<SettingsState> {
+  const user = await requireUser();
+  const d = db();
+  const on = text(form, "public") === "on";
+  const limited = await consentGuard(d, user.id);
+  if (limited) return { message: limited };
+  let changed;
+  try {
+    changed = await setCardPublic(d, user.id, on);
+  } catch (err) {
+    console.error("setCardPublic failed:", err instanceof Error ? err.message : String(err));
+    return { message: GENERIC };
+  }
+  if (!changed) redirect("/login");
+  revalidatePath("/settings");
+  revalidatePath("/leaderboard");
+  return {
+    message: on
+      ? { tone: "success", text: "Saved. Your card can show up on the leaderboard." }
+      : { tone: "success", text: "Saved. Your card is off the leaderboard." },
   };
 }
 

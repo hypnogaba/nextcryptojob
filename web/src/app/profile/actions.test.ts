@@ -45,13 +45,24 @@ describe("createCardAction (trust model of 13.09: self-reported sources are enou
     await expect(run(createCardAction({}, form("engineer")))).resolves.toMatch(/^\/c\/[A-Za-z0-9_-]{10}$/);
   });
 
-  it("creates BD and Trader cards with nothing verified", async () => {
+  it("one card per person (item 7): a card for another role revokes the previous one and redirects its old address", async () => {
     score("bd", 40);
     score("trader", 82);
     exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
-    await expect(run(createCardAction({}, form("bd")))).resolves.toMatch(/^\/c\//);
-    await expect(run(createCardAction({}, form("trader")))).resolves.toMatch(/^\/c\//);
-    expect(rows("SELECT role FROM cards ORDER BY role")).toEqual([{ role: "bd" }, { role: "trader" }]);
+    const first = await run(createCardAction({}, form("bd")));
+    expect(first).toMatch(/^\/c\//);
+    const firstSlug = (first as string).slice(3);
+    const second = await run(createCardAction({}, form("trader")));
+    expect(second).toMatch(/^\/c\//);
+    const secondSlug = (second as string).slice(3);
+
+    // Лише одна активна картка, роль trader (остання видана).
+    expect(rows("SELECT role, revoked_at IS NOT NULL AS revoked FROM cards ORDER BY role")).toEqual([
+      { role: "bd", revoked: 1 },
+      { role: "trader", revoked: 0 },
+    ]);
+    // Стара адреса /c/<bd-slug> веде на нову.
+    expect(rows("SELECT redirect_to FROM cards WHERE slug = ?", firstSlug)).toEqual([{ redirect_to: secondSlug }]);
   });
 
   it("still refuses a role without a score, a role the person did not pick, and an unknown role", async () => {

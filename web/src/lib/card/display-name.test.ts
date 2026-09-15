@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DisplayNameError, normalizeDisplayName, suggestDisplayName } from "./display-name";
+import { DISPLAY_NAME_MAX, DisplayNameError, nameFontScale, normalizeDisplayName, suggestDisplayName } from "./display-name";
 
 describe("normalizeDisplayName", () => {
   it.each([
@@ -49,5 +49,31 @@ describe("suggestDisplayName", () => {
   it("leaves the field empty when the email part is not an allowed name", () => {
     expect(suggestDisplayName(null, "0x52908400098527886e0f@example.com")).toBe("");
     expect(suggestDisplayName(null, null)).toBe("");
+  });
+});
+
+// K2, раунд 5: довгий нік на картці («@KESTREL.DELACROIX») зменшує кегль, а не обрізає «…».
+describe("nameFontScale", () => {
+  it("keeps full size for short names", () => {
+    expect(nameFontScale("alice")).toBe(1);
+    expect(nameFontScale("@ada_ships")).toBe(1);
+  });
+
+  it("shrinks steadily as the name gets longer, never below the floor", () => {
+    const short = nameFontScale("@kestrel.dev");
+    const long = nameFontScale("@kestrel.delacroix1234");
+    const max = nameFontScale("A".repeat(DISPLAY_NAME_MAX));
+    expect(long).toBeLessThan(short);
+    expect(max).toBeLessThan(long);
+    expect(max).toBeGreaterThanOrEqual(0.55);
+    expect(short).toBeLessThanOrEqual(1);
+  });
+
+  it("never returns a scale that would need truncation logic to hide overflow", () => {
+    for (let n = 1; n <= DISPLAY_NAME_MAX; n++) {
+      const scale = nameFontScale("a".repeat(n));
+      expect(scale).toBeGreaterThanOrEqual(0.55);
+      expect(scale).toBeLessThanOrEqual(1);
+    }
   });
 });

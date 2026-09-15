@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AccountShell } from "@/components/account-nav";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { suggestDisplayName } from "@/lib/card/display-name";
@@ -14,6 +15,7 @@ import { sealSeed } from "@/lib/card/seal";
 import { listActiveCards } from "@/lib/card/store";
 import { explainRole, hasStaleVerifyGap, sourceState } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
+import { mainRole, rankRoles } from "@/lib/score/result";
 import { isActive, profileStatus } from "@/lib/score/status";
 import { parseWait } from "../welcome/flow";
 import { RescoreButton } from "./rescore-button";
@@ -51,20 +53,22 @@ export default async function ProfilePage({ searchParams }: Props) {
   const changed = done && consent && (status.sourcesChanged || stale) && !active;
   // Печатка з підтвердженого гаманця, інакше зі slug картки (підпису гаманців у релізі 1 ще немає).
   const wallet = identities.find((i) => (i.kind === "evm" || i.kind === "solana") && i.verifiedAt)?.value ?? null;
+  // Раунд 5, п.7: одна картка на людину, роль = головна (перша обрана в брифі), не найвищий бал.
+  const main = mainRole(answers.roles, rankRoles(answers.roles, scores));
 
   return (
-    <section className="mx-auto grid max-w-4xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="display text-title">Your card and score</h1>
-        {done ? (
+    <AccountShell active="card" title="Your card and score">
+      <div className="grid gap-6">
+      {done ? (
+        <div className="-mt-2 flex justify-end">
           <Link
             href="/welcome"
             className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
           >
             Edit answers
           </Link>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {!done ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -136,6 +140,9 @@ export default async function ProfilePage({ searchParams }: Props) {
                 eligibility={cardEligibility(role)}
                 active={card}
                 sealSeed={card ? sealSeed({ wallet, slug: card.slug }) : null}
+                // Раунд 5, п.7: одна картка на людину. Лише головна роль показує «Create my
+                // card»; решта лише в розборі (RoleCard приховує CardArea, коли не головна).
+                isMain={role === main}
               />
             );
           })}
@@ -152,6 +159,7 @@ export default async function ProfilePage({ searchParams }: Props) {
           </div>
         </div>
       ) : null}
-    </section>
+      </div>
+    </AccountShell>
   );
 }

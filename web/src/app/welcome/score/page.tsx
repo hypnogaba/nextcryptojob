@@ -2,19 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CardFront } from "@/components/card/card-front";
+import { ShareOnX } from "@/components/card/share-on-x";
+import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
+import { loadSettings } from "@/lib/account/settings";
 import { requireUser } from "@/lib/auth/session";
 import { ROLES } from "@/lib/card/roles";
-import { cardPath, xShareUrl } from "@/lib/card/share";
+import { cardPath, shareText, xShareUrl } from "@/lib/card/share";
 import { getCard, getCardEvidence, listActiveCards } from "@/lib/card/store";
 import { cardView } from "@/lib/card/view";
-import { db } from "@/lib/db";
+import { appEnv, db } from "@/lib/db";
 import { listIdentities } from "@/lib/identity/store";
+import { instantMatches, NO_FIT } from "@/lib/jobs/instant";
+import { jobsDb } from "@/lib/jobs-db";
 import { briefDone } from "@/lib/onboarding/steps";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { explainRole, sourceState } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
-import { improvements, nextPollStep, rankRoles } from "@/lib/score/result";
+import { improvements, mainRole, nextPollStep, rankRoles } from "@/lib/score/result";
 import { profileStatus } from "@/lib/score/status";
 import { requestOrigin } from "../../c/[slug]/card-data";
 import { RescoreButton } from "../../profile/rescore-button";
@@ -100,7 +105,9 @@ export default async function ScorePage() {
     </div>
   );
 
-  const best = ranked[0];
+  // Раунд 5, п.7: одна картка на людину, роль = головна (перша обрана в брифі), не найвищий бал.
+  const main = mainRole(answers.roles, ranked);
+  const best = ranked.find((r) => r.role === main) ?? null;
   if (!best) {
     const state = sourceState(identities);
     const views = answers.roles.map((role) => explainRole(role, scores.get(role) ?? null, state));
@@ -123,9 +130,48 @@ export default async function ScorePage() {
     );
   }
 
-  const cards = await listActiveCards(d, user.id);
+  const [cards, settings, now] = await Promise.all([
+    listActiveCards(d, user.id),
+    loadSettings(d, user.id),
+    instantMatches(
+      { db: d, env: appEnv(), jobs: jobsDb, now: new Date() },
+      {
+        roles: JSON.stringify(answers.roles),
+        remote_mode: answers.remoteMode,
+        city: answers.city,
+        salary_min: answers.salaryMin,
+        salary_currency: answers.salaryCurrency,
+        role_text: answers.roleText,
+      },
+      new Set(),
+      NO_FIT,
+    ),
+  ]);
   const active = cards.find((c) => c.role === best.role) ?? null;
-  const others = ranked.slice(1);
+  const others = ranked.filter((r) => r.role !== main);
+
+  // Раунд 5, п.4: вакансії важливіші за картку, тож ідуть першими й виділені; під ними
+  // «завтра надішлемо ще» за каналом, який людина обрала на кроці «How should we send your jobs?».
+  const tomorrow =
+    settings?.channel === "telegram"
+      ? "Tomorrow we send you more jobs in Telegram."
+      : settings?.channel === "email"
+        ? "Tomorrow we send you more jobs by email."
+        : null;
+  const jobsSection =
+    now.state === "ok" && now.jobs.length > 0 ? (
+      <section aria-labelledby="jobs-h" className="grid gap-4 rounded-2xl border-[1.5px] border-ink bg-soft p-5 sm:p-6">
+        <h2 id="jobs-h" className="font-display text-2xl leading-tight font-semibold tracking-[-0.02em]">
+          Your jobs
+        </h2>
+        <ol className="grid gap-4">
+          {now.jobs.slice(0, 5).map((j, i) => (
+            <JobCard key={j.ref} job={j} reasons={j.reasons} note={j.note} rank={i + 1} compact />
+          ))}
+        </ol>
+        {tomorrow ? <p className="text-sm text-ink-muted">{tomorrow}</p> : null}
+      </section>
+    ) : null;
   const summary = (
     <div className="grid gap-2">
       <p className="text-lg text-ink">
@@ -148,6 +194,7 @@ export default async function ScorePage() {
     return shell(
       <>
         {summary}
+        {jobsSection}
         <IssueCard role={best.role} />
         {improve}
         {next}
@@ -162,6 +209,7 @@ export default async function ScorePage() {
   return shell(
     <>
       {summary}
+      {jobsSection}
       <div className="grid items-start gap-8 md:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         <div className="ncj-card mx-auto w-full max-w-[340px]">
           <CardFront face={view} draw />
@@ -171,28 +219,19 @@ export default async function ScorePage() {
             This is your card. It is public at its own link, so you can share it with friends and on X. It shows your name,
             role and score, never your wallets or links.
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button asChild size="lg">
               <a href={`${cardPath(active.slug)}/share/tall`} download>
                 Download image
               </a>
             </Button>
-            <Button asChild size="lg" variant="outline">
-              <a href={xShareUrl(view, origin)} target="_blank" rel="noopener noreferrer">
-                Share on X
-              </a>
-            </Button>
+            <ShareOnX
+              text={shareText(view)}
+              cardUrl={new URL(cardPath(active.slug), origin).toString()}
+              imageUrl={`${cardPath(active.slug)}/share/wide`}
+              trackHref={`/go/share-x${new URL(xShareUrl(view, origin)).search}`}
+            />
           </div>
-          <p className="text-sm text-ink-muted">
-            <Link href={cardPath(active.slug)} className={LINK}>
-              Open your public card
-            </Link>{" "}
-            or get the{" "}
-            <a href={`${cardPath(active.slug)}/share/wide`} download className={LINK}>
-              16:9 image
-            </a>
-            . The name on it is {view.displayName}; you can change it on your profile.
-          </p>
           {stale ? (
             <div className="grid gap-2 border-t border-line pt-4">
               <p className="text-sm text-ink">

@@ -58,11 +58,14 @@ export async function createCard(db: D1Database, input: NewCard): Promise<string
   // Збіг slug (1 з 2^60) зірве вставку, і batch відкотить і відкликання теж.
   const slug = newSlug();
   await db.batch([
+    // Раунд 5, п.7: ОДНА картка на людину, не на (людина, роль): нова картка (будь-якої ролі)
+    // відкликає всі інші активні картки цієї людини, і стара адреса /c/<slug> веде на нову
+    // (redirect_to, читає web/src/app/c/[slug]/page.tsx). idx_cards_active_user (0024) тримає це:
+    // без цього UPDATE спершу вставка нижче впала б на unique(user_id) WHERE revoked_at IS NULL,
+    // бо стара картка ще активна. redirect_to без FK навмисно (0024): new slug ще не існує тут.
     db
-      .prepare(
-        "UPDATE cards SET revoked_at = datetime('now') WHERE user_id = ? AND role = ? AND revoked_at IS NULL",
-      )
-      .bind(input.userId, input.role),
+      .prepare("UPDATE cards SET revoked_at = datetime('now'), redirect_to = ? WHERE user_id = ? AND revoked_at IS NULL")
+      .bind(slug, input.userId),
     db
       .prepare(
         "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) " +
@@ -145,6 +148,25 @@ export async function getCardEvidence(db: D1Database, slug: string): Promise<Car
     connected: (row.kinds ?? "").split(",").filter((k): k is IdentityKind => IDENTITY_KINDS.has(k as IdentityKind)),
     selfReported: row.self_reported === 1,
   };
+}
+
+/**
+ * Куди веде стара адреса /c/<slug> прибраної картки (п.7, раунд 5): slug чинної картки цієї ж
+ * людини, чи null (картку не відкликали заради консолідації, чи чинної картки більше нема).
+ * Код лишається робочим навіть до накочення 0024: без стовпця redirect_to читання ловить
+ * "no such column" і повертає null, як і без самої картки.
+ */
+export async function getCardRedirect(db: D1Database, slug: string): Promise<string | null> {
+  if (!isSlug(slug)) return null;
+  try {
+    const row = await db
+      .prepare("SELECT redirect_to FROM cards WHERE slug = ? AND revoked_at IS NOT NULL AND redirect_to IS NOT NULL")
+      .bind(slug)
+      .first<{ redirect_to: string }>();
+    return row?.redirect_to ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Активні картки людини (одна на роль), для сторінки балу. */

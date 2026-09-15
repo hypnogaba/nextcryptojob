@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormMessage } from "@/components/form/form-message";
 import { consume, type Limits } from "@/lib/auth/ratelimit";
@@ -73,13 +74,21 @@ export function withWait(url: string, wait: number | null): string {
 export async function goNext(ctx: StepContext, completed: Step): Promise<never> {
   const next = nextStep(completed);
   if (isBriefStep(completed)) {
+    // Раунд 5, п.13(б): без цього наступна сторінка (роль з нового тексту, чи /jobs) могла
+    // показати кеш RSC з попереднього візиту на той самий /welcome?step=… чи /jobs (клієнтський
+    // Router Cache Next не бачить зміни в базі сам, доки шлях явно не інвалідовано). "layout"
+    // чистить кеш під усім /welcome (усі ?step=), а не лише точний рядок запиту.
+    revalidatePath("/welcome", "layout");
+    if (ctx.briefDone && completed !== "target") revalidatePath("/jobs");
     redirect(ctx.briefDone && completed !== "target" ? "/jobs" : `/welcome?step=${next}`);
   }
   if (!ctx.wasDone && next === "done") redirect(SCORE_PATH);
   if (ctx.wasDone) {
+    revalidatePath("/profile");
     const status = await profileStatus(ctx.d, ctx.user.id);
     redirect(withWait("/profile", status.sourcesChanged ? await rescoreNow(ctx) : null));
   }
+  revalidatePath("/welcome", "layout");
   redirect(`/welcome?step=${next}`);
 }
 

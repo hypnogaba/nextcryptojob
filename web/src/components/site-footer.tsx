@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/wordmark";
 
+// Раунд 5: Agents прибрано (п.9, лишається за прямим посиланням), Terms і Company terms
+// злито в один пункт «Terms» (п.11, /terms з розділами candidates/companies).
 const LINKS = [
   { href: "/scoring", label: "How scoring works" },
   { href: "/company", label: "For companies" },
-  { href: "/agents", label: "Agents" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
   { href: "/feedback", label: "Got a job? Tell us" },
   { href: "https://x.com/nextcryptojob", label: "X" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
-  { href: "/terms/companies", label: "Company terms" },
 ] as const;
 
 export function SiteFooter() {
@@ -49,10 +49,6 @@ export function SiteFooter() {
             </ul>
           </nav>
         </div>
-        <p className="max-w-[72ch] text-sm text-ink-muted">
-          Jobs come from company career pages, public job boards and companies that post here. Your wallets and links
-          never go on your card.
-        </p>
       </div>
     </footer>
   );

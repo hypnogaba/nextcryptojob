@@ -12,11 +12,15 @@ const MENU_LINK = "block rounded-[10px] px-3 py-2.5 text-[0.9375rem] font-medium
 const PILL =
   "inline-flex min-h-10 items-center gap-2 rounded-[10px] px-4 max-sm:gap-1.5 max-sm:px-3 text-sm font-semibold whitespace-nowrap transition-colors duration-300";
 
-/** Другорядне в одному меню «More» (власник 14.09, C1): сайт для пошуку роботи, решта окремо. */
+/**
+ * Другорядне в одному меню «More» (власник 14.09, C1): сайт для пошуку роботи, решта окремо.
+ * Раунд 5, п.9: Agents прибрано (лишається за прямим посиланням /agents для агентів і openapi).
+ * Раунд 5, п.7: Leaderboard додано (усі публічні картки, за балом).
+ */
 const MORE = [
   { href: "/scoring", label: "How scoring works", note: "What we read and how the score adds up" },
+  { href: "/leaderboard", label: "Leaderboard", note: "Public cards, ranked by score" },
   { href: "/company", label: "For companies", note: "Search candidates by proof" },
-  { href: "/agents", label: "Agents", note: "API and MCP for AI agents" },
   { href: "/faq", label: "FAQ", note: "Answers for candidates and companies" },
   { href: "/contact", label: "Contact", note: "Write to the team" },
 ] as const;

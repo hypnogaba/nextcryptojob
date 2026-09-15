@@ -18,12 +18,29 @@ const ITEMS: readonly { key: AccountKey; href: string; label: string }[] = [
   { key: "company", href: "/company/start", label: "Company account" },
 ];
 
-export function AccountShell({ active, title, sub, children }: { active: AccountKey; title: string; sub?: string; children: ReactNode }) {
+/**
+ * `title` необов'язковий (раунд 5, п.10): деякі сторінки (наприклад /welcome в режимі правки)
+ * мають власний заголовок усередині `children` і не потребують ще одного h1 тут.
+ */
+export function AccountShell({
+  active,
+  title,
+  sub,
+  /** /jobs потребує ширшого вмісту (двоколонковий список і "Improve your matches" збоку). */
+  wide = false,
+  children,
+}: {
+  active: AccountKey;
+  title?: string;
+  sub?: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section className="mx-auto max-w-5xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
-      <h1 className="display text-title">{title}</h1>
+    <section className={`mx-auto ${wide ? "max-w-[1360px]" : "max-w-5xl"} px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14`}>
+      {title ? <h1 className="display text-title">{title}</h1> : null}
       {sub ? <p className="mt-2 text-ink-muted">{sub}</p> : null}
-      <div className="acct mt-8">
+      <div className={`acct ${title ? "mt-8" : ""}`}>
         <nav aria-label="Your account" className="acct-side">
           {ITEMS.map((item) => (
             <Link key={item.key} href={item.href} aria-current={item.key === active ? "page" : undefined} className="acct-item">

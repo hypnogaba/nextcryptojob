@@ -33,8 +33,9 @@ export function pollDelayMs(elapsedMs: number): number {
 export type RoleScore = { role: RoleKey; score: number; level: number };
 
 /**
- * Бали ролей людини, найвищий спершу (лише ролі, що рахуються, і з балом). Перша роль іде на
- * картку; за рівного балу порядок, у якому людина обрала ролі.
+ * Бали ролей людини, найвищий спершу (лише ролі, що рахуються, і з балом); за рівного балу
+ * порядок, у якому людина обрала ролі. Яка роль іде на картку вирішує mainRole нижче, не порядок
+ * тут (раунд 5, п.7: одна картка на людину, роль = перша обрана, а не найвищий бал).
  */
 export function rankRoles(roles: readonly RoleKey[], scores: ReadonlyMap<string, ScoreRow>): RoleScore[] {
   return roles
@@ -44,6 +45,17 @@ export function rankRoles(roles: readonly RoleKey[], scores: ReadonlyMap<string,
     )
     .sort((a, b) => b.row.score! - a.row.score! || a.i - b.i)
     .map(({ role, row }) => ({ role, score: displayScore(row.score!), level: levelFor(row.score!) }));
+}
+
+/**
+ * Раунд 5, п.7: ОДНА КАРТКА НА ЛЮДИНУ. Роль картки = перша роль, яку людина обрала в брифі
+ * (roles[0], порядок анкети), а не найвищий бал. Якщо ця роль ще не порахована (чи ролей взагалі
+ * не обрано), беремо найвищий бал серед порахованих; інші бали лишаються лише в розборі (RoleCard).
+ */
+export function mainRole(roles: readonly RoleKey[], ranked: readonly RoleScore[]): RoleKey | null {
+  const first = roles[0];
+  if (first && (ranked.length === 0 || ranked.some((r) => r.role === first))) return first;
+  return ranked[0]?.role ?? first ?? null;
 }
 
 export type Improvement = { key: string; text: string; href: string };

@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CardBackFace } from "@/components/card/card-back";
 import { CardFront } from "@/components/card/card-front";
+import { ShareOnX } from "@/components/card/share-on-x";
 import { Button } from "@/components/ui/button";
 import { ROLES } from "@/lib/card/roles";
-import { cardPath, xShareUrl } from "@/lib/card/share";
+import { cardPath, shareText, xShareUrl } from "@/lib/card/share";
+import { getCardRedirect } from "@/lib/card/store";
+import { db } from "@/lib/db";
 import { isScoredRoleKey, recipeBonus, recipeCore } from "@/lib/roles/recipes";
 import { loadCardView, loadIsOwner, requestOrigin } from "./card-data";
 import { ReportForm } from "./report-form";
@@ -53,12 +56,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CardPage({ params }: Props) {
   const { slug } = await params;
   const view = await loadCardView(slug);
-  if (!view) notFound();
+  if (!view) {
+    // Раунд 5, п.7: стара адреса прибраної картки (консолідація на одну картку на людину) веде
+    // на ту, що лишилась, замість 404.
+    const to = await getCardRedirect(db(), slug);
+    if (to) redirect(cardPath(to));
+    notFound();
+  }
   // Власник бачить «Share on X» і картинки; хто він, у HTML не потрапляє.
   const owner = await loadIsOwner(slug);
+  const origin = await requestOrigin();
   // Клік іде через /go/share-x, який рахує funnel_days ('share_click', /admin/funnel) і
   // веде далі на x.com з тими самими параметрами (без відкритого редіректу: хост фіксований).
-  const shareUrl = owner ? `/go/share-x${new URL(xShareUrl(view, await requestOrigin())).search}` : null;
+  const shareUrl = owner ? `/go/share-x${new URL(xShareUrl(view, origin)).search}` : null;
+  const cardUrl = new URL(cardPath(slug), origin).toString();
   const meta = `Formula ${view.formulaVersion}, issued ${view.issuedOn}.`;
   const recipe = isScoredRoleKey(view.role)
     ? `How ${view.roleName} is scored: ${recipeCore(view.role)}. Bonus: ${recipeBonus(view.role)}.`
@@ -102,11 +113,7 @@ export default async function CardPage({ params }: Props) {
         {shareUrl ? (
           <div className="grid gap-4 border-t border-line pt-6">
             <div className="flex flex-wrap items-center gap-3">
-              <Button asChild size="lg">
-                <a href={shareUrl} target="_blank" rel="noopener noreferrer">
-                  Share on X
-                </a>
-              </Button>
+              <ShareOnX text={shareText(view)} cardUrl={cardUrl} imageUrl={`${cardPath(slug)}/share/wide`} trackHref={shareUrl} />
               <Button asChild size="lg" variant="outline">
                 <a href={`${cardPath(slug)}/share/wide`} download>
                   Image 16:9
@@ -118,7 +125,6 @@ export default async function CardPage({ params }: Props) {
                 </a>
               </Button>
             </div>
-            <p className="text-sm text-ink-muted">Attach an image to your post so the card shows at full size.</p>
             <Link
               href="/profile"
               className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-ink underline decoration-line-strong decoration-2 underline-offset-4 hover:decoration-ink"

@@ -18,6 +18,7 @@ import { loadAnswers } from "@/lib/onboarding/store";
 import { ROLES, type RoleKey } from "@/lib/card/roles";
 import { POSITION_CODE } from "@/lib/roles/recipes";
 import { loadScores } from "@/lib/score/load";
+import { ScoreReadyWatcher } from "./score-ready-watcher";
 
 export const metadata: Metadata = { title: "Account", robots: { index: false } };
 
@@ -84,9 +85,16 @@ export default async function AccountPage() {
     );
   }
 
+  // Раунд 5, п.2 + п.14: людина, хто «Skip»-нула чекання балу (welcome/score/scoring-wait.tsx),
+  // бачить тут «Your card is ready», коли рушій закінчить, без повернення на ту сторінку.
+  const watchScore = hasX && cards.length === 0;
+
   return (
     <AccountShell active="overview" title="Account" sub="Your card, your jobs and your settings, in one place.">
-      <h2 className="display text-[1.75rem] leading-none">Welcome back{user.email ? `, ${user.email.split("@")[0]}` : ""}</h2>
+      <ScoreReadyWatcher watch={watchScore} />
+      <h2 className="mt-6 display text-[1.75rem] leading-none">
+        Welcome back{user.email ? `, ${user.email.split("@")[0]}` : ""}
+      </h2>
       <p className="mt-1 text-ink-muted">
         {best ? `Your card shows level ${levelFor(best.score)} of 10.` : "You have not created a card yet."}
       </p>

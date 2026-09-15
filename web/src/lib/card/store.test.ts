@@ -15,7 +15,7 @@ let db: D1Database;
 let raw: DatabaseSync;
 
 beforeEach(() => {
-  ({ db, raw } = sqliteD1(["0001_core", "0005_cards"]));
+  ({ db, raw } = sqliteD1(["0001_core", "0005_cards", "0024_one_card_per_person"]));
   raw.exec("INSERT INTO users (id, email) VALUES ('u1', 'a@example.com'), ('u2', 'b@example.com')");
 });
 
@@ -46,24 +46,32 @@ describe("createCard + getCard", () => {
     expect(card).not.toHaveProperty("user_id");
   });
 
-  it("keeps one active card per person and role: a new card revokes the old one", async () => {
+  it("keeps one active card per person, same role: a new card revokes the old one and redirects to it", async () => {
     const first = await createCard(db, INPUT);
     const second = await createCard(db, { ...INPUT, score: 81 });
     expect(await getCard(db, first)).toBeNull();
     expect((await getCard(db, second))?.level).toBe(9);
 
-    const revoked = raw.prepare("SELECT revoked_at FROM cards WHERE slug = ?").get(first) as { revoked_at: string };
+    const revoked = raw.prepare("SELECT revoked_at, redirect_to FROM cards WHERE slug = ?").get(first) as {
+      revoked_at: string;
+      redirect_to: string;
+    };
     expect(revoked.revoked_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(revoked.redirect_to).toBe(second);
   });
 
-  it("leaves other roles and other people alone", async () => {
+  // Раунд 5, п.7: ОДНА КАРТКА НА ЛЮДИНУ, не на людину й роль. Нова картка іншої ролі теж
+  // відкликає стару, і стара адреса веде на нову; інша людина не зачеплена.
+  it("one card per person (item 7): a card for another role revokes the previous one, but leaves other people alone", async () => {
     const auditor = await createCard(db, INPUT);
     const engineer = await createCard(db, { ...INPUT, role: "engineer" });
     const other = await createCard(db, { ...INPUT, userId: "u2" });
-    await createCard(db, INPUT);
+
     expect(await getCard(db, auditor)).toBeNull();
     expect(await getCard(db, engineer)).not.toBeNull();
     expect(await getCard(db, other)).not.toBeNull();
+    const redirected = raw.prepare("SELECT redirect_to FROM cards WHERE slug = ?").get(auditor) as { redirect_to: string };
+    expect(redirected.redirect_to).toBe(engineer);
   });
 
   it("returns null for a missing, malformed or revoked slug", async () => {
@@ -81,12 +89,16 @@ describe("createCard + getCard", () => {
     expect(raw.prepare("SELECT COUNT(*) AS n FROM cards").get()).toEqual({ n: 0 });
   });
 
-  it("the database itself refuses a second active card for the same person and role", () => {
-    const insert = raw.prepare(
-      "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES (?, 'u1', 'engineer', 50, 6, 'a', 'v5')",
-    );
-    insert.run("aaaaaaaaaa");
-    expect(() => insert.run("bbbbbbbbbb")).toThrow(/UNIQUE/);
+  it("the database itself refuses a second active card for the same person, even a different role (item 7)", () => {
+    const insert = (slug: string, role: string) =>
+      raw
+        .prepare(
+          "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES (?, 'u1', ?, 50, 6, 'a', 'v5')",
+        )
+        .run(slug, role);
+    insert("aaaaaaaaaa", "engineer");
+    expect(() => insert("bbbbbbbbbb", "engineer")).toThrow(/UNIQUE/);
+    expect(() => insert("cccccccccc", "bd")).toThrow(/UNIQUE/);
   });
 
   it.each([

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { nextPollStep, pollDelayMs } from "@/lib/score/result";
@@ -8,11 +9,19 @@ import { ensureScoreAction } from "../actions/score";
 
 /** Після стількох секунд чесно кажемо, що довше звичайного, і що сторінку можна закрити. */
 const SLOW_AFTER_MS = 90_000;
+/**
+ * Раунд 5, п.2 + п.14 (веб-частина): 30 с занадто довго. Після 10 с без результату людину саму
+ * несе далі, в акаунт; картка й бал наздоженуть її там (ScoreReadyWatcher, account/page.tsx).
+ * «Skip, go to my account» робить те саме одразу, без чекання.
+ */
+const AUTO_SKIP_AFTER_MS = 10_000;
 
 /**
  * «Scoring your work…»: ставить бал у чергу (якщо треба) і питає /api/profile/status, поки рушій
  * на VPS не закінчить (зазвичай секунди, до хвилини). Коли бал готовий або завдання впало,
- * перебудовує сторінку, і сервер показує результат. Зупиняється, коли вкладка схована.
+ * перебудовує сторінку, і сервер показує результат. Довше 10 с, або сама кнопка «Skip»: людина йде
+ * в акаунт одразу, а картка з'являється сама там (ScoreReadyWatcher). Зупиняється, коли вкладка
+ * схована.
  */
 export function ScoringWait({ initial }: { initial: ProfileStatus }) {
   const router = useRouter();
@@ -21,6 +30,7 @@ export function ScoringWait({ initial }: { initial: ProfileStatus }) {
   const [note, setNote] = useState<string | null>(null);
   const started = useRef(0);
   const nextEnqueueAt = useRef(0);
+  const skipped = useRef(false);
 
   useEffect(() => {
     let stopped = false;
@@ -30,10 +40,16 @@ export function ScoringWait({ initial }: { initial: ProfileStatus }) {
     async function tick(current: ProfileStatus) {
       if (stopped) return;
       const now = Date.now();
-      setElapsed(now - started.current);
+      const sinceStart = now - started.current;
+      setElapsed(sinceStart);
       const step = nextPollStep(current);
       if (step === "done" || step === "failed") {
         router.refresh();
+        return;
+      }
+      if (sinceStart >= AUTO_SKIP_AFTER_MS && !skipped.current) {
+        skipped.current = true;
+        router.push("/account");
         return;
       }
       if (step === "enqueue" && now >= nextEnqueueAt.current) {
@@ -102,8 +118,16 @@ export function ScoringWait({ initial }: { initial: ProfileStatus }) {
         {note ??
           (slow
             ? "It is taking longer than usual. You can leave this page: your score will be on your profile when it is ready."
-            : "This usually takes from a few seconds to a minute. Keep this page open.")}
+            : "This usually takes from a few seconds to a minute, up to 10 seconds here before we send you on.")}
       </p>
+      <div>
+        <Link
+          href="/account"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
+        >
+          Skip, go to my account
+        </Link>
+      </div>
     </div>
   );
 }

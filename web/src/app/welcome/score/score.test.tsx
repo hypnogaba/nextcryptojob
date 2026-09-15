@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSession } from "@/lib/auth/session";
+import { type JobsDb, readOnlyJobsDb } from "@/lib/jobs-db";
+import { resetCompanyProfiles } from "@/lib/jobs/companies";
+import { resetCrawlPool } from "@/lib/jobs/pool";
 import { exec, harness, RedirectCalled, resetHarness, rows } from "@/test/harness";
+import { jobsTestDb } from "@/test/jobs-db";
 import { ensureScoreAction, issueFirstCardAction } from "../actions/score";
 import ScorePage from "./page";
 
@@ -11,6 +15,27 @@ vi.mock("next/navigation", async () => ({
   ...(await import("@/test/harness")).navigationModule,
   useRouter: () => ({ refresh: () => undefined, push: () => undefined }),
 }));
+
+// База вакансій: прив'язку підміняємо на рівні модуля, як і в тестах /jobs.
+const jobsHolder = vi.hoisted(() => ({ db: null as JobsDb | null }));
+vi.mock("@/lib/jobs-db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
+  jobsDb: () => jobsHolder.db,
+}));
+
+/** Жива вакансія ролі engineer, як мінімум POOL_SQL (db/jobs 0001_schema.sql). */
+function addEngineerJob(): void {
+  const { raw, d1 } = jobsTestDb();
+  raw
+    .prepare(
+      `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, source, tags, dedupe_key,
+                               posted_at, fetched_at, first_seen_at)
+       VALUES ('j1', 'https://jobs.example.com/j1', 'Acme', 'acme', 'Protocol Engineer', 'Remote', 1,
+               'board:test', '["web3"]', 'acme-protocol-engineer', datetime('now'), datetime('now'), datetime('now'))`,
+    )
+    .run();
+  jobsHolder.db = readOnlyJobsDb(d1);
+}
 
 /** Людина, що пройшла анкету й кроки балу: ролі, згода, X. */
 async function finished(roles = '["bd","marketing_content"]') {
@@ -44,6 +69,9 @@ async function render(): Promise<string> {
 
 beforeEach(() => {
   resetHarness();
+  resetCrawlPool();
+  resetCompanyProfiles();
+  jobsHolder.db = null;
   harness.headers = new Headers({ host: "nextcryptojob.xyz", "cf-connecting-ip": "203.0.113.9" });
 });
 
@@ -102,21 +130,21 @@ describe("/welcome/score", () => {
     expect(await render()).toContain("Scoring your work…");
   });
 
-  it("once scored, shows the best role and makes the card from the page (no card yet)", async () => {
-    await finished();
+  it("once scored, shows the main role (first chosen, item 7) and makes the card from the page (no card yet)", async () => {
+    await finished(); // roles: ["bd","marketing_content"], bd chosen first
     job("done");
     score("bd", 44.6);
-    score("marketing_content", 61.2);
+    score("marketing_content", 61.2); // higher score, but not the main role
     const html = await render();
     expect(html).toContain("We scored you <span");
-    expect(html).toMatch(/61<\/span> in Marketing &amp; content, level 7 of 10/);
-    expect(html).toContain("Your other roles: BD &amp; partnerships 44.");
+    expect(html).toMatch(/44<\/span> in BD &amp; partnerships, level 5 of 10/);
+    expect(html).toContain("Your other roles: Marketing &amp; content 61.");
     expect(html).toContain("Making your card…");
     expect(html).toContain("Improve your score");
     expect(html).toContain("Add more wallets: you have 1 of 10.");
   });
 
-  it("with the card made: the picture, Download image and Share on X with the public link", async () => {
+  it("with the card made: the picture, Download image and Share on X, no repeated public-card blurb (item 5)", async () => {
     await finished();
     job("done");
     score("marketing_content", 61.2);
@@ -125,10 +153,13 @@ describe("/welcome/score", () => {
     const html = await render();
     expect(html).toContain(`href="/c/${issued.slug}/share/tall" download=""`);
     expect(html).toContain("Download image");
-    expect(html).toMatch(/href="https:\/\/x\.com\/intent\/post\?text=I%20scored%2061%20in%20Marketing%20%26%20content/);
+    // Раунд 5, п.3: «Share on X» іде через /go/share-x (рахує share_click), сама картинка через
+    // Web Share/буфер обміну (share-on-x.tsx); OG-прев'ю тут лишається запасним планом у href.
+    expect(html).toMatch(/href="\/go\/share-x\?text=I%20scored%2061%20in%20Marketing%20%26%20content/);
     expect(html).toContain(encodeURIComponent(`https://nextcryptojob.xyz/c/${issued.slug}`));
     expect(html).toContain("Share on X");
-    expect(html).toContain(`href="/c/${issued.slug}"`);
+    expect(html).not.toContain("Open your public card");
+    expect(html).not.toContain("you can change it on your profile");
     expect(html).not.toContain("Making your card…");
   });
 
@@ -143,5 +174,49 @@ describe("/welcome/score", () => {
     expect(html).toContain("We could not score your roles yet.");
     expect(html).toContain("Connect GitHub to get an Engineer score.");
     expect(html).not.toContain("Download image");
+  });
+});
+
+// Раунд 5, п.4: вакансії важливіші за картку, тож ідуть першими й виділені; під ними «завтра
+// надішлемо ще» за каналом.
+describe("jobs before the card (item 4)", () => {
+  it("shows the matching job above the card, and says jobs keep coming by email (default channel)", async () => {
+    await finished('["engineer"]');
+    addEngineerJob();
+    job("done");
+    score("engineer", 61.2);
+    const issued = await issueFirstCardAction("engineer");
+    if (!issued.ok) throw new Error(issued.message);
+    const html = await render();
+
+    expect(html).toContain("Your jobs");
+    expect(html).toContain("Protocol Engineer");
+    expect(html).toContain("Tomorrow we send you more jobs by email.");
+    // Вакансії йдуть РАНІШЕ картки в розмітці.
+    expect(html.indexOf("Your jobs")).toBeLessThan(html.indexOf("ncj-card"));
+    expect(html.indexOf("Protocol Engineer")).toBeLessThan(html.indexOf("ncj-card"));
+  });
+
+  it("says jobs keep coming in Telegram when that is the chosen channel", async () => {
+    exec("INSERT INTO users (id, email, channel, onboarding_step, roles) VALUES ('u', 'ada@example.com', 'telegram', 'done', '[\"engineer\"]')");
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
+    await createSession("u", null);
+    addEngineerJob();
+    job("done");
+    score("engineer", 61.2);
+    const html = await render();
+    expect(html).toContain("Tomorrow we send you more jobs in Telegram.");
+    expect(html).not.toContain("by email.");
+  });
+
+  it("has no jobs section when nothing matches, and the card still shows", async () => {
+    await finished('["engineer"]');
+    job("done");
+    score("engineer", 61.2);
+    const html = await render();
+    expect(html).not.toContain("Your jobs");
+    expect(html).not.toContain("Tomorrow we send you");
+    expect(html).toContain("Making your card…");
   });
 });

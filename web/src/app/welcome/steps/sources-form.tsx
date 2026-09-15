@@ -39,8 +39,9 @@ export function SourcesForm({ initial, editing }: { initial: Record<Key, string>
         const error = state.errors?.[f.key];
         return (
           <div key={f.key} className="grid gap-2">
+            {/* Раунд 5, п.12: без позначки «(optional)» біля назви джерела; лишається в lead кроку. */}
             <label htmlFor={f.key} className={LABEL}>
-              {f.label} <span className="font-normal text-ink-muted">(optional)</span>
+              {f.label}
             </label>
             <input
               id={f.key}

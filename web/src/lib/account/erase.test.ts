@@ -71,6 +71,7 @@ function seed(raw: DatabaseSync) {
       ('dg_a', 'a', '2026-09-12', 'sent', 1, 'telegram'), ('dg_b', 'b', '2026-09-12', 'sent', 1, 'email');
     INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel) VALUES
       ('a', 'nr:1', 'nextrole', 'dg_a', 1, 'sent', 'telegram'), ('b', 'nr:1', 'nextrole', 'dg_b', 1, 'sent', 'email');
+    INSERT INTO saved_jobs (user_id, job_ref) VALUES ('a', 'nr:1'), ('b', 'nr:1');
 
     INSERT INTO login_codes (email, code_hash, expires_at) VALUES
       ('a@example.com', 'x', datetime('now', '+10 minutes')), ('b@example.com', 'y', datetime('now', '+10 minutes'));
