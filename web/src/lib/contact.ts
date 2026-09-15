@@ -13,15 +13,8 @@ import type { Limits } from "@/lib/auth/ratelimit";
  * що його розпізнали.
  */
 
-export const CONTACT_TOPICS = ["candidate", "company", "press", "other"] as const;
-export type ContactTopic = (typeof CONTACT_TOPICS)[number];
-
-export function isContactTopic(v: unknown): v is ContactTopic {
-  return typeof v === "string" && (CONTACT_TOPICS as readonly string[]).includes(v);
-}
-
-export const CONTACT_MESSAGE_MAX = 4000;
-export const CONTACT_MESSAGE_MIN = 10;
+import { CONTACT_TOPICS, type ContactTopic, isContactTopic, CONTACT_MESSAGE_MAX, CONTACT_MESSAGE_MIN } from "@/lib/contact-shared";
+export { CONTACT_TOPICS, type ContactTopic, isContactTopic, CONTACT_MESSAGE_MAX, CONTACT_MESSAGE_MIN };
 
 /** 5 листів на годину з однієї IP: досить людині, мало для засмічення. */
 export const CONTACT_IP_LIMITS: Limits = { windowMinutes: 60, maxAttempts: 5, blockMinutes: 60 };

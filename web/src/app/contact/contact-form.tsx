@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { FormMessageLine } from "@/components/form/form-message";
 import { FIELD, HINT, LABEL, TEXTAREA } from "@/components/form/styles";
 import { SubmitButton } from "@/components/form/submit-button";
-import { CONTACT_MESSAGE_MAX } from "@/lib/contact";
+import { CONTACT_MESSAGE_MAX } from "@/lib/contact-shared";
 import { submitContactAction, type ContactState } from "./actions";
 
 const TOPICS: { value: string; label: string }[] = [
