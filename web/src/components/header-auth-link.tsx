@@ -17,6 +17,8 @@ const MORE = [
   { href: "/scoring", label: "How scoring works", note: "What we read and how the score adds up" },
   { href: "/company", label: "For companies", note: "Search candidates by proof" },
   { href: "/agents", label: "Agents", note: "API and MCP for AI agents" },
+  { href: "/faq", label: "FAQ", note: "Answers for candidates and companies" },
+  { href: "/contact", label: "Contact", note: "Write to the team" },
 ] as const;
 
 /**

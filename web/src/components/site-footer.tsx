@@ -5,6 +5,10 @@ const LINKS = [
   { href: "/scoring", label: "How scoring works" },
   { href: "/company", label: "For companies" },
   { href: "/agents", label: "Agents" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/contact", label: "Contact" },
+  { href: "/feedback", label: "Got a job? Tell us" },
+  { href: "https://x.com/nextcryptojob", label: "X" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
   { href: "/terms/companies", label: "Company terms" },
@@ -23,12 +27,23 @@ export function SiteFooter() {
             <ul className="-mx-2 flex flex-wrap">
               {LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="inline-flex min-h-11 items-center px-2 text-sm text-ink-muted transition-colors hover:text-ink"
-                  >
-                    {link.label}
-                  </Link>
+                  {link.href.startsWith("https://") ? (
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-11 items-center px-2 text-sm text-ink-muted transition-colors hover:text-ink"
+                    >
+                      {link.label}
+                    </a>
+                  ) : (
+                    <Link
+                      href={link.href}
+                      className="inline-flex min-h-11 items-center px-2 text-sm text-ink-muted transition-colors hover:text-ink"
+                    >
+                      {link.label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
