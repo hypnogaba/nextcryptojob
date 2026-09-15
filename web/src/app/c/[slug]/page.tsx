@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CardBackFace } from "@/components/card/card-back";
 import { CardFront } from "@/components/card/card-front";
 import { ShareOnX } from "@/components/card/share-on-x";
 import { Button } from "@/components/ui/button";
 import { ROLES } from "@/lib/card/roles";
 import { cardPath, shareText, xShareUrl } from "@/lib/card/share";
+import { getCardRedirect } from "@/lib/card/store";
+import { db } from "@/lib/db";
 import { isScoredRoleKey, recipeBonus, recipeCore } from "@/lib/roles/recipes";
 import { loadCardView, loadIsOwner, requestOrigin } from "./card-data";
 import { ReportForm } from "./report-form";
@@ -54,7 +56,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CardPage({ params }: Props) {
   const { slug } = await params;
   const view = await loadCardView(slug);
-  if (!view) notFound();
+  if (!view) {
+    // Раунд 5, п.7: стара адреса прибраної картки (консолідація на одну картку на людину) веде
+    // на ту, що лишилась, замість 404.
+    const to = await getCardRedirect(db(), slug);
+    if (to) redirect(cardPath(to));
+    notFound();
+  }
   // Власник бачить «Share on X» і картинки; хто він, у HTML не потрапляє.
   const owner = await loadIsOwner(slug);
   const origin = await requestOrigin();

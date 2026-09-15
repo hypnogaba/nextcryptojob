@@ -130,15 +130,15 @@ describe("/welcome/score", () => {
     expect(await render()).toContain("Scoring your work…");
   });
 
-  it("once scored, shows the best role and makes the card from the page (no card yet)", async () => {
-    await finished();
+  it("once scored, shows the main role (first chosen, item 7) and makes the card from the page (no card yet)", async () => {
+    await finished(); // roles: ["bd","marketing_content"], bd chosen first
     job("done");
     score("bd", 44.6);
-    score("marketing_content", 61.2);
+    score("marketing_content", 61.2); // higher score, but not the main role
     const html = await render();
     expect(html).toContain("We scored you <span");
-    expect(html).toMatch(/61<\/span> in Marketing &amp; content, level 7 of 10/);
-    expect(html).toContain("Your other roles: BD &amp; partnerships 44.");
+    expect(html).toMatch(/44<\/span> in BD &amp; partnerships, level 5 of 10/);
+    expect(html).toContain("Your other roles: Marketing &amp; content 61.");
     expect(html).toContain("Making your card…");
     expect(html).toContain("Improve your score");
     expect(html).toContain("Add more wallets: you have 1 of 10.");

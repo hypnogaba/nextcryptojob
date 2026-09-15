@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getIdentity } from "@/lib/identity/store";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { loadScores } from "@/lib/score/load";
-import { nextPollStep, rankRoles } from "@/lib/score/result";
+import { mainRole, nextPollStep, rankRoles } from "@/lib/score/result";
 import { profileStatus } from "@/lib/score/status";
 
 /**
@@ -28,7 +28,9 @@ export async function checkScoreReadyAction(): Promise<ReadyCheck> {
 
   const [answers, scores, cards] = await Promise.all([loadAnswers(d, user.id), loadScores(d, user.id), listActiveCards(d, user.id)]);
   const ranked = rankRoles(answers.roles, scores);
-  const best = ranked[0];
+  // Раунд 5, п.7: одна картка на людину, роль = головна (перша обрана в брифі), не найвищий бал.
+  const main = mainRole(answers.roles, ranked);
+  const best = ranked.find((r) => r.role === main) ?? null;
   if (!best) return { ready: false };
 
   const active = cards.find((c) => c.role === best.role);

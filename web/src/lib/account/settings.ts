@@ -25,6 +25,8 @@ export type Settings = {
   visible: boolean;
   contactMode: ContactMode;
   scoringConsent: boolean;
+  /** Картка на /leaderboard (раунд 5, п.7): за замовчуванням так, можна вимкнути в Privacy. */
+  cardPublic: boolean;
 };
 
 type Row = {
@@ -39,13 +41,14 @@ type Row = {
   contact_mode: ContactMode;
   visibility: number | null;
   scoring: number | null;
+  card_public: number;
 };
 
 async function loadRow(d: D1Database, userId: string): Promise<Row | null> {
   return d
     .prepare(
       `SELECT u.email, u.telegram_id, u.telegram_username, u.channel, u.digest_hour, u.timezone,
-              u.digest_paused, u.visible_to_companies, u.contact_mode,
+              u.digest_paused, u.visible_to_companies, u.contact_mode, u.card_public,
               (SELECT granted FROM consents WHERE user_id = u.id AND kind = ?2) AS visibility,
               (SELECT MAX(granted) FROM consents WHERE user_id = u.id AND kind IN ${SCORING_BASIS_SQL}) AS scoring
          FROM users u WHERE u.id = ?1`,
@@ -68,7 +71,14 @@ export async function loadSettings(d: D1Database, userId: string): Promise<Setti
     visible: row.visible_to_companies === 1 && row.visibility === 1,
     contactMode: row.contact_mode,
     scoringConsent: row.scoring === 1,
+    cardPublic: row.card_public === 1,
   };
+}
+
+/** «Show my card on the leaderboard» (раунд 5, п.7): просте перемикання, без згоди й аудиту. */
+export async function setCardPublic(d: D1Database, userId: string, on: boolean): Promise<boolean> {
+  const res = await d.prepare("UPDATE users SET card_public = ? WHERE id = ?").bind(on ? 1 : 0, userId).run();
+  return res.meta.changes === 1;
 }
 
 // --- Щоденні вакансії ---------------------------------------------------------

@@ -109,6 +109,7 @@ export function RoleCard({
   eligibility,
   active,
   sealSeed,
+  isMain,
 }: {
   view: RoleView;
   /** Зворот з breakdown_json ролі або null. */
@@ -119,6 +120,11 @@ export function RoleCard({
   active: ActiveCard | null;
   /** Зерно печатки активної картки або null. */
   sealSeed: number | null;
+  /**
+   * Раунд 5, п.7: одна картка на людину. Головна роль показує лицьовий бік і «Create my card»;
+   * решта ролей лише розбір бала (CardBackFace), без картки й без кнопки.
+   */
+  isMain: boolean;
 }) {
   return (
     <article aria-labelledby={`role-${view.role}`} className="grid gap-5 rounded-xl border border-line bg-surface p-4 sm:p-6">
@@ -151,10 +157,12 @@ export function RoleCard({
               aspect-ratio 1.586 ncj-card обрізає зайве без overflow, і панель налазить на те, що
               йде після неї (власник 15.09, п.1: «How the score was built» лягала на «Could not
               read» і на кнопку біля «Name on your card» на 1280/1440). */}
-          <div className="grid items-start justify-items-center gap-5 md:grid-cols-2">
-            <div className="ncj-card w-full max-w-[340px]">
-              <CardFront face={faceFor(view, back, active, sealSeed, defaultName)} />
-            </div>
+          <div className={isMain ? "grid items-start justify-items-center gap-5 md:grid-cols-2" : "grid justify-items-center"}>
+            {isMain ? (
+              <div className="ncj-card w-full max-w-[340px]">
+                <CardFront face={faceFor(view, back, active, sealSeed, defaultName)} />
+              </div>
+            ) : null}
             <CardBackFace
               face={faceFor(view, back, active, sealSeed, defaultName)}
               back={back}
@@ -166,7 +174,7 @@ export function RoleCard({
           <p className="text-sm text-ink-muted">We found data for {view.cover}% of what this score counts.</p>
           <Notes title="Could not read" items={view.gaps} />
           <Notes title="Tips" items={view.tips} />
-          <CardArea view={view} defaultName={defaultName} eligibility={eligibility} active={active} />
+          {isMain ? <CardArea view={view} defaultName={defaultName} eligibility={eligibility} active={active} /> : null}
         </>
       ) : null}
     </article>

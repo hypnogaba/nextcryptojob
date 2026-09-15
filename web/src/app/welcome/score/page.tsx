@@ -19,7 +19,7 @@ import { briefDone } from "@/lib/onboarding/steps";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { explainRole, sourceState } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
-import { improvements, nextPollStep, rankRoles } from "@/lib/score/result";
+import { improvements, mainRole, nextPollStep, rankRoles } from "@/lib/score/result";
 import { profileStatus } from "@/lib/score/status";
 import { requestOrigin } from "../../c/[slug]/card-data";
 import { RescoreButton } from "../../profile/rescore-button";
@@ -105,7 +105,9 @@ export default async function ScorePage() {
     </div>
   );
 
-  const best = ranked[0];
+  // Раунд 5, п.7: одна картка на людину, роль = головна (перша обрана в брифі), не найвищий бал.
+  const main = mainRole(answers.roles, ranked);
+  const best = ranked.find((r) => r.role === main) ?? null;
   if (!best) {
     const state = sourceState(identities);
     const views = answers.roles.map((role) => explainRole(role, scores.get(role) ?? null, state));
@@ -146,7 +148,7 @@ export default async function ScorePage() {
     ),
   ]);
   const active = cards.find((c) => c.role === best.role) ?? null;
-  const others = ranked.slice(1);
+  const others = ranked.filter((r) => r.role !== main);
 
   // Раунд 5, п.4: вакансії важливіші за картку, тож ідуть першими й виділені; під ними
   // «завтра надішлемо ще» за каналом, який людина обрала на кроці «How should we send your jobs?».

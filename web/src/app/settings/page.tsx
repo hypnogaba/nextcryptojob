@@ -14,7 +14,7 @@ import { AddEmailForm } from "../account/add-email-form";
 import { TelegramPanel } from "../account/telegram-panel";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
-import { VisibilityForm } from "./visibility-form";
+import { LeaderboardSwitch, VisibilityForm } from "./visibility-form";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
 
@@ -86,6 +86,8 @@ export default async function SettingsPage() {
         canTurnOn={s.scoringConsent}
         contact={{ mode: s.contactMode, telegramHandle: s.telegramHandle }}
       />
+
+      <LeaderboardSwitch cardPublic={s.cardPublic} />
 
       <Section id="data" title="Your data">
         <div className="grid gap-3">

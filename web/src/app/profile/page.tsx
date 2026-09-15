@@ -15,6 +15,7 @@ import { sealSeed } from "@/lib/card/seal";
 import { listActiveCards } from "@/lib/card/store";
 import { explainRole, hasStaleVerifyGap, sourceState } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
+import { mainRole, rankRoles } from "@/lib/score/result";
 import { isActive, profileStatus } from "@/lib/score/status";
 import { parseWait } from "../welcome/flow";
 import { RescoreButton } from "./rescore-button";
@@ -52,6 +53,8 @@ export default async function ProfilePage({ searchParams }: Props) {
   const changed = done && consent && (status.sourcesChanged || stale) && !active;
   // Печатка з підтвердженого гаманця, інакше зі slug картки (підпису гаманців у релізі 1 ще немає).
   const wallet = identities.find((i) => (i.kind === "evm" || i.kind === "solana") && i.verifiedAt)?.value ?? null;
+  // Раунд 5, п.7: одна картка на людину, роль = головна (перша обрана в брифі), не найвищий бал.
+  const main = mainRole(answers.roles, rankRoles(answers.roles, scores));
 
   return (
     <AccountShell active="card" title="Your card and score">
@@ -137,6 +140,9 @@ export default async function ProfilePage({ searchParams }: Props) {
                 eligibility={cardEligibility(role)}
                 active={card}
                 sealSeed={card ? sealSeed({ wallet, slug: card.slug }) : null}
+                // Раунд 5, п.7: одна картка на людину. Лише головна роль показує «Create my
+                // card»; решта лише в розборі (RoleCard приховує CardArea, коли не головна).
+                isMain={role === main}
               />
             );
           })}

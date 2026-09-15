@@ -40,15 +40,15 @@ describe("checkScoreReadyAction", () => {
     await expect(checkScoreReadyAction()).resolves.toEqual({ ready: false });
   });
 
-  it("issues the first card for the best-scoring role once the job is done, like issueFirstCardAction", async () => {
-    await finished();
+  it("issues the first card for the main role (first chosen, item 7) once the job is done", async () => {
+    await finished(); // roles: ["bd","marketing_content"], bd chosen first
     job("done");
     score("bd", 44);
-    score("marketing_content", 61);
+    score("marketing_content", 61); // higher score, but not the main role
     const res = await checkScoreReadyAction();
     expect(res.ready).toBe(true);
     expect(res).toMatchObject({ ready: true, path: expect.stringMatching(/^\/c\//) });
-    expect(rows("SELECT role, display_name FROM cards")).toEqual([{ role: "marketing_content", display_name: "@ada" }]);
+    expect(rows("SELECT role, display_name FROM cards")).toEqual([{ role: "bd", display_name: "@ada" }]);
   });
 
   it("reuses the existing card for the best role instead of making a second one", async () => {

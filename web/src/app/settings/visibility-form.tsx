@@ -6,7 +6,7 @@ import { FormMessageLine } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
 import { SwitchButton } from "@/components/form/switch-button";
 import { cn } from "@/lib/utils";
-import { setContactModeAction, setVisibilityAction, type SettingsState } from "./actions";
+import { setCardPublicAction, setContactModeAction, setVisibilityAction, type SettingsState } from "./actions";
 
 // Те, що віддає lib/crm/project.ts: ролі й бали, мережі й роки ончейн, які джерела підключено, де й за скільки.
 // Власник 14.09 (C4): поки «Show my Telegram directly» увімкнено, компанія бачить не лише нік, а й
@@ -124,6 +124,43 @@ export function VisibilityForm({
           </ul>
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * «Show my card on the leaderboard» (раунд 5, п.7): /leaderboard показує картку, бал і нік усіх,
+ * хто не вимкнув це тут. Окремо від «Show me to companies»: картка вже публічна за своєю адресою
+ * (/c/<slug>), це лише перемикає, чи вона потрапляє на спільну сторінку.
+ */
+export function LeaderboardSwitch({ cardPublic }: { cardPublic: boolean }) {
+  const [state, action] = useActionState(setCardPublicAction, {} as SettingsState);
+  return (
+    <section aria-labelledby="leaderboard-title" className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-6">
+      <div className="grid gap-1">
+        <h2 id="leaderboard-title" className="display text-[1.75rem] leading-none">
+          Leaderboard
+        </h2>
+        <p className="text-sm text-ink-muted">
+          A page listing everyone's public card, ranked by score: the image, the score and the nick, nothing else.
+        </p>
+      </div>
+      <form action={action} className={ROW}>
+        <input type="hidden" name="public" value={cardPublic ? "off" : "on"} />
+        <div className="grid gap-0.5">
+          <p id="leaderboard-label" className={STATE}>
+            <span aria-hidden className={cn(DOT, cardPublic ? "bg-brand" : "bg-line-strong")} />
+            {cardPublic ? "Your card is on the leaderboard" : "Your card is off the leaderboard"}
+          </p>
+          <p id="leaderboard-help" className="text-sm text-ink-muted">
+            {cardPublic
+              ? "Anyone can see it on /leaderboard, ranked by score. Your card at its own link still works either way."
+              : "It stays off /leaderboard. Your card at its own link still works, you can still share it yourself."}
+          </p>
+        </div>
+        <SwitchButton checked={cardPublic} labelledBy="leaderboard-label" describedBy="leaderboard-help" />
+      </form>
+      <FormMessageLine message={state.message} />
     </section>
   );
 }

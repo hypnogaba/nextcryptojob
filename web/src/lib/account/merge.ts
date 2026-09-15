@@ -207,12 +207,14 @@ export async function mergeAccounts(d: D1Database, survivorId: string, otherId: 
   st.push(q("DELETE FROM score_jobs WHERE user_id = ?1 AND status = 'queued'", O));
   st.push(q("UPDATE score_jobs SET user_id = ?1 WHERE user_id = ?2", S, O));
 
-  // Картки: з двох активних однієї ролі лишається картка winner, друга відкликана (рядок є).
+  // Картки: ОДНА картка на людину (раунд 5, п.7), не на людину й роль. Winner уже має активну
+  // картку (будь-якої ролі): картка loser відкликається (рядок лишається, без redirect_to: той
+  // самий власник, а не консолідація на /c/…). Інакше картка loser лишається єдиною далі.
   st.push(
     q(
       `UPDATE cards SET revoked_at = datetime('now')
         WHERE user_id = ?2 AND revoked_at IS NULL
-          AND role IN (SELECT role FROM cards WHERE user_id = ?1 AND revoked_at IS NULL)`,
+          AND EXISTS (SELECT 1 FROM cards w WHERE w.user_id = ?1 AND w.revoked_at IS NULL)`,
       W,
       L,
     ),

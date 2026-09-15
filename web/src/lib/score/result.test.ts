@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScoreRow } from "./explain";
-import { improvements, nextPollStep, pollDelayMs, rankRoles } from "./result";
+import { improvements, mainRole, nextPollStep, pollDelayMs, rankRoles } from "./result";
 import type { ProfileStatus } from "./status";
 
 const status = (job: ProfileStatus["job"], sourcesChanged = false, scored = false): ProfileStatus => ({ job, scored, sourcesChanged });
@@ -37,7 +37,7 @@ describe("nextPollStep: the 'Scoring your work…' page", () => {
   });
 });
 
-describe("rankRoles: which score goes on the first card", () => {
+describe("rankRoles: the person's scored roles, highest first", () => {
   const scores = new Map([
     ["bd", row("bd", 44.6)],
     ["marketing_content", row("marketing_content", 61.2)],
@@ -60,6 +60,39 @@ describe("rankRoles: which score goes on the first card", () => {
   it("keeps the person's order on a tie", () => {
     const tie = new Map([["bd", row("bd", 40)], ["community", row("community", 40)]]);
     expect(rankRoles(["community", "bd"], tie).map((r) => r.role)).toEqual(["community", "bd"]);
+  });
+});
+
+// Раунд 5, п.7: ОДНА КАРТКА НА ЛЮДИНУ, роль = перша обрана в брифі, не найвищий бал.
+describe("mainRole: one card per person, first choice over highest score", () => {
+  const scores = new Map([
+    ["bd", row("bd", 44.6)],
+    ["marketing_content", row("marketing_content", 61.2)],
+    ["engineer", row("engineer", null)],
+  ]);
+
+  it("picks the first role the person chose, even when another role scores higher", () => {
+    const ranked = rankRoles(["bd", "marketing_content"], scores);
+    expect(ranked[0].role).toBe("marketing_content"); // найвищий бал
+    expect(mainRole(["bd", "marketing_content"], ranked)).toBe("bd"); // перша обрана
+  });
+
+  it("falls back to the highest score when the first choice has no score yet", () => {
+    const ranked = rankRoles(["engineer", "marketing_content"], scores); // engineer: null
+    expect(mainRole(["engineer", "marketing_content"], ranked)).toBe("marketing_content");
+  });
+
+  it("falls back to the highest score when no role was chosen at all", () => {
+    const ranked = rankRoles(["bd", "marketing_content"], scores);
+    expect(mainRole([], ranked)).toBe("marketing_content");
+  });
+
+  it("is null when nothing is chosen and nothing is scored", () => {
+    expect(mainRole([], [])).toBeNull();
+  });
+
+  it("keeps the first choice even before anything is scored, for gating the create-card button", () => {
+    expect(mainRole(["bd", "marketing_content"], [])).toBe("bd");
   });
 });
 

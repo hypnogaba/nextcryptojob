@@ -220,7 +220,9 @@ describe("mergeAccounts: score queue, cards, sessions", () => {
     expect(jobs).toEqual([{ user_id: "survivor", status: "done" }]);
   });
 
-  it("revokes the other's card of a role the winner already holds, and moves the rest", async () => {
+  // Раунд 5, п.7: одна картка на людину (не на людину й роль): якщо обидва профілі мають активну
+  // картку, лишається лише winner, other відкликається (той самий власник, тож без redirect_to).
+  it("when both have an active card, revokes the other's and keeps the survivor's", async () => {
     insertUser(t, "survivor", { telegram_id: "1", channel: "telegram", onboarding_step: "sources" });
     insertUser(t, "other", { email: "ada@example.com", channel: "email", onboarding_step: "target" });
     exec(
@@ -229,11 +231,7 @@ describe("mergeAccounts: score queue, cards, sessions", () => {
     );
     exec(
       t,
-      "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES ('s2', 'other', 'engineer', 60, 7, 'Ivan', 'v6')",
-    );
-    exec(
-      t,
-      "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES ('s3', 'other', 'trader', 90, 10, 'Ivan', 'v6')",
+      "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES ('s2', 'other', 'trader', 90, 10, 'Ivan', 'v6')",
     );
 
     await mergeAccounts(t.d1, "survivor", "other");
@@ -241,9 +239,22 @@ describe("mergeAccounts: score queue, cards, sessions", () => {
       t,
       "SELECT slug, user_id, revoked_at FROM cards ORDER BY slug",
     );
-    expect(cards.find((c) => c.slug === "s2")?.revoked_at).not.toBeNull();
     expect(cards.every((c) => c.user_id === "survivor")).toBe(true);
-    expect(cards.find((c) => c.slug === "s3")?.revoked_at).toBeNull();
+    expect(cards.find((c) => c.slug === "s1")?.revoked_at).toBeNull();
+    expect(cards.find((c) => c.slug === "s2")?.revoked_at).not.toBeNull();
+  });
+
+  it("when only the other profile has a card, it moves over and stays active", async () => {
+    insertUser(t, "survivor", { telegram_id: "1", channel: "telegram", onboarding_step: "sources" });
+    insertUser(t, "other", { email: "ada@example.com", channel: "email", onboarding_step: "target" });
+    exec(
+      t,
+      "INSERT INTO cards (slug, user_id, role, score, level, display_name, formula_version) VALUES ('s2', 'other', 'trader', 90, 10, 'Ivan', 'v6')",
+    );
+
+    await mergeAccounts(t.d1, "survivor", "other");
+    const card = one<{ user_id: string; revoked_at: string | null }>(t, "SELECT user_id, revoked_at FROM cards WHERE slug = 's2'");
+    expect(card).toEqual({ user_id: "survivor", revoked_at: null });
   });
 
   it("moves the other profile's sessions onto the survivor", async () => {

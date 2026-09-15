@@ -49,6 +49,8 @@ export const APPLIED_AFTER_CRM = [
   "0021_owner_tools.sql",
   // Раунд 3 власника: той самий нік чи адреса в кількох профілях. Ще НЕ накочено.
   "0022_identities_shared.sql",
+  // Раунд 5 (п.7): одна картка на людину, redirect_to для старих адрес. Ще НЕ накочено.
+  "0024_one_card_per_person.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {
