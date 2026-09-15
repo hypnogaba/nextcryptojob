@@ -11,6 +11,9 @@ import { saveXAction } from "./actions/x";
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
 vi.mock("next/navigation", async () => (await import("@/test/harness")).navigationModule);
+// goNext (item 13b) revalidates /welcome and /jobs so the next page never serves a stale RSC
+// payload from the Next.js router cache; outside a request the real revalidatePath throws.
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const EVM = "0xe6b532e63f228087e26a5897131f2e1d043e27f2";
 

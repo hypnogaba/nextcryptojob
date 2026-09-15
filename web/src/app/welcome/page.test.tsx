@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSession, type SessionMethod } from "@/lib/auth/session";
 import { exec, harness, resetHarness, rows } from "@/test/harness";
 import { addEmailAction } from "../account/email-actions";
+import { saveTargetAction } from "./actions/answers";
 import { saveDeliveryAction } from "./actions/delivery";
 import WelcomePage from "./page";
 
@@ -100,6 +101,38 @@ describe("place: filled in from step 1", () => {
     expect(html).toMatch(/checked="" value="remote"/);
     expect(html).toContain('value="36000"');
     expect(html).toMatch(/<option value="EUR" selected="">/);
+  });
+});
+
+// Раунд 5, п.13(б): написав новий бриф, а наступна сторінка показала бриф з минулого разу.
+// Новий бриф мусить перезаписати старий (users.target_text) і роль на кроці «roles» мусить
+// іти зі свіжого тексту, а не з попереднього; goNext (welcome/flow.ts) тепер кличе
+// revalidatePath("/welcome", "layout"), інакше клієнтський Router Cache Next міг би віддати
+// застарілий RSC того самого /welcome?step=roles з попереднього візиту в тій самій сесії.
+describe("a new brief overwrites the old one (item 13b)", () => {
+  it("saves the new target text over the old one and revalidates /welcome so the roles step is never stale", async () => {
+    await signIn({ step: "target", roles: "[]" });
+
+    await expect(
+      saveTargetAction({}, form({ target: "BD lead at a DeFi protocol, I closed 20+ partnerships" })).catch((e: Error) => e.message),
+    ).resolves.toBe("redirect(/welcome?step=roles)");
+    expect(rows("SELECT target_text FROM users")).toEqual([{ target_text: "BD lead at a DeFi protocol, I closed 20+ partnerships" }]);
+    expect((await render("roles"))).toContain('name="role" value="bd"');
+
+    // Написав НОВИЙ бриф, зовсім інша робота: старий текст і стара роль не мають лишитись.
+    revalidated.length = 0;
+    await expect(
+      saveTargetAction({}, form({ target: "Solidity engineer, remote or Lisbon, from $90k a year" })).catch((e: Error) => e.message),
+    ).resolves.toBe("redirect(/welcome?step=roles)");
+
+    // Перезапис, не додавання: рівно один рядок, з новим текстом.
+    expect(rows("SELECT target_text FROM users")).toEqual([{ target_text: "Solidity engineer, remote or Lisbon, from $90k a year" }]);
+    // Дію на кроці «target» ще раз можна викликати (canVisit): це і є «Back» і новий бриф.
+    expect(revalidated).toContain("/welcome");
+
+    const html = await render("roles");
+    expect(html).toContain('name="role" value="engineer"');
+    expect(html).not.toContain('name="role" value="bd"');
   });
 });
 
