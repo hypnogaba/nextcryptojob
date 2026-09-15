@@ -7,7 +7,7 @@ import {
   sampleSolana, sampleX,
 } from "./fake-registry.js";
 import { groupIdentities, type IdentityRow } from "./identities.js";
-import { scoreUser } from "./run-person.js";
+import { FAST_FIRST_PASS_DEADLINE_MS, FAST_FIRST_PASS_SAMPLE, scoreUser } from "./run-person.js";
 
 const USER = "user-0001-aaaa";
 const EVM_A = "0x" + "a".repeat(40);
@@ -239,6 +239,64 @@ describe("scoreUser", () => {
     await expect(scoreUser(USER, { registry: fakeRegistry(), db, env: {} })).rejects.toThrow(/500/);
     db.beforeStatement = null;
     expect(facts().x!.facts_json).toBe('{"old":true}');
+    expect(scores()).toEqual({});
+  });
+});
+
+describe("scoreUser: fastFirstPass (п.14, 15.09: перший бал швидше)", () => {
+  it("без fastFirstPass кожен збирач зветься раз, зі звичайною вибіркою й дедлайном", async () => {
+    fullIdentities();
+    const registry = fakeRegistry();
+    await scoreUser(USER, { registry, db, env: { OTHER: "kept" }, now: () => NOW });
+    const solana = registry.calls.filter((c) => c.collector === "collectSolana");
+    expect(solana).toHaveLength(1);
+    expect(solana[0]!.ctx.env).toEqual({ OTHER: "kept" });
+    expect(registry.calls.filter((c) => c.collector === "collectX")).toHaveLength(1);
+  });
+
+  it("з fastFirstPass кожен збирач зветься двічі: спершу мала вибірка Solana й коротший дедлайн, потім звичайні", async () => {
+    fullIdentities();
+    const registry = fakeRegistry();
+    const deadlineMs = 45_000;
+    const summary = await scoreUser(USER, { registry, db, env: { OTHER: "kept" }, now: () => NOW, deadlineMs, fastFirstPass: true });
+
+    const solana = registry.calls.filter((c) => c.collector === "collectSolana");
+    expect(solana).toHaveLength(2);
+    expect(solana[0]!.ctx.env).toEqual({ OTHER: "kept", SOL_SAMPLE: String(FAST_FIRST_PASS_SAMPLE) });
+    expect(solana[0]!.ctx.deadline).toBe(NOW + FAST_FIRST_PASS_DEADLINE_MS);
+    expect(solana[1]!.ctx.env).toEqual({ OTHER: "kept" }); // другий прохід без вибірки-обмеження
+    expect(solana[1]!.ctx.deadline).toBe(NOW + deadlineMs);
+    // Решта збирачів теж двічі: другий прохід це повний перерахунок усього, не лише Solana.
+    expect(registry.calls.filter((c) => c.collector === "collectX")).toHaveLength(2);
+
+    // Другий, повний прохід лишається джерелом правди в scores (тут ті самі дані з fakeRegistry).
+    expect(summary.scored).toBeGreaterThan(0);
+    expect(Object.keys(scores()).length).toBeGreaterThan(0);
+  });
+
+  it("перший прохід, що впав, не заважає другому записати бал", async () => {
+    fullIdentities();
+    let solanaCalls = 0;
+    const registry = fakeRegistry({
+      collectSolana: async () => {
+        solanaCalls++;
+        if (solanaCalls === 1) throw new Error("RPC boom");
+        return { ok: true, facts: sampleSolana([SOL]) };
+      },
+    });
+    const summary = await scoreUser(USER, { registry, db, env: {}, now: () => NOW, fastFirstPass: true });
+    expect(solanaCalls).toBe(2);
+    expect(summary.scored).toBeGreaterThan(0);
+    expect(JSON.parse(facts().solana!.facts_json!)).toEqual(sampleSolana([SOL]));
+  });
+
+  it("зупинка процесу під час першого проходу кидає й нічого не пише (не ковтає signal)", async () => {
+    fullIdentities();
+    const stop = new AbortController();
+    const registry = fakeRegistry({ collectSolana: () => hangUntilAborted() });
+    const promise = scoreUser(USER, { registry, db, env: {}, signal: stop.signal, fastFirstPass: true, deadlineMs: 10_000 });
+    stop.abort();
+    await expect(promise).rejects.toMatchObject({ name: "AbortError" });
     expect(scores()).toEqual({});
   });
 });

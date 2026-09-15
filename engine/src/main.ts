@@ -65,7 +65,12 @@ export async function runWorker(o: WorkerOptions): Promise<WorkerStats> {
     const ms = () => Math.round(performance.now() - t0);
     const done = (async () => {
       try {
-        const s = await scoreUser(job.userId, { registry: o.registry, db: o.db, env: o.env, signal: abort.signal, deadlineMs });
+        // П.14: людина чекає лише на 'connect' (перший бал після брифу); 'refresh' масовий, у фоні,
+        // без нікого, хто чекає, тож не платить подвійним RPC за двопрохідний бал.
+        const s = await scoreUser(job.userId, {
+          registry: o.registry, db: o.db, env: o.env, signal: abort.signal, deadlineMs,
+          fastFirstPass: job.reason === "connect",
+        });
         const recorded = await queue.complete(job);
         stats.done++;
         log(`${who} done ${s.totalMs}ms gaps=${s.gaps.length}${s.gaps.length ? `(${s.gaps.join(",")})` : ""} ` +

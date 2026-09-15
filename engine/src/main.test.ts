@@ -108,6 +108,32 @@ describe("worker", () => {
     expect(Date.now() - t0).toBeLessThan(2_000);
   });
 
+  it("п.14: reason 'connect' рахує бал двопрохідно (людина чекає), 'refresh' звичайно, одним проходом", async () => {
+    const solanaCallsFor: Record<string, number> = {};
+    const registry = fakeRegistry({
+      collectSolana: async (addresses: readonly string[]) => {
+        const id = addresses[0]!;
+        solanaCallsFor[id] = (solanaCallsFor[id] ?? 0) + 1;
+        return { ok: true, facts: {} };
+      },
+    });
+    const connectId = "connect-user-0000";
+    const refreshId = "refresh-user-0000";
+    db.addUser(connectId);
+    db.addIdentity(connectId, "solana", connectId);
+    db.exec("INSERT INTO score_jobs (user_id, reason) VALUES (?, 'connect')", connectId);
+    db.addUser(refreshId);
+    db.addIdentity(refreshId, "solana", refreshId);
+    db.exec("INSERT INTO score_jobs (user_id, reason) VALUES (?, 'refresh')", refreshId);
+
+    const w = start(registry, { concurrency: 1 });
+    await waitFor(() => jobs().every((j) => j.status === "done"));
+    w.stop.abort();
+    await w.done;
+    expect(solanaCallsFor[connectId]).toBe(2);
+    expect(solanaCallsFor[refreshId]).toBe(1);
+  });
+
   it("повертає завислі завдання під час роботи", async () => {
     const id = addPerson(1);
     db.exec("UPDATE score_jobs SET status = 'running', attempts = 1, started_at = datetime('now', '-11 minutes') WHERE user_id = ?", id);
