@@ -81,24 +81,55 @@ describe("/api/logo", () => {
 describe("company profiles", () => {
   it("reads domain and about by company key; a bad domain is dropped", async () => {
     const p = await companyProfiles(jobs);
-    expect(p.byKey.get("aave")).toEqual({ domain: "aave.com", about: "Aave runs lending markets." });
-    expect(p.byKey.get("kraken")).toEqual({ domain: "kraken.com", about: null });
-    expect(p.byKey.get("bad")).toEqual({ domain: null, about: null });
+    expect(p.byKey.get("aave")).toEqual({ domain: "aave.com", about: "Aave runs lending markets.", token: null });
+    expect(p.byKey.get("kraken")).toEqual({ domain: "kraken.com", about: null, token: null });
+    expect(p.byKey.get("bad")).toEqual({ domain: null, about: null, token: null });
     expect([...p.domains].sort()).toEqual(["aave.com", "kraken.com"]);
   });
 
-  it("two rows for one company: the first non-empty domain and about", () => {
+  it("two rows for one company: the first non-empty domain, about and token", () => {
     const p = profilesOf([
       { name: "Aave Labs", domain: null, about: "Aave builds DeFi." },
-      { name: "aave labs", domain: "aave.com", about: "Other text." },
+      { name: "aave labs", domain: "aave.com", about: "Other text.", token_symbol: "AAVE", token_price_usd: 90, token_updated_at: "2026-09-14T00:00:00Z" },
     ]);
-    expect(p.byKey.get("aave labs")).toEqual({ domain: "aave.com", about: "Aave builds DeFi." });
+    expect(p.byKey.get("aave labs")).toEqual({
+      domain: "aave.com",
+      about: "Aave builds DeFi.",
+      token: { symbol: "AAVE", priceUsd: 90, mcapUsd: null, change24h: null, updatedAt: "2026-09-14T00:00:00Z" },
+    });
   });
 
-  it("before db/jobs 0005 there are no columns: empty, no error", async () => {
+  it("reads a company's token market data (db/jobs 0004)", async () => {
+    const t = jobsTestDb();
+    t.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain, token_symbol, token_confidence,
+        token_checked_at, token_price_usd, token_mcap_usd, token_change_24h, token_updated_at) VALUES
+      ('arbitrum', 'Arbitrum', 'greenhouse', 'arbitrum', 'manual', 'arbitrum.io', 'ARB', 'homepage',
+        '2026-09-14T00:00:00Z', 0.42, 1900000000, 3.1, '2026-09-14T00:00:00Z')`);
+    const db = readOnlyJobsDb(t.d1);
+    const p = await companyProfiles(() => db);
+    expect(p.byKey.get("arbitrum")).toEqual({
+      domain: "arbitrum.io",
+      about: null,
+      token: { symbol: "ARB", priceUsd: 0.42, mcapUsd: 1_900_000_000, change24h: 3.1, updatedAt: "2026-09-14T00:00:00Z" },
+    });
+  });
+
+  it("before db/jobs 0005 there are no columns at all: empty, no error", async () => {
     const old = { all: async () => Promise.reject(new Error("D1_ERROR: no such column: domain")), first: async () => null };
     const p = await companyProfiles(() => old);
     expect(p.byKey.size).toBe(0);
+  });
+
+  it("before db/jobs 0004 there is no token column: domain and about still come through, without a token", async () => {
+    const noToken: JobsDb = {
+      all: async <T,>(sql: string) => {
+        if (/token_symbol/.test(sql)) throw new Error("D1_ERROR: no such column: token_symbol");
+        return [{ name: "Aave", domain: "aave.com", about: "Aave runs lending markets." }] as T[];
+      },
+      first: async () => null,
+    };
+    const p = await companyProfiles(() => noToken);
+    expect(p.byKey.get("aave")).toEqual({ domain: "aave.com", about: "Aave runs lending markets.", token: null });
   });
 
   it("logo paths and domains", () => {

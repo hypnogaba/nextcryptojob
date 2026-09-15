@@ -1,21 +1,28 @@
 import { companyKey } from "./clean";
 import type { JobsDb } from "@/lib/jobs-db";
 import { FAILURE_BACKOFF_MS, POOL_TTL_MS } from "./pool";
+import { type TokenColumns, type TokenQuote, tokenQuoteOf } from "./token";
 
 /**
- * Що відомо про роботодавця (реєстр companies у базі вакансій, стовпці domain і about з db/jobs 0005):
- * домен для значка на картці вакансії й одне-два речення про те, що компанія робить. Пише їх engine
- * (jobs-about) лише з джерел, які самі це дають; сайт лише читає.
+ * Що відомо про роботодавця (реєстр companies у базі вакансій, стовпці domain і about з db/jobs 0005,
+ * токен з db/jobs 0004): домен для значка на картці вакансії, одне-два речення про те, що компанія
+ * робить, і ринкові дані її токена. Пише їх engine (jobs-about, jobs-tokens) лише з джерел, які самі
+ * це дають; сайт лише читає.
  *
  * Читання: один запит на кілька сотень рядків, і лише коли ізолят не має свіжої копії (POOL_TTL_MS, як
  * пул вакансій). Без 0005 чи коли база не відповіла: порожньо, картки показують літеру замість значка й
- * без речення. Той самий набір доменів тримає й /api/logo: значок береться лише для домену з реєстру.
+ * без речення. Без 0004 (стовпці токена ще не накотили): domain і about лишаються, токена просто немає
+ * (selectCompanyRows пробує без цих стовпців). Той самий набір доменів тримає й /api/logo: значок
+ * береться лише для домену з реєстру.
  */
 
-export type CompanyProfile = { domain: string | null; about: string | null };
+export type CompanyProfile = { domain: string | null; about: string | null; token: TokenQuote | null };
 
 /** Той самий запит, що в engine (engine/src/digest/jobs.ts PROFILES_SQL). */
-export const PROFILES_SQL = "SELECT name, domain, about FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL";
+export const PROFILES_SQL = `SELECT name, domain, about, token_symbol, token_price_usd, token_mcap_usd, token_change_24h, token_updated_at
+  FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL OR token_price_usd IS NOT NULL`;
+/** Той самий запит без стовпців 0004 (токена ще не накотили): профілі йдуть без токена. */
+export const PROFILES_SQL_NO_TOKEN = "SELECT name, domain, about FROM companies WHERE domain IS NOT NULL OR about IS NOT NULL";
 
 /** Домен як ім'я хоста: лише літери, цифри, дефіс і крапки, щонайменше дві частини. */
 export const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
@@ -32,11 +39,11 @@ export type CompanyProfiles = {
   domains: Set<string>;
 };
 
-const EMPTY: CompanyProfiles = { byKey: new Map(), domains: new Set() };
+export const EMPTY_PROFILES: CompanyProfiles = { byKey: new Map(), domains: new Set() };
 
-type Row = { name: string; domain: string | null; about: string | null };
+type Row = { name: string; domain: string | null; about: string | null } & TokenColumns;
 
-/** Рядки реєстру → профілі за ключем. Два рядки з одним ключем: перший непорожній домен і опис. */
+/** Рядки реєстру → профілі за ключем. Два рядки з одним ключем: перший непорожній домен, опис і токен. */
 export function profilesOf(rows: readonly Row[]): CompanyProfiles {
   const byKey = new Map<string, CompanyProfile>();
   const domains = new Set<string>();
@@ -45,11 +52,27 @@ export function profilesOf(rows: readonly Row[]): CompanyProfiles {
     if (!key) continue;
     const domain = cleanDomain(r.domain);
     const about = r.about?.replace(/\s+/g, " ").trim() || null;
+    const token = tokenQuoteOf(r);
     if (domain) domains.add(domain);
     const cur = byKey.get(key);
-    byKey.set(key, { domain: cur?.domain ?? domain, about: cur?.about ?? about });
+    byKey.set(key, { domain: cur?.domain ?? domain, about: cur?.about ?? about, token: cur?.token ?? token });
   }
   return { byKey, domains };
+}
+
+/**
+ * Рядки реєстру, з фолбеком без стовпців токена (db/jobs 0004): читання лишається одне на успіх, і
+ * лише коли 0004 ще не накотили пробує вдруге без цих стовпців (ONCE тут, а не в кожному читачі).
+ * "no such table" (0005 теж немає): порожньо, без другої спроби.
+ */
+export async function selectCompanyRows(jobs: JobsDb): Promise<Row[]> {
+  try {
+    return await jobs.all<Row>(PROFILES_SQL);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "unknown";
+    if (!/no such column/i.test(msg)) throw e;
+    return await jobs.all<Row>(PROFILES_SQL_NO_TOKEN);
+  }
 }
 
 let cached: { at: number; value: CompanyProfiles } | null = null;
@@ -65,9 +88,9 @@ export function resetCompanyProfiles(): void {
 export async function companyProfiles(open: () => JobsDb): Promise<CompanyProfiles> {
   const t = Date.now();
   if (cached && t - cached.at < POOL_TTL_MS) return cached.value;
-  if (failedAt !== null && t - failedAt < FAILURE_BACKOFF_MS) return cached?.value ?? EMPTY;
+  if (failedAt !== null && t - failedAt < FAILURE_BACKOFF_MS) return cached?.value ?? EMPTY_PROFILES;
   try {
-    const rows = await open().all<Row>(PROFILES_SQL);
+    const rows = await selectCompanyRows(open());
     cached = { at: Date.now(), value: profilesOf(rows) };
     failedAt = null;
     return cached.value;
@@ -75,12 +98,12 @@ export async function companyProfiles(open: () => JobsDb): Promise<CompanyProfil
     const msg = e instanceof Error ? e.message : "unknown";
     // Без 0005 стовпців немає: це не збій, просто ще нема чого показати.
     if (/no such column|no such table/i.test(msg)) {
-      cached = { at: Date.now(), value: EMPTY };
-      return EMPTY;
+      cached = { at: Date.now(), value: EMPTY_PROFILES };
+      return EMPTY_PROFILES;
     }
     console.warn(`jobs: company profiles read failed (${e instanceof Error ? e.name : "unknown"})`);
     failedAt = Date.now();
-    return cached?.value ?? EMPTY;
+    return cached?.value ?? EMPTY_PROFILES;
   }
 }
 
