@@ -1,30 +1,43 @@
 import type { CSSProperties } from "react";
 import { LogoMark } from "@/components/wordmark";
-import { tierVars } from "@/lib/card/tiers";
+import { MAX_LEVEL, tierVars } from "@/lib/card/tiers";
 import type { CardFace } from "@/lib/card/view";
 import { cn } from "@/lib/utils";
-import { SealBadge } from "./seal-badge";
+import { Seal } from "./seal";
 
 /**
- * Лицьовий бік картки у форматі банківської (напрям «Payday»): знак і номер, кругла
- * печатка-жетон з рівнем праворуч угорі, бал і роль, ім'я тисненням і
- * до трьох джерел з «gap» замість нуля. Позначка «Example card» лише на face.kind === "example".
+ * Лицьовий бік картки у форматі банківської (round4, макет dir-6): знак і номер, бал і роль,
+ * гільош-печатка прикрасою поруч з балом (без числа всередині), підпис Name / Level n of 10 /
+ * Finish трьома колонками. Джерела бала на лицьовому боці більше немає (лише на звороті).
+ * Позначка «Example card» лише на face.kind === "example", і лише коли hideTag не задано (на
+ * головній її замінює підпис під стосом карток).
  */
 export function CardFront({
   face,
   draw = false,
   spin = false,
+  /** Світлова смуга по картці (лише жива картка на головній). */
+  sweep = false,
+  /** Не показувати позначку «Example card»: на головній її замінює підпис під стосом. */
+  hideTag = false,
   className,
 }: {
   face: CardFace;
   draw?: boolean;
   /** Печатка повільно обертається після малювання (components/card/seal.tsx). */
   spin?: boolean;
+  sweep?: boolean;
+  hideTag?: boolean;
   className?: string;
 }) {
   const t = face.tier;
   return (
-    <div role="img" aria-label={face.summary} className={cn("ncj-face", className)} style={tierVars(t) as CSSProperties}>
+    <div
+      role="img"
+      aria-label={face.summary}
+      className={cn("ncj-face", sweep && "ncj-sweep", className)}
+      style={{ ...(tierVars(t) as CSSProperties), "--sweep-op": t.finish === "black" ? 0.14 : 0.55 } as CSSProperties}
+    >
       <div className="ncj-window">
         <div className="ncj-top">
           <span className="ncj-brand">
@@ -40,31 +53,31 @@ export function CardFront({
           <span className="ncj-of">
             of 100<b>{face.roleName}</b>
           </span>
+          {face.sealSeed !== null ? (
+            <Seal seed={face.sealSeed} level={t.sealLayers} inks={t.sealInks} strokeWidth={1.1} segments={6} draw={draw} spin={spin} className="ncj-mid-seal" />
+          ) : (
+            <span aria-hidden="true" className="ncj-mid-seal-empty" />
+          )}
         </div>
         <div className="ncj-bot">
-          <span className="ncj-name">{face.displayName}</span>
-          {face.stats.length > 0 ? (
-            <span className="ncj-stats">
-              {face.stats.slice(0, 3).map((s) => (
-                <span key={s.code} className={s.value === null ? "gap" : undefined}>
-                  {s.code}
-                  <b>{s.value ?? "gap"}</b>
-                </span>
-              ))}
-            </span>
-          ) : null}
+          <div className="ncj-bot-col ncj-name">
+            <span>Name</span>
+            <b>{face.displayName}</b>
+          </div>
+          <div className="ncj-bot-col">
+            <span>Level</span>
+            <b>
+              {face.level} of {MAX_LEVEL}
+            </b>
+          </div>
+          <div className="ncj-bot-col">
+            <span>Finish</span>
+            <b>{t.finishName}</b>
+          </div>
         </div>
       </div>
-      <SealBadge
-        seed={face.sealSeed}
-        tier={t}
-        value={face.level}
-        draw={draw}
-        spin={spin}
-        className={cn("ncj-face-badge", face.sealSeed === null && "ncj-badge-empty")}
-      />
       {face.marker ? <span className="ncj-tag ncj-tag-marker">{face.marker}</span> : null}
-      {face.kind === "example" ? <span className="ncj-tag ncj-tag-example">Example card</span> : null}
+      {face.kind === "example" && !hideTag ? <span className="ncj-tag ncj-tag-example">Example card</span> : null}
     </div>
   );
 }

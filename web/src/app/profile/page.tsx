@@ -41,6 +41,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   const done = briefDone(answers.step);
   const state = sourceState(identities);
   const x = identities.find((i) => i.kind === "x") ?? null;
+  const hasWallet = identities.some((i) => i.kind === "evm" || i.kind === "solana");
   // Модель довіри 13.09: нік X, який людина вписала, іде в ім'я на картці й без коду.
   const defaultName = suggestDisplayName(x?.value ?? null, user.email);
   const active = isActive(status);
@@ -100,6 +101,23 @@ export default async function ProfilePage({ searchParams }: Props) {
             className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-brand underline underline-offset-4"
           >
             Add X
+          </Link>
+        </div>
+      ) : null}
+
+      {done && !hasWallet ? (
+        <div className="grid gap-2 rounded-xl border-[1.5px] border-line bg-surface p-4 sm:p-5">
+          {/* Гаманець став обов'язковим 15.09 (як X); хто вже мав акаунт без нього, ми не блокуємо,
+              лише пропонуємо додати (власник 15.09, п.5). */}
+          <p className="text-sm text-ink">
+            Add a wallet. It is now part of the brief, like X: onchain history counts for every role and is the whole
+            Trader score.
+          </p>
+          <Link
+            href="/welcome?step=wallets"
+            className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-brand underline underline-offset-4"
+          >
+            Add a wallet
           </Link>
         </div>
       ) : null}

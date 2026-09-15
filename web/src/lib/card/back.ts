@@ -171,11 +171,6 @@ export function cardBack(json: string | Breakdown, connected?: ReadonlySet<Ident
   };
 }
 
-/** Рядок статистики лицьового боку: код і значення (null = прогалина). Не більше шести. */
-export function frontStats(back: CardBack | null): { code: string; value: number | null }[] {
-  return (back?.lines ?? []).slice(0, 6).map((l) => ({ code: l.code, value: l.value === null ? null : Math.round(l.value) }));
-}
-
 /** «GitHub 74.2, X 46.3 and an onchain bonus»: рядок причин для картинки X. */
 export function builtFrom(back: CardBack | null): string | null {
   if (!back) return null;

@@ -2,11 +2,12 @@ import { ArrowRight, Send, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { GithubLogo, XLogo } from "@/components/brand-icons";
-import { CardFront } from "@/components/card/card-front";
+import { CardStack } from "@/components/landing/card-stack";
 import { JobFeed } from "@/components/landing/job-feed";
 import { Odometer } from "@/components/landing/odometer";
 import { RollOnView } from "@/components/landing/roll-on-view";
 import { exampleFace } from "@/lib/card/example";
+import { underprintDataUri } from "@/lib/card/seal";
 import { appEnv, db } from "@/lib/db";
 import { homeBoard, updatedAgo } from "@/lib/jobs/home-board";
 import { roughCount } from "@/lib/jobs/instant";
@@ -27,25 +28,26 @@ const WRAP = "mx-auto max-w-[1280px] px-[clamp(16px,4vw,32px)]";
 /** Скільки рядків у стрічці панелі: сьогоднішні п'ять і далі стрічка. */
 const FEED_SIZE = 14;
 
-/** Що ми читаємо: те, що вже показує роботу людини. Лише публічне. X обов'язковий (анкета). */
+/** Що ми читаємо: те, що вже показує роботу людини. Лише публічне. X і гаманець обов'язкові (анкета). */
 const SOURCES = [
   { name: "X", note: "Required", body: "What you post, who replies, and who follows you.", icon: "x" },
-  { name: "Wallets", note: "Optional", body: "EVM and Solana. How long you've been onchain and what you do there.", icon: "wallet" },
+  { name: "Wallets", note: "Required", body: "EVM and Solana. How long you've been onchain and what you do there.", icon: "wallet" },
   { name: "GitHub", note: "Optional", body: "Repos, stars, and pull requests merged into other projects.", icon: "github" },
 ] as const;
 
 export default async function HomePage() {
   const now = new Date();
   const board = await homeBoard({ db, env: safeEnv(), jobs: jobsDb, now });
-  const face = exampleFace();
   const feed = board.available ? [...board.today.jobs, ...board.ticker].slice(0, FEED_SIZE) : [];
   const s = board.available ? board.stats : null;
   const ago = s ? updatedAgo(s.updatedMs, now.getTime()) : null;
 
+  const underprint = underprintDataUri("#0e0f12", 1);
+
   return (
     <>
       <section
-        className={`${WRAP} grid items-center gap-x-12 gap-y-10 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:pt-10`}
+        className={`${WRAP} relative grid items-center gap-x-12 gap-y-10 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:pt-10`}
       >
         <div>
           <h1 className="display max-w-[600px] text-hero">Get hired for what you&apos;ve actually done.</h1>
@@ -65,51 +67,49 @@ export default async function HomePage() {
                 maxLength={BRIEF_MAX_CHARS}
                 placeholder="Solidity engineer, DeFi, remote, from $150k"
               />
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <small className="text-sm text-ink-muted">Free for job seekers</small>
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
                 <button
                   type="submit"
-                  className="inline-flex h-12 items-center gap-2 rounded-full bg-ink px-5 font-semibold text-white transition-[background-color,transform] duration-300 hover:bg-brand-hover active:scale-[0.98]"
+                  className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-ink px-5 font-semibold text-white transition-[background-color,transform] duration-300 hover:bg-brand-hover active:scale-[0.98]"
                 >
                   Find a job
-                  <ArrowRight aria-hidden className="size-4 text-lemon" strokeWidth={2.5} />
+                  <ArrowRight aria-hidden className="size-4 text-white" strokeWidth={2.5} />
                 </button>
               </div>
             </div>
           </form>
         </div>
 
-        <div className="ncj-panel">
-          <div className="ncj-card ncj-panel-card">
-            <CardFront face={face} spin />
-          </div>
-          <p className="mt-5 ml-1 text-[0.8125rem] leading-[1.125rem] text-lemon-ink">
-            Built from public GitHub, X and wallet history. Yours comes with your jobs.
-          </p>
+        <CardStack face={exampleFace(10)} />
+        <div className="ncj-wave" aria-hidden="true" style={{ backgroundImage: `url("${underprint}")` }} />
+      </section>
 
-          <section id="today" aria-labelledby="today-h" className="ncj-sheet-jobs scroll-mt-24">
-            <header className="flex items-baseline justify-between gap-3 px-1 pb-3">
-              <h2 id="today-h" className="font-display text-[1.375rem] leading-7 font-bold tracking-[-0.02em] sm:text-[1.875rem] sm:leading-9">
-                {s ? (
-                  <RollOnView className="inline">
-                    <Odometer value={roughCount(s.live)} style={{ "--odo-delay": "0ms" } as CSSProperties} /> live jobs
-                  </RollOnView>
-                ) : (
-                  "Live jobs"
-                )}
-              </h2>
+      <section aria-labelledby="board-h" className={`${WRAP} pb-24`}>
+        <div className="ncj-board">
+          <div className="ncj-board-h">
+            <h2 id="board-h" className="font-display text-[1.375rem] leading-7 font-bold tracking-[-0.02em] sm:text-[1.875rem] sm:leading-9">
               {s ? (
-                <p className="text-right text-sm text-ink-muted">
+                <RollOnView className="inline">
+                  <Odometer value={roughCount(s.live)} style={{ "--odo-delay": "0ms" } as CSSProperties} /> live jobs
+                </RollOnView>
+              ) : (
+                "Live jobs"
+              )}
+            </h2>
+            {s ? (
+              <div className="ncj-chip-row">
+                <span className="ncj-chip-pill">
                   {s.sources > 0 ? `${roughCount(s.sources)} sources` : `${roughCount(s.companies)} companies`}
-                  {ago ? (
-                    <>
-                      <br />
-                      updated {ago}
-                    </>
-                  ) : null}
-                </p>
-              ) : null}
-            </header>
+                </span>
+                <span className="ncj-chip-pill">
+                  <i className="ncj-pulse-dot" aria-hidden="true" />
+                  Updated daily
+                </span>
+                {ago ? <span className="ncj-chip-pill">Last check {ago}</span> : null}
+              </div>
+            ) : null}
+          </div>
+          <section id="today" aria-labelledby="board-h" className="ncj-sheet-jobs scroll-mt-24">
             {feed.length > 0 ? (
               <JobFeed jobs={feed} />
             ) : (
@@ -127,15 +127,12 @@ export default async function HomePage() {
             We read the work you&apos;ve <span className="ncj-mark">already done</span>, and find jobs that fit it.
           </h2>
           <ul className="mt-12 grid overflow-hidden rounded-[28px] border-[1.5px] border-line md:grid-cols-3">
-            {SOURCES.map((src, i) => (
+            {SOURCES.map((src) => (
               <li
                 key={src.name}
                 className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-4 p-7 max-md:[&+&]:border-t-[1.5px] md:[&+&]:border-l-[1.5px] [&+&]:border-line"
               >
-                <span
-                  aria-hidden="true"
-                  className={`grid size-12 place-items-center rounded-[14px] ${i === 0 ? "bg-lemon" : "bg-soft"}`}
-                >
+                <span aria-hidden="true" className="grid size-12 place-items-center rounded-[14px] bg-soft">
                   {src.icon === "x" ? (
                     <XLogo className="size-6" />
                   ) : src.icon === "wallet" ? (
@@ -160,7 +157,7 @@ export default async function HomePage() {
             <span className="inline-flex items-center gap-2">
               <Send aria-hidden className="size-5" strokeWidth={2} /> Up to 5 matching jobs a day, by Telegram or email.
             </span>
-            <span className="text-ink-muted">Free for job seekers. Public data only.</span>
+            <span className="text-ink-muted">Public data only.</span>
           </div>
         </div>
       </section>

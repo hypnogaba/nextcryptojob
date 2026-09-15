@@ -6,7 +6,7 @@ import { readOnlyJobsDb, type JobsDb } from "@/lib/jobs-db";
 import { resetCompanyProfiles } from "@/lib/jobs/companies";
 import { resetCrawlPool } from "@/lib/jobs/pool";
 import { crmDb, run } from "@/test/crm-fixtures";
-import { exec, harness, RedirectCalled, resetHarness } from "@/test/harness";
+import { exec, harness, resetHarness } from "@/test/harness";
 import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import { migratedD1 } from "@/test/sqlite-d1";
 import JobsPage from "./page";
@@ -48,10 +48,11 @@ async function signIn(userId: string): Promise<void> {
 const render = async () => renderToStaticMarkup(await JobsPage());
 
 describe("/jobs", () => {
-  it("sends a visitor without a session to /login", async () => {
-    const err = await JobsPage().catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(RedirectCalled);
-    expect((err as RedirectCalled).url).toBe("/login");
+  it("invites a visitor without a session to start a profile, instead of sending them nowhere", async () => {
+    const html = await render();
+    expect(html).toContain("Create a profile and get your jobs right away.");
+    expect(html).toMatch(/<a[^>]*href="\/start"[^>]*>Start your profile<\/a>/);
+    expect(html).toContain('href="/login"');
   });
 
   it("shows this person's jobs and never another person's", async () => {
@@ -108,10 +109,10 @@ describe("/jobs", () => {
       ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
     await signIn("ada");
     const html = await render();
-    // Оцінка приглушеним пунктиром, окремо від зарплати (зарплата лимонною пігулкою).
+    // Оцінка приглушеним пунктиром, окремо від зарплати (зарплата звичайним текстом, round4).
     expect(html).toMatch(/<span class="[^"]*border-dashed[^"]*text-ink-muted[^"]*">est\. \$180k to \$225k \(web3\.career estimate\)<\/span>/);
     // Зарплата роботодавця є: оцінки не видно.
-    expect(html).toMatch(/<span class="[^"]*bg-lemon[^"]*">\$120k to \$150k<\/span>/);
+    expect(html).toMatch(/<span class="[^"]*text-right[^"]*">\$120k to \$150k<\/span>/);
     expect(html).not.toContain("$300k");
   });
 
@@ -172,7 +173,7 @@ describe("/jobs: Jobs for you now", () => {
     expect(ada).toContain("Your best matches today");
     expect(ada).toContain("Solidity Engineer");
     expect(ada).toContain("Rust Engineer");
-    expect(ada).toMatch(/<span class="[^"]*bg-lemon[^"]*">\$120k to \$150k<\/span>/);
+    expect(ada).toMatch(/<span class="[^"]*text-right[^"]*">\$120k to \$150k<\/span>/);
     expect(ada).toContain("Why this fits you");
     expect(ada).toContain("Matches your Engineer role.");
     expect(ada).toContain("Remote, as you asked.");

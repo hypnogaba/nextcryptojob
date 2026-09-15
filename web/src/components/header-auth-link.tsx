@@ -10,7 +10,7 @@ const NAV_LINK =
   "inline-flex min-h-10 items-center rounded-full px-3 max-sm:px-2 text-[0.9375rem] font-medium text-ink-muted transition-colors duration-300 hover:bg-soft hover:text-ink aria-[current=page]:bg-soft aria-[current=page]:text-ink";
 const MENU_LINK = "block rounded-[10px] px-3 py-2.5 text-[0.9375rem] font-medium text-ink hover:bg-soft";
 const PILL =
-  "inline-flex min-h-10 items-center gap-2 rounded-full px-4 max-sm:gap-1.5 max-sm:px-3 text-sm font-semibold whitespace-nowrap transition-colors duration-300";
+  "inline-flex min-h-10 items-center gap-2 rounded-[10px] px-4 max-sm:gap-1.5 max-sm:px-3 text-sm font-semibold whitespace-nowrap transition-colors duration-300";
 
 /** Другорядне в одному меню «More» (власник 14.09, C1): сайт для пошуку роботи, решта окремо. */
 const MORE = [
@@ -56,7 +56,8 @@ export function HeaderNav() {
     };
   }, []);
 
-  const jobsHref = signedIn ? "/jobs" : "/#today";
+  // /jobs сама показує запрошення створити профіль, коли людина не ввійшла (власник 15.09, п.9).
+  const jobsHref = "/jobs";
   const current = (href: string) => (pathname === href ? "page" : undefined);
 
   return (
@@ -120,7 +121,7 @@ export function HeaderNav() {
           </Link>
           <Link href="/#find" className={`${PILL} bg-ink text-white hover:bg-brand-hover`}>
             Find a job
-            <ArrowRight aria-hidden className="size-4 text-lemon" strokeWidth={2.5} />
+            <ArrowRight aria-hidden className="size-4 text-white" strokeWidth={2.5} />
           </Link>
         </>
       )}

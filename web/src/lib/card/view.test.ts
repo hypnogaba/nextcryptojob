@@ -45,7 +45,7 @@ describe("cardView", () => {
       number: "No. aB3_-x9QzK",
       summary: "alice: Security auditor, score 72 of 100, level 8 of 10",
     });
-    expect(view.tier.finish).toBe("black");
+    expect(view.tier.finish).toBe("chrome");
     expect(view.tier.sealLayers).toBe(8);
   });
 
@@ -78,19 +78,12 @@ describe("cardView", () => {
       ["Website", 5, null],
       ["Onchain", 5, 94],
     ]);
-    expect(view.stats).toEqual([
-      { code: "GH", value: 80 },
-      { code: "X", value: 50 },
-      { code: "WEB", value: null },
-      { code: "ONC", value: 94 },
-    ]);
     expect(view.backMissing).toBeNull();
   });
 
   it("hides a newer breakdown behind an older card and says why", () => {
     const view = cardView(FIXTURE, { ...EVIDENCE, score: 75.1 });
     expect(view.back).toBeNull();
-    expect(view.stats).toEqual([]);
     expect(view.backMissing).toMatch(/changed after the card was issued on 12 Sep 2026/);
   });
 

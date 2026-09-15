@@ -46,21 +46,31 @@ describe("EXAMPLE tag", () => {
 });
 
 describe("CardFront", () => {
-  it("shows score, role, the level in the round seal badge, name, three stats and the card number", () => {
+  it("shows score, role, name, level and finish in the footer, the card number, and no per-source stats", () => {
     const html = renderToStaticMarkup(<CardFront face={exampleFace()} />);
-    for (const text of [">73<", "of 100<b>Engineer</b>", "<small>LVL</small><b>8</b>", "@kestrel.dev", ">GH<", ">ONC<", "No. kSt7rEl0dv", "Season 1"]) {
+    for (const text of [
+      ">73<",
+      "of 100<b>Engineer</b>",
+      "@kestrel.dev",
+      ">Level<",
+      "<b>8 of 10</b>",
+      ">Finish<",
+      "<b>Chrome</b>",
+      "No. kSt7rEl0dv",
+      "Season 1",
+    ]) {
       expect(html).toContain(text);
     }
-    expect(html).toContain('class="ncj-badge ncj-face-badge"');
-    // Четверте джерело (сайт, gap) на лицьовому боці не вміщається: воно в розкладі під карткою.
-    expect(html).not.toContain(">WEB<");
+    expect(html).toContain("ncj-mid-seal");
+    // Джерела бала («GH 74 X 46 ONC 92») на лицьовому боці більше немає (лише на звороті).
+    for (const gone of [">GH<", ">ONC<", "ncj-stats", "ncj-face-badge"]) expect(html).not.toContain(gone);
   });
 
-  it("draws the seal only once the card is issued, and keeps the level in the badge", () => {
+  it("draws the seal only once the card is issued, and keeps the level in the footer either way", () => {
     const html = renderToStaticMarkup(<CardFront face={{ ...exampleFace(), sealSeed: null, kind: "draft" }} />);
     expect(html).not.toContain("ncj-seal");
-    expect(html).toContain("ncj-badge-empty");
-    expect(html).toContain("<small>LVL</small><b>8</b>");
+    expect(html).toContain("ncj-mid-seal-empty");
+    expect(html).toContain("<b>8 of 10</b>");
   });
 });
 

@@ -3,10 +3,10 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
-// Кнопки пігулкою (напрям «Payday»): чорна головна, контурна з лінією, кільце фокуса з
+// Кнопки прямокутні, 10px (макет round4): чорна головна, контурна з лінією, кільце фокуса з
 // base-шару globals.css, натискання трохи стискає.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-sm font-semibold whitespace-nowrap transition-[background-color,border-color,color,transform] duration-300 ease-(--ease-enter) outline-none select-none active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-[10px] border border-transparent bg-clip-padding text-sm font-semibold whitespace-nowrap transition-[background-color,border-color,color,transform] duration-300 ease-(--ease-enter) outline-none select-none active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -19,7 +19,7 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive:
           "border-destructive/50 bg-surface text-destructive hover:bg-destructive/10",
-        link: "text-ink underline decoration-lemon decoration-2 underline-offset-4 hover:decoration-ink",
+        link: "text-ink underline decoration-ink decoration-2 underline-offset-4 hover:decoration-ink-3",
       },
       size: {
         default:

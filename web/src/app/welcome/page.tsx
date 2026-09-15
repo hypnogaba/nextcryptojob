@@ -18,7 +18,6 @@ import { AddEmailForm } from "../account/add-email-form";
 import { DailyJobsForm } from "../settings/daily-jobs-form";
 import { saveDeliveryAction } from "./actions/delivery";
 import { continueSourcesAction } from "./actions/sources";
-import { skipWalletsAction } from "./actions/wallets";
 import { parseWait } from "./flow";
 import { StepShell } from "./step-shell";
 import { PlaceForm } from "./steps/place-form";
@@ -201,19 +200,20 @@ export default async function WelcomePage({ searchParams }: Props) {
       );
 
     case "wallets":
+      // Гаманець обов'язковий, як X (власник 15.09, п.5): без «Skip for now», WalletsForm
+      // сама не пускає далі без жодної адреси при першому проході (editing=false).
       return shell(
         step,
-        `Optional, and each wallet raises your score. Add up to ${MAX_WALLETS}: onchain history counts for every role and is the whole Trader score.`,
-        <div className="grid gap-8">
-          <WalletsForm
-            editing={editing}
-            initial={identities
-              .filter((i) => i.kind === "evm" || i.kind === "solana")
-              .map((i) => i.value)
-              .join("\n")}
-          />
-          {editing ? null : <SkipForNow action={skipWalletsAction} note="Optional. You can add wallets later from your profile." />}
-        </div>,
+        editing
+          ? `Each wallet raises your score. Add up to ${MAX_WALLETS}: onchain history counts for every role and is the whole Trader score.`
+          : `Required to continue, like X. Add at least one address, up to ${MAX_WALLETS}: onchain history counts for every role and is the whole Trader score.`,
+        <WalletsForm
+          editing={editing}
+          initial={identities
+            .filter((i) => i.kind === "evm" || i.kind === "solana")
+            .map((i) => i.value)
+            .join("\n")}
+        />,
       );
 
     case "sources":

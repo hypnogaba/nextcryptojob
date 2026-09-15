@@ -5,7 +5,7 @@ import { loadAnswers } from "@/lib/onboarding/store";
 import { savePlaceAction, saveRolesAction, saveTargetAction } from "./actions/answers";
 import { saveDeliveryAction } from "./actions/delivery";
 import { continueSourcesAction, saveSourcesAction } from "./actions/sources";
-import { saveWalletsAction, skipWalletsAction } from "./actions/wallets";
+import { saveWalletsAction } from "./actions/wallets";
 import { saveXAction } from "./actions/x";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
@@ -184,18 +184,21 @@ describe("brief first, then jobs, then the optional stand out steps", () => {
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "x" }]);
   });
 
-  it("X is required; wallets and sources can be skipped; the last step leads to the score page", async () => {
+  it("X and wallets are required; sources can be skipped; the last step leads to the score page", async () => {
     await signInAt("u", "x", '["engineer"]');
-    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'evm', ?)", EVM);
     // Без X далі не пускає: крок гаманців відсилає назад, а порожній нік не зберігається.
-    await expect(run(skipWalletsAction())).resolves.toBe("/welcome");
+    await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/welcome");
     await expect(run(saveXAction({}, form({ handle: "  " })))).resolves.toMatchObject({ errors: { handle: "Enter your X handle." } });
     await expect(run(saveXAction({}, form({ handle: "https://x.com/Ada_Dev" })))).resolves.toBe("/welcome?step=wallets");
-    await expect(run(skipWalletsAction())).resolves.toBe("/welcome?step=sources");
+    // Гаманець обов'язковий, як X (власник 15.09, п.5): порожнє поле не пускає далі.
+    await expect(run(saveWalletsAction({}, form({ wallets: "" })))).resolves.toMatchObject({
+      message: { tone: "error", text: "Add at least one EVM or Solana address to continue." },
+    });
+    await expect(run(saveWalletsAction({}, form({ wallets: EVM })))).resolves.toBe("/welcome?step=sources");
     await expect(run(continueSourcesAction())).resolves.toBe("/welcome/score");
     expect(rows("SELECT kind, value FROM identities ORDER BY id")).toEqual([
-      { kind: "evm", value: EVM },
       { kind: "x", value: "ada_dev" },
+      { kind: "evm", value: EVM },
     ]);
     expect(rows("SELECT onboarding_step FROM users")).toEqual([{ onboarding_step: "done" }]);
   });

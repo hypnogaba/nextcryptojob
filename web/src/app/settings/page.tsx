@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { AccountShell } from "@/components/account-nav";
+import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { HINT } from "@/components/form/styles";
 import { loadSettings } from "@/lib/account/settings";
@@ -9,6 +11,7 @@ import { timezoneList } from "@/lib/account/timezones";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { AddEmailForm } from "../account/add-email-form";
+import { TelegramPanel } from "../account/telegram-panel";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
 import { VisibilityForm } from "./visibility-form";
@@ -29,23 +32,31 @@ function Section({ id, title, intro, children }: { id: string; title: string; in
   );
 }
 
-/** Налаштування: щоденні вакансії, видимість, контакт, свої дані. */
+/** Налаштування, round4 (макет design-round4/dir-6): Sign-in, Daily jobs, Privacy, Your data,
+ * вихід, у бічному меню кабінету (AccountShell). Кожна група та сама поведінка й ті самі
+ * server actions, що й раніше; лише розкладка й навігація нові (власник 15.09, п.7). */
 export default async function SettingsPage() {
   const user = await requireUser();
   const s = await loadSettings(db(), user.id);
   if (!s) redirect("/login");
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="display text-title">Settings</h1>
-        <Link
-          href="/account"
-          className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
-        >
-          Back to account
-        </Link>
-      </div>
+    <AccountShell active="settings" title="Settings" sub="How we reach you and who can see you.">
+      <div className="grid gap-6">
+      <Section id="signin" title="Sign-in" intro="Email and Telegram: how you sign in, and where daily jobs can go.">
+        <div className="grid gap-1">
+          <span className="text-sm font-semibold text-ink-muted">Email</span>
+          <span className="text-ink">{user.email ?? "Not added yet"}</span>
+        </div>
+        {user.email ? null : (
+          <div className="border-t border-line pt-4">
+            <AddEmailForm intro="We send a code to check it's yours. Then daily jobs can go there, and you can sign in with it." />
+          </div>
+        )}
+        <div className="border-t border-line pt-4">
+          <TelegramPanel userId={user.id} />
+        </div>
+      </Section>
 
       <Section id="daily" title="Daily jobs" intro="Up to 5 jobs that match your roles, once a day at the hour you choose.">
         {s.email ? null : (
@@ -109,6 +120,11 @@ export default async function SettingsPage() {
         </Link>
         .
       </p>
-    </div>
+
+      <div>
+        <SignOutButton />
+      </div>
+      </div>
+    </AccountShell>
   );
 }

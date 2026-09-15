@@ -6,6 +6,9 @@ import { saveStep } from "@/lib/onboarding/store";
 import { field, goNext, identityWriteGuard, recordChange, stepContext, type StepState } from "../flow";
 
 // Крок гаманців: одне поле, багато адрес. Помилка кожної адреси окремо.
+// Гаманець обов'язковий, як X (власник 15.09, п.5): при першому проході (wasDone === false)
+// без жодної адреси далі не пускаємо, на сервері, а не лише кнопкою в WalletsForm. Хто вже
+// пройшов усе раніше (редагування з профілю), може лишити поле порожнім: не блокуємо існуючих.
 
 export async function saveWalletsAction(_prev: StepState, form: FormData): Promise<StepState> {
   const ctx = await stepContext("wallets");
@@ -15,6 +18,9 @@ export async function saveWalletsAction(_prev: StepState, form: FormData): Promi
   if (errors.length > 0) {
     return { errors: Object.fromEntries(errors.map((e) => [e.input, e.error])), values };
   }
+  if (!ctx.wasDone && wallets.length === 0) {
+    return { message: { tone: "error", text: "Add at least one EVM or Solana address to continue." }, values };
+  }
   const limited = await identityWriteGuard(ctx);
   if (limited) return { message: limited, values };
 
@@ -23,11 +29,4 @@ export async function saveWalletsAction(_prev: StepState, form: FormData): Promi
   await saveStep(ctx.d, ctx.user.id, "wallets", {}, ctx.answers.step);
   if (res.added + res.removed > 0) await recordChange(ctx, "wallets");
   return goNext(ctx, "wallets");
-}
-
-/** «Skip for now»: гаманці не обов'язкові, добірка без них працює. Адрес не чіпає. */
-export async function skipWalletsAction(): Promise<void> {
-  const ctx = await stepContext("wallets");
-  await saveStep(ctx.d, ctx.user.id, "wallets", {}, ctx.answers.step);
-  await goNext(ctx, "wallets");
 }

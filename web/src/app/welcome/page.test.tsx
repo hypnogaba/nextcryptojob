@@ -170,14 +170,23 @@ describe("X step", () => {
   });
 });
 
-describe("wallets and sources: optional, each one raises the score, no Sherlock", () => {
-  it("wallets say up to 10 and that each raises the score", async () => {
+describe("wallets step: required like X, no 'Skip for now'; sources step: optional, no Sherlock", () => {
+  it("wallets say up to 10, required, no skip", async () => {
     await signIn({ step: "wallets", roles: '["bd"]' });
     exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
     const html = await render();
-    expect(html).toContain("each wallet raises your score. Add up to 10");
+    expect(html).toContain("Required to continue, like X. Add at least one address, up to 10");
     expect(html).toContain("0 of 10 wallets");
-    expect(html).toContain("Skip for now");
+    expect(html).not.toContain("Skip for now");
+  });
+
+  it("editing wallets from the profile drops the 'required' copy: an existing user is not locked out", async () => {
+    await signIn({ step: "done", roles: '["bd"]' });
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
+    const html = await render("wallets");
+    expect(html).toContain("Each wallet raises your score. Add up to 10");
+    expect(html).not.toContain("Required to continue");
+    expect(html).not.toContain("Skip for now");
   });
 
   it("sources have GitHub, YouTube and a website, and no Sherlock", async () => {
