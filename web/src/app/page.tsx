@@ -29,10 +29,11 @@ const WRAP = "mx-auto max-w-[1280px] px-[clamp(16px,4vw,32px)]";
 const FEED_SIZE = 14;
 
 /** Що ми читаємо: те, що вже показує роботу людини. Лише публічне. X і гаманець обов'язкові (анкета). */
+// Раунд 5, п.12: без позначок Required/Optional біля джерел (текст пояснює це в анкеті самій).
 const SOURCES = [
-  { name: "X", note: "Required", body: "What you post, who replies, and who follows you.", icon: "x" },
-  { name: "Wallets", note: "Required", body: "EVM and Solana. How long you've been onchain and what you do there.", icon: "wallet" },
-  { name: "GitHub", note: "Optional", body: "Repos, stars, and pull requests merged into other projects.", icon: "github" },
+  { name: "X", body: "What you post, who replies, and who follows you.", icon: "x" },
+  { name: "Wallets", body: "EVM and Solana. How long you've been onchain and what you do there.", icon: "wallet" },
+  { name: "GitHub", body: "Repos, stars, and pull requests merged into other projects.", icon: "github" },
 ] as const;
 
 export default async function HomePage() {
@@ -142,22 +143,16 @@ export default async function HomePage() {
                   )}
                 </span>
                 <div>
-                  <h3 className="flex items-center gap-2 font-display text-xl leading-7 font-semibold">
-                    {src.name}
-                    <small className="rounded-full bg-soft px-2 py-0.5 font-sans text-xs font-semibold text-ink-muted">
-                      {src.note}
-                    </small>
-                  </h3>
+                  <h3 className="font-display text-xl leading-7 font-semibold">{src.name}</h3>
                   <p className="mt-1 text-[0.9375rem] leading-[22px] text-ink-muted">{src.body}</p>
                 </div>
               </li>
             ))}
           </ul>
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 text-lg leading-7">
+          <div className="mt-8 flex flex-wrap items-center gap-4 text-lg leading-7">
             <span className="inline-flex items-center gap-2">
               <Send aria-hidden className="size-5" strokeWidth={2} /> Up to 5 matching jobs a day, by Telegram or email.
             </span>
-            <span className="text-ink-muted">Public data only.</span>
           </div>
         </div>
       </section>

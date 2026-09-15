@@ -116,7 +116,7 @@ describe("/welcome/score", () => {
     expect(html).toContain("Add more wallets: you have 1 of 10.");
   });
 
-  it("with the card made: the picture, Download image and Share on X with the public link", async () => {
+  it("with the card made: the picture, Download image and Share on X, no repeated public-card blurb (item 5)", async () => {
     await finished();
     job("done");
     score("marketing_content", 61.2);
@@ -128,7 +128,8 @@ describe("/welcome/score", () => {
     expect(html).toMatch(/href="https:\/\/x\.com\/intent\/post\?text=I%20scored%2061%20in%20Marketing%20%26%20content/);
     expect(html).toContain(encodeURIComponent(`https://nextcryptojob.xyz/c/${issued.slug}`));
     expect(html).toContain("Share on X");
-    expect(html).toContain(`href="/c/${issued.slug}"`);
+    expect(html).not.toContain("Open your public card");
+    expect(html).not.toContain("you can change it on your profile");
     expect(html).not.toContain("Making your card…");
   });
 

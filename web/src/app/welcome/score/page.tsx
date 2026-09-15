@@ -183,16 +183,6 @@ export default async function ScorePage() {
               </a>
             </Button>
           </div>
-          <p className="text-sm text-ink-muted">
-            <Link href={cardPath(active.slug)} className={LINK}>
-              Open your public card
-            </Link>{" "}
-            or get the{" "}
-            <a href={`${cardPath(active.slug)}/share/wide`} download className={LINK}>
-              16:9 image
-            </a>
-            . The name on it is {view.displayName}; you can change it on your profile.
-          </p>
           {stale ? (
             <div className="grid gap-2 border-t border-line pt-4">
               <p className="text-sm text-ink">

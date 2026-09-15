@@ -98,14 +98,17 @@ describe("home page", () => {
     expect(text(html)).not.toContain("Today's jobs did not load just now.");
   });
 
-  it("says what we read: X and wallets required, GitHub optional, delivery by Telegram or email", async () => {
+  it("says what we read: X, wallets and GitHub, delivery by Telegram or email", async () => {
     const t = text(await home());
     expect(t).toContain("We read the work you've already done, and find jobs that fit it.");
-    expect(t).toContain("XRequired");
-    expect(t).toContain("WalletsRequired");
-    expect(t).toContain("GitHubOptional");
+    // Раунд 5, п.12: без позначок Required/Optional і без рядка «Public data only.».
+    expect(t).toContain("X");
+    expect(t).toContain("Wallets");
+    expect(t).toContain("GitHub");
+    expect(t).not.toContain("Required");
+    expect(t).not.toContain("Optional");
     expect(t).toContain("Up to 5 matching jobs a day, by Telegram or email.");
-    expect(t).toContain("Public data only.");
+    expect(t).not.toContain("Public data only.");
     expect(t).not.toContain("Free for job seekers");
   });
 

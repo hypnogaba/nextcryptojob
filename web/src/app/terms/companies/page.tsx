@@ -1,8 +1,7 @@
-import { LegalPage, legalMetadata } from "@/components/legal-page";
-import { LEGAL_DOCS } from "@/lib/legal/docs";
+import { redirect } from "next/navigation";
 
-export const metadata = legalMetadata(LEGAL_DOCS.termsCompanies);
-
-export default function CompanyTermsPage() {
-  return <LegalPage doc={LEGAL_DOCS.termsCompanies} />;
+// Раунд 5, п.11: "Company terms" злито в один пункт "Terms" (/terms, розділ #companies).
+// Старі посилання з кабінету компанії й листів не ламаємо: редирект сюди й далі.
+export default function CompanyTermsRedirect(): never {
+  redirect("/terms#companies");
 }
