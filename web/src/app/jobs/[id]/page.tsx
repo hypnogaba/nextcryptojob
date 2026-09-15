@@ -11,7 +11,7 @@ import { loadPublicJob, type PublicJobPage } from "@/lib/crm/public-jobs";
 import { appEnv, db } from "@/lib/db";
 import { formatSalary } from "@/lib/digest/format";
 import { isId } from "@/lib/ids";
-import { companyKey } from "@/lib/jobs/clean";
+import { brandKey } from "@/lib/jobs/clean";
 import { companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { jobPostingJsonLd, jsonLdScript } from "@/lib/jobs/job-posting";
 import { tokenChip, type TokenChip } from "@/lib/jobs/token";
@@ -69,7 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  */
 async function companyToken(company: string, verifiedDomain: string | null): Promise<{ token: TokenChip | null; site: string | null }> {
   const profiles = await companyProfiles(jobsDb);
-  const known = profileFor(profiles, companyKey(company));
+  const known = profileFor(profiles, brandKey(company));
   return {
     token: tokenChip(known?.token, new Date()),
     site: known?.domain && known.domain !== verifiedDomain ? known.domain : null,

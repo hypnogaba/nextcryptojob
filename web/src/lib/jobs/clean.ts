@@ -33,3 +33,26 @@ export function isNonCryptoCompany(key: string | null | undefined, name?: string
   if (key && NON_CRYPTO_COMPANIES.has(key.trim().toLowerCase())) return true;
   return !!name && NON_CRYPTO_COMPANIES.has(companyKey(name));
 }
+
+/**
+ * Слова, що позначають той самий бренд під іншою юридичною формою, не просто суфікс на кшталт
+ * Inc/Ltd, а ціле окреме слово: «Morpho» і «Morpho Labs», «Offchain» і «Offchain Labs», одна
+ * компанія (власник 15.09: «Account Growth, Morpho, Paris» і «Account Growth, Morpho Labs, Paris»
+ * поруч, «погане лице»). Навмисно вужчий список, ніж discover.ts looseKey (там ще protocol/network
+ * і подібне, для іншої мети, чи заводити нову дошку ATS): тут лише слова, які власник назвав
+ * напряму, щоб не злити «Acme Protocol» з «Acme» чи «Solana Foundation» з «Solana Labs» (різні
+ * організації).
+ */
+const COMPANY_ALIAS_WORDS = new Set(["labs", "lab", "foundation"]);
+
+/**
+ * companyKey без слів-псевдонімів бренду: «Morpho» і «Morpho Labs» дають один ключ. Для дедупу
+ * вакансій (jobs/ids.ts dedupeKey, jobs/prepare.ts company_key і добірка/сайт/лист/бот через той
+ * самий стовпець), не для companyKey самого: NON_CRYPTO_COMPANIES і решта точних звірянь лишаються
+ * на companyKey.
+ */
+export function brandKey(name: string): string {
+  const words = companyKey(name).split(" ").filter(Boolean);
+  const core = words.filter((w) => !COMPANY_ALIAS_WORDS.has(w));
+  return (core.length ? core : words).join(" ");
+}

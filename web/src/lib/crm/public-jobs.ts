@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { cleanText, companyJobLocation } from "@/lib/digest/format";
 import { jobsDb, type JobsDb } from "@/lib/jobs-db";
-import { companyKey } from "@/lib/jobs/clean";
+import { brandKey } from "@/lib/jobs/clean";
 import { type CompanyProfiles, companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { jobVia } from "@/lib/jobs/link";
 import { crawlPool, parseDbTime, publicSalary, type PoolJob } from "@/lib/jobs/pool";
@@ -99,8 +99,8 @@ function companyPoolJob(r: LiveRow, env: { SITE_URL?: string }): PoolJob {
     postedAt: isoTime(r.published_at),
     postedMs,
     haystack: foldText([r.title, r.company_name, ...tagsOf(r.tags)].join(" ")),
-    // Як companyJob в engine/src/digest/jobs.ts: ключ компанії з назви, місце «Remote or Lisbon».
-    companyKey: companyKey(r.company_name),
+    // Як companyJob в engine/src/digest/jobs.ts: ключ компанії з назви (brandKey), місце «Remote or Lisbon».
+    companyKey: brandKey(r.company_name),
     location: companyJobLocation(r.remote_mode, r.city),
     country: r.country,
     seenMs: null,

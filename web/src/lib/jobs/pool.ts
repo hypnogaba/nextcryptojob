@@ -1,7 +1,7 @@
 import type { RoleKey } from "@/lib/card/roles";
 import { cleanText, plausibleSalary, safeUrl } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
-import { companyKey, isNonCryptoCompany } from "./clean";
+import { brandKey, isNonCryptoCompany } from "./clean";
 import { foldText, isRemoteLocation } from "./place";
 import { titleRoles } from "./roles";
 
@@ -238,7 +238,11 @@ export function crawlJob(r: PoolRow): PoolJob | null {
     postedAt: postedMs === null ? null : new Date(postedMs).toISOString().replace(/\.\d{3}Z$/, "Z"),
     postedMs,
     haystack: foldText([title, company, ...tags].join(" ")),
-    companyKey: r.company_key || companyKey(r.company),
+    // brandKey, не голий company_key: «Morpho»/«Morpho Labs» одна компанія для правила «одна
+    // вакансія на компанію» (match.ts). Рядки, записані до цієї правки, доженуть при наступному
+    // скані (upsert оновлює company_key); до того читаємо через brandKey ще раз, він безпечний
+    // для вже-loose значення (без слів-псевдонімів повторний прохід нічого не змінює).
+    companyKey: r.company_key ? brandKey(r.company_key) : brandKey(r.company),
     location: location ?? (remote ? "Remote" : null),
     country: r.country,
     seenMs: parseDbTime(r.fetched_at),

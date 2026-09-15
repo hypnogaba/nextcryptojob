@@ -1,4 +1,4 @@
-import { companyKey } from "./clean";
+import { brandKey } from "./clean";
 import type { JobsDb } from "@/lib/jobs-db";
 import { FAILURE_BACKOFF_MS, POOL_TTL_MS } from "./pool";
 import { type TokenColumns, type TokenQuote, tokenQuoteOf } from "./token";
@@ -43,12 +43,16 @@ export const EMPTY_PROFILES: CompanyProfiles = { byKey: new Map(), domains: new 
 
 type Row = { name: string; domain: string | null; about: string | null } & TokenColumns;
 
-/** Рядки реєстру → профілі за ключем. Два рядки з одним ключем: перший непорожній домен, опис і токен. */
+/**
+ * Рядки реєстру → профілі за ключем. Ключ тут brandKey, не голий companyKey: «Jito Labs» двома
+ * рядками (два ATS, 15.09: дубль у companies) і будь-яка пара «X» / «X Labs» чи «X Foundation»
+ * зливаються в один профіль. Два рядки з одним ключем: перший непорожній домен, опис і токен.
+ */
 export function profilesOf(rows: readonly Row[]): CompanyProfiles {
   const byKey = new Map<string, CompanyProfile>();
   const domains = new Set<string>();
   for (const r of rows) {
-    const key = companyKey(r.name);
+    const key = brandKey(r.name);
     if (!key) continue;
     const domain = cleanDomain(r.domain);
     const about = r.about?.replace(/\s+/g, " ").trim() || null;
@@ -107,9 +111,9 @@ export async function companyProfiles(open: () => JobsDb): Promise<CompanyProfil
   }
 }
 
-/** Профіль компанії вакансії за її ключем; null, якщо про неї нічого не знаємо. */
+/** Профіль компанії вакансії за її ключем (brandKey); null, якщо про неї нічого не знаємо. */
 export function profileFor(p: CompanyProfiles, key: string | null | undefined, name?: string): CompanyProfile | null {
-  return p.byKey.get(key || companyKey(name ?? "")) ?? null;
+  return p.byKey.get(key || brandKey(name ?? "")) ?? null;
 }
 
 /** Адреса значка компанії на нашому сайті (/api/logo), або null без домену. */

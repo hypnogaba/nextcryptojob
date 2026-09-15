@@ -1,7 +1,7 @@
 import { SCORING_BASIS_SQL } from "@/lib/consent";
 import type { JobsDb } from "@/lib/jobs-db";
 import { isRoleKey } from "@/lib/card/roles";
-import { companyKey } from "@/lib/jobs/clean";
+import { brandKey } from "@/lib/jobs/clean";
 import { type CompanyProfiles, companyProfiles, EMPTY_PROFILES, profileFor } from "@/lib/jobs/companies";
 import type { FitContext } from "@/lib/jobs/fit";
 import type { BriefRow } from "@/lib/jobs/instant";
@@ -224,7 +224,7 @@ async function crawlDetails(
   return new Map(
     rows.map((r) => {
       const estimate = estimateText(salaryEstimateOf(r));
-      const known = profileFor(profiles, companyKey(r.company));
+      const known = profileFor(profiles, brandKey(r.company));
       return [
       `nr:${r.id}`,
       {

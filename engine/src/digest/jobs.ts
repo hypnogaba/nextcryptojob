@@ -7,7 +7,7 @@
 // контракт листа), тож лишаються з часів, коли вакансії читались з бази NextRole (до 14.09.2026).
 import type { Db } from "../pipeline/db.js";
 import { ATS_PROVIDERS } from "../jobs/types.js";
-import { companyKey, isNonCryptoCompany } from "./clean.js";
+import { brandKey, isNonCryptoCompany } from "./clean.js";
 import type { JobsDb } from "./jobs-db.js";
 import { annualRange, type DigestJob, formatSalary, isFresh, isRemoteLocation, type JobSalary } from "./match.js";
 import { parseRoles, titleRoles } from "./roles.js";
@@ -133,7 +133,10 @@ export function crawlJob(r: PoolRow): { job: DigestJob } | { drop: "tag" | "comp
   return {
     job: {
       ref: `nr:${r.id}`, source: "nextrole", id: r.id, title: r.title.trim(), company: r.company.trim(),
-      companyKey: r.company_key || companyKey(r.company), url: r.url, location: r.location?.trim() || null,
+      // brandKey, не голий company_key: «Morpho»/«Morpho Labs» мають дати одну вакансію в доборі
+      // (правило «одна на компанію», match.ts). Рядки, записані до цієї правки, доженуть це при
+      // наступному скані (upsert оновлює company_key, jobs/store.ts); до того fallback теж brandKey.
+      companyKey: r.company_key ? brandKey(r.company_key) : brandKey(r.company), url: r.url, location: r.location?.trim() || null,
       placeText: r.location, remote: isRemoteLocation(r.remote === 1, r.location), country: r.country,
       salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, null),
       postedAt: parseDbTime(r.posted_at), firstSeenAt: parseDbTime(r.first_seen_at), seenAt: parseDbTime(r.fetched_at),
@@ -202,7 +205,7 @@ export function companyJob(r: CompanyRow, siteUrl: string): DigestJob | null {
   const location = [remote ? "Remote" : null, city].filter(Boolean).join(" or ") || null;
   return {
     ref: `co:${r.id}`, source: "company", id: r.id, title: r.title.trim(), company: r.company_name.trim(),
-    companyKey: companyKey(r.company_name), url: companyJobUrl(siteUrl, r.id), location, placeText: city, remote,
+    companyKey: brandKey(r.company_name), url: companyJobUrl(siteUrl, r.id), location, placeText: city, remote,
     country: r.country, salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, r.salary_period),
     postedAt: parseDbTime(r.published_at), firstSeenAt: null, seenAt: null, dedupeKey: null, roles,
   };
@@ -249,7 +252,8 @@ export const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 type ProfileRow = { name: string; domain: string | null; about: string | null } & TokenColumns;
 
 /**
- * Профілі за ключем компанії (companyKey назви, як jobs_cache.company_key вакансій з ATS цієї компанії).
+ * Профілі за ключем компанії (brandKey назви, як companyKey вакансій зі сканування вище): «Jito
+ * Labs» двома рядками (15.09, дубль ATS-джерел) чи «X» / «X Labs» зливаються в один профіль.
  * Два рядки з одним ключем: перший непорожній домен, опис і токен. Без 0005 (стовпців немає) або коли база
  * не відповіла: порожньо, і добірка йде без речень про компанію. Без 0004: без токена, решта як була.
  */
@@ -272,7 +276,7 @@ export async function loadCompanyProfiles(jobs: JobsDb, log: (l: string) => void
     return out;
   }
   for (const r of rows) {
-    const key = companyKey(r.name);
+    const key = brandKey(r.name);
     if (!key) continue;
     const domain = r.domain && DOMAIN_RE.test(r.domain.trim().toLowerCase()) ? r.domain.trim().toLowerCase() : null;
     const about = r.about?.replace(/\s+/g, " ").trim() || null;
