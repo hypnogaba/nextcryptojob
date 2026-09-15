@@ -1,13 +1,22 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { newId } from "@/lib/ids";
+import { type JobsDb, readOnlyJobsDb } from "@/lib/jobs-db";
 import { addCompany, addSubscription, crmDb, run } from "@/test/crm-fixtures";
 import { harness, resetHarness, rows } from "@/test/harness";
+import { jobsTestDb } from "@/test/jobs-db";
 import { GET, HEAD } from "./apply/route";
 import JobPage, { generateMetadata } from "./page";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
 vi.mock("next/headers", async () => (await import("@/test/harness")).headersModule);
+
+// База вакансій зі сканування (раунд 5, п.20): та сама підміна, що в тестах /jobs.
+const jobsHolder = vi.hoisted(() => ({ db: null as JobsDb | null }));
+vi.mock("@/lib/jobs-db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
+  jobsDb: () => jobsHolder.db,
+}));
 
 class NotFoundCalled extends Error {}
 vi.mock("next/navigation", async () => ({
@@ -27,6 +36,7 @@ let company: string;
 
 beforeEach(() => {
   resetHarness({ SITE_URL: "https://nextcryptojob.xyz" } as never);
+  jobsHolder.db = null;
   const { raw, d1 } = crmDb();
   harness.raw = raw;
   harness.env.DB = d1;
@@ -254,5 +264,50 @@ describe("/jobs/<id>/apply", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("Location")).toBeNull();
     expect(clicks(id)).toBe(0);
+  });
+});
+
+// Раунд 5, п.20: /jobs/<id> для БУДЬ-ЯКОЇ вакансії, не лише компаній у CRM.
+describe("/jobs/<id>: a job from scanning (item 20)", () => {
+  const scannedId = `j${"a".repeat(24)}`;
+
+  function addScanned(o: { source?: string; postedAt?: string | null } = {}) {
+    const { raw, d1 } = jobsTestDb();
+    raw
+      .prepare(
+        `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, salary_min, salary_max, salary_currency,
+                                 source, tags, dedupe_key, posted_at, fetched_at, first_seen_at)
+         VALUES (?, 'https://web3.career/r/abc?ref=x', 'Acme', 'acme', 'Protocol Engineer', 'Remote', 1, 90000, 150000, 'USD',
+                 ?, '["web3"]', 'acme-protocol-engineer', ?, datetime('now'), datetime('now'))`,
+      )
+      .run(scannedId, o.source ?? "board:web3career", o.postedAt === undefined ? null : o.postedAt);
+    jobsHolder.db = readOnlyJobsDb(d1);
+  }
+
+  it("shows title, company, location, salary and roles, with Apply going straight to the source", async () => {
+    addScanned();
+    const html = await render(scannedId);
+    expect(html).toContain("Protocol Engineer");
+    expect(html).toContain("Acme");
+    expect(html).toContain("Remote");
+    expect(html).toContain("$90k to $150k");
+    expect(html).toContain('href="https://web3.career/r/abc?ref=x" target="_blank" rel="noopener"');
+    expect(html).toContain("via web3.career");
+    // Немає /jobs/<id>/apply тут: без нашого рахунку, лише пряме зовнішнє посилання.
+    expect(html).not.toContain(`href="/jobs/${scannedId}/apply"`);
+  });
+
+  it("is not found once it falls outside the live window (closed by age)", async () => {
+    addScanned({ postedAt: new Date(Date.now() - 40 * 86_400_000).toISOString() });
+    await expect(render(scannedId)).rejects.toBeInstanceOf(NotFoundCalled);
+  });
+
+  it("stays live longer for a company's own ATS feed than for a board", async () => {
+    addScanned({ source: "greenhouse:acme", postedAt: new Date(Date.now() - 40 * 86_400_000).toISOString() });
+    await expect(render(scannedId)).resolves.toContain("Protocol Engineer");
+  });
+
+  it("neither a CRM job nor a scanned job with that id: not found", async () => {
+    await expect(render(`j${"b".repeat(24)}`)).rejects.toBeInstanceOf(NotFoundCalled);
   });
 });

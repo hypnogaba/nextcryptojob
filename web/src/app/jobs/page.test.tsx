@@ -82,9 +82,11 @@ describe("/jobs", () => {
       ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
     await signIn("ada");
     const html = await render();
-    // Назва й кнопка "Apply": обидві рівно на apply_url, follow, з реферером.
+    // "Apply" лишається рівно apply_url, follow, з реферером (раунд 5, п.20: назва тепер веде на
+    // внутрішню /jobs/<id>, уся картка клікабельна, лише Apply назовні; web3.career TOS торкається
+    // лише Apply).
     const links = [...html.matchAll(new RegExp(`<a [^>]*href="${apply.replace(/[?]/g, "\\?").replace(/&/g, "&amp;")}"[^>]*>`, "g"))].map((m) => m[0]);
-    expect(links).toHaveLength(2);
+    expect(links).toHaveLength(1);
     for (const w3 of links) {
       expect(w3).toContain('rel="noopener"');
       expect(w3).toContain('target="_blank"');
@@ -93,6 +95,9 @@ describe("/jobs", () => {
     expect(html).toMatch(/>Apply<svg/);
     expect(html).toContain("via web3.career");
     expect(html.match(/via web3\.career/g)).toHaveLength(1);
+    // Назва й уся картка ведуть на внутрішню сторінку вакансії, не одразу на дошку.
+    expect(html).toContain('href="/jobs/w3"');
+    expect(html).toContain('href="/jobs/gh"');
     expect(html).toContain('href="https://jobs.example.com/gh" target="_blank" rel="noopener noreferrer nofollow"');
   });
 

@@ -37,7 +37,25 @@ export type CardJob = {
 const WRAP = "min-w-0 wrap-anywhere";
 const TITLE_LINK = "underline decoration-transparent decoration-2 underline-offset-4 transition-colors hover:decoration-line-strong focus-visible:decoration-line-strong";
 
-function Title({ job }: { job: CardJob }) {
+/** /jobs/<id> з job_ref («nr:<id>» чи «co:<id>»): той самий шлях для обох джерел (раунд 5, п.20). */
+export function jobDetailHref(jobRef: string): string {
+  return `/jobs/${jobRef.replace(/^(nr|co):/, "")}`;
+}
+
+/**
+ * Заголовок: коли є `detailHref` (раунд 5, п.20), веде на внутрішню сторінку /jobs/<id> для
+ * БУДЬ-ЯКОЇ вакансії (опис, компанія, сайт, токен, причини), не назовні: "Apply" на ній самій веде
+ * до компанії. Без detailHref (сторінки поза /jobs, ще без картки-як-посилання) лишається старий
+ * шлях: сторінка компанії на сайті "/jobs/<id>" чи зовнішня дошка одразу.
+ */
+function Title({ job, detailHref }: { job: CardJob; detailHref: string | null }) {
+  if (detailHref) {
+    return (
+      <Link href={detailHref} prefetch={false} className={TITLE_LINK}>
+        {job.title}
+      </Link>
+    );
+  }
   const url = job.url;
   if (!url) return <>{job.title}</>;
   // Вакансія компанії: її сторінка на сайті, у тій самій вкладці.
@@ -192,42 +210,50 @@ export function JobCard({
 }) {
   const domain = job.domain ?? null;
   const hasWhy = Boolean(reasons?.length || why);
+  // Раунд 5, п.20: уся картка клікабельна на внутрішню /jobs/<id>, коли є jobRef. "Розтягнуте
+  // посилання" (overlay нижче, вміст поверх): Title, Apply і Save лишаються своїми посиланнями.
+  const detailHref = jobRef ? jobDetailHref(jobRef) : null;
   return (
-    <li className="rounded-3xl border-[1.5px] border-line bg-surface p-5 transition-[border-color,box-shadow] duration-300 hover:border-[#d5d7dd] hover:shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)] sm:p-7">
-      <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-4 gap-y-3 sm:grid-cols-[56px_minmax(0,1fr)_auto]">
-        <CompanyLogo name={job.company} src={logoPath(domain)} size={compact ? 44 : 56} />
-        <div className="min-w-0">
-          <h3 className={`font-display text-xl leading-7 font-semibold tracking-[-0.015em] text-ink sm:text-2xl sm:leading-[30px] ${WRAP}`}>
-            {rank ? <span className="sr-only">Match {rank}: </span> : null}
-            <Title job={job} />
-          </h3>
-          <p className={`mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.9375rem] text-ink-muted ${WRAP}`}>
-            <span className="font-semibold text-ink">{job.company}</span>
-            {domain ? <CompanySite domain={domain} /> : null}
-            {job.location ? <span>{job.location}</span> : null}
-          </p>
-          {job.token ? (
-            <div className="mt-2">
-              <TokenBadge token={job.token} />
-            </div>
-          ) : null}
-        </div>
-        <div className="col-span-full justify-self-start sm:col-span-1 sm:justify-self-end">
-          <Pay job={job} />
-        </div>
-      </div>
-      {hasWhy || job.about ? (
-        <div className={`mt-5 grid gap-6 border-t border-line pt-5 ${hasWhy && job.about ? "md:grid-cols-2" : ""}`}>
-          <Why reasons={reasons} why={why} note={note} label={compact ? "Why we sent it" : "Why this fits you"} />
-          {job.about ? (
-            <div className="min-w-0">
-              <p className="mb-2 text-[0.8125rem] font-bold text-ink">About the company</p>
-              <p className={`text-[0.9375rem] leading-[22px] text-ink-muted ${WRAP}`}>{job.about}</p>
-            </div>
-          ) : null}
-        </div>
+    <li className="relative rounded-3xl border-[1.5px] border-line bg-surface p-5 transition-[border-color,box-shadow] duration-300 hover:border-[#d5d7dd] hover:shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)] sm:p-7">
+      {detailHref ? (
+        <Link href={detailHref} prefetch={false} aria-hidden="true" tabIndex={-1} className="absolute inset-0 z-0 rounded-3xl" />
       ) : null}
-      <Apply job={job} compact={compact} jobRef={jobRef} saved={saved} />
+      <div className="relative z-[1]">
+        <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-4 gap-y-3 sm:grid-cols-[56px_minmax(0,1fr)_auto]">
+          <CompanyLogo name={job.company} src={logoPath(domain)} size={compact ? 44 : 56} />
+          <div className="min-w-0">
+            <h3 className={`font-display text-xl leading-7 font-semibold tracking-[-0.015em] text-ink sm:text-2xl sm:leading-[30px] ${WRAP}`}>
+              {rank ? <span className="sr-only">Match {rank}: </span> : null}
+              <Title job={job} detailHref={detailHref} />
+            </h3>
+            <p className={`mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.9375rem] text-ink-muted ${WRAP}`}>
+              <span className="font-semibold text-ink">{job.company}</span>
+              {domain ? <CompanySite domain={domain} /> : null}
+              {job.location ? <span>{job.location}</span> : null}
+            </p>
+            {job.token ? (
+              <div className="mt-2">
+                <TokenBadge token={job.token} />
+              </div>
+            ) : null}
+          </div>
+          <div className="col-span-full justify-self-start sm:col-span-1 sm:justify-self-end">
+            <Pay job={job} />
+          </div>
+        </div>
+        {hasWhy || job.about ? (
+          <div className={`mt-5 grid gap-6 border-t border-line pt-5 ${hasWhy && job.about ? "md:grid-cols-2" : ""}`}>
+            <Why reasons={reasons} why={why} note={note} label={compact ? "Why we sent it" : "Why this fits you"} />
+            {job.about ? (
+              <div className="min-w-0">
+                <p className="mb-2 text-[0.8125rem] font-bold text-ink">About the company</p>
+                <p className={`text-[0.9375rem] leading-[22px] text-ink-muted ${WRAP}`}>{job.about}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <Apply job={job} compact={compact} jobRef={jobRef} saved={saved} />
+      </div>
     </li>
   );
 }
