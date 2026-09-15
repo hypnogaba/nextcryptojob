@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CardFront } from "@/components/card/card-front";
+import { ShareOnX } from "@/components/card/share-on-x";
 import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
 import { loadSettings } from "@/lib/account/settings";
 import { requireUser } from "@/lib/auth/session";
 import { ROLES } from "@/lib/card/roles";
-import { cardPath, xShareUrl } from "@/lib/card/share";
+import { cardPath, shareText, xShareUrl } from "@/lib/card/share";
 import { getCard, getCardEvidence, listActiveCards } from "@/lib/card/store";
 import { cardView } from "@/lib/card/view";
 import { appEnv, db } from "@/lib/db";
@@ -216,17 +217,18 @@ export default async function ScorePage() {
             This is your card. It is public at its own link, so you can share it with friends and on X. It shows your name,
             role and score, never your wallets or links.
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button asChild size="lg">
               <a href={`${cardPath(active.slug)}/share/tall`} download>
                 Download image
               </a>
             </Button>
-            <Button asChild size="lg" variant="outline">
-              <a href={xShareUrl(view, origin)} target="_blank" rel="noopener noreferrer">
-                Share on X
-              </a>
-            </Button>
+            <ShareOnX
+              text={shareText(view)}
+              cardUrl={new URL(cardPath(active.slug), origin).toString()}
+              imageUrl={`${cardPath(active.slug)}/share/wide`}
+              trackHref={`/go/share-x${new URL(xShareUrl(view, origin)).search}`}
+            />
           </div>
           {stale ? (
             <div className="grid gap-2 border-t border-line pt-4">

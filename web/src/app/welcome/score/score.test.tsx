@@ -153,7 +153,9 @@ describe("/welcome/score", () => {
     const html = await render();
     expect(html).toContain(`href="/c/${issued.slug}/share/tall" download=""`);
     expect(html).toContain("Download image");
-    expect(html).toMatch(/href="https:\/\/x\.com\/intent\/post\?text=I%20scored%2061%20in%20Marketing%20%26%20content/);
+    // Раунд 5, п.3: «Share on X» іде через /go/share-x (рахує share_click), сама картинка через
+    // Web Share/буфер обміну (share-on-x.tsx); OG-прев'ю тут лишається запасним планом у href.
+    expect(html).toMatch(/href="\/go\/share-x\?text=I%20scored%2061%20in%20Marketing%20%26%20content/);
     expect(html).toContain(encodeURIComponent(`https://nextcryptojob.xyz/c/${issued.slug}`));
     expect(html).toContain("Share on X");
     expect(html).not.toContain("Open your public card");
