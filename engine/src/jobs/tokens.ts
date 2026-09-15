@@ -280,7 +280,9 @@ export interface TokensReport {
 }
 
 const isRateLimit = (e: unknown): boolean => e instanceof SourceUnavailableError && e.status === 429;
-const shortMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 160);
+// Без параметрів адреси: довгий ?ids=… з'їдав 160 символів разом із кодом відповіді, а ключ може бути в параметрах.
+const shortMsg = (e: unknown): string =>
+  (e instanceof Error ? e.message : String(e)).replace(/(https?:\/\/[^\s?]+)\?\S*/g, "$1").slice(0, 160);
 
 /** Чи треба компанію шукати цього разу: без зіставлення або «не знайдено» давніше за TOKENS_RECHECK_DAYS. */
 export function isDue(row: TokenRow, now: Date): boolean {
