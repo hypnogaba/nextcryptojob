@@ -6,12 +6,23 @@ import type { Network } from "@x402/core/types";
  * Функція чиста: оточення приходить аргументом, тож її легко перевірити
  * тестом і викликати з маршруту REST, MCP чи cron однаково.
  *
+ * П.8 (раунд 5, 15.09, РІШЕННЯ ВЛАСНИКА: лише Solana): x402 тепер приймає лише мережу Solana.
+ * `X402_PAY_TO_EVM` більше не читається (лишений у типі оточення, щоб старий секрет, якщо він ще
+ * в Worker, не ламав нічого); мережа Base з `networks` прибрана, код EVM-схеми (ExactEvmScheme,
+ * server.ts) не видалено, лише не реєструється. Ціни ті самі в USDC на будь-якій мережі.
+ *
  * Правила «без ключів» (contracts §8, специфікація 7.3):
- * - продакшн без CDP_API_KEY_ID/CDP_API_KEY_SECRET або без адрес отримувача:
+ * - продакшн без CDP_API_KEY_ID/CDP_API_KEY_SECRET або без адреси отримувача Solana:
  *   x402 вимкнено, причина називає, чого бракує ("not configured: CDP_API_KEY_ID");
- * - розробка без ключів CDP: тестові мережі через https://x402.org/facilitator.
- * Адреси отримувача потрібні завжди: гроші без адреси піти не можуть, а
- * підставна адреса в розробці тихо «з'їдала» б тестові платежі.
+ * - розробка без ключів CDP: тестова мережа через https://x402.org/facilitator.
+ * Адреса отримувача потрібна завжди: гроші без адреси піти не можуть, а підставна адреса в
+ * розробці тихо «з'їдала» б тестові платежі.
+ *
+ * Перевірка платежів лишається на фасилітаторі (CDP чи x402.org), не на нас: `@x402/svm` дає
+ * facilitator-side перевірку (ExactSvmScheme), але вона вимагає власного підписувача-оплатника
+ * комісії (гарячий гаманець із SOL), а власник цієї пачки прямо каже: «лише публічна адреса,
+ * ключів у нас немає й не треба». Самостійна перевірка x402 на Solana лишається відкритим
+ * питанням для наступної сесії (звіт п.8).
  */
 
 export const PAID_ACTIONS = ["search_candidates", "request_intro", "buy_usdc_month"] as const;
@@ -67,7 +78,11 @@ export type X402Config =
       readonly facilitator: null;
     };
 
-/** Змінні, які читає x402. Секрети Worker і звичайні змінні приходять однаково. */
+/**
+ * Змінні, які читає x402. Секрети Worker і звичайні змінні приходять однаково.
+ * `X402_PAY_TO_EVM` більше не читається (п.8: лише Solana); поле лишилось у типі, щоб старий
+ * секрет у Worker, якщо він там ще є, не викликав помилку типів деінде.
+ */
 export interface X402Env {
   X402_NETWORK?: string;
   X402_PAY_TO_EVM?: string;
@@ -119,7 +134,6 @@ const MODE_ALIASES: Record<string, X402Mode> = {
   "solana-devnet": "testnet",
 };
 
-const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const SOLANA_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 function clean(value: string | undefined): string | undefined {
@@ -156,7 +170,6 @@ export function readX402Config(env: X402Env, nodeEnv: string | undefined = proce
   const apiKeyId = clean(env.CDP_API_KEY_ID);
   const apiKeySecret = clean(env.CDP_API_KEY_SECRET);
   const hasCdp = apiKeyId !== undefined && apiKeySecret !== undefined;
-  const payToEvm = clean(env.X402_PAY_TO_EVM);
   const payToSolana = clean(env.X402_PAY_TO_SOLANA);
 
   const missing: string[] = [];
@@ -165,23 +178,18 @@ export function readX402Config(env: X402Env, nodeEnv: string | undefined = proce
     if (!apiKeyId) missing.push("CDP_API_KEY_ID");
     if (!apiKeySecret) missing.push("CDP_API_KEY_SECRET");
   }
-  if (!payToEvm) missing.push("X402_PAY_TO_EVM");
   if (!payToSolana) missing.push("X402_PAY_TO_SOLANA");
   if (missing.length > 0) return disabled(`not configured: ${missing.join(", ")}`, missing);
 
   // Помилка в адресі отримувача відправила б гроші в нікуди: краще вимкнути x402.
   const invalid: string[] = [];
-  if (!EVM_ADDRESS.test(payToEvm!)) invalid.push("X402_PAY_TO_EVM");
   if (!SOLANA_ADDRESS.test(payToSolana!)) invalid.push("X402_PAY_TO_SOLANA");
   if (invalid.length > 0) {
     return disabled(`invalid setting: ${invalid.join(", ")} is not a valid address`, invalid);
   }
 
   const assets = USDC[mode];
-  const networks: X402Network[] = [
-    { ...assets.evm, payTo: payToEvm! },
-    { ...assets.svm, payTo: payToSolana! },
-  ];
+  const networks: X402Network[] = [{ ...assets.svm, payTo: payToSolana! }];
 
   let facilitator: FacilitatorSettings;
   if (hasCdp) {
