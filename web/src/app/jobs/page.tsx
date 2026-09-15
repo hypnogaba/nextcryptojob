@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AccountShell } from "@/components/account-nav";
 import { JobCard } from "@/components/jobs/job-card";
 import { HINT } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
@@ -214,10 +215,8 @@ export default async function JobsPage() {
   const checked = now.state === "ok" ? checkedLine(now.checked, now.jobs.length) : null;
 
   return (
-    <div className="mx-auto max-w-[1280px] px-[clamp(16px,4vw,32px)] pt-6 pb-24 sm:pt-10">
-      <h1 className="display text-title">Your jobs</h1>
-
-      <div className="mt-8 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <AccountShell active="jobs" title="Your jobs" wide>
+      <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section aria-labelledby="now-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-1">
           <div className="grid gap-2">
             <h2 id="now-h" className={H2}>
@@ -273,6 +272,6 @@ export default async function JobsPage() {
           </section>
         ) : null}
       </div>
-    </div>
+    </AccountShell>
   );
 }

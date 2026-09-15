@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AccountShell } from "@/components/account-nav";
 import { isAdminSession } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
@@ -60,26 +61,35 @@ export default async function WelcomePage({ searchParams }: Props) {
   const notice = wait ? `Saved. You can update your score in ${wait} seconds, from your profile.` : null;
   // Адмін, що ввійшов поштою, анкету проходити не мусить (власник 14.09).
   const admin = !briefDone(answers.step) && isAdminSession(user, (appEnv() as { ADMIN_EMAILS?: string }).ADMIN_EMAILS);
-  const shell = (s: Step, lead: ReactNode, children: ReactNode) => (
-    <StepShell
-      step={s}
-      editing={editing}
-      lead={lead}
-      notice={notice}
-      banner={
-        admin ? (
-          <p className="rounded-xl border border-line bg-wash px-3 py-2 text-sm text-ink">
-            You are signed in as an admin. This setup is optional for you.{" "}
-            <Link href="/admin" className={LINK}>
-              Go to admin
-            </Link>
-          </p>
-        ) : null
-      }
-    >
-      {children}
-    </StepShell>
-  );
+  const shell = (s: Step, lead: ReactNode, children: ReactNode) => {
+    const stepShell = (
+      <StepShell
+        step={s}
+        editing={editing}
+        lead={lead}
+        notice={notice}
+        banner={
+          admin ? (
+            <p className="rounded-xl border border-line bg-wash px-3 py-2 text-sm text-ink">
+              You are signed in as an admin. This setup is optional for you.{" "}
+              <Link href="/admin" className={LINK}>
+                Go to admin
+              </Link>
+            </p>
+          ) : null
+        }
+      >
+        {children}
+      </StepShell>
+    );
+    // Раунд 5, п.10: правка відповідей (editing) лишається в кабінеті, з бічним меню на місці.
+    // Заголовок тут не задаємо: StepShell уже показує свій («Step N of M», назва кроку).
+    return editing ? (
+      <AccountShell active="answers">{stepShell}</AccountShell>
+    ) : (
+      stepShell
+    );
+  };
 
   switch (step) {
     case "target":

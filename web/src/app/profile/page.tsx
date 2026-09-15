@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AccountShell } from "@/components/account-nav";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { suggestDisplayName } from "@/lib/card/display-name";
@@ -53,18 +54,18 @@ export default async function ProfilePage({ searchParams }: Props) {
   const wallet = identities.find((i) => (i.kind === "evm" || i.kind === "solana") && i.verifiedAt)?.value ?? null;
 
   return (
-    <section className="mx-auto grid max-w-4xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="display text-title">Your card and score</h1>
-        {done ? (
+    <AccountShell active="card" title="Your card and score">
+      <div className="grid gap-6">
+      {done ? (
+        <div className="-mt-2 flex justify-end">
           <Link
             href="/welcome"
             className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
           >
             Edit answers
           </Link>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {!done ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -152,6 +153,7 @@ export default async function ProfilePage({ searchParams }: Props) {
           </div>
         </div>
       ) : null}
-    </section>
+      </div>
+    </AccountShell>
   );
 }
