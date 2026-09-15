@@ -26,30 +26,34 @@ describe("steps", () => {
   it("only moves the saved step forward", () => {
     expect(advance("target", "target")).toBe("roles");
     expect(advance("wallets", "roles")).toBe("wallets");
-    // Після згоди (кінець анкети) досягнуто перший крок «Stand out», після джерел усе.
-    expect(advance("consent", "consent")).toBe("x");
+    // Після останнього кроку анкети (умови) досягнуто перший крок «Stand out», після джерел усе.
+    expect(advance("delivery", "delivery")).toBe("x");
     expect(advance("sources", "sources")).toBe("done");
     expect(advance("done", "x")).toBe("done");
   });
 });
 
 describe("brief first, stand out after", () => {
-  it("asks what, roles, where, how to send and consent, then the optional X, wallets and sources", () => {
+  it("asks what, roles, where and how to send (no consent step), then the optional X, wallets and sources", () => {
     const order: string[] = [];
     for (let s = parseSavedStep(null); s !== "done"; s = nextStep(s)) order.push(s);
-    expect(order).toEqual(["target", "roles", "place", "delivery", "consent", "x", "wallets", "sources"]);
+    expect(order).toEqual(["target", "roles", "place", "delivery", "x", "wallets", "sources"]);
+  });
+
+  it("reads the old consent step saved in the database as delivery", () => {
+    expect(parseSavedStep("consent")).toBe("delivery");
   });
 
   it("counts steps in their own part and does not go back from stand out into the brief", () => {
-    expect(stepPosition("delivery")).toEqual({ part: "brief", n: 4, of: 5 });
+    expect(stepPosition("delivery")).toEqual({ part: "brief", n: 4, of: 4 });
     expect(stepPosition("wallets")).toEqual({ part: "standout", n: 2, of: 3 });
     expect(prevStep("x")).toBeNull();
     expect(prevStep("sources")).toBe("wallets");
     expect(prevStep("roles")).toBe("target");
   });
 
-  it("the brief is done once consent moves a person to the stand out steps", () => {
-    expect(briefDone("consent")).toBe(false);
+  it("the brief is done once the last button moves a person to the stand out steps", () => {
+    expect(briefDone("delivery")).toBe(false);
     expect(briefDone("x")).toBe(true);
     expect(briefDone("done")).toBe(true);
   });
@@ -147,10 +151,13 @@ describe("answers store", () => {
     expect((await loadAnswers(t.d1, "a")).step).toBe("done");
   });
 
-  it("a stand out step without consent (saved under the old order) resumes at the brief", async () => {
+  it("a stand out step without the terms (saved under the old order) resumes at the brief", async () => {
     t.raw.exec("UPDATE users SET onboarding_step = 'wallets' WHERE id = 'a'");
     expect((await loadAnswers(t.d1, "a")).step).toBe("delivery");
-    t.raw.exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('a', 'scoring', 1, 'v1')");
+    t.raw.exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('a', 'terms', 1, 'terms-0.2')");
+    expect((await loadAnswers(t.d1, "a")).step).toBe("wallets");
+    // Стара згода на бал теж рахується.
+    t.raw.exec("UPDATE consents SET kind = 'scoring' WHERE user_id = 'a'");
     expect((await loadAnswers(t.d1, "a")).step).toBe("wallets");
   });
 });

@@ -45,8 +45,8 @@ export function StepShell({
         ) : null}
       </div>
       <div
-        // Класи повністю, щоб Tailwind їх побачив: 5 кроків анкети, 3 кроки «Stand out».
-        className={`mt-3 grid gap-1.5 ${brief ? "grid-cols-5" : "grid-cols-3"}`}
+        // Класи повністю, щоб Tailwind їх побачив: 4 кроки анкети, 3 кроки «Stand out».
+        className={`mt-3 grid gap-1.5 ${brief ? "grid-cols-4" : "grid-cols-3"}`}
         role="progressbar"
         aria-label={brief ? "Brief progress" : "Score steps progress"}
         aria-valuemin={1}

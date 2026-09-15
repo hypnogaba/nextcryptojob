@@ -37,6 +37,24 @@ export function AddEmailForm({ intro }: { intro?: string }) {
 
   const invalid = state.message?.tone === "error";
 
+  if (state.step === "merge") {
+    return (
+      <form action={formAction} className="grid gap-2">
+        <input type="hidden" name="email" value={state.email} />
+        <input type="hidden" name="grant" value={state.grant} />
+        <FormMessageLine id={messageId} message={state.message} className="min-h-0" />
+        <div className="flex flex-wrap gap-2">
+          <SubmitButton name="intent" value="merge" pendingLabel="Merging..." className="h-11 px-5 text-base">
+            Merge accounts
+          </SubmitButton>
+          <SubmitButton name="intent" value="change" variant="link" formNoValidate className="h-11 px-3">
+            Use a different email
+          </SubmitButton>
+        </div>
+      </form>
+    );
+  }
+
   if (state.step === "email") {
     return (
       <form action={formAction} className="grid gap-2">

@@ -63,7 +63,7 @@ export function SearchResults({
       <p className="text-sm text-ink-muted" aria-live="polite">
         {items.length} {items.length === 1 ? "candidate" : "candidates"} shown
       </p>
-      <ol className="overflow-hidden rounded-[10px] border-2 border-ink bg-surface">
+      <ol className="overflow-hidden rounded-[10px] border-[1.5px] border-line bg-surface">
         {items.map((c) => (
           <li key={c.candidate_id} className="border-b border-line last:border-b-0 hover:bg-brand-soft">
             <CandidateRow

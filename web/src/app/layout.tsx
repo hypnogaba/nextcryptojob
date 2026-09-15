@@ -1,22 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Big_Shoulders, Familjen_Grotesk } from "next/font/google";
+import { Funnel_Display, Funnel_Sans } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteNotice } from "@/components/site-state";
 import "./globals.css";
 
-// Big Shoulders для чисел і заголовків (вузький, як табло), Familjen Grotesk для
-// тексту. Обидва змінні, OFL. Код і адреси йдуть системним моноширинним.
-const display = Big_Shoulders({
+// Funnel Display для заголовків і чисел, Funnel Sans для тексту (напрям «Payday»).
+// Обидва змінні, OFL. Код і адреси йдуть системним моноширинним.
+const display = Funnel_Display({
   subsets: ["latin", "latin-ext"],
-  axes: ["opsz"],
   variable: "--nf-display",
-  // Для Big Shoulders у Next немає метрик запасного шрифту.
-  adjustFontFallback: false,
   display: "swap",
 });
 
-const text = Familjen_Grotesk({
+const text = Funnel_Sans({
   subsets: ["latin", "latin-ext"],
   variable: "--nf-text",
   display: "swap",
@@ -35,10 +32,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eceef1" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1829" },
-  ],
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
 export default function RootLayout({

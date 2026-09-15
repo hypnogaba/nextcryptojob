@@ -5,8 +5,10 @@ import {
   HIDDEN_NOTICE,
   SOURCE_KEYS,
   type Badges,
+  type CandidateLinks,
   type CandidateProfile,
   type CandidateSummary,
+  type CandidateWalletLink,
   type Chain,
   type Contact,
   type HiddenCandidate,
@@ -25,14 +27,19 @@ import { visibleToSql } from "./visibility";
  * Анонімний профіль кандидата для компаній (специфікація CRM, 5.3): відповідь
  * будується ЛИШЕ з білого списку полів. Два рівні захисту:
  * 1. loadCandidates вибирає з бази тільки потрібні колонки: ні пошти, ні
- *    telegram_username (лише «чи є»), ні target_text, ні identities.value, ні
- *    фактів, крім трьох ончейн-джерел, з яких рахуються мережі й роки;
+ *    target_text, ні фактів, крім трьох ончейн-джерел, з яких рахуються мережі й роки;
  * 2. проєкція копіює в відповідь лише поля з договору, вільний текст людини
  *    (місто, валюта) проходить перевірку форми.
  *
- * Не показуємо ніколи: email, telegram_username (крім знімка контакту після
- * знайомства), target_text, ніки й адреси з identities, facts_json,
- * last_active_at, дату створення акаунта.
+ * Не показуємо ніколи: email (крім знімка контакту після прийнятого знайомства),
+ * target_text, facts_json, last_active_at, дату створення акаунта.
+ *
+ * Власник 14.09 (C4): «якщо компанія знайшла людину, чому не видно контактів і
+ * посилань одразу?» `telegram_username` і значення `identities` (X, GitHub,
+ * YouTube, сайт, гаманці) тепер теж читаємо, але в поле `links` (`linksOf`
+ * нижче) вони йдуть, лише поки `linksVisible` (той самий перемикач «Show my
+ * Telegram directly», що й раніше відкривав нік): опт-аут ховає все одразу,
+ * а не лише Telegram.
  */
 
 // ---------------------------------------------------------------------------
@@ -48,6 +55,8 @@ export interface UserRow {
   contact_mode: string;
   has_telegram: number;
   contact_consent: number;
+  /** Лише для `links`, за `linksVisible`: сирий нік, з @ чи без. */
+  telegram_username: string | null;
 }
 
 export interface ScoreRow {
@@ -65,6 +74,8 @@ export interface ScoreRow {
 export interface IdentityRow {
   user_id: string;
   kind: string;
+  /** Лише для `links`, за `linksVisible`: нік, логін чи адреса (contracts §2). */
+  value: string;
   verified_via: string | null;
   verified_at: string | null;
 }
@@ -92,7 +103,8 @@ export interface CandidateRows {
 
 const USER_COLUMNS = `u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.salary_currency, u.contact_mode,
   (u.telegram_username IS NOT NULL AND trim(u.telegram_username) <> '') AS has_telegram,
-  EXISTS (SELECT 1 FROM consents cc WHERE cc.user_id = u.id AND cc.kind = 'contact' AND cc.granted = 1) AS contact_consent`;
+  EXISTS (SELECT 1 FROM consents cc WHERE cc.user_id = u.id AND cc.kind = 'contact' AND cc.granted = 1) AS contact_consent,
+  u.telegram_username`;
 
 /**
  * Рядки для набору кандидатів одним пакетом запитів (id одним параметром JSON
@@ -121,7 +133,7 @@ export async function loadCandidates(
       )
       .bind(list),
     db
-      .prepare(`SELECT user_id, kind, verified_via, verified_at FROM identities WHERE user_id IN ${inIds}`)
+      .prepare(`SELECT user_id, kind, value, verified_via, verified_at FROM identities WHERE user_id IN ${inIds}`)
       .bind(list),
     db
       .prepare(
@@ -490,6 +502,57 @@ export function contactModeOf(user: UserRow): "approval" | "direct" {
   return user.contact_mode === "direct" && user.has_telegram === 1 && user.contact_consent === 1 ? "direct" : "approval";
 }
 
+/** '@handle' з telegram_username, як у lib/crm/intros.ts (той сам нормалізація, без спільного імпорту: цикл project ↔ intros). */
+function telegramLink(username: string | null): string | null {
+  const bare = (username ?? "").trim().replace(/^@+/, "");
+  return bare ? `@${bare}` : null;
+}
+
+/**
+ * Посилання видно, лише поки людина не відмовилась «Show my Telegram directly» в /settings
+ * (власник 14.09, C4): та сама умова, що раніше відкривала лише Telegram-нік, тепер відкриває
+ * і публічні акаунти, і адреси гаманців. Видимість самого профілю (`visible_to_companies`)
+ * перевірена раніше, у visibility.ts.
+ */
+export function linksVisible(user: UserRow): boolean {
+  return user.contact_mode === "direct" && user.contact_consent === 1;
+}
+
+function explorerUrl(kind: "evm" | "solana", address: string): string {
+  return kind === "evm" ? `https://etherscan.io/address/${address}` : `https://solscan.io/account/${address}`;
+}
+
+/** youtube: '@handle' нижнім регістром або 'UC…' channel id, як є (contracts §2). */
+function youtubeUrl(value: string): string {
+  return value.startsWith("@") ? `https://www.youtube.com/${value}` : `https://www.youtube.com/channel/${value}`;
+}
+
+/**
+ * Прямі посилання на облікові записи: X, GitHub, YouTube, сайт (URL, contracts §2 нормалізує
+ * його вже до `https://…`), гаманці (усі, з посиланням на публічний обозрівач). Один запис на
+ * вид для x/github/youtube/site (перший знайдений: connect замінює старий рядок, не додає новий).
+ * null, якщо `linksVisible` каже ні.
+ */
+export function linksOf(user: UserRow, identities: IdentityRow[]): CandidateLinks | null {
+  if (!linksVisible(user)) return null;
+  const first = (kind: string) => identities.find((i) => i.kind === kind)?.value ?? null;
+  const site = first("site");
+  const x = first("x");
+  const github = first("github");
+  const youtube = first("youtube");
+  const wallets: CandidateWalletLink[] = identities
+    .filter((i): i is IdentityRow & { kind: "evm" | "solana" } => i.kind === "evm" || i.kind === "solana")
+    .map((i) => ({ chain: i.kind, address: i.value, explorer_url: explorerUrl(i.kind, i.value) }));
+  return {
+    telegram: telegramLink(user.telegram_username),
+    x: x ? `https://x.com/${x}` : null,
+    github: github ? `https://github.com/${github}` : null,
+    youtube: youtube ? youtubeUrl(youtube) : null,
+    website: site,
+    wallets,
+  };
+}
+
 export function tagsOf(json: string): string[] {
   try {
     const v = JSON.parse(json);
@@ -535,6 +598,7 @@ export function projectProfile(
     roles_detailed: roleScoresDetailed(rows),
     intro: opts.intro,
     contact: opts.contact,
+    links: linksOf(rows.user, rows.identities),
   };
 }
 

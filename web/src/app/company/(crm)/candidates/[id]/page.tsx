@@ -20,7 +20,7 @@ import {
 } from "@/lib/crm/labels";
 import { companyIntroNotice } from "@/lib/crm/notify";
 import type { PipelineEvent } from "@/lib/crm/pipeline";
-import { CandidateId, type Account, type CandidateView, type RoleKey } from "@/lib/crm/types";
+import { CandidateId, type Account, type CandidateLinks, type CandidateView, type RoleKey } from "@/lib/crm/types";
 import { candidatePanel, companyJobs } from "@/lib/crm/views";
 import { settleDemoIntros } from "@/lib/admin/demo";
 import { notifierFromEnv } from "@/lib/crm/notify";
@@ -29,6 +29,62 @@ import { CandidatePanel } from "./candidate-panel";
 import { RoleTabs } from "./role-tabs";
 
 export const metadata: Metadata = { title: "Candidate", robots: { index: false } };
+
+const WALLET_CHAIN_TEXT: Record<CandidateLinks["wallets"][number]["chain"], string> = { evm: "EVM wallet", solana: "Solana wallet" };
+
+function shortAddress(a: string): string {
+  return a.length > 14 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a;
+}
+
+/**
+ * Контакт і публічні акаунти одразу на сторінці (власник 14.09, C4: "why are contacts and
+ * social links not shown? ... must see all links, Telegram and everything, immediately").
+ * Порожньо, лише поки кандидат вимкнув "Show my Telegram directly" в /settings; тоді Telegram
+ * і далі відкривається лише через "Request intro" у панелі праворуч.
+ */
+function LinksCard({ links }: { links: CandidateLinks | null }) {
+  if (!links) {
+    return (
+      <section aria-labelledby="links-title" className={`${CARD} grid gap-2 p-4 sm:p-6`}>
+        <h2 id="links-title" className={H2}>
+          Links
+        </h2>
+        <p className="text-sm text-ink-muted">
+          This candidate has not turned on &ldquo;Show my Telegram directly&rdquo;, so links are not shown here. Ask
+          for an intro in the panel to get their contact.
+        </p>
+      </section>
+    );
+  }
+  const items: { label: string; href: string; text: string }[] = [];
+  if (links.telegram) items.push({ label: "Telegram", href: `https://t.me/${links.telegram.replace(/^@/, "")}`, text: links.telegram });
+  if (links.x) items.push({ label: "X", href: links.x, text: links.x.replace(/^https?:\/\//, "") });
+  if (links.github) items.push({ label: "GitHub", href: links.github, text: links.github.replace(/^https?:\/\//, "") });
+  if (links.youtube) items.push({ label: "YouTube", href: links.youtube, text: links.youtube.replace(/^https?:\/\//, "") });
+  if (links.website) items.push({ label: "Website", href: links.website, text: links.website.replace(/^https?:\/\//, "") });
+  for (const w of links.wallets) items.push({ label: WALLET_CHAIN_TEXT[w.chain], href: w.explorer_url, text: shortAddress(w.address) });
+  return (
+    <section aria-labelledby="links-title" className={`${CARD} grid gap-2 p-4 sm:p-6`}>
+      <h2 id="links-title" className={H2}>
+        Links
+      </h2>
+      {items.length === 0 ? (
+        <p className="text-sm text-ink-muted">No public accounts or wallets connected yet.</p>
+      ) : (
+        <ul className="grid gap-1.5 sm:grid-cols-2" data-list="links">
+          {items.map((it, i) => (
+            <li key={`${it.label}-${i}`} className="flex min-w-0 items-baseline gap-2 text-sm">
+              <span className="shrink-0 text-ink-muted">{it.label}:</span>
+              <a href={it.href} target="_blank" rel="noreferrer" title={it.text} className={`${LINK} min-w-0 truncate`}>
+                {it.text}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 function quotaLine(quotas: Account["quotas"]): string | null {
   const month = quotas.request_intro_month;
@@ -65,7 +121,7 @@ export default async function CandidatePage({
     </Link>
   );
   const shell = (children: React.ReactNode) => (
-    <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 px-[clamp(16px,4vw,56px)] pt-6 pb-20 sm:pt-8">
+    <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-[clamp(16px,4vw,56px)] pt-6 pb-20 sm:pt-8">
       <div className="-my-2 flex flex-wrap gap-x-5">
         {back}
         <Link href="/company/pipeline" className={`${LINK} inline-flex min-h-11 items-center text-sm`}>
@@ -192,12 +248,15 @@ export default async function CandidatePage({
         </div>
       </header>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <section aria-labelledby="scores-title" className={`${CARD} grid min-w-0 gap-4 p-4 sm:p-6`}>
-          <h2 id="scores-title" className={H2}>
-            Scores by role
-          </h2>
-          <RoleTabs roles={view.roles_detailed} initial={roleParam ?? h.role} />
-        </section>
+        <div className="grid min-w-0 gap-6">
+          <LinksCard links={view.links} />
+          <section aria-labelledby="scores-title" className={`${CARD} grid min-w-0 gap-4 p-4 sm:p-6`}>
+            <h2 id="scores-title" className={H2}>
+              Scores by role
+            </h2>
+            <RoleTabs roles={view.roles_detailed} initial={roleParam ?? h.role} />
+          </section>
+        </div>
         {panelEl}
       </div>
     </>,

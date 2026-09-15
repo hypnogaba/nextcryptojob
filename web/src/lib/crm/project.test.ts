@@ -124,6 +124,8 @@ const PROFILE_KEYS = new Set([
   ...SUMMARY_KEYS,
   "roles_detailed", "breakdown", "core", "bonus", "gaps", "formula_version", "updated_at", "source", "label", "weight",
   "value", "max", "intro", "contact",
+  // links (C4, власник 14.09): null поки кандидат не в режимі direct (leakyCandidate нижче лишається approval).
+  "links", "telegram", "x", "github", "youtube", "website", "wallets", "chain", "address", "explorer_url",
 ]);
 const RESPONSE_KEYS = new Set(["data", "next_cursor", "page", "page_cap_reached", "empty_reason", "role_visible_count"]);
 
@@ -235,6 +237,73 @@ describe("get_candidate", () => {
     const id = addUser(db.raw);
     const guest = await contextFor(db, { hasPayment: true }, { now: NOW });
     await expect(runAction("get_candidate", { candidate_id: id }, guest)).rejects.toMatchObject({ code: "key_required", status: 401 });
+  });
+});
+
+describe("links: contacts and accounts shown on the candidate page (C4, owner 14.09)", () => {
+  it("shows Telegram, X, GitHub, YouTube, website and wallet explorer links for a candidate in direct mode", async () => {
+    const { ctx } = await companyCtx();
+    const id = addUser(db.raw, { telegram: "alice_eth", contactMode: "direct", contactConsent: true });
+    addScore(db.raw, id, "engineer", 70);
+    addIdentity(db.raw, id, "x", "alice_eth");
+    addIdentity(db.raw, id, "github", "alice-eth");
+    addIdentity(db.raw, id, "youtube", "@alicecodes");
+    addIdentity(db.raw, id, "site", "https://alice.dev");
+    addIdentity(db.raw, id, "evm", "0xabcdef0123456789abcdef0123456789abcdef01");
+    addIdentity(db.raw, id, "solana", "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU");
+
+    const profile = (await runAction("get_candidate", { candidate_id: id }, ctx)).output as CandidateProfile;
+    expect(profile.links).toEqual({
+      telegram: "@alice_eth",
+      x: "https://x.com/alice_eth",
+      github: "https://github.com/alice-eth",
+      youtube: "https://www.youtube.com/@alicecodes",
+      website: "https://alice.dev",
+      wallets: [
+        { chain: "evm", address: "0xabcdef0123456789abcdef0123456789abcdef01", explorer_url: "https://etherscan.io/address/0xabcdef0123456789abcdef0123456789abcdef01" },
+        { chain: "solana", address: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", explorer_url: "https://solscan.io/account/7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+      ],
+    });
+    expect(CandidateView.safeParse(profile).success).toBe(true);
+    // Пошта не входить у links: вона й далі йде лише через прийняте знайомство.
+    expect(JSON.stringify(profile.links)).not.toContain("@example.com");
+  });
+
+  it("a YouTube channel id (not a handle) links to /channel/", async () => {
+    const { ctx } = await companyCtx();
+    const id = addUser(db.raw, { telegram: "bob", contactMode: "direct", contactConsent: true });
+    addScore(db.raw, id, "engineer", 70);
+    addIdentity(db.raw, id, "youtube", "UCabcdefghijklmnopqrstuv");
+    const profile = (await runAction("get_candidate", { candidate_id: id }, ctx)).output as CandidateProfile;
+    expect(profile.links?.youtube).toBe("https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv");
+  });
+
+  it("hides links when the candidate opted out (approval mode), even with connected accounts", async () => {
+    const { ctx } = await companyCtx();
+    const id = addUser(db.raw, { telegram: "carol", contactMode: "approval" });
+    addScore(db.raw, id, "engineer", 70);
+    addIdentity(db.raw, id, "x", "carol");
+    addIdentity(db.raw, id, "evm", "0xabcdef0123456789abcdef0123456789abcdef02");
+    const profile = (await runAction("get_candidate", { candidate_id: id }, ctx)).output as CandidateProfile;
+    expect(profile.links).toBeNull();
+  });
+
+  it("hides links without a fresh contact consent, even if contact_mode says direct", async () => {
+    const { ctx } = await companyCtx();
+    const id = addUser(db.raw, { telegram: "dan", contactMode: "direct", contactConsent: false });
+    addScore(db.raw, id, "engineer", 70);
+    addIdentity(db.raw, id, "x", "dan");
+    const profile = (await runAction("get_candidate", { candidate_id: id }, ctx)).output as CandidateProfile;
+    expect(profile.links).toBeNull();
+  });
+
+  it("without a Telegram username, direct mode still shows the other links but no Telegram", async () => {
+    const { ctx } = await companyCtx();
+    const id = addUser(db.raw, { telegram: null, contactMode: "direct", contactConsent: true });
+    addScore(db.raw, id, "engineer", 70);
+    addIdentity(db.raw, id, "github", "eve-dev");
+    const profile = (await runAction("get_candidate", { candidate_id: id }, ctx)).output as CandidateProfile;
+    expect(profile.links).toEqual({ telegram: null, x: null, github: "https://github.com/eve-dev", youtube: null, website: null, wallets: [] });
   });
 });
 

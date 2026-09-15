@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 export const LINK = "font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand";
 export const CARD = "rounded-xl border border-line bg-surface";
-/** Обгортка сторінки CRM: ширину додає сторінка (max-w-3xl, max-w-5xl). */
+/** Обгортка сторінки CRM: ширину додає сторінка (max-w-3xl для форм, max-w-7xl = 1280px для контейнера). */
 export const PAGE = "mx-auto grid grid-cols-1 gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12";
 /** Заголовок розділу (панелі) і менший, для панелей збоку й плиток. */
 export const H2 = "display text-[1.75rem] leading-none";

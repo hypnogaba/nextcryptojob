@@ -66,7 +66,7 @@ bash -c 'set -a; . /etc/nextcryptojob-engine.env; set +a; for k in CF_ACCOUNT_ID
 | Ключ | Без нього |
 |---|---|
 | `GITHUB_TOKEN` | github і dune = прогалина; ролі з головним gh_eng (engineer, security_auditor без Sherlock) без балу |
-| `HELIUS_KEY` | Solana: лише підписи з публічного RPC; обміни відомі тільки для гаманців до 30 успішних транзакцій |
+| `HELIUS_KEY` або `SOLANA_RPC_URL` | Solana: лише підписи з публічного RPC; обміни відомі тільки для гаманців до 30 успішних транзакцій. `SOLANA_RPC_URL` = повна https-адреса будь-якого постачальника з ключем (Helius, Alchemy), важить більше за `HELIUS_KEY` |
 | `BLOCKSCOUT_KEY` | Base і Optimism через публічні сервери Blockscout, які часто відповідають 429 |
 | `YOUTUBE_KEY` | youtube = прогалина (media лише з X) |
 

@@ -1,17 +1,16 @@
-// Картинки картки для X (next/og: Satori + resvg):
+// Картинки картки для X (next/og: Satori + resvg), напрям «Payday»:
 // - "wide" 1200×675, картинка для допису; той самий макет на 1200×630 іде в og:image;
 // - "tall" 1080×1350, портрет.
-// Тло темне, картка під кутом зліва (обробка рівня, печатка), праворуч заголовок.
-// Велика рідка розетка з того ж зерна виходить за край: на мініатюрі вона
-// читається як малюнок, а не сіра пляма. Жоден текст не заходить у верхні й
-// нижні 24 px, тож обрізання до 1.91:1 нічого не з'їдає.
+// Лимонне поле, банківська картка під кутом (обробка рівня, кругла печатка з рівнем),
+// поруч роль, бал і рівень, з чого бал. Жоден текст не заходить у верхні й нижні 24 px,
+// тож обрізання до 1.91:1 нічого не з'їдає.
 import { ImageResponse } from "next/og";
 import type { CSSProperties } from "react";
-import bigShoulders from "./fonts/big-shoulders-800";
-import familjen from "./fonts/familjen-grotesk-500";
 import cyrillic from "./fonts/ncj-cyrillic-600";
+import funnelDisplay from "./fonts/funnel-display-700";
+import funnelSans from "./fonts/funnel-sans-500";
 import { builtFrom } from "./back";
-import { makeSeal, sealDataUri, underprintDataUri } from "./seal";
+import { makeSeal, sealDataUri } from "./seal";
 import { tierBackground } from "./tiers";
 import type { CardView } from "./view";
 
@@ -26,10 +25,9 @@ export const SHARE_SIZES: Record<ShareFormat, { width: number; height: number }>
 /** Розмір картинки Open Graph (посилання в X, Telegram, Slack). */
 export const OG_SIZE = SHARE_SIZES.link;
 
-const BG = "#0f1829";
-const FG = "#eef1f6";
-const FG_2 = "#c2cbd9";
-const ACCENT = "#ff7a4d";
+const LEMON = "#ffdb2e";
+const INK = "#111318";
+const LEMON_INK = "#3d3300";
 
 type Options = NonNullable<ConstructorParameters<typeof ImageResponse>[1]>;
 type Fonts = NonNullable<Options["fonts"]>;
@@ -43,15 +41,15 @@ function decode(base64: string): ArrayBuffer {
 
 // Порядок важливий: Satori шукає літеру спершу в названому шрифті, далі в решті.
 // Кирилиця імені є лише в NCJ Card Cyrillic (з IBM Plex Sans), тож він останній.
-const DISPLAY = "Big Shoulders";
-const TEXT = "Familjen Grotesk";
+const DISPLAY = "Funnel Display";
+const TEXT = "Funnel Sans";
 const CYRILLIC = "NCJ Card Cyrillic";
 
 let fonts: Fonts | undefined;
 function cardFonts(): Fonts {
   fonts ??= [
-    { name: DISPLAY, data: decode(bigShoulders), weight: 800, style: "normal" },
-    { name: TEXT, data: decode(familjen), weight: 500, style: "normal" },
+    { name: DISPLAY, data: decode(funnelDisplay), weight: 700, style: "normal" },
+    { name: TEXT, data: decode(funnelSans), weight: 500, style: "normal" },
     { name: CYRILLIC, data: decode(cyrillic), weight: 600, style: "normal" },
   ];
   return fonts;
@@ -60,251 +58,195 @@ function cardFonts(): Fonts {
 /** Довге ім'я дрібнішим кеглем: до 32 символів без обрізання на ширшій картці. */
 export function nameFontSize(name: string, cardWidth: number): number {
   const length = [...name].length;
-  const base = cardWidth * 0.074;
-  return Math.round(length <= 16 ? base : length <= 22 ? base * 0.82 : base * 0.66);
+  const base = cardWidth * 0.042;
+  return Math.round(length <= 18 ? base : length <= 24 ? base * 0.86 : base * 0.72);
 }
 
 const flex = (style: CSSProperties): CSSProperties => ({ display: "flex", ...style });
 
+/** Кругла печатка з рівнем: розетка з того ж зерна, що на сторінці, і лимонне ядро. */
+function Badge({ view, size, ring }: { view: CardView; size: number; ring: string }) {
+  const t = view.tier;
+  const seal = sealDataUri(makeSeal(view.sealSeed ?? 0, t.sealLayers), { inks: t.sealInks, strokeWidth: 1.1, size });
+  const core = Math.round(size * 0.4);
+  return (
+    <div style={flex({ position: "relative", width: size, height: size, alignItems: "center", justifyContent: "center" })}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- Satori малює лише <img> */}
+      <img src={seal} alt="" width={size} height={size} style={{ position: "absolute", left: 0, top: 0 }} />
+      <div
+        style={flex({
+          width: core,
+          height: core,
+          borderRadius: core,
+          backgroundColor: LEMON,
+          border: `${Math.round(size * 0.04)}px solid ${ring}`,
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          color: INK,
+        })}
+      >
+        <span style={{ fontFamily: TEXT, fontSize: Math.round(size * 0.075), letterSpacing: 1, lineHeight: 1 }}>LVL</span>
+        <span style={{ fontFamily: DISPLAY, fontSize: Math.round(size * 0.17), lineHeight: 0.95 }}>{String(view.level)}</span>
+      </div>
+    </div>
+  );
+}
+
 /** Картка для картинки: та сама анатомія, що на сторінці (components/card/card-front.tsx). */
 function ShareCard({ view, width }: { view: CardView; width: number }) {
   const t = view.tier;
-  const height = Math.round(width / 0.718);
-  const pad = Math.round(width * 0.055);
-  const inner = width - 2 * pad;
-  const winPad = Math.round(inner * 0.07);
-  const artSide = Math.round(inner * 0.62);
-  const dark = t.finish === "black" || t.finish === "red_seal";
-  const seal = sealDataUri(makeSeal(view.sealSeed ?? 0, t.sealLayers, "share"), {
-    inks: t.sealInks,
-    strokeWidth: 1.5,
-    size: artSide,
-  });
+  const height = Math.round(width / 1.586);
   const u = (k: number) => Math.round(width * k);
+  const stats = view.stats.slice(0, 3);
   return (
     <div
       style={flex({
         ...tierBackground(t),
+        position: "relative",
         width,
         height,
-        padding: pad,
-        borderRadius: `${u(0.0455)}px / ${Math.round(height * 0.035)}px`,
-        position: "relative",
-        boxShadow: "0 24px 48px rgba(0,0,0,0.45)",
+        borderRadius: u(0.052),
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: `${u(0.062)}px ${u(0.07)}px ${u(0.056)}px`,
+        color: t.ink,
+        boxShadow: "0 36px 50px -20px rgba(77,62,0,0.55)",
       })}
     >
-      <div
-        style={flex({
-          flexDirection: "column",
-          width: inner,
-          height: height - 2 * pad,
-          padding: winPad,
-          backgroundColor: t.window,
-          borderRadius: u(0.028),
-          color: t.ink,
-        })}
-      >
-        <div style={flex({ justifyContent: "space-between", alignItems: "flex-start" })}>
-          <div style={flex({ flexDirection: "column" })}>
-            <span style={{ fontFamily: DISPLAY, fontSize: u(0.25), lineHeight: 0.8 }}>{String(view.score)}</span>
-            <span style={{ fontFamily: DISPLAY, fontSize: u(0.079), lineHeight: 1, marginTop: u(0.016) }}>
-              {view.positionCode}
-            </span>
+      <div style={flex({ flexDirection: "column" })}>
+        <div style={flex({ alignItems: "center", fontFamily: DISPLAY, fontSize: u(0.043) })}>
+          <div
+            style={flex({
+              width: u(0.056),
+              height: u(0.056),
+              borderRadius: u(0.056),
+              backgroundColor: LEMON,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: u(0.018),
+            })}
+          >
+            <div style={{ width: u(0.012), height: u(0.012), borderRadius: u(0.012), backgroundColor: INK }} />
           </div>
-          <div style={flex({ flexDirection: "column", alignItems: "flex-end", fontFamily: DISPLAY, color: t.ink2 })}>
-            <span style={{ fontSize: u(0.042) }}>LEVEL</span>
-            <span style={{ fontSize: u(0.09), lineHeight: 1, color: t.ink }}>{String(view.level)}</span>
-            <span style={{ fontSize: u(0.042) }}>{t.finishName.toUpperCase()}</span>
-          </div>
+          NextCryptoJob
         </div>
-        <div style={flex({ flexGrow: 1, alignItems: "center", justifyContent: "center", position: "relative", margin: `${u(0.02)}px 0` })}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- Satori малює лише <img> */}
-          <img
-            src={underprintDataUri(dark ? "#a9adb2" : "#5d6166", dark ? 0.16 : 0.2)}
-            alt=""
-            width={inner - 2 * winPad}
-            height={artSide}
-            style={{ position: "absolute", left: 0, top: 0 }}
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element -- Satori малює лише <img> */}
-          <img src={seal} alt="" width={artSide} height={artSide} />
+        <span style={{ fontFamily: TEXT, fontSize: u(0.025), letterSpacing: u(0.002), color: t.ink2, marginTop: u(0.01) }}>
+          {`SEASON 1 · ${(view.number ?? "").toUpperCase()}`}
+        </span>
+      </div>
+      <div style={flex({ alignItems: "flex-end" })}>
+        {/* Без від'ємного трекінгу: Satori міряє ширину без нього, і роль лізла б на число. */}
+        <span style={{ fontFamily: DISPLAY, fontSize: u(0.24), lineHeight: 0.8, flexShrink: 0 }}>{String(view.score)}</span>
+        <div style={flex({ flexDirection: "column", marginLeft: u(0.03), paddingBottom: u(0.006), maxWidth: u(0.5) })}>
+          <span style={{ fontFamily: TEXT, fontSize: u(0.039), color: t.ink2 }}>of 100</span>
+          <span style={{ fontFamily: DISPLAY, fontSize: u(0.048), lineHeight: 1.15 }}>{view.roleName}</span>
         </div>
-        <div
+      </div>
+      <div style={flex({ justifyContent: "space-between", alignItems: "flex-end", marginTop: u(0.045) })}>
+        <span
           style={{
             display: "block",
             fontFamily: `${DISPLAY}, ${CYRILLIC}`,
             fontSize: nameFontSize(view.displayName, width),
-            lineHeight: 1.1,
+            letterSpacing: u(0.005),
             textTransform: "uppercase",
             overflow: "hidden",
             whiteSpace: "nowrap",
             textOverflow: "ellipsis",
+            maxWidth: stats.length > 0 ? u(0.5) : u(0.86),
           }}
         >
           {view.displayName}
-        </div>
-        {view.stats.length > 0 ? (
-          <div style={flex({ flexWrap: "wrap", marginTop: u(0.02), fontFamily: DISPLAY })}>
-            {view.stats.map((s) => (
-              <div
-                key={s.code}
-                style={flex({
-                  width: "30.5%",
-                  alignItems: "baseline",
-                  borderTop: `${Math.max(2, u(0.004))}px solid ${t.ink}`,
-                  paddingTop: u(0.008),
-                  marginRight: "2.5%",
-                  marginTop: u(0.006),
-                })}
-              >
-                <span style={{ fontSize: s.value === null ? u(0.036) : u(0.058), color: s.value === null ? t.ink2 : t.ink }}>
+        </span>
+        {stats.length > 0 ? (
+          <div style={flex({ fontFamily: TEXT, fontSize: u(0.03), color: t.ink2 })}>
+            {stats.map((s) => (
+              <div key={s.code} style={flex({ alignItems: "baseline", marginLeft: u(0.024) })}>
+                <span>{s.code}</span>
+                <span style={{ marginLeft: u(0.008), fontSize: u(0.035), color: s.value === null ? t.ink2 : t.ink }}>
                   {s.value === null ? "gap" : String(s.value)}
                 </span>
-                <span style={{ fontSize: u(0.034), marginLeft: u(0.013) }}>{s.code}</span>
               </div>
             ))}
           </div>
         ) : null}
       </div>
-      {view.marker ? (
-        <span
-          style={{
-            position: "absolute",
-            left: u(0.07),
-            top: Math.round(height * 0.012),
-            fontFamily: DISPLAY,
-            fontSize: u(0.031),
-            letterSpacing: u(0.003),
-            padding: `0 ${u(0.016)}px`,
-            backgroundColor: t.window,
-            color: t.ink,
-          }}
-        >
-          {view.marker.toUpperCase()}
-        </span>
-      ) : null}
-      <div
-        style={flex({
-          position: "absolute",
-          left: u(0.07),
-          right: u(0.07),
-          bottom: Math.round(height * 0.012),
-          justifyContent: "space-between",
-          fontFamily: DISPLAY,
-          fontSize: u(0.031),
-          letterSpacing: u(0.0025),
-          color: t.frameInk,
-        })}
-      >
-        <span>SEASON 1</span>
-        <span>{view.number ?? ""}</span>
+      <div style={flex({ position: "absolute", top: u(0.044), right: u(0.048) })}>
+        <Badge view={view} size={u(0.29)} ring={t.frame} />
       </div>
     </div>
   );
 }
 
-function Rosette({ view, size, left, top }: { view: CardView; size: number; left: number; top: number }) {
-  const uri = sealDataUri(makeSeal(view.sealSeed ?? 0, view.tier.sealLayers, "share"), {
-    inks: [FG, FG],
-    strokeWidth: 0.45,
-    size,
-    opacity: 0.1,
-  });
-  // eslint-disable-next-line @next/next/no-img-element -- Satori малює лише <img>
-  return <img src={uri} alt="" width={size} height={size} style={{ position: "absolute", left, top }} />;
+function reasonLine(view: CardView): string | null {
+  return builtFrom(view.back);
 }
 
-function Headline({ view, size, center = false }: { view: CardView; size: number; center?: boolean }) {
-  return (
-    <div
-      style={flex({
-        flexWrap: "wrap",
-        justifyContent: center ? "center" : "flex-start",
-        fontFamily: DISPLAY,
-        fontSize: size,
-        lineHeight: 0.88,
-        textTransform: "uppercase",
-      })}
-    >
-      <span style={{ marginRight: size * 0.22 }}>{view.roleName}</span>
-      <span style={{ marginRight: size * 0.22 }}>rated</span>
-      <span style={{ color: ACCENT }}>{String(view.score)}</span>
-    </div>
-  );
-}
-
-function reasonLine(view: CardView): string {
-  const parts = [`Level ${view.level} of 10, ${view.tier.finishName.toLowerCase()} finish.`];
-  const built = builtFrom(view.back);
-  if (built) parts.push(built);
-  if (view.marker) parts.push(`${view.marker}.`);
-  return parts.join(" ");
-}
-
-/** 1200×675 або 1200×630: картка зліва, заголовок праворуч. */
+/** 1200×675 або 1200×630: картка зліва під кутом, праворуч роль і бал. */
 function Wide({ view, height }: { view: CardView; height: number }) {
   const W = 1200;
-  const cardH = Math.round(height * 0.8);
-  const cardW = Math.round(cardH * 0.718);
-  const head = view.roleName.length > 18 ? 76 : 92;
+  const cardW = 540;
+  const cardH = Math.round(cardW / 1.586);
+  const big = view.roleName.length > 18 ? 52 : 64;
+  const reasons = reasonLine(view);
   return (
-    <div style={flex({ width: W, height, backgroundColor: BG, color: FG, position: "relative", overflow: "hidden" })}>
-      <Rosette view={view} size={780} left={W - 560} top={Math.round(height / 2 - 400)} />
-      <div style={flex({ position: "absolute", left: 72, top: Math.round((height - cardH) / 2), transform: "rotate(-4deg)" })}>
+    <div style={flex({ width: W, height, backgroundColor: LEMON, color: INK, position: "relative", overflow: "hidden" })}>
+      <div style={flex({ position: "absolute", left: 64, top: Math.round((height - cardH) / 2), transform: "rotate(-6deg)" })}>
         <ShareCard view={view} width={cardW} />
       </div>
       <div
         style={flex({
           position: "absolute",
-          left: 540,
-          right: 64,
-          top: 72,
+          left: 684,
+          right: 60,
+          top: 64,
           bottom: 64,
           flexDirection: "column",
-          justifyContent: "space-between",
+          justifyContent: "center",
         })}
       >
-        <div style={flex({ flexDirection: "column" })}>
-          <Headline view={view} size={head} />
-          <div style={{ display: "block", fontFamily: TEXT, fontSize: 26, lineHeight: 1.35, color: FG_2, marginTop: 24 }}>
-            {reasonLine(view)}
-          </div>
-        </div>
-        <div style={flex({ justifyContent: "space-between", fontFamily: DISPLAY, fontSize: 24, letterSpacing: 1.5, color: FG_2 })}>
-          <span>SEASON 1</span>
-          <span>NEXTCRYPTOJOB.XYZ</span>
-        </div>
+        <span style={{ fontFamily: `${TEXT}, ${CYRILLIC}`, fontSize: 28, color: LEMON_INK }}>{view.displayName}</span>
+        <span style={{ fontFamily: DISPLAY, fontSize: big, lineHeight: 1, letterSpacing: -2, marginTop: 10 }}>{view.roleName}</span>
+        <span style={{ fontFamily: TEXT, fontSize: 30, marginTop: 14 }}>{`Rated ${view.score} of 100. Level ${view.level}.`}</span>
+        {reasons ? (
+          <span style={{ fontFamily: TEXT, fontSize: 23, lineHeight: 1.35, color: LEMON_INK, marginTop: 28 }}>{reasons}</span>
+        ) : null}
+        <span style={{ fontFamily: DISPLAY, fontSize: 28, marginTop: 36 }}>nextcryptojob.xyz</span>
       </div>
     </div>
   );
 }
 
-/** 1080×1350: картка вгорі, заголовок і рівень унизу. */
+/** 1080×1350: картка вгорі, роль, бал і рівень унизу. */
 function Tall({ view }: { view: CardView }) {
   const { width: W, height: H } = SHARE_SIZES.tall;
-  const cardW = 580;
-  const head = view.roleName.length > 18 ? 92 : 112;
+  const cardW = 800;
+  const big = view.roleName.length > 18 ? 76 : 96;
+  const reasons = reasonLine(view);
   return (
-    <div style={flex({ width: W, height: H, backgroundColor: BG, color: FG, position: "relative", overflow: "hidden" })}>
-      <Rosette view={view} size={1040} left={20} top={-120} />
-      <div style={flex({ position: "absolute", left: (W - cardW) / 2, top: 84, transform: "rotate(-3deg)" })}>
+    <div style={flex({ width: W, height: H, backgroundColor: LEMON, color: INK, position: "relative", overflow: "hidden" })}>
+      <div style={flex({ position: "absolute", left: (W - cardW) / 2, top: 190, transform: "rotate(-4deg)" })}>
         <ShareCard view={view} width={cardW} />
       </div>
       <div
         style={flex({
           position: "absolute",
-          left: 72,
-          right: 72,
-          bottom: 80,
+          left: 80,
+          right: 80,
+          bottom: 140,
           flexDirection: "column",
           alignItems: "center",
           textAlign: "center",
         })}
       >
-        <Headline view={view} size={head} center />
-        <div style={{ display: "block", fontFamily: DISPLAY, fontSize: 34, letterSpacing: 2, color: FG_2, marginTop: 28 }}>
-          {`LEVEL ${view.level} ${view.tier.finishName.toUpperCase()} / NEXTCRYPTOJOB.XYZ`}
-        </div>
+        <span style={{ fontFamily: `${TEXT}, ${CYRILLIC}`, fontSize: 34, color: LEMON_INK }}>{view.displayName}</span>
+        <span style={{ fontFamily: DISPLAY, fontSize: big, lineHeight: 1, letterSpacing: -3, marginTop: 12 }}>{view.roleName}</span>
+        <span style={{ fontFamily: TEXT, fontSize: 38, marginTop: 18 }}>{`Rated ${view.score} of 100. Level ${view.level}.`}</span>
+        {reasons ? (
+          <span style={{ fontFamily: TEXT, fontSize: 28, lineHeight: 1.35, color: LEMON_INK, marginTop: 24 }}>{reasons}</span>
+        ) : null}
+        <span style={{ fontFamily: DISPLAY, fontSize: 34, marginTop: 40 }}>nextcryptojob.xyz</span>
       </div>
     </div>
   );

@@ -15,7 +15,8 @@
  * - swaps точний, коли прочитано всі успішні й список не обрізаний (договір §3).
  *
  * RPC: з HELIUS_KEY https://mainnet.helius-rpc.com/?api-key=… (getSignaturesForAddress і
- * getTransaction по 1 кредиту, 4 паралельно); без ключа публічний
+ * getTransaction по 1 кредиту, 4 паралельно) або SOLANA_RPC_URL (будь-який постачальник,
+ * напр. Alchemy, так само 4 паралельно); без ключа публічний
  * https://api.mainnet-beta.solana.com (бюджет limits.ts: 1 запит, 300 мс): лише підписи,
  * а транзакції тільки в точному випадку (до 30 успішних), інакше swaps = null з приміткою.
  * Межа часу: після deadline − 10 с нових сторінок і транзакцій не беремо, віддаємо виміряне.
@@ -65,12 +66,32 @@ export interface SolanaOptions extends CollectOptions {
   minSample?: number;
 }
 
-interface Rpc { url: string; host: string; helius: boolean; key?: string }
+/** keyed: власний вузол з ключем (повна вибірка, 4 паралельно), а не публічний. */
+interface Rpc { url: string; host: string; keyed: boolean; key?: string }
 
+/**
+ * Секрет у повній адресі вузла: найдовший шматок шляху або значення параметра
+ * (Helius ?api-key=…, Alchemy /v2/…, QuickNode /…/). Його вирізає scrubKey з текстів помилок.
+ */
+function secretOf(u: URL): string | undefined {
+  const parts = [...u.pathname.split("/"), ...[...u.searchParams.values()]].filter((p) => p.length >= 8);
+  return parts.sort((a, b) => b.length - a.length)[0];
+}
+
+/**
+ * SOLANA_RPC_URL (повна https-адреса будь-якого постачальника) важить більше за HELIUS_KEY;
+ * без обох публічний вузол.
+ */
 export function rpcFor(env: Record<string, string | undefined>): Rpc {
+  const custom = env.SOLANA_RPC_URL?.trim();
+  if (custom) {
+    let u: URL | null = null;
+    try { u = new URL(custom); } catch { /* не адреса: далі HELIUS_KEY або публічний */ }
+    if (u?.protocol === "https:") return { url: custom, host: u.host, keyed: true, key: secretOf(u) };
+  }
   const key = env.HELIUS_KEY?.trim();
-  if (key) return { url: `${HELIUS_RPC}?api-key=${encodeURIComponent(key)}`, host: "mainnet.helius-rpc.com", helius: true, key };
-  return { url: PUBLIC_RPC, host: "api.mainnet-beta.solana.com", helius: false };
+  if (key) return { url: `${HELIUS_RPC}?api-key=${encodeURIComponent(key)}`, host: "mainnet.helius-rpc.com", keyed: true, key };
+  return { url: PUBLIC_RPC, host: "api.mainnet-beta.solana.com", keyed: false };
 }
 
 type RpcResponse<T> = { result?: T; error?: { code?: number; message?: string } };
@@ -88,7 +109,7 @@ async function rpc<T>(r: Rpc, method: string, params: unknown[], o: CollectOptio
     }, {
       fetchImpl: o.fetchImpl, timeoutMs: REQUEST_TIMEOUT_MS,
       // Публічний вузол часто відповідає 429: на один повтор більше.
-      retries: o.retries ?? (r.helius ? 1 : 2), retryDelayMs: o.retryDelayMs ?? 1_000,
+      retries: o.retries ?? (r.keyed ? 1 : 2), retryDelayMs: o.retryDelayMs ?? 1_000,
     });
     if (d && typeof d === "object" && "result" in d) return d.result ?? null;
     const msg = scrubKey(String(d?.error?.message ?? "відповідь без result"), r.key).slice(0, 200);
@@ -212,7 +233,7 @@ async function collectAddress(address: string, r: Rpc, o: SolanaOptions, b: Budg
 
   const ok = sigs.filter((s) => s.err === null || s.err === undefined);
   let picked: string[];
-  if (r.helius) {
+  if (r.keyed) {
     picked = ok.slice(0, sampleSize).map((s) => s.signature).filter((s): s is string => !!s);
   } else if (complete && ok.length <= PUBLIC_EXACT_MAX) {
     // Публічний вузол: лише точний випадок, коли всі успішні вміщаються в кілька запитів.
@@ -223,7 +244,7 @@ async function collectAddress(address: string, r: Rpc, o: SolanaOptions, b: Budg
   }
 
   let cut = false;
-  const verdicts = await mapPool(picked, r.helius ? 4 : 1, async (sig) => {
+  const verdicts = await mapPool(picked, r.keyed ? 4 : 1, async (sig) => {
     if (!b.open()) { cut = true; return undefined; }
     try {
       const tx = await rpc<ParsedTx>(r, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }], ro);
@@ -283,7 +304,7 @@ export async function collectSolana(addresses: readonly string[], o: SolanaOptio
 
   if (Object.keys(facts).length === 0) {
     const why = [...reasons].join("; ").slice(0, 400);
-    return { ok: false, gap: r.helius ? `Solana: ${why}` : `not configured: HELIUS_KEY; public ${r.host} failed: ${why}` };
+    return { ok: false, gap: r.keyed ? `Solana: ${why}` : `not configured: HELIUS_KEY; public ${r.host} failed: ${why}` };
   }
   return { ok: true, facts, ...(Object.keys(partial).length ? { partial } : {}) };
 }

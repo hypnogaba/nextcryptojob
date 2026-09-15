@@ -31,7 +31,7 @@ export type CardJob = {
 
 // Текст із чужих дощок буває одним довгим словом: переносимо будь-де, щоб 390 px не роз'їхались.
 const WRAP = "min-w-0 wrap-anywhere";
-const TITLE_LINK = "underline decoration-transparent underline-offset-4 transition-colors hover:decoration-brand focus-visible:decoration-brand";
+const TITLE_LINK = "underline decoration-transparent decoration-2 underline-offset-4 transition-colors hover:decoration-lemon focus-visible:decoration-lemon";
 
 function Title({ job }: { job: CardJob }) {
   const url = job.url;
@@ -60,41 +60,44 @@ function Title({ job }: { job: CardJob }) {
   );
 }
 
-function Facts({ job }: { job: CardJob }) {
-  const chip = "inline-flex min-h-7 items-center rounded-md px-2.5 text-[0.8125rem] leading-tight";
-  if (!job.location && !job.salary && !job.salaryEstimate) return null;
-  return (
-    <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Where and pay">
-      {job.location ? <li className={`${chip} border border-line bg-surface text-ink ${WRAP}`}>{job.location}</li> : null}
-      {job.salary ? (
-        <li className={`${chip} bg-ink font-semibold text-ground tabular-nums`}>{job.salary}</li>
-      ) : job.salaryEstimate ? (
-        // Оцінка дошки, не зарплата: приглушено й окремо від зарплати.
-        <li className={`${chip} border border-dashed border-line-strong text-ink-muted ${WRAP}`}>{job.salaryEstimate}</li>
-      ) : (
-        <li className={`${chip} text-ink-muted`}>Salary not listed</li>
-      )}
-    </ul>
-  );
+/** Вилка лимонною пігулкою; оцінка дошки приглушено й пунктиром, бо це не зарплата. */
+function Pay({ job }: { job: CardJob }) {
+  if (job.salary) {
+    return (
+      <span className="rounded-full bg-lemon px-3.5 py-1.5 font-display text-lg leading-tight font-semibold whitespace-nowrap tabular-nums">
+        {job.salary}
+      </span>
+    );
+  }
+  if (job.salaryEstimate) {
+    return (
+      <span className={`rounded-full border border-dashed border-line-strong px-3 py-1 text-[0.8125rem] text-ink-muted ${WRAP}`}>
+        {job.salaryEstimate}
+      </span>
+    );
+  }
+  return <span className="rounded-full bg-soft px-3 py-1.5 text-sm font-medium whitespace-nowrap text-ink-muted">Salary not listed</span>;
 }
 
 function Why({ reasons, why, note, label }: { reasons?: readonly string[]; why?: string | null; note?: string | null; label: string }) {
   const list = reasons?.length ? reasons : null;
   if (!list && !why) return null;
   return (
-    <div className="mt-4 rounded-lg bg-brand-soft px-4 py-3.5">
-      <p className="text-xs font-bold tracking-[0.08em] text-brand uppercase">{label}</p>
+    <div className="min-w-0">
+      <p className="mb-2 text-[0.8125rem] font-bold text-ink">{label}</p>
       {list ? (
-        <ul className="mt-2 grid gap-1.5">
+        <ul className="grid gap-2">
           {list.map((r) => (
-            <li key={r} className={`flex gap-2 text-[0.9375rem] leading-snug text-ink ${WRAP}`}>
-              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand" strokeWidth={3} />
+            <li key={r} className={`grid grid-cols-[20px_minmax(0,1fr)] gap-2 text-[0.9375rem] leading-[22px] text-ink ${WRAP}`}>
+              <span aria-hidden="true" className="mt-px grid size-5 place-items-center rounded-full bg-lemon">
+                <Check className="size-3 text-ink" strokeWidth={3.5} />
+              </span>
               <span>{r}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className={`mt-1.5 text-[0.9375rem] leading-snug text-ink ${WRAP}`}>{why}</p>
+        <p className={`text-[0.9375rem] leading-[22px] text-ink ${WRAP}`}>{why}</p>
       )}
       {note ? <p className={`mt-2 text-sm text-ink-muted ${WRAP}`}>{note}</p> : null}
     </div>
@@ -108,8 +111,8 @@ function Apply({ job, compact }: { job: CardJob; compact: boolean }) {
     return note ? <p className={`mt-4 text-xs text-ink-muted ${WRAP}`}>{note}</p> : null;
   }
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button asChild size={compact ? "default" : "lg"} variant={compact ? "outline" : "default"} className="w-full sm:w-auto">
+    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <Button asChild size={compact ? "default" : "lg"} variant={compact ? "outline" : "default"} className="w-full sm:w-auto [&_svg]:text-lemon">
         <a href={apply.href} {...(apply.newTab ? { target: "_blank", rel: apply.rel ?? undefined } : {})}>
           {apply.label}
           {apply.newTab ? <ArrowUpRight aria-hidden="true" data-icon="inline-end" /> : null}
@@ -142,31 +145,36 @@ export function JobCard({
   compact?: boolean;
 }) {
   const domain = job.domain ?? null;
+  const hasWhy = Boolean(reasons?.length || why);
   return (
-    <li className="rounded-xl border border-line bg-surface p-4 shadow-rest sm:p-6">
-      <div className="flex items-start gap-3.5 sm:gap-4">
-        <CompanyLogo name={job.company} src={logoPath(domain)} size={compact ? 40 : 48} />
-        <div className="min-w-0 flex-1">
-          <h3 className={`font-sans text-[1.0625rem] leading-snug font-semibold text-ink sm:text-lg ${WRAP}`}>
+    <li className="rounded-3xl border-[1.5px] border-line bg-surface p-5 transition-[border-color,box-shadow] duration-300 hover:border-[#d5d7dd] hover:shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)] sm:p-7">
+      <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-4 gap-y-3 sm:grid-cols-[56px_minmax(0,1fr)_auto]">
+        <CompanyLogo name={job.company} src={logoPath(domain)} size={compact ? 44 : 56} />
+        <div className="min-w-0">
+          <h3 className={`font-display text-xl leading-7 font-semibold tracking-[-0.015em] text-ink sm:text-2xl sm:leading-[30px] ${WRAP}`}>
+            {rank ? <span className="sr-only">Match {rank}: </span> : null}
             <Title job={job} />
           </h3>
-          <p className={`mt-0.5 text-sm text-ink-muted ${WRAP}`}>
-            <span className="font-medium text-ink">{job.company}</span>
-            {domain ? <span> · {domain}</span> : null}
+          <p className={`mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.9375rem] text-ink-muted ${WRAP}`}>
+            <span className="font-semibold text-ink">{job.company}</span>
+            {domain ? <span>{domain}</span> : null}
+            {job.location ? <span>{job.location}</span> : null}
           </p>
         </div>
-        {rank ? (
-          <span className="font-display text-2xl leading-none font-extrabold text-line-strong tabular-nums" aria-label={`Match ${rank}`}>
-            {String(rank).padStart(2, "0")}
-          </span>
-        ) : null}
+        <div className="col-span-full justify-self-start sm:col-span-1 sm:justify-self-end">
+          <Pay job={job} />
+        </div>
       </div>
-      <Facts job={job} />
-      <Why reasons={reasons} why={why} note={note} label={compact ? "Why we sent it" : "Why this fits you"} />
-      {job.about ? (
-        <p className={`mt-4 text-sm leading-relaxed text-ink-muted ${WRAP}`}>
-          <span className="font-semibold text-ink">About {job.company}.</span> {job.about}
-        </p>
+      {hasWhy || job.about ? (
+        <div className={`mt-5 grid gap-6 border-t border-line pt-5 ${hasWhy && job.about ? "md:grid-cols-2" : ""}`}>
+          <Why reasons={reasons} why={why} note={note} label={compact ? "Why we sent it" : "Why this fits you"} />
+          {job.about ? (
+            <div className="min-w-0">
+              <p className="mb-2 text-[0.8125rem] font-bold text-ink">About the company</p>
+              <p className={`text-[0.9375rem] leading-[22px] text-ink-muted ${WRAP}`}>{job.about}</p>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       <Apply job={job} compact={compact} />
     </li>

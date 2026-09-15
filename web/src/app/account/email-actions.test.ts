@@ -16,7 +16,6 @@ type Sent = { to: string; subject: string; text: string };
 let outbox: Sent[] = [];
 
 const EMAIL_STEP: AddEmailState = { step: "email", email: "" };
-const TAKEN = "This email is linked to another profile.";
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -100,19 +99,70 @@ describe("addEmailAction", () => {
     expect(rows("SELECT channel FROM users")).toEqual([{ channel: "email" }]);
   });
 
-  it("refuses an email that belongs to another profile and changes nothing", async () => {
+  it("offers to merge when an email belongs to another profile of the same person, without changing anything yet", async () => {
     exec("INSERT INTO users (id, email) VALUES ('other', 'Ada@Example.com')");
     await signInTelegramOnly();
     await send("ada@example.com");
-    await expect(verify("ada@example.com", lastCode())).resolves.toMatchObject({
-      step: "email",
-      message: { tone: "error", text: TAKEN },
+    const offered = await verify("ada@example.com", lastCode());
+    expect(offered).toMatchObject({
+      step: "merge",
+      email: "ada@example.com",
+      message: { tone: "info", text: expect.stringContaining("This email is already on your other NextCryptoJob account") },
     });
+    expect((offered as AddEmailState).grant).toBeTruthy();
+    // Ще нічого не змінено: обидва профілі лишились окремими, з їхніми поштами.
     expect(rows("SELECT id, email FROM users ORDER BY id")).toEqual([
       { id: "other", email: "Ada@Example.com" },
       { id: "tg", email: null },
     ]);
     expect(rows("SELECT action FROM audit_log")).toEqual([{ action: "account.email_conflict" }]);
+  });
+
+  it("merges the two profiles once the person presses Merge accounts", async () => {
+    exec(
+      "INSERT INTO users (id, email, roles, onboarding_step) VALUES ('other', 'ada@example.com', '[\"engineer\"]', 'sources')",
+    );
+    await signInTelegramOnly();
+    await send("ada@example.com");
+    const offered = (await verify("ada@example.com", lastCode())) as AddEmailState;
+    expect(offered.step).toBe("merge");
+
+    const merged = await addEmailAction(offered, form({ intent: "merge", email: "ada@example.com", grant: offered.grant! }));
+    expect(merged).toMatchObject({
+      step: "done",
+      email: "ada@example.com",
+      message: { tone: "success", text: expect.stringContaining("Accounts merged") },
+    });
+    // Один профіль лишається: Telegram-акаунт (сесія), тепер і з поштою, і з роллю з іншого.
+    expect(rows("SELECT id, email, telegram_id, roles FROM users")).toEqual([
+      { id: "tg", email: "ada@example.com", telegram_id: "555", roles: '["engineer"]' },
+    ]);
+    expect(rows("SELECT action FROM audit_log WHERE action = 'account.merge'")).toEqual([{ action: "account.merge" }]);
+  });
+
+  it("refuses to merge with an expired or tampered grant", async () => {
+    exec("INSERT INTO users (id, email) VALUES ('other', 'ada@example.com')");
+    await signInTelegramOnly();
+    await send("ada@example.com");
+    const offered = (await verify("ada@example.com", lastCode())) as AddEmailState;
+
+    const res = await addEmailAction(offered, form({ intent: "merge", email: "ada@example.com", grant: "0.deadbeef" }));
+    expect(res).toMatchObject({ step: "email", message: { tone: "error" } });
+    expect(rows("SELECT id FROM users")).toHaveLength(2);
+  });
+
+  it("tells the person to write in when the two profiles have different Telegram accounts connected", async () => {
+    exec("INSERT INTO users (id, email, telegram_id) VALUES ('other', 'ada@example.com', '777')");
+    await signInTelegramOnly("tg", "555");
+    await send("ada@example.com");
+    const offered = (await verify("ada@example.com", lastCode())) as AddEmailState;
+
+    const res = await addEmailAction(offered, form({ intent: "merge", email: "ada@example.com", grant: offered.grant! }));
+    expect(res).toMatchObject({
+      step: "email",
+      message: { tone: "error", text: expect.stringContaining("we cannot merge them here") },
+    });
+    expect(rows("SELECT id FROM users")).toHaveLength(2);
   });
 
   it("keeps the person in the same session, opened by Telegram", async () => {

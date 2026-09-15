@@ -41,7 +41,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section aria-labelledby={`${id}-title`} className={cn("min-w-0 rounded-[10px] border-2 border-ink bg-surface", className)}>
+    <section aria-labelledby={`${id}-title`} className={cn("min-w-0 rounded-[10px] border-[1.5px] border-line bg-surface", className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-ink px-4 py-3">
         <h2 id={`${id}-title`} className="display text-[1.5rem] leading-none">
           {title}

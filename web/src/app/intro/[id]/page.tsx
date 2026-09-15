@@ -30,7 +30,7 @@ function first(value: string | string[] | undefined): string | null {
 function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto grid max-w-2xl gap-6 px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
-      <section className="grid gap-5 rounded-xl border-2 border-ink bg-surface p-4 sm:p-6">{children}</section>
+      <section className="grid gap-5 rounded-xl border-[1.5px] border-line bg-surface p-4 sm:p-6">{children}</section>
     </div>
   );
 }

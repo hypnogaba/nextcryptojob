@@ -47,7 +47,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
 
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-5xl`}>
+      <div className={`${PAGE} max-w-7xl`}>
         <PageTitle>Pipeline</PageTitle>
         <NoAccess />
       </div>
@@ -85,7 +85,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
   const filtered = Boolean(job || tag);
 
   return (
-    <div className={`${PAGE} max-w-5xl`}>
+    <div className={`${PAGE} max-w-7xl`}>
       <PageTitle aside={total ? `${total} ${total === 1 ? "candidate" : "candidates"}` : undefined}>Pipeline</PageTitle>
       {done ? <Notice tone="success">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}

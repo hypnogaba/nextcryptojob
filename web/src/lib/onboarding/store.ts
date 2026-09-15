@@ -1,6 +1,7 @@
 // Відповіді анкети в users: що шукає людина, ролі, місце, зарплата і
 // досягнутий крок. Кожне збереження кроку й перехід далі одним записом.
 import type { RoleKey } from "@/lib/card/roles";
+import { SCORING_BASIS_SQL } from "@/lib/consent";
 import { parseRoles } from "@/lib/roles/catalog";
 import type { Place } from "./place";
 import { advance, normalizeSavedStep, parseSavedStep, type SavedStep, type Step } from "./steps";
@@ -37,7 +38,7 @@ export async function loadAnswers(db: D1Database, userId: string): Promise<Answe
   const row = await db
     .prepare(
       `SELECT target_text, roles, role_text, remote_mode, city, salary_min, salary_currency, onboarding_step,
-              (SELECT granted FROM consents WHERE user_id = users.id AND kind = 'scoring') AS scoring
+              (SELECT MAX(granted) FROM consents WHERE user_id = users.id AND kind IN ${SCORING_BASIS_SQL}) AS scoring
          FROM users WHERE id = ?`,
     )
     .bind(userId)
@@ -50,7 +51,7 @@ export async function loadAnswers(db: D1Database, userId: string): Promise<Answe
     city: row?.city ?? null,
     salaryMin: row?.salary_min ?? null,
     salaryCurrency: row?.salary_currency ?? null,
-    // Згода в тому самому читанні: крок «Stand out» без згоди (старий порядок) = ще анкета.
+    // Умови в тому самому читанні: крок «Stand out» без них (старий порядок) = ще анкета.
     step: normalizeSavedStep(parseSavedStep(row?.onboarding_step), row?.scoring === 1),
   };
 }

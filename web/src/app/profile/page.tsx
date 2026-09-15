@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { suggestDisplayName } from "@/lib/card/display-name";
 import { cardEligibility } from "@/lib/card/eligibility";
-import { hasConsent, SCORING_CONSENT } from "@/lib/consent";
+import { hasScoringBasis } from "@/lib/consent";
 import { db } from "@/lib/db";
 import { listIdentities } from "@/lib/identity/store";
 import { briefDone } from "@/lib/onboarding/steps";
@@ -34,10 +34,10 @@ export default async function ProfilePage({ searchParams }: Props) {
     listIdentities(d, user.id),
     profileStatus(d, user.id),
     loadScores(d, user.id),
-    hasConsent(d, user.id, SCORING_CONSENT.kind),
+    hasScoringBasis(d, user.id),
     listActiveCards(d, user.id),
   ]);
-  // Анкету пройдено й згоду дано: бал уже рахується, навіть якщо «Stand out» ще попереду.
+  // Анкету пройдено й умови прийнято: бал уже рахується, навіть якщо «Stand out» ще попереду.
   const done = briefDone(answers.step);
   const state = sourceState(identities);
   const x = identities.find((i) => i.kind === "x") ?? null;
@@ -91,7 +91,7 @@ export default async function ProfilePage({ searchParams }: Props) {
       ) : null}
 
       {done && !x ? (
-        <div className="grid gap-2 rounded-xl border-2 border-ink bg-surface p-4 sm:p-5">
+        <div className="grid gap-2 rounded-xl border-[1.5px] border-line bg-surface p-4 sm:p-5">
           <p className="text-sm text-ink">
             Add your X account. Most roles are scored from X, and your score and card need it. Just type your handle.
           </p>

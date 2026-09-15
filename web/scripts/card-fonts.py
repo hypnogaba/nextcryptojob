@@ -8,7 +8,7 @@
 # робимо статичні копії (fontTools varLib.instancer), урізаємо до латиниці й
 # кладемо в src/lib/card/fonts/*.ts як base64.
 #
-# Big Shoulders і Familjen Grotesk не мають кирилиці, а ім'я на картці може бути
+# Funnel Display і Funnel Sans (напрям «Payday», раунд 3) не мають кирилиці, а ім'я на картці може бути
 # кирилицею (display-name.ts). Тому поруч лежить кирилична частина IBM Plex Sans
 # 600, вирізана з попереднього plex-sans-600.ts: Satori бере її для літер, яких
 # немає в першому шрифті. Тест fonts.test.ts перевіряє покриття.
@@ -39,23 +39,23 @@ def cps(*ranges):
 
 # ASCII, Latin-1 і Latin Extended-A (імена), плюс знаки, які ставить сама картка.
 LATIN = cps((0x20, 0x7E), (0xA0, 0x17F)) + [0x2013, 0x2018, 0x2019, 0x201C, 0x201D, 0x2026, 0x00B7]
-# Кирилиця і чотири латинські літери, яких немає в Big Shoulders (Ĳ ĳ ŉ ſ).
+# Кирилиця і чотири латинські літери, яких могло не бути в основному шрифті (Ĳ ĳ ŉ ſ).
 CYRILLIC = cps((0x400, 0x45F), (0x490, 0x491)) + [0x20, 0x132, 0x133, 0x149, 0x17F]
 
 FONTS = [
     {
-        "file": "big-shoulders-800",
-        "src": f"{RAW}/bigshoulders/BigShoulders%5Bopsz,wght%5D.ttf",
-        "axes": {"wght": 800, "opsz": 72},
+        "file": "funnel-display-700",
+        "src": f"{RAW}/funneldisplay/FunnelDisplay%5Bwght%5D.ttf",
+        "axes": {"wght": 700},
         "unicodes": LATIN,
-        "label": "Big Shoulders 800 (opsz 72)",
+        "label": "Funnel Display 700",
     },
     {
-        "file": "familjen-grotesk-500",
-        "src": f"{RAW}/familjengrotesk/FamiljenGrotesk%5Bwght%5D.ttf",
+        "file": "funnel-sans-500",
+        "src": f"{RAW}/funnelsans/FunnelSans%5Bwght%5D.ttf",
         "axes": {"wght": 500},
         "unicodes": LATIN,
-        "label": "Familjen Grotesk 500",
+        "label": "Funnel Sans 500",
     },
 ]
 
@@ -111,18 +111,17 @@ def main() -> None:
         static = instancer.instantiateVariableFont(var, spec["axes"])
         write(spec["file"], spec["label"], cut(static, spec["unicodes"]))
 
-    # Кирилиця для імен: з наявного plex-sans-600.ts (підмножина Google Fonts API).
-    plex_ts = OUT / "plex-sans-600.ts"
-    if plex_ts.exists():
-        b64 = re.search(r'"([A-Za-z0-9+/=]+)"', plex_ts.read_text()).group(1)
-        plex = TTFont(io.BytesIO(base64.b64decode(b64)))
-        # «Plex» зарезервована назва (OFL), тож змінена копія зветься інакше.
-        rename(plex, "NCJ Card Cyrillic")
-        write("ncj-cyrillic-600", "NCJ Card Cyrillic (кирилиця IBM Plex Sans 600)", cut(plex, CYRILLIC))
-    elif not (OUT / "ncj-cyrillic-600.ts").exists():
-        sys.exit("plex-sans-600.ts is gone and ncj-cyrillic-600.ts is missing: restore plex-sans-600.ts from git (commit before the redesign).")
-    # Файл уже є (plex-sans-600.ts видалено після першого запуску): лишаємо як є.
-
+    # Запасний шрифт для імен: кирилиця і латинські літери, яких немає у Funnel Display
+    # (Ĉ, Ĕ, Ĝ ...), з IBM Plex Sans 600 (google/fonts, OFL). «Plex» зарезервована назва
+    # (OFL), тож змінена копія зветься NCJ Card Cyrillic.
+    display = TTFont(io.BytesIO(fetch(FONTS[0]["src"])))
+    have = set(display.getBestCmap())
+    gaps = [cp for cp in LATIN if cp not in have]
+    plex_var = TTFont(io.BytesIO(fetch(f"{RAW}/ibmplexsans/IBMPlexSans%5Bwdth,wght%5D.ttf")))
+    plex = instancer.instantiateVariableFont(plex_var, {"wght": 600, "wdth": 100})
+    rename(plex, "NCJ Card Cyrillic")
+    write("ncj-cyrillic-600", "NCJ Card Cyrillic (кирилиця й латинські прогалини Funnel Display, з IBM Plex Sans 600)", cut(plex, CYRILLIC + gaps))
+    print("latin gaps filled:", "".join(chr(c) for c in gaps))
 
 if __name__ == "__main__":
     main()

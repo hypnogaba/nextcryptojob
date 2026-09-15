@@ -2,13 +2,19 @@
 
 > **DRAFT. Not in force. For review by a French lawyer before launch.**
 > This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version: 0.1 (draft), 2026-09-12.
+> Version: 0.2 (draft), 2026-09-14.
 
 These terms apply when you use NextCryptoJob (nextcryptojob.xyz) to look for a job.
 The service is run by [LEGAL NAME], sole trader, France, SIRET [SIRET], [ADDRESS],
 [CONTACT EMAIL] ("we", "us").
 
 Our Privacy Policy explains how we use your data. It is part of these terms.
+
+**How you accept.** There are no boxes to tick. At the end of setup, under the Continue
+button, we write "By continuing you agree to the Terms and Privacy." Pressing Continue,
+and using the service after that, means you accept these terms and the Privacy Policy.
+We record the version you accepted and the date. If we change these terms, we tell you
+before the change takes effect.
 
 ## 1. Free for candidates, forever
 
@@ -53,16 +59,12 @@ to get a job, an interview or an introduction, do not pay. Report it to
 another person's X account, GitHub, YouTube channel, website or wallet. This is
 impersonation. It can also harm the real owner.
 
-**How we check.**
+**We take your word for it.** We do not ask you to prove control: no code in your bio,
+no sign-in with X, no wallet signature. Your public card says that the sources are
+self-reported, and anyone can report a card.
 
-- X: you prove control by putting a code in your bio or in a post.
-- Wallets: you paste addresses. We do not check them by signature unless you choose to sign. A signed wallet gets a "verified" badge. An unsigned wallet shows no badge.
-- One wallet address can belong to one account only.
-- GitHub, YouTube and website: [to confirm product behaviour: how control is checked; unverified sources show no badge].
-
-**Disputes.** If two people claim the same wallet or account, we may ask both to prove
-control (for example by signing a message with the wallet). The person who proves
-control keeps it. We remove it from the other account and may suspend that account.
+- The same X account, GitHub, YouTube channel, website or wallet can be on more than one account. Nobody can block you by adding your account first.
+- If someone reports that an account or wallet on a profile is not theirs, we may ask the person to prove control (for example by signing a message with the wallet). If they cannot, we remove it from their profile and may suspend the profile.
 
 **We never ask for your keys.** We will never ask for your private key or seed phrase.
 A signature for verification only signs a text message. It never moves funds or gives
@@ -71,7 +73,7 @@ it is a scam.
 
 ## 5. Your score
 
-- We compute your score only if you consent. See "How scoring works".
+- Your score is part of the service you accept at the end of setup. We compute it from the sources you add, as "How scoring works" explains. If you add no sources, there is nothing to score. You can remove a source or delete your account at any time.
 - The score uses public data and a formula written by people. It is an indication of public signals. It is not a judgment of your worth, and it is not a reference.
 - Public data can be incomplete or wrong. We do not guarantee that your score is accurate or that it will stay the same.
 - If a source does not answer, we leave it out. We do not count it as zero.
@@ -91,10 +93,10 @@ one month.
 
 ## 7. Visibility to companies and contact
 
-- On the last setup step, "Show me to companies" is on unless you untick it. While it is off, companies cannot find you.
-- When it is on, paying companies can see your score, roles, level, networks and verification badges. They never see your wallet addresses or raw data.
+- When you finish setting up, "Show me to companies" is on: being found by companies is what the service is for. You can turn it off at any time in Settings. While it is off, companies cannot find you.
+- When it is on, paying companies can see your score, roles, level, networks and verification badges. While "Show my Telegram directly" is also on, they see your Telegram, X, GitHub, YouTube, website and wallet addresses too. They never see your email without your approval, or raw data.
 - You choose how companies reach you:
-  - "Show my Telegram directly" (on unless you untick it or choose the option below): companies that can see your profile also see your Telegram handle and can message you. If you have no Telegram username, they send you an intro request instead. We never show your email in this mode.
+  - "Show my Telegram directly" (on when you finish setting up; turn it off in Settings): companies that can see your profile also see your Telegram handle and can message you. If you have no Telegram username, they send you an intro request instead. We never show your email in this mode.
   - "Only after I approve each company": you see each request, with the company and role, and answer yes or no.
 - You can change these choices or switch visibility off at any time. This stops new access. A company that already received your contact holds it under its own responsibility. Our terms require it to use your contact only for recruiting.
 - We do not guarantee that any company will contact you, interview you or hire you.

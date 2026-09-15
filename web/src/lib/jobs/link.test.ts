@@ -90,7 +90,7 @@ const JOB_LINK_FILES = [
   "components/jobs/job-card.tsx",
   "lib/telegram/bot.ts",
   "app/admin/sources/page.tsx",
-  "components/landing/job-ticker.tsx",
+  "components/landing/job-feed.tsx",
   "lib/jobs/home-board.ts",
   "lib/jobs/instant.ts",
   "lib/jobs/pool.ts",

@@ -65,7 +65,7 @@ export default function CompanyLandingPage() {
       <section aria-label="How it works" className={`${WRAP} pb-16 sm:pb-20`}>
         <ul className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
           {POINTS.map((point) => (
-            <li key={point.title} className="grid content-start gap-2 border-t-2 border-ink pt-4">
+            <li key={point.title} className="grid content-start gap-2 border-t border-line pt-4">
               <h2 className="font-sans text-lg font-semibold text-ink">{point.title}</h2>
               <p className="max-w-[52ch] text-ink-muted">{point.body}</p>
             </li>
@@ -84,7 +84,7 @@ export default function CompanyLandingPage() {
           </p>
         </div>
         {/* relative: sr-only підписи в клітинках інакше тікають з рамки й розширюють сторінку на телефоні. */}
-        <div className="relative overflow-x-auto rounded-[10px] border-2 border-ink bg-surface">
+        <div className="relative overflow-x-auto rounded-[10px] border-[1.5px] border-line bg-surface">
           <table className="w-full min-w-[720px] border-collapse text-left">
             <caption className="px-5 pt-4 text-left text-sm text-ink-muted">Board: Solana infra team. Example data.</caption>
             <thead>

@@ -1,18 +1,14 @@
 import type { CSSProperties } from "react";
-import { underprintDataUri } from "@/lib/card/seal";
+import { LogoMark } from "@/components/wordmark";
 import { tierVars } from "@/lib/card/tiers";
 import type { CardFace } from "@/lib/card/view";
 import { cn } from "@/lib/utils";
-import { Seal } from "./seal";
-
-// Хвилі підкладки під печаткою, ледь помітні: темні на світлому полі, світлі на чорному.
-const UNDERPRINT_ON_PAPER = underprintDataUri("#5d6166", 0.2);
-const UNDERPRINT_ON_BLACK = underprintDataUri("#a9adb2", 0.16);
+import { SealBadge } from "./seal-badge";
 
 /**
- * Лицьовий бік картки: бал, код позиції, рівень і обробка, печатка, ім'я,
- * до шести джерел з «gap» замість нуля, рядок сезону й номера.
- * EXAMPLE з'являється лише на face.kind === "example".
+ * Лицьовий бік картки у форматі банківської (напрям «Payday»): знак і номер, кругла
+ * печатка-жетон з рівнем праворуч угорі, бал і роль, ім'я тисненням і
+ * до трьох джерел з «gap» замість нуля. Позначка «Example card» лише на face.kind === "example".
  */
 export function CardFront({
   face,
@@ -27,48 +23,48 @@ export function CardFront({
   className?: string;
 }) {
   const t = face.tier;
-  const dark = t.finish === "black" || t.finish === "red_seal";
   return (
     <div role="img" aria-label={face.summary} className={cn("ncj-face", className)} style={tierVars(t) as CSSProperties}>
       <div className="ncj-window">
-        <div className="ncj-rating">
-          <div>
-            <div className="ncj-num">{face.score}</div>
-            <div className="ncj-pos">{face.positionCode}</div>
-          </div>
-          <div className="ncj-lvl">
-            Level<b>{face.level}</b>
-            {t.finishName}
-          </div>
+        <div className="ncj-top">
+          <span className="ncj-brand">
+            <LogoMark className="ncj-brand-mark" />
+            NextCryptoJob
+          </span>
+          <span className="ncj-set">
+            Season 1 · {face.number ?? "not issued yet"}
+          </span>
         </div>
-        <div
-          className="ncj-art"
-          style={{ backgroundImage: `url("${dark ? UNDERPRINT_ON_BLACK : UNDERPRINT_ON_PAPER}")`, backgroundSize: "cover" }}
-        >
-          {face.sealSeed !== null ? (
-            <Seal seed={face.sealSeed} level={t.sealLayers} inks={t.sealInks} strokeWidth={0.85} draw={draw} spin={spin} />
-          ) : (
-            <p className="ncj-art-empty">The seal is drawn when you create the card.</p>
-          )}
+        <div className="ncj-mid">
+          <span className="ncj-num">{face.score}</span>
+          <span className="ncj-of">
+            of 100<b>{face.roleName}</b>
+          </span>
         </div>
-        <div className="ncj-name">{face.displayName}</div>
-        {face.stats.length > 0 ? (
-          <div className="ncj-stats">
-            {face.stats.map((s) => (
-              <div key={s.code} className={s.value === null ? "gap" : undefined}>
-                <b>{s.value ?? "gap"}</b>
-                <span>{s.code}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <div className="ncj-bot">
+          <span className="ncj-name">{face.displayName}</span>
+          {face.stats.length > 0 ? (
+            <span className="ncj-stats">
+              {face.stats.slice(0, 3).map((s) => (
+                <span key={s.code} className={s.value === null ? "gap" : undefined}>
+                  {s.code}
+                  <b>{s.value ?? "gap"}</b>
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </div>
       </div>
+      <SealBadge
+        seed={face.sealSeed}
+        tier={t}
+        value={face.level}
+        draw={draw}
+        spin={spin}
+        className={cn("ncj-face-badge", face.sealSeed === null && "ncj-badge-empty")}
+      />
       {face.marker ? <span className="ncj-tag ncj-tag-marker">{face.marker}</span> : null}
-      {face.kind === "example" ? <span className="ncj-tag ncj-tag-example">EXAMPLE</span> : null}
-      <div className="ncj-setline">
-        <span>SEASON 1</span>
-        <span>{face.number ?? "Not issued yet"}</span>
-      </div>
+      {face.kind === "example" ? <span className="ncj-tag ncj-tag-example">Example card</span> : null}
     </div>
   );
 }

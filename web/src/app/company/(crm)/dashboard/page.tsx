@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   const { ctx, company } = await crmPage("dashboard");
   if (company.access === "none") {
     return (
-      <div className={`${PAGE} max-w-5xl`}>
+      <div className={`${PAGE} max-w-7xl`}>
         <PageTitle>Dashboard</PageTitle>
         <NoAccess />
       </div>
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
   const fresh = board.total === 0 && board.savedSearches.total === 0 && board.jobs.length === 0;
 
   return (
-    <div className={`${PAGE} max-w-5xl`}>
+    <div className={`${PAGE} max-w-7xl`}>
       <PageTitle>Dashboard</PageTitle>
 
       {fresh ? (
@@ -73,21 +73,21 @@ export default async function DashboardPage() {
             Get started
           </h2>
           <ol className="grid gap-3 sm:grid-cols-3">
-            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+            <li className="grid content-start gap-1 border-t border-line pt-3">
               <p className="font-semibold text-ink">1. Find candidates</p>
               <p className="text-sm text-ink-muted">Search anonymous profiles by role, score, chains and work mode.</p>
               <Link href="/company/search" className={`${LINK} text-sm`}>
                 Open Search
               </Link>
             </li>
-            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+            <li className="grid content-start gap-1 border-t border-line pt-3">
               <p className="font-semibold text-ink">2. Save a search</p>
               <p className="text-sm text-ink-muted">Get a daily email when new candidates match your filters.</p>
               <Link href="/company/saved-searches" className={`${LINK} text-sm`}>
                 Saved searches
               </Link>
             </li>
-            <li className="grid content-start gap-1 border-t-2 border-ink pt-3">
+            <li className="grid content-start gap-1 border-t border-line pt-3">
               <p className="font-semibold text-ink">3. Post a job</p>
               <p className="text-sm text-ink-muted">Jobs you publish appear in daily digests of matching candidates.</p>
               <Link href="/company/jobs/new" className={`${LINK} text-sm`}>

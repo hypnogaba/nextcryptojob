@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
 const LINK = "font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-4 hover:decoration-brand";
-const PRE = "overflow-x-auto rounded-[10px] border-2 border-ink bg-surface p-5 font-mono text-sm leading-relaxed";
+const PRE = "overflow-x-auto rounded-[10px] border-[1.5px] border-line bg-surface p-5 font-mono text-sm leading-relaxed";
 
 // Справжні запити з договору API (docs/api/openapi.yaml, docs/api/mcp-tools.md).
 const JOBS_LOG: readonly (readonly [string, string])[] = [
@@ -45,7 +45,7 @@ function Log({ lines }: { lines: readonly (readonly [string, string])[] }) {
 
 function Block({ id, title, children, code }: { id: string; title: string; children: React.ReactNode; code: React.ReactNode }) {
   return (
-    <section aria-labelledby={id} className="grid items-start gap-6 border-t-2 border-ink pt-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-12">
+    <section aria-labelledby={id} className="grid items-start gap-6 border-t border-line pt-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-12">
       <div className="grid max-w-[52ch] gap-3">
         <h2 id={id} className="font-sans text-xl font-semibold text-ink">
           {title}

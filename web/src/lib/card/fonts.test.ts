@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { isAllowedDisplayNameChar } from "./display-name";
-import bigShoulders from "./fonts/big-shoulders-800";
-import familjen from "./fonts/familjen-grotesk-500";
+import funnelDisplay from "./fonts/funnel-display-700";
+import funnelSans from "./fonts/funnel-sans-500";
 import cyrillic from "./fonts/ncj-cyrillic-600";
 import { POSITION_CODE, SOURCE_CODE } from "@/lib/roles/recipes";
 import { ROLES } from "./roles";
-import { FINISHES } from "./tiers";
 
 // Мінімальне читання cmap (формати 4 і 12) з TTF: які символи є в шрифті.
 // Satori мовчки малює порожнечу на місці відсутньої літери, тож перевіряємо заздалегідь.
@@ -60,25 +59,26 @@ function missing(font: Set<number>, text: string): string[] {
 }
 
 describe("card fonts", () => {
-  const display = codepoints(bigShoulders);
-  const text = codepoints(familjen);
+  const display = codepoints(funnelDisplay);
+  const text = codepoints(funnelSans);
   const cyr = codepoints(cyrillic);
 
-  it("Big Shoulders has every digit, role, position code, source code, finish and the site mark", () => {
-    const labels = [
-      ...Object.values(ROLES).map((r) => r.name.toUpperCase()),
-      ...Object.values(POSITION_CODE),
-      ...Object.values(SOURCE_CODE),
-      ...FINISHES.map((f) => f.name.toUpperCase()),
-    ].join("");
-    expect(missing(display, `0123456789${labels}LEVEL SEASON No. RATED gap /NEXTCRYPTOJOB.XYZ`)).toEqual([]);
+  it("Funnel Display has every digit, role, the brand and the site address", () => {
+    const labels = Object.values(ROLES).map((r) => r.name).join("");
+    expect(missing(display, `0123456789${labels}NextCryptoJob nextcryptojob.xyz`)).toEqual([]);
   });
 
-  it("Familjen Grotesk has the reason line", () => {
-    expect(missing(text, "Level 0123456789 of 10, black finish. Built from GitHub 74.2, X and an onchain bonus. Wallets not verified.")).toEqual([]);
+  it("Funnel Sans has the card's small print, the source codes and the reason line", () => {
+    const codes = [...Object.values(SOURCE_CODE), ...Object.values(POSITION_CODE)].join("");
+    expect(
+      missing(
+        text,
+        `${codes} LVL SEASON 1 · NO. of 100 gap Rated 73 of 100. Level 8. Built from GitHub 74.2, X 46.3 and an onchain bonus.`,
+      ),
+    ).toEqual([]);
   });
 
-  it("Big Shoulders or the Cyrillic fallback has every character a display name may use", () => {
+  it("Funnel Display or the Cyrillic fallback has every character a display name may use", () => {
     const allowed = Array.from({ length: 0x500 }, (_, cp) => String.fromCodePoint(cp)).filter(
       isAllowedDisplayNameChar,
     );
@@ -90,8 +90,9 @@ describe("card fonts", () => {
     expect(missing(union, both)).toEqual([]);
   });
 
-  it("keeps the fallback to Cyrillic and the four letters Big Shoulders lacks, so it stays small", () => {
+  it("keeps the fallback to Cyrillic and the Latin letters Funnel Display lacks, so it stays small", () => {
     const extra = new Set([0x20, 0x132, 0x133, 0x149, 0x17f]);
-    expect([...cyr].every((cp) => extra.has(cp) || (cp >= 0x400 && cp <= 0x491))).toBe(true);
+    const latinGap = (cp: number) => cp <= 0x17f && !display.has(cp);
+    expect([...cyr].filter((cp) => !extra.has(cp) && !latinGap(cp) && (cp < 0x400 || cp > 0x491))).toEqual([]);
   });
 });

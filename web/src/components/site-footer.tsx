@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoMark } from "@/components/wordmark";
 
 const LINKS = [
   { href: "/scoring", label: "How scoring works" },
@@ -7,22 +8,24 @@ const LINKS = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
   { href: "/terms/companies", label: "Company terms" },
-  { href: "/login", label: "Sign in" },
 ] as const;
 
 export function SiteFooter() {
   return (
-    <footer className="mx-auto mt-auto w-full max-w-[1240px] px-[clamp(16px,4vw,56px)]">
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-t-2 border-ink py-12 sm:py-16">
-        <p className="display max-w-[14ch] text-[clamp(2rem,1.2rem+3vw,3.5rem)] leading-[0.9]">Free for job seekers.</p>
-        <div className="grid gap-3">
+    <footer className="mx-auto mt-auto w-full max-w-[1280px] px-[clamp(16px,4vw,32px)]">
+      <div className="grid gap-4 border-t border-line py-8 sm:py-10">
+        <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
+          <p className="inline-flex items-center gap-2 font-display text-[1.0625rem] font-bold tracking-[-0.02em]">
+            <LogoMark className="size-6" />
+            NextCryptoJob
+          </p>
           <nav aria-label="Footer">
             <ul className="-mx-2 flex flex-wrap">
               {LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="inline-flex min-h-11 items-center px-2 text-[0.9375rem] text-ink-muted transition-colors hover:text-ink"
+                    className="inline-flex min-h-11 items-center px-2 text-sm text-ink-muted transition-colors hover:text-ink"
                   >
                     {link.label}
                   </Link>
@@ -30,11 +33,11 @@ export function SiteFooter() {
               ))}
             </ul>
           </nav>
-          <p className="text-sm text-ink-muted">
-            Jobs come from company career pages, public job boards and companies that post here. Your wallets and links
-            never go on your card.
-          </p>
         </div>
+        <p className="max-w-[72ch] text-sm text-ink-muted">
+          Free for job seekers. Jobs come from company career pages, public job boards and companies that post here.
+          Your wallets and links never go on your card.
+        </p>
       </div>
     </footer>
   );

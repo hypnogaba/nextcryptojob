@@ -256,7 +256,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const empty = result && result.data.length === 0 && result.empty_reason;
 
   return (
-    <div className={`${PAGE} max-w-5xl`}>
+    <div className={`${PAGE} max-w-7xl`}>
       <PageTitle
         aside={
           quota && quota.limit !== null && quota.remaining !== null

@@ -57,7 +57,7 @@ export default async function TeamPage({
   const seatsLeft = Math.max(0, team.seats.limit - team.seats.used);
 
   return (
-    <div className={`${PAGE} max-w-5xl *:max-w-3xl`}>
+    <div className={`${PAGE} max-w-7xl *:max-w-3xl`}>
       <PageTitle aside={`${team.seats.used} of ${team.seats.limit} seats used`}>Team</PageTitle>
 
       {done && DONE[done] ? (

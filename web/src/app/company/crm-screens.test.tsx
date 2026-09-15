@@ -430,19 +430,44 @@ describe("candidate profile as a company sees it", () => {
     expect(await html(IntrosPage(sp({ status: "accepted" })))).toContain(handle);
   });
 
-  it("direct mode: Show Telegram handle reveals it at once and says the candidate is told", async () => {
+  it("direct mode: the Telegram handle and links show on the page at once (C4, owner 14.09)", async () => {
     const a = await company("Acme Labs");
     const x = candidate(81, { contactMode: "direct", contactConsent: true });
     const page = await html(CandidatePage(cand(x)));
+    // Не потрібен запит: нік уже видно в картці Links, компанія не чекає на клік.
+    expect(page).toContain(handles.get(x));
+    expect(page).not.toContain("has not turned on");
     expect(page).toContain("Show Telegram handle");
     expect(page).toContain("This candidate shares their Telegram: message them directly.");
     expect(page).toContain("They will be told that Acme Labs viewed it.");
-    noContact(page);
 
+    // «Show Telegram handle» усе одно записує подію знайомства й журнал, як і раніше.
     const s = await panel(a.co, x, "intro", { message: "Hi, we found your profile on NextCryptoJob and would like to talk about a role." });
     expect(s.message).toBe("Here is the Telegram handle. The candidate was told that you viewed it.");
     expect(s.card?.contact?.value).toBe(handles.get(x));
     expect(rows("SELECT action FROM audit_log WHERE action = 'contact.reveal'")).toHaveLength(1);
+  });
+
+  it("opted out (approval mode): no links card contact, only after an accepted intro", async () => {
+    const a = await company("Acme Labs");
+    const x = candidate(81);
+    const before = await html(CandidatePage(cand(x)));
+    expect(before).toContain("has not turned on");
+    noContact(before);
+
+    await panel(a.co, x, "intro", { message: "Hi, we found your profile on NextCryptoJob and would like to talk about a role." });
+    const [{ id: introId }] = rows<{ id: string }>("SELECT id FROM intros");
+    await respondToIntro(harness.env.DB as D1Database, {
+      introId,
+      userId: x,
+      decision: "accept",
+      via: "web",
+      notifier: { mailer: null, origin: "https://nextcryptojob.xyz" },
+    });
+    const after = await html(CandidatePage(cand(x)));
+    // Прийнятий запит показує контакт у панелі, але не в картці Links: вона й далі порожня.
+    expect(after).toContain("has not turned on");
+    expect(after).toContain(handles.get(x));
   });
 
   it("the intro dialog says the candidate decides and you get their Telegram on yes; ?intro=1 opens it", async () => {

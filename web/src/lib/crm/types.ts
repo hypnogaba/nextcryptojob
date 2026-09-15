@@ -252,6 +252,29 @@ export const Badges = z.object({
 });
 export type Badges = z.infer<typeof Badges>;
 
+export const CandidateWalletLink = z.object({
+  chain: z.enum(["evm", "solana"]),
+  address: z.string(),
+  explorer_url: z.url(),
+});
+export type CandidateWalletLink = z.infer<typeof CandidateWalletLink>;
+
+/**
+ * Прямі посилання на облікові записи кандидата (власник 14.09, C4: компанія бачить усе
+ * одразу, без запиту знайомства). Лише поки видимо (не null) або опт-аут: `linksVisible`
+ * у lib/crm/project.ts, той самий перемикач, що й пряма показ Telegram-ніку. Пошта сюди
+ * не входить: пошту компанія бачить лише після прийнятого запиту (окреме поле `contact`).
+ */
+export const CandidateLinks = z.object({
+  telegram: z.string().nullable(),
+  x: z.url().nullable(),
+  github: z.url().nullable(),
+  youtube: z.url().nullable(),
+  website: z.url().nullable(),
+  wallets: z.array(CandidateWalletLink),
+});
+export type CandidateLinks = z.infer<typeof CandidateLinks>;
+
 export const PipelineBrief = z.object({ stage: Stage, tags: z.array(z.string()) });
 
 export const CandidateSummary = z.object({
@@ -328,6 +351,8 @@ export const CandidateProfile = CandidateSummary.extend({
   roles_detailed: z.array(RoleScoreDetailed),
   intro: Intro.nullable(),
   contact: Contact.nullable(),
+  /** null while the candidate has opted out of "Show my Telegram directly" in Settings. */
+  links: CandidateLinks.nullable(),
 });
 export type CandidateProfile = z.infer<typeof CandidateProfile>;
 

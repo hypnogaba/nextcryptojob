@@ -108,10 +108,10 @@ describe("/jobs", () => {
       ('ada', 'nr:gh', 'nextrole', 'dg_a', 2, 'sent', 'email', 'Matches your Engineer role.')`);
     await signIn("ada");
     const html = await render();
-    // Оцінка приглушеним пунктиром, окремо від зарплати (зарплата темним пунктом).
-    expect(html).toMatch(/<li class="[^"]*border-dashed[^"]*text-ink-muted[^"]*">est\. \$180k to \$225k \(web3\.career estimate\)<\/li>/);
+    // Оцінка приглушеним пунктиром, окремо від зарплати (зарплата лимонною пігулкою).
+    expect(html).toMatch(/<span class="[^"]*border-dashed[^"]*text-ink-muted[^"]*">est\. \$180k to \$225k \(web3\.career estimate\)<\/span>/);
     // Зарплата роботодавця є: оцінки не видно.
-    expect(html).toMatch(/<li class="[^"]*bg-ink[^"]*">\$120k to \$150k<\/li>/);
+    expect(html).toMatch(/<span class="[^"]*bg-lemon[^"]*">\$120k to \$150k<\/span>/);
     expect(html).not.toContain("$300k");
   });
 
@@ -172,7 +172,7 @@ describe("/jobs: Jobs for you now", () => {
     expect(ada).toContain("Your best matches today");
     expect(ada).toContain("Solidity Engineer");
     expect(ada).toContain("Rust Engineer");
-    expect(ada).toMatch(/<li class="[^"]*bg-ink[^"]*">\$120k to \$150k<\/li>/);
+    expect(ada).toMatch(/<span class="[^"]*bg-lemon[^"]*">\$120k to \$150k<\/span>/);
     expect(ada).toContain("Why this fits you");
     expect(ada).toContain("Matches your Engineer role.");
     expect(ada).toContain("Remote, as you asked.");
@@ -275,7 +275,7 @@ describe("/jobs: Jobs for you now", () => {
     await signIn("ada");
     const html = await render();
     expect(html).toContain('src="/api/logo/aave.com"');
-    expect(html).toContain("About Aave.</span> Aave runs lending markets on many chains.");
+    expect(html).toMatch(/About the company<\/p><p[^>]*>Aave runs lending markets on many chains\.<\/p>/);
     expect(html).toContain("aave.com");
   });
 });
