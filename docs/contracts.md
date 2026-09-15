@@ -179,7 +179,9 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
   пише лише сканер engine, сайт читає, лише читання в коді).
 - engine, база вакансій (з 14.09): `CF_JOBS_D1_DATABASE_ID` (обов'язкова для `digest-due` і `jobs-*`); необов'язкові
   `JOBS_WINDOW_DAYS` (30), `JOBS_PRUNE_DAYS` (30), `JOBS_SPEEDRUN` (1), `JOBS_SUPERTEAM` (0), `JOBS_GETRO_DISCOVERY` (0 у коді;
-  на VPS 1 з рішення власника 14.09, `engine/deploy/README.md` §8), `JOBS_GETRO_MAX_PAGES` (50, сторінок списку компаній на дошку).
+  на VPS 1 з рішення власника 14.09, `engine/deploy/README.md` §8), `JOBS_GETRO_MAX_PAGES` (50, сторінок списку компаній на дошку);
+  `COINGECKO_API_KEY` (необов'язковий, лише engine: демо-ключ CoinGecko для `jobs-tokens`, без нього
+  безкоштовний API з меншим бюджетом запитів, `engine/src/jobs/tokens.ts`).
 
 ## 7. Номери міграцій (щоб доріжки не зіткнулись)
 | Файл | Власник | Таблиці |
@@ -206,7 +208,10 @@ type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  /
 | 0021_owner_tools.sql | web: адмінка | visit_days і visit_visitors (власний лічильник відвідувань, хеш із сіллю дня, без IP), owner_alerts (сповіщення власнику, дедуплікація), users.is_demo і companies.is_demo (демо-компанія), перебудова company_jobs_live без демо |
 База вакансій `nextcryptojob-jobs` має свою нумерацію в `db/jobs` (0001_schema.sql: jobs_cache, companies,
 sources, source_state, getro_collections, scan_runs; 0002_salary_estimate.sql: jobs_cache.salary_est_*; 0003_job_boards.sql:
-job_boards, реєстр дошок екосистем і фондів; засів `db/jobs/seed/seed.sql`, дошки `db/jobs/seed/update-2026-09-14-boards.sql`),
+job_boards, реєстр дошок екосистем і фондів; засів `db/jobs/seed/seed.sql`, дошки `db/jobs/seed/update-2026-09-14-boards.sql`;
+0004_company_token.sql: companies.coingecko_id, token_symbol, token_confidence, token_checked_at, token_price_usd,
+token_mcap_usd, token_change_24h, token_updated_at (токен роботодавця й ринкові дані з CoinGecko); без цих
+стовпців сайт і добірка працюють як раніше, читання падає на «no such column» і повторюється без них),
 власник engine (сканер).
 Нова таблиця поза цим списком лише через controller.
 
