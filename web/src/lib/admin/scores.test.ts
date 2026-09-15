@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addUser, crmDb, run } from "@/test/crm-fixtures";
-import { loadScoreDistribution, loadUserScoreDetail, searchScoreUsers } from "./scores";
+import { listCandidates, loadScoreDistribution, loadUserScoreDetail, searchScoreUsers } from "./scores";
 
 /**
  * /admin/scores і /admin/scores/[userId] (C): гістограма і середнє за роллю, «підозрілі»
@@ -98,5 +98,28 @@ describe("loadUserScoreDetail", () => {
     expect(engineer.core.find((c) => c.key === "gh_eng")).toEqual({ key: "gh_eng", label: "GitHub engineering", value: 70, weight: 80 });
     expect(engineer.cover).toBe(80);
     expect(detail?.rawFacts.map((f) => f.source)).toEqual(["github", "x"]);
+  });
+});
+
+describe("listCandidates", () => {
+  it("lists everyone with their best score and level, and filters by email, Telegram or X handle (п.17: /admin/candidates)", async () => {
+    const { d1, u1, u2 } = seed();
+    const all = await listCandidates(d1);
+    expect(all.map((r) => r.userId).sort()).toEqual([u1, u2].sort());
+    const ada = all.find((r) => r.userId === u1);
+    expect(ada).toMatchObject({ email: "ada@example.com", xHandle: "ada", bestScore: 71, bestLevel: 8 });
+    const bob = all.find((r) => r.userId === u2);
+    expect(bob).toMatchObject({ email: "bob@example.com", bestScore: 85, bestLevel: 9 });
+
+    expect((await listCandidates(d1, { q: "ADA@example.com" })).map((r) => r.userId)).toEqual([u1]);
+    expect((await listCandidates(d1, { q: "@ada" })).map((r) => r.userId)).toEqual([u1]);
+    expect(await listCandidates(d1, { q: "nobody" })).toEqual([]);
+  });
+
+  it("a person without a score yet has no best score or level", async () => {
+    const { raw, d1 } = crmDb();
+    const id = addUser(raw, { id: "fresh", email: "fresh@example.com" });
+    const rows = await listCandidates(d1);
+    expect(rows).toEqual([{ userId: id, email: "fresh@example.com", telegramUsername: null, xHandle: null, createdAt: rows[0]!.createdAt, bestScore: null, bestLevel: null }]);
   });
 });

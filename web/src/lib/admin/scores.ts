@@ -122,6 +122,47 @@ export async function loadScoreDistribution(db: D1Database): Promise<ScoreDistri
   };
 }
 
+export type CandidateRow = {
+  userId: string;
+  email: string | null;
+  telegramUsername: string | null;
+  xHandle: string | null;
+  createdAt: string | null;
+  bestScore: number | null;
+  bestLevel: number | null;
+};
+
+/**
+ * /admin/candidates (п.17, 15.09: власник не знайшов розбір балу людини з адмінки): останні люди,
+ * кожен рядок веде на /admin/scores/<id>. Без пошуку, найновіші перші; з пошуком, email, Telegram
+ * чи X-нік містить рядок (без урахування регістру), теж найновіші перші.
+ */
+export async function listCandidates(db: D1Database, o: { q?: string; limit?: number } = {}): Promise<CandidateRow[]> {
+  const q = (o.q ?? "").trim().replace(/^@/, "").toLowerCase();
+  const limit = o.limit ?? 100;
+  const where = q
+    ? `WHERE lower(u.email) LIKE '%' || ?1 || '%' OR lower(u.telegram_username) LIKE '%' || ?1 || '%'
+        OR EXISTS (SELECT 1 FROM identities i WHERE i.user_id = u.id AND i.kind = 'x' AND lower(i.value) LIKE '%' || ?1 || '%')`
+    : "";
+  const stmt = db.prepare(
+    `SELECT u.id AS user_id, u.email, u.telegram_username, u.created_at,
+            (SELECT i.value FROM identities i WHERE i.user_id = u.id AND i.kind = 'x' LIMIT 1) AS x_handle,
+            (SELECT MAX(s.score) FROM scores s WHERE s.user_id = u.id) AS best_score
+       FROM users u
+       ${where}
+      ORDER BY u.created_at DESC
+      LIMIT ${Math.max(1, Math.min(500, limit))}`,
+  );
+  const { results } = await (q ? stmt.bind(q) : stmt).all<{
+    user_id: string; email: string | null; telegram_username: string | null; created_at: string | null;
+    x_handle: string | null; best_score: number | null;
+  }>();
+  return results.map((r) => ({
+    userId: r.user_id, email: r.email, telegramUsername: r.telegram_username, xHandle: r.x_handle, createdAt: r.created_at,
+    bestScore: r.best_score, bestLevel: typeof r.best_score === "number" ? levelFor(r.best_score) : null,
+  }));
+}
+
 export type ScoreSearchHit = { userId: string; email: string | null; telegramUsername: string | null; xHandle: string | null };
 
 /** Пошук людини за X-ніком (без @) або поштою, для /admin/scores. */

@@ -13,7 +13,7 @@ import { appEnv, db } from "@/lib/db";
 import { formatSalary } from "@/lib/digest/format";
 import { isId } from "@/lib/ids";
 import { currentUser } from "@/lib/auth/session";
-import { companyKey } from "@/lib/jobs/clean";
+import { brandKey } from "@/lib/jobs/clean";
 import { applyLink, jobVia } from "@/lib/jobs/link";
 import { companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { NO_FIT, reasonsForRef } from "@/lib/jobs/instant";
@@ -100,7 +100,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 /** Токен компанії, коли адреса ще не верифікована в CRM: реєстр бази вакансій (db/jobs 0004/0005). */
 async function companyToken(company: string, verifiedDomain: string | null): Promise<{ token: TokenChip | null; site: string | null }> {
   const profiles = await companyProfiles(jobsDb);
-  const known = profileFor(profiles, companyKey(company));
+  const known = profileFor(profiles, brandKey(company));
   return {
     token: tokenChip(known?.token, new Date()),
     site: known?.domain && known.domain !== verifiedDomain ? known.domain : null,

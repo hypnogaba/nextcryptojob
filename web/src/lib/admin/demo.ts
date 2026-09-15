@@ -170,6 +170,19 @@ export interface DemoState {
   formula: { version: string; published: boolean };
 }
 
+/**
+ * Id демо-компанії цього адміна, чи null (п.19: «View as company» в меню адмінки, той самий
+ * openDemoAction, що кнопка «Open demo» в блоці Demo company). Один легкий запит, не весь demoState:
+ * рендериться на кожній сторінці адмінки (AdminNav).
+ */
+export async function myDemoCompanyId(db: D1Database, adminUserId: string): Promise<string | null> {
+  const row = await db
+    .prepare(`SELECT c.id FROM companies c JOIN company_members m ON m.company_id = c.id AND m.user_id = ? WHERE c.is_demo = 1 LIMIT 1`)
+    .bind(adminUserId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 /** Що з демо вже є (для адмінки). */
 export async function demoState(db: D1Database, adminUserId: string): Promise<DemoState> {
   const [companies, counts] = await db.batch([

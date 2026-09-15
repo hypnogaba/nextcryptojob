@@ -1,6 +1,6 @@
 // Перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.ts (prepare, officeOnly, richness),
 // з поправками під крипто-базу: лише крипто, список не-крипто компаній, вікно віку за родом джерела, id з адреси.
-import { companyKey, isNonCryptoCompany } from "../digest/clean.js";
+import { brandKey, companyKey, isNonCryptoCompany } from "../digest/clean.js";
 import { ATS_WINDOW_DAYS, isEmployerFeed, POSTED_WINDOW_DAYS } from "../digest/jobs.js";
 import { dedupeKey, jobId } from "./ids.js";
 import { extractSalary } from "./salary-text.js";
@@ -123,7 +123,9 @@ export function prepare(jobs: readonly RawJob[], windows: Windows, now: Date): P
     const parsed = hasPay ? null : extractSalary(j.description);
     const int = (v: number | null | undefined): number | null => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null);
     rows.push({
-      id, url, company, companyKey: key, title,
+      // company_key у базі це brandKey (Morpho/Morpho Labs = один ключ), не голий `key`, який лишається
+      // лише для сита не-крипто компаній вище: `isNonCryptoCompany` звіряє точні назви зі списку.
+      id, url, company, companyKey: brandKey(company), title,
       location: j.location?.trim() ? collapse(j.location) : null,
       remote,
       salaryMin: hasPay ? int(j.salaryMin) : parsed?.min ?? null,

@@ -38,6 +38,7 @@ export type CrmPage =
   | "billing"
   | "developers"
   | "settings"
+  | "help"
   | "apply";
 
 export const COMPANY_COOKIE_OPTIONS = {
@@ -69,7 +70,7 @@ export const loadCrm = cache(async (): Promise<CrmView | null> => {
 
 /** Чи відкрита сторінка для компанії в цьому стані. */
 export function pageAllowed(page: CrmPage, company: Pick<CompanyInfo, "status" | "kind">): boolean {
-  if (page === "settings") return true;
+  if (page === "settings" || page === "help") return true;
   if (page === "apply") return company.kind === "agency";
   return company.status === "active";
 }

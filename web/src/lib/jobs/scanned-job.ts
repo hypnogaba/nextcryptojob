@@ -5,7 +5,7 @@
 // підбору (коли людина ввійшла й підходить), і веде далі на джерело кнопкою Apply.
 import { cleanText, formatSalary, safeUrl } from "@/lib/digest/format";
 import { type CompanyProfiles, profileFor } from "./companies";
-import { companyKey } from "./clean";
+import { brandKey } from "./clean";
 import type { JobsDb } from "@/lib/jobs-db";
 import { jobVia } from "./link";
 import { ATS_WINDOW_DAYS, isEmployerFeed, POSTED_WINDOW_DAYS } from "./pool";
@@ -86,7 +86,7 @@ export async function loadScannedJob(jobs: JobsDb, id: string, profiles: Company
 
   const tags = tagsOf(row.tags);
   const roles: RoleKey[] = titleRoles(row.title, tags);
-  const known = profileFor(profiles, companyKey(row.company));
+  const known = profileFor(profiles, brandKey(row.company));
   const site = known?.domain ? companySiteUrl(known.domain) : null;
   const url = safeUrl(row.url);
 

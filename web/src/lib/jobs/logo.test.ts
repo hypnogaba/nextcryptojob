@@ -92,11 +92,19 @@ describe("company profiles", () => {
       { name: "Aave Labs", domain: null, about: "Aave builds DeFi." },
       { name: "aave labs", domain: "aave.com", about: "Other text.", token_symbol: "AAVE", token_price_usd: 90, token_updated_at: "2026-09-14T00:00:00Z" },
     ]);
-    expect(p.byKey.get("aave labs")).toEqual({
+    expect(p.byKey.get("aave")).toEqual({
       domain: "aave.com",
       about: "Aave builds DeFi.",
       token: { symbol: "AAVE", priceUsd: 90, mcapUsd: null, change24h: null, updatedAt: "2026-09-14T00:00:00Z" },
     });
+  });
+
+  it("two rows under different brand variants (Jito Labs / Jito Foundation, 15.09 dup in companies): same profile", () => {
+    const p = profilesOf([
+      { name: "Jito Foundation", domain: null, about: null },
+      { name: "Jito Labs", domain: "jito.network", about: "Jito builds MEV infrastructure on Solana." },
+    ]);
+    expect(p.byKey.get("jito")).toEqual({ domain: "jito.network", about: "Jito builds MEV infrastructure on Solana.", token: null });
   });
 
   it("reads a company's token market data (db/jobs 0004)", async () => {

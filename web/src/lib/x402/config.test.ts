@@ -1,30 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readX402Config, resetConfigWarnings, type X402Env } from "./config";
 
-const EVM = "0x1111111111111111111111111111111111111111";
 const SOL = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 const CDP = { CDP_API_KEY_ID: "key-id", CDP_API_KEY_SECRET: "c2VjcmV0LXZhbHVlLW5vdC1yZWFs" };
-const PAY_TO = { X402_PAY_TO_EVM: EVM, X402_PAY_TO_SOLANA: SOL };
+const PAY_TO = { X402_PAY_TO_SOLANA: SOL };
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe("production", () => {
-  it("with CDP keys and both addresses accepts USDC on Base and Solana mainnet through CDP", () => {
+  it("with CDP keys and a Solana address accepts USDC on Solana mainnet through CDP (п.8: лише Solana)", () => {
     const config = readX402Config({ ...CDP, ...PAY_TO }, "production");
     expect(config.enabled).toBe(true);
     if (!config.enabled) return;
     expect(config.mode).toBe("mainnet");
     expect(config.facilitator).toMatchObject({ kind: "cdp", url: "https://api.cdp.coinbase.com/platform/v2/x402" });
     expect(config.networks).toEqual([
-      {
-        network: "eip155:8453",
-        family: "evm",
-        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        payTo: EVM,
-        extra: { name: "USD Coin", version: "2" },
-      },
       {
         network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
         family: "svm",
@@ -33,6 +25,13 @@ describe("production", () => {
         extra: {},
       },
     ]);
+  });
+
+  it("an X402_PAY_TO_EVM left over in the environment is ignored, not required and not offered", () => {
+    const config = readX402Config({ ...CDP, ...PAY_TO, X402_PAY_TO_EVM: "0x1111111111111111111111111111111111111111" }, "production");
+    expect(config.enabled).toBe(true);
+    if (!config.enabled) return;
+    expect(config.networks.map((n) => n.family)).toEqual(["svm"]);
   });
 
   it("keeps the CDP secret usable but out of JSON and logs", () => {
@@ -63,17 +62,17 @@ describe("production", () => {
     expect(config).toMatchObject({ enabled: false, reason: "not configured: CDP_API_KEY_SECRET" });
   });
 
-  it("without a pay-to address turns x402 off", () => {
-    const config = readX402Config({ ...CDP, X402_PAY_TO_EVM: EVM }, "production");
+  it("without a Solana pay-to address turns x402 off", () => {
+    const config = readX402Config({ ...CDP }, "production");
     expect(config).toMatchObject({ enabled: false, reason: "not configured: X402_PAY_TO_SOLANA" });
   });
 
   it("rejects a malformed pay-to address instead of sending money to it", () => {
-    const config = readX402Config({ ...CDP, X402_PAY_TO_EVM: "0x1234", X402_PAY_TO_SOLANA: SOL }, "production");
-    expect(config).toMatchObject({ enabled: false, missing: ["X402_PAY_TO_EVM"] });
+    const config = readX402Config({ ...CDP, X402_PAY_TO_SOLANA: "not-an-address" }, "production");
+    expect(config).toMatchObject({ enabled: false, missing: ["X402_PAY_TO_SOLANA"] });
   });
 
-  it("with CDP keys and X402_NETWORK=testnet uses the test networks through CDP, and warns loudly once", () => {
+  it("with CDP keys and X402_NETWORK=testnet uses the test network through CDP, and warns loudly once", () => {
     resetConfigWarnings();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     readX402Config({ ...CDP, ...PAY_TO, X402_NETWORK: "testnet" }, "production");
@@ -83,7 +82,7 @@ describe("production", () => {
     expect(warn).toHaveBeenCalledOnce(); // раз на ізолят, не на кожен запит
     if (!config.enabled) throw new Error("expected enabled");
     expect(config.facilitator.kind).toBe("cdp");
-    expect(config.networks.map((n) => n.network)).toEqual(["eip155:84532", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"]);
+    expect(config.networks.map((n) => n.network)).toEqual(["solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"]);
   });
 });
 
@@ -95,20 +94,13 @@ describe("development", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("without CDP keys uses the test networks through x402.org", () => {
+  it("without CDP keys uses the test network through x402.org", () => {
     const config = readX402Config({ ...PAY_TO }, "development");
     if (!config.enabled) throw new Error(`expected enabled, got ${config.reason}`);
     expect(config.mode).toBe("testnet");
     expect(config.facilitator).toEqual({ kind: "x402org", url: "https://x402.org/facilitator" });
     expect(config.facilitator.auth).toBeUndefined();
     expect(config.networks).toEqual([
-      {
-        network: "eip155:84532",
-        family: "evm",
-        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        payTo: EVM,
-        extra: { name: "USDC", version: "2" },
-      },
       {
         network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
         family: "svm",
@@ -124,9 +116,9 @@ describe("development", () => {
     expect(config).toMatchObject({ enabled: false, reason: "not configured: CDP_API_KEY_ID, CDP_API_KEY_SECRET" });
   });
 
-  it("still needs pay-to addresses", () => {
+  it("still needs a pay-to address", () => {
     const config = readX402Config({}, "development");
-    expect(config).toMatchObject({ enabled: false, reason: "not configured: X402_PAY_TO_EVM, X402_PAY_TO_SOLANA" });
+    expect(config).toMatchObject({ enabled: false, reason: "not configured: X402_PAY_TO_SOLANA" });
   });
 });
 

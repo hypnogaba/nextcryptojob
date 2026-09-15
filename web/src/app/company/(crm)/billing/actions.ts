@@ -6,6 +6,9 @@ import { currentUser } from "@/lib/auth/session";
 import { createCheckout, type CheckoutResult } from "@/lib/billing/checkout";
 import { requestOrigin } from "@/lib/billing/origin";
 import { createPortal, type PortalResult } from "@/lib/billing/portal";
+import {
+  confirmInvoice, createInvoice, loadInvoice, readSolanaPayConfig, type SolanaPayEnv, verifyOnChain,
+} from "@/lib/billing/solana-pay";
 import { stripeClient, stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
 import { crmActionActor, type ActionContext } from "@/lib/crm/context";
 import { can } from "@/lib/crm/permissions";
@@ -28,7 +31,9 @@ export type BillingError =
   | "company_not_active"
   | "no_customer"
   | "stripe_failed"
-  | "rate_limited";
+  | "rate_limited"
+  | "not_found"
+  | "rpc_failed";
 
 function fail(code: BillingError): never {
   redirect(`${BILLING}?error=${code}`);
@@ -87,4 +92,35 @@ export async function openPortalAction(): Promise<void> {
   if (!res) fail("stripe_failed");
   if (!res.ok) fail(res.reason === "no_customer" ? "no_customer" : "stripe_failed");
   redirect(res.url);
+}
+
+/**
+ * Кнопки Solana Pay (п.8, 15.09): «Get payment link» робить рахунок і веде на ту саму сторінку
+ * з ?invoice=<id> (QR і посилання рендерить сторінка), «Check now» звіряє цей рахунок у мережі
+ * одразу, не чекаючи години cron (lib/cron/solana-pay-check.ts перевіряє те саме в фоні).
+ */
+export async function createSolanaPayInvoiceAction(): Promise<void> {
+  const { companyId, userId } = await owner();
+  const config = readSolanaPayConfig(appEnv() as unknown as SolanaPayEnv);
+  if (!config.enabled) fail("not_configured");
+  const invoice = await createInvoice(db(), companyId, userId, new Date());
+  redirect(`${BILLING}?invoice=${invoice.id}`);
+}
+
+export async function checkSolanaPayInvoiceAction(form: FormData): Promise<void> {
+  const { companyId } = await owner();
+  const invoiceId = String(form.get("invoice_id") ?? "");
+  const invoice = await loadInvoice(db(), companyId, invoiceId);
+  if (!invoice) fail("not_found");
+  if (invoice.status !== "pending") redirect(`${BILLING}?invoice=${invoice.id}`);
+
+  const config = readSolanaPayConfig(appEnv() as unknown as SolanaPayEnv);
+  if (!config.enabled) fail("not_configured");
+  const result = await verifyOnChain(config.rpcUrl, invoice.reference, config.payTo, invoice.amountUsdc);
+  if (result.status === "error") {
+    console.error("solana pay verify failed:", result.reason);
+    fail("rpc_failed");
+  }
+  if (result.status === "confirmed") await confirmInvoice(db(), invoice, result.tx, result.payer, new Date());
+  redirect(`${BILLING}?invoice=${invoice.id}${result.status === "pending" ? "&checked=1" : ""}`);
 }

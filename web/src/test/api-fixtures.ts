@@ -110,26 +110,34 @@ export async function callTool(
 
 let nonce = 0;
 
-/** Підписаний (на заглушці) платіж EIP-3009 за першою вимогою з 402. */
+/**
+ * Підписаний (на заглушці) платіж за першою вимогою з 402: EIP-3009 для eip155:…, base64
+ * "transaction" для solana:… (п.8, 15.09: лише Solana лишилась у config.networks, але тест-заглушка
+ * фасилітатора (intro-fixtures.ts stubNetwork) не звіряє форму payload, тож рядок-заглушка годиться).
+ * Ім'я лишилось evmPayment: так звуться виклики в п'яти тестових файлах, форма підлаштовується сама.
+ */
 export function evmPayment(required: PaymentRequired, paymentIdentifier?: string): PaymentPayload {
   nonce++;
-  const accepted = required.accepts.find((a) => a.network.startsWith("eip155:")) as PaymentRequirements;
+  const accepted = required.accepts[0] as PaymentRequirements;
+  const svm = accepted.network.startsWith("solana:");
   return {
     x402Version: 2,
     resource: required.resource,
     accepted,
     ...(paymentIdentifier ? { extensions: { "payment-identifier": { info: { required: false, id: paymentIdentifier } } } } : {}),
-    payload: {
-      signature: `0x${nonce.toString(16).padStart(130, "0")}`,
-      authorization: {
-        from: PAYER,
-        to: accepted.payTo,
-        value: accepted.amount,
-        validAfter: "0",
-        validBefore: "9999999999",
-        nonce: `0x${(nonce + 1_000_000).toString(16).padStart(64, "0")}`,
-      },
-    },
+    payload: svm
+      ? { transaction: `AQAB-test-tx-${nonce}` }
+      : {
+          signature: `0x${nonce.toString(16).padStart(130, "0")}`,
+          authorization: {
+            from: PAYER,
+            to: accepted.payTo,
+            value: accepted.amount,
+            validAfter: "0",
+            validBefore: "9999999999",
+            nonce: `0x${(nonce + 1_000_000).toString(16).padStart(64, "0")}`,
+          },
+        },
   };
 }
 

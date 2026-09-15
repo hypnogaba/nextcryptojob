@@ -23,6 +23,12 @@ describe("id і ключ змісту", () => {
     expect(titleKey("Data Analyst (m/f/d)")).toBe(titleKey("Data  Analyst"));
     expect(dedupeKey("Example Inc.", "Backend Engineer")).toBe(dedupeKey("Example", "Backend Engineer (Remote)"));
   });
+  it("та сама компанія під іншою назвою бренду (Labs/Foundation) дає той самий ключ змісту (15.09, справжня пара Morpho)", () => {
+    expect(dedupeKey("Morpho", "Account Growth")).toBe(dedupeKey("Morpho Labs", "Account Growth"));
+    expect(dedupeKey("Offchain", "Business Operations Manager")).toBe(dedupeKey("Offchain Labs", "Business Operations Manager"));
+    // "Protocol" не псевдонім бренду (Acme Protocol лишається окремою назвою від Acme).
+    expect(dedupeKey("Acme Protocol", "Engineer")).not.toBe(dedupeKey("Acme", "Engineer"));
+  });
   it("назва без латиниці не дає порожнього ключа", () => {
     expect(titleKey("Розробник")).toBe("розробник");
     expect(dedupeKey("X", "Розробник")).not.toBe(dedupeKey("X", "Аналітик"));
@@ -73,6 +79,18 @@ describe("prepare: лише крипто, вікно за родом джере�
       ["board:web3career", 135_050, "USD"], ["ashby:example", null, null],
     ]);
     expect(dropped.duplicate).toBe(2);
+  });
+
+  it("«Morpho» і «Morpho Labs», та сама роль і адреса, дедупляться в один рядок з більшим бором даних (15.09, справжня пара з бази)", () => {
+    const bare = raw({ url: "https://boards.example.com/morpho/1", company: "Morpho", title: "Account Growth", location: "Paris" });
+    const withSalary = raw({
+      url: "https://jobs.morpho.org/account-growth", company: "Morpho Labs", title: "Account Growth", location: "Paris",
+      salaryMin: 70_000, salaryMax: 90_000, salaryCurrency: "eur",
+    });
+    const { rows, dropped } = prepare([bare, withSalary], WINDOWS, NOW);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ company: "Morpho Labs", companyKey: "morpho", salaryMin: 70_000, salaryCurrency: "EUR" });
+    expect(dropped.duplicate).toBe(1);
   });
 
   it("рядок: id з адреси, ключ компанії добірки, теги з web3 першим, вилка з тексту", () => {

@@ -266,7 +266,9 @@ async function sha256Hex(text: string): Promise<string> {
  * `resource` і `extensions` клієнт може змінити, не підписуючи нічого заново.
  * Якби вони входили в хеш, той самий підписаний платіж з іншим payment-identifier
  * дав би новий хеш і пройшов би UNIQUE. Інші написання того самого дозволу EIP-3009
- * (регістр hex, зайві ключі) ловить другий UNIQUE: (network, evm_from, evm_nonce).
+ * (регістр hex, зайві ключі) ловить другий UNIQUE: (network, evm_from, evm_nonce);
+ * для Solana той самий payload.transaction із зайвим сусіднім ключем ловить
+ * (network, svm_transaction).
  */
 export async function paymentPayloadHash(payload: PaymentPayload): Promise<string> {
   return sha256Hex(
@@ -290,6 +292,17 @@ function evmAuthorizationKey(payload: PaymentPayload): { from: string; nonce: st
   const auth = payload.payload.authorization;
   if (!isRecord(auth) || typeof auth.from !== "string" || typeof auth.nonce !== "string") return null;
   return { from: auth.from.toLowerCase(), nonce: auth.nonce.toLowerCase() };
+}
+
+/**
+ * Другий UNIQUE для Solana (network, svm_transaction), як evmAuthorizationKey для EVM: payload.transaction
+ * (base64) сама є повним підписаним переказом, тож зайвий сусідній ключ у payload чи інший порядок полів
+ * обгортки не змінює її, а payload_hash (весь payload) змінює. null для інших схем і EVM.
+ */
+function svmTransactionKey(payload: PaymentPayload): string | null {
+  if (!payload.accepted.network.startsWith("solana:")) return null;
+  const tx = payload.payload.transaction;
+  return typeof tx === "string" && tx ? tx : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -753,14 +766,16 @@ export function createPaymentGate({ db, config, facilitator }: PaymentGateOption
     const payloadHash = await paymentPayloadHash(payload);
     const requestHash = await paymentRequestHash(set.action, requestInput, set.resource.url);
     const evmKey = evmAuthorizationKey(payload);
+    const svmKey = svmTransactionKey(payload);
     const paymentId = newPaymentId();
     const price = PRICES[set.action];
-    // ON CONFLICT DO NOTHING спрацьовує на будь-якому UNIQUE: payload_hash, payment_identifier, (network, evm_from, evm_nonce).
+    // ON CONFLICT DO NOTHING спрацьовує на будь-якому UNIQUE: payload_hash, payment_identifier,
+    // (network, evm_from, evm_nonce), (network, svm_transaction).
     const inserted = await db
       .prepare(
-        `INSERT INTO x402_payments (id, payload_hash, request_hash, payment_identifier, evm_from, evm_nonce, company_id,
-           api_key_id, network, asset, pay_to, amount_atomic, amount_usd_cents, action, channel, status, facilitator, request_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'verified', ?16, ?17)
+        `INSERT INTO x402_payments (id, payload_hash, request_hash, payment_identifier, evm_from, evm_nonce, svm_transaction,
+           company_id, api_key_id, network, asset, pay_to, amount_atomic, amount_usd_cents, action, channel, status, facilitator, request_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'verified', ?17, ?18)
          ON CONFLICT DO NOTHING`,
       )
       .bind(
@@ -770,6 +785,7 @@ export function createPaymentGate({ db, config, facilitator }: PaymentGateOption
         identifier,
         evmKey?.from ?? null,
         evmKey?.nonce ?? null,
+        svmKey,
         context.companyId ?? null,
         context.apiKeyId ?? null,
         matched.network,

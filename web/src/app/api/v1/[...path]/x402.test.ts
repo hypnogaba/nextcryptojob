@@ -62,7 +62,7 @@ const payments = () => all<{ status: string; action: string; channel: string; co
 const usage = () => all(db.raw, "SELECT action, billing, status, payer FROM usage_events");
 
 describe("guest search paid by x402", () => {
-  it("without a payment the answer is 402 with the requirements for Base and Solana in the header and the body", async () => {
+  it("without a payment the answer is 402 with the requirements for Solana in the header and the body", async () => {
     const res = await post("/candidates/search", { body: { filters: { role: "engineer" } } });
     expect(res.status).toBe(402);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
@@ -75,7 +75,6 @@ describe("guest search paid by x402", () => {
       extensions: { "payment-identifier": { info: { required: false } } },
     });
     expect(res.body.accepts.map((a: { network: string; amount: string; payTo: string }) => [a.network, a.amount, a.payTo])).toEqual([
-      ["eip155:84532", "500000", "0x1111111111111111111111111111111111111111"],
       ["solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1", "500000", "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"],
     ]);
     expect(schemaErrors("POST", "/candidates/search", res)).toEqual([]);
@@ -90,7 +89,9 @@ describe("guest search paid by x402", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.map((d: { candidate_id: string }) => d.candidate_id)).toEqual([...ids].reverse());
     expect(JSON.stringify(res.body)).not.toMatch(/dev_\d|@example\.com/);
-    expect(settlementFrom(res)).toMatchObject({ success: true, transaction: "0xtx1", network: "eip155:84532", payer: PAYER });
+    expect(settlementFrom(res)).toMatchObject({
+      success: true, transaction: "0xtx1", network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1", payer: PAYER,
+    });
     expect(res.headers.get("RateLimit-Limit")).toBe("50");
     expect(schemaErrors("POST", "/candidates/search", res)).toEqual([]);
     expect(net.settle).toBe(1);
@@ -225,7 +226,7 @@ describe("payments not configured", () => {
     expect(guest.status).toBe(401);
     expect(guest.body.error).toMatchObject({
       code: "not_configured",
-      message: "Payments are not configured on this server (not configured: X402_PAY_TO_EVM, X402_PAY_TO_SOLANA).",
+      message: "Payments are not configured on this server (not configured: X402_PAY_TO_SOLANA).",
     });
     const withPayment = await post("/candidates/search", { body: {}, payment: "e30" });
     expect(withPayment.body.error.code).toBe("not_configured");

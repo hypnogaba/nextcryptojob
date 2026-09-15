@@ -1,7 +1,7 @@
 // Ключі рядка jobs_cache: id з адреси і ключ змісту (компанія + назва).
 // titleKey перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.ts.
 import { createHash } from "node:crypto";
-import { companyKey } from "../digest/clean.js";
+import { brandKey } from "../digest/clean.js";
 
 /**
  * id вакансії з її адреси: 'j' + 24 hex від sha256. Та сама адреса завжди дає той самий id, тож:
@@ -31,6 +31,9 @@ export function titleKey(title: string): string {
 
 /**
  * Ключ змісту: компанія + роль без локації, тож геоклони й та сама вакансія на дошці та в ATS
- * схлопуються. Ключ компанії той самий, що в добірці й на сайті (engine/src/digest/clean.ts).
+ * схлопуються. Компанія тут brandKey, а не голий companyKey: «Morpho» і «Morpho Labs» з тим самим
+ * заголовком мають дати один ключ (engine/src/digest/clean.ts), інакше однакова вакансія під
+ * двома назвами компанії проходить дедуп окремо (15.09, «Account Growth, Morpho, Paris» і
+ * «Account Growth, Morpho Labs, Paris»).
  */
-export const dedupeKey = (company: string, title: string): string => `${companyKey(company)}|${titleKey(title)}`;
+export const dedupeKey = (company: string, title: string): string => `${brandKey(company)}|${titleKey(title)}`;
