@@ -2,7 +2,8 @@ import { ArrowUpRight, Check } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { logoPath } from "@/lib/jobs/companies";
-import { applyLink, externalJobLink } from "@/lib/jobs/link";
+import { applyLink, EXTERNAL_JOB_REL, externalJobLink } from "@/lib/jobs/link";
+import { companySiteUrl, type TokenChip } from "@/lib/jobs/token";
 import { CompanyLogo } from "./company-logo";
 
 /**
@@ -27,6 +28,8 @@ export type CardJob = {
   postedBy: string | null;
   about?: string | null;
   domain?: string | null;
+  /** Чип токена компанії (символ, ціна, MC, зміна за добу); null, якщо токена немає чи ціна не свіжа. */
+  token?: TokenChip | null;
 };
 
 // Текст із чужих дощок буває одним довгим словом: переносимо будь-де, щоб 390 px не роз'їхались.
@@ -77,6 +80,34 @@ function Pay({ job }: { job: CardJob }) {
     );
   }
   return <span className="rounded-full bg-soft px-3 py-1.5 text-sm font-medium whitespace-nowrap text-ink-muted">Salary not listed</span>;
+}
+
+/** Домен приглушеним текстом; посилання на сайт компанії, якщо домен придатний. Спільна для картки й /jobs/<id>. */
+export function CompanySite({ domain }: { domain: string }) {
+  const url = companySiteUrl(domain);
+  if (!url) return <span>{domain}</span>;
+  return (
+    <a href={url} target="_blank" rel={EXTERNAL_JOB_REL} className="underline decoration-line-strong underline-offset-2 hover:decoration-ink">
+      {domain}
+    </a>
+  );
+}
+
+/**
+ * Чип токена компанії: символ, ціна, MC і зміна за добу (червона лише коли вниз, як єдиний тривожний
+ * колір сайту). flex-wrap і tabular-nums без white-space:nowrap: довгий тікер переходить на новий
+ * рядок усередині чипа, а не роз'їжджає картку на 390 px. Спільна для картки й /jobs/<id>.
+ */
+export function TokenBadge({ token }: { token: TokenChip }) {
+  const down = token.change?.startsWith("-") ?? false;
+  return (
+    <span className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-2xl bg-soft px-3 py-1 text-[0.8125rem] font-medium tabular-nums text-ink-muted">
+      <span className="font-semibold text-ink">{token.symbol}</span>
+      <span>{token.price}</span>
+      {token.mcap ? <span>{token.mcap}</span> : null}
+      {token.change ? <span className={down ? "text-danger" : "text-ink"}>{token.change}</span> : null}
+    </span>
+  );
 }
 
 function Why({ reasons, why, note, label }: { reasons?: readonly string[]; why?: string | null; note?: string | null; label: string }) {
@@ -157,9 +188,14 @@ export function JobCard({
           </h3>
           <p className={`mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.9375rem] text-ink-muted ${WRAP}`}>
             <span className="font-semibold text-ink">{job.company}</span>
-            {domain ? <span>{domain}</span> : null}
+            {domain ? <CompanySite domain={domain} /> : null}
             {job.location ? <span>{job.location}</span> : null}
           </p>
+          {job.token ? (
+            <div className="mt-2">
+              <TokenBadge token={job.token} />
+            </div>
+          ) : null}
         </div>
         <div className="col-span-full justify-self-start sm:col-span-1 sm:justify-self-end">
           <Pay job={job} />

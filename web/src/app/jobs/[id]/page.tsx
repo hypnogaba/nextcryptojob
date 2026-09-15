@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { CompanySite, TokenBadge } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
 import { ROLES } from "@/lib/card/roles";
 import { countryName } from "@/lib/crm/countries";
@@ -10,7 +11,11 @@ import { loadPublicJob, type PublicJobPage } from "@/lib/crm/public-jobs";
 import { appEnv, db } from "@/lib/db";
 import { formatSalary } from "@/lib/digest/format";
 import { isId } from "@/lib/ids";
+import { companyKey } from "@/lib/jobs/clean";
+import { companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { jobPostingJsonLd, jsonLdScript } from "@/lib/jobs/job-posting";
+import { tokenChip, type TokenChip } from "@/lib/jobs/token";
+import { jobsDb } from "@/lib/jobs-db";
 import { siteOrigin } from "@/lib/site";
 
 /**
@@ -56,6 +61,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+/**
+ * Токен компанії й, коли адреса ще не верифікована в CRM, її сайт з реєстру бази вакансій (JOBS_DB
+ * companies, db/jobs 0004/0005), знайдені за ключем назви. Компанія тут своя, з CRM, а не зі
+ * сканування, тож збіг ключа лише випадковий (той самий проєкт продає й тут, і на чужій дошці);
+ * порожньо і сторінка мовчить про токен, як мовчала до цієї зміни.
+ */
+async function companyToken(company: string, verifiedDomain: string | null): Promise<{ token: TokenChip | null; site: string | null }> {
+  const profiles = await companyProfiles(jobsDb);
+  const known = profileFor(profiles, companyKey(company));
+  return {
+    token: tokenChip(known?.token, new Date()),
+    site: known?.domain && known.domain !== verifiedDomain ? known.domain : null,
+  };
+}
+
 export default async function PublicJobPageView({ params }: Props) {
   const { id } = await params;
   const job = await loadJob(id);
@@ -66,16 +86,20 @@ export default async function PublicJobPageView({ params }: Props) {
   const salary = job.salary ? formatSalary(job.salary) : null;
   const facts = [place, country && !place.includes(country) ? country : null, salary].filter(Boolean) as string[];
   const ld = jobPostingJsonLd(job, siteOrigin(appEnv()));
+  const { token, site } = await companyToken(job.company, job.companyDomainVerified ? job.companyDomain : null);
 
   return (
     <article className="mx-auto grid max-w-3xl gap-8 px-4 pt-10 pb-20 sm:px-6 sm:pt-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(ld) }} />
       <header className="grid gap-3">
-        <p className="text-sm text-ink-muted">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
           <span className="font-medium text-ink">{job.company}</span>
           {job.companyDomainVerified && job.companyDomain ? (
-            <span> · {job.companyDomain} (domain verified)</span>
+            <span>{job.companyDomain} (domain verified)</span>
+          ) : site ? (
+            <CompanySite domain={site} />
           ) : null}
+          {token ? <TokenBadge token={token} /> : null}
         </p>
         <h1 className="text-3xl font-semibold tracking-tight break-words sm:text-4xl">{job.title}</h1>
         {facts.length > 0 ? <p className="text-base text-ink wrap-anywhere">{facts.join(" · ")}</p> : null}

@@ -2,9 +2,11 @@ import { loadCompanyJobs } from "@/lib/crm/public-jobs";
 import { cleanText, estimateText } from "@/lib/digest/format";
 import type { RoleKey } from "@/lib/card/roles";
 import type { JobsDb } from "@/lib/jobs-db";
+import { type CompanyProfiles, companyProfiles, EMPTY_PROFILES, profileFor } from "./companies";
 import { externalJobLink } from "./link";
 import { formatSalary } from "./match";
 import { FAILURE_BACKOFF_MS, crawlPool, POOL_TTL_MS, type PoolJob } from "./pool";
+import { tokenChip, type TokenChip } from "./token";
 
 /**
  * Табло головної: лічильники, приклад щоденного листа і стрічка вакансій із зарплатою.
@@ -65,6 +67,8 @@ export type TickerJob = {
   rel: string | null;
   /** Кого назвати джерелом («web3.career»), або null. */
   via: string | null;
+  /** Чип токена компанії (db/jobs 0004), лише свіжі ціни; null, якщо токена немає чи це вакансія компанії. */
+  token: TokenChip | null;
 };
 
 /**
@@ -168,7 +172,13 @@ function candidates(all: readonly PoolJob[], withEstimates: boolean): Cand[] {
 /** Ключ вакансії на сторінці: co:<id> для вакансій компаній, nr:<id> для сканованих. */
 const refOf = (j: PoolJob) => (j.source === "company" ? `co:${j.jobId}` : `nr:${j.jobId.replace(/^nr_/, "")}`);
 
-function toTickerJob(c: Cand): TickerJob {
+/** Профіль компанії лише для вакансій зі сканування: у вакансії компанії є своя сторінка на сайті. */
+function tokenOf(job: PoolJob, profiles: CompanyProfiles, now: Date): TokenChip | null {
+  if (job.source !== "crawl") return null;
+  return tokenChip(profileFor(profiles, job.companyKey, job.company)?.token, now);
+}
+
+function toTickerJob(c: Cand, profiles: CompanyProfiles, now: Date): TickerJob {
   return {
     ref: refOf(c.job),
     title: cleanText(c.job.title, 70),
@@ -180,6 +190,7 @@ function toTickerJob(c: Cand): TickerJob {
     external: c.link.external,
     rel: c.link.rel,
     via: c.link.via,
+    token: tokenOf(c.job, profiles, now),
   };
 }
 
@@ -189,7 +200,12 @@ function toTickerJob(c: Cand): TickerJob {
  * оцінкою дошки йде в чергу своєї ролі після всіх із зарплатою роботодавця: так роль без жодної
  * вилки (Community, Creator) не зникає зі стрічки, а оцінка ніколи не випереджає справжню зарплату.
  */
-export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJob[] {
+export function tickerJobs(
+  all: readonly PoolJob[],
+  size = TICKER_SIZE,
+  profiles: CompanyProfiles = EMPTY_PROFILES,
+  now: Date = new Date(),
+): TickerJob[] {
   // Черги за першою роллю вакансії, у порядку, в якому роль уперше трапилась (найсвіжіша першою).
   const queues = new Map<string, Cand[]>();
   for (const c of candidates(all, true)) {
@@ -209,7 +225,7 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
       if (!c) continue;
       used.add(c.job.companyKey);
       took = true;
-      out.push(toTickerJob(c));
+      out.push(toTickerJob(c, profiles, now));
       if (out.length >= size) break;
     }
   }
@@ -221,23 +237,27 @@ export function tickerJobs(all: readonly PoolJob[], size = TICKER_SIZE): TickerJ
  * роботодавця (оцінку дошки сюди не беремо), одна на компанію. Якщо таких менше TODAY_SIZE,
  * беремо перші TODAY_SIZE зі стрічки (різні ролі) і role: null, щоб підпис не обіцяв інженера.
  */
-export function todaysJobs(all: readonly PoolJob[]): TodaysJobs {
+export function todaysJobs(all: readonly PoolJob[], profiles: CompanyProfiles = EMPTY_PROFILES, now: Date = new Date()): TodaysJobs {
   const used = new Set<string>();
   const jobs: TickerJob[] = [];
   for (const c of candidates(all, false)) {
     if (!c.job.roles.includes(TODAY_ROLE) || !c.job.workMode.includes("remote") || used.has(c.job.companyKey)) continue;
     used.add(c.job.companyKey);
-    jobs.push(toTickerJob(c));
+    jobs.push(toTickerJob(c, profiles, now));
     if (jobs.length === TODAY_SIZE) return { role: TODAY_ROLE, jobs };
   }
-  return { role: null, jobs: tickerJobs(all, TODAY_SIZE) };
+  return { role: null, jobs: tickerJobs(all, TODAY_SIZE, profiles, now) };
 }
 
 /** Приклад листа і стрічка без повторів: вакансії з прикладу в стрічку не йдуть. */
-export function homeLists(all: readonly PoolJob[]): { today: TodaysJobs; ticker: TickerJob[] } {
-  const today = todaysJobs(all);
+export function homeLists(
+  all: readonly PoolJob[],
+  profiles: CompanyProfiles = EMPTY_PROFILES,
+  now: Date = new Date(),
+): { today: TodaysJobs; ticker: TickerJob[] } {
+  const today = todaysJobs(all, profiles, now);
   const shown = new Set(today.jobs.map((j) => j.ref));
-  return { today, ticker: tickerJobs(all.filter((j) => !shown.has(refOf(j)))) };
+  return { today, ticker: tickerJobs(all.filter((j) => !shown.has(refOf(j))), TICKER_SIZE, profiles, now) };
 }
 
 // ---------------------------------------------------------------------------
@@ -270,7 +290,8 @@ export async function homeBoard(deps: {
       } catch (e) {
         console.warn(`home: company jobs read failed (${e instanceof Error ? e.name : "unknown"})`);
       }
-      value = { available: true, stats: homeStats(crawl, company, deps.now), ...homeLists([...company, ...crawl]) };
+      const profiles = await companyProfiles(deps.jobs);
+      value = { available: true, stats: homeStats(crawl, company, deps.now), ...homeLists([...company, ...crawl], profiles, deps.now) };
     }
   } catch (e) {
     // Напр. немає прив'язки DB поза Worker: головна однаково відкривається.

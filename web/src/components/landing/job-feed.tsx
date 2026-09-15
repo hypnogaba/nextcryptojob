@@ -8,7 +8,10 @@ export const FEED_MIN_TO_ROLL = 7;
 const SECONDS_PER_ROW = 5;
 
 function Row({ job, copy }: { job: TickerJob; copy: boolean }) {
-  const label = [job.title, job.company, job.place, job.salary, job.via ? `via ${job.via}` : null].filter(Boolean).join(", ");
+  const down = job.token?.change?.startsWith("-") ?? false;
+  const label = [job.title, job.company, job.place, job.salary, job.via ? `via ${job.via}` : null, job.token?.text ?? null]
+    .filter(Boolean)
+    .join(", ");
   const body = (
     <>
       <span className="ncj-feed-av" aria-hidden="true">
@@ -21,6 +24,13 @@ function Row({ job, copy }: { job: TickerJob; copy: boolean }) {
           {job.place ? ` · ${job.place}` : ""}
           {/* Джерело названо видимо: цього просять умови web3.career. */}
           {job.via ? ` · via ${job.via}` : ""}
+          {job.token ? (
+            <>
+              {" · "}
+              <span className="text-ink">{job.token.symbol}</span> {job.token.price}
+              {job.token.change ? <span className={down ? "text-danger" : "text-ink"}> {job.token.change}</span> : null}
+            </>
+          ) : null}
         </span>
       </span>
       <span className={job.estimate ? "ncj-feed-p ncj-feed-est" : "ncj-feed-p"}>{job.estimate ? "Not listed" : job.salary}</span>

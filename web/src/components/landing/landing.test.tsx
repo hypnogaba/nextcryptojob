@@ -31,6 +31,7 @@ const job = (i: number, over: Partial<TickerJob> = {}): TickerJob => ({
   rel: "noopener noreferrer nofollow",
   via: null,
   estimate: false,
+  token: null,
   ...over,
 });
 
@@ -77,5 +78,21 @@ describe("JobFeed", () => {
     expect(a).not.toMatch(/nofollow|noreferrer|ugc|sponsored/);
     expect(a).toContain("via web3.career");
     expect(text(html)).toContain("via web3.career");
+  });
+
+  it("shows the token chip when the job has one, coloured red only when the price is down", () => {
+    const up = { symbol: "$ARB", price: "$0.42", mcap: "MC $1.9B", change: "+3.1%", text: "$ARB $0.42 · MC $1.9B · +3.1%" };
+    const down = { ...up, symbol: "$AAVE", change: "-2.3%" };
+    const html = renderToStaticMarkup(<JobFeed jobs={[job(1, { token: up }), job(2, { token: down })]} />);
+    expect(text(html)).toContain("$ARB $0.42 +3.1%");
+    expect(text(html)).toContain("$AAVE $0.42 -2.3%");
+    expect(html).toContain('<span class="text-ink"> +3.1%</span>');
+    expect(html).toContain('<span class="text-danger"> -2.3%</span>');
+  });
+
+  it("shows no token line when the job has none", () => {
+    const html = renderToStaticMarkup(<JobFeed jobs={[job(1)]} />);
+    expect(html).not.toContain("$ARB");
+    expect(html).not.toContain('class="text-danger"');
   });
 });

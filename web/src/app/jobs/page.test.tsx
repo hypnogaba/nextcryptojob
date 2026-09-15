@@ -278,4 +278,29 @@ describe("/jobs: Jobs for you now", () => {
     expect(html).toMatch(/About the company<\/p><p[^>]*>Aave runs lending markets on many chains\.<\/p>/);
     expect(html).toContain("aave.com");
   });
+
+  it("shows a fresh token chip with the company's site link; hides a stale one", async () => {
+    const nr = jobsTestDb();
+    addPoolJob(nr.raw, { id: "eng1", title: "Solidity Engineer", company: "Aave", postedAt: hoursAgo(5), fetchedAt: hoursAgo(2) });
+    nr.raw.exec(`INSERT INTO companies (slug, name, ats_provider, ats_slug, discovered_via, domain,
+                   token_symbol, token_confidence, token_checked_at, token_price_usd, token_mcap_usd, token_change_24h, token_updated_at)
+                 VALUES ('aave', 'Aave', 'greenhouse', 'aave', 'manual', 'aave.com',
+                   'AAVE', 'homepage', datetime('now'), 90.5, 1400000000, -2.3, datetime('now'))`);
+    jobsHolder.db = readOnlyJobsDb(nr.d1);
+    await signIn("ada");
+    const html = await render();
+    expect(html).toContain('href="https://aave.com"');
+    expect(html).toContain("$AAVE");
+    expect(html).toContain("$90.50");
+    expect(html).toContain("MC $1.4B");
+    expect(html).toContain("-2.3%");
+
+    // Ціна старша за 3 доби: сайт компанії лишається, чипа немає.
+    resetCrawlPool();
+    resetCompanyProfiles();
+    run(nr.raw, "UPDATE companies SET token_updated_at = datetime('now', '-10 days') WHERE slug = 'aave'");
+    const html2 = await render();
+    expect(html2).toContain('href="https://aave.com"');
+    expect(html2).not.toContain("$AAVE");
+  });
 });
