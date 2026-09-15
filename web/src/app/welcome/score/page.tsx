@@ -2,14 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CardFront } from "@/components/card/card-front";
+import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
+import { loadSettings } from "@/lib/account/settings";
 import { requireUser } from "@/lib/auth/session";
 import { ROLES } from "@/lib/card/roles";
 import { cardPath, xShareUrl } from "@/lib/card/share";
 import { getCard, getCardEvidence, listActiveCards } from "@/lib/card/store";
 import { cardView } from "@/lib/card/view";
-import { db } from "@/lib/db";
+import { appEnv, db } from "@/lib/db";
 import { listIdentities } from "@/lib/identity/store";
+import { instantMatches, NO_FIT } from "@/lib/jobs/instant";
+import { jobsDb } from "@/lib/jobs-db";
 import { briefDone } from "@/lib/onboarding/steps";
 import { loadAnswers } from "@/lib/onboarding/store";
 import { explainRole, sourceState } from "@/lib/score/explain";
@@ -123,9 +127,48 @@ export default async function ScorePage() {
     );
   }
 
-  const cards = await listActiveCards(d, user.id);
+  const [cards, settings, now] = await Promise.all([
+    listActiveCards(d, user.id),
+    loadSettings(d, user.id),
+    instantMatches(
+      { db: d, env: appEnv(), jobs: jobsDb, now: new Date() },
+      {
+        roles: JSON.stringify(answers.roles),
+        remote_mode: answers.remoteMode,
+        city: answers.city,
+        salary_min: answers.salaryMin,
+        salary_currency: answers.salaryCurrency,
+        role_text: answers.roleText,
+      },
+      new Set(),
+      NO_FIT,
+    ),
+  ]);
   const active = cards.find((c) => c.role === best.role) ?? null;
   const others = ranked.slice(1);
+
+  // Раунд 5, п.4: вакансії важливіші за картку, тож ідуть першими й виділені; під ними
+  // «завтра надішлемо ще» за каналом, який людина обрала на кроці «How should we send your jobs?».
+  const tomorrow =
+    settings?.channel === "telegram"
+      ? "Tomorrow we send you more jobs in Telegram."
+      : settings?.channel === "email"
+        ? "Tomorrow we send you more jobs by email."
+        : null;
+  const jobsSection =
+    now.state === "ok" && now.jobs.length > 0 ? (
+      <section aria-labelledby="jobs-h" className="grid gap-4 rounded-2xl border-[1.5px] border-ink bg-soft p-5 sm:p-6">
+        <h2 id="jobs-h" className="font-display text-2xl leading-tight font-semibold tracking-[-0.02em]">
+          Your jobs
+        </h2>
+        <ol className="grid gap-4">
+          {now.jobs.slice(0, 5).map((j, i) => (
+            <JobCard key={j.ref} job={j} reasons={j.reasons} note={j.note} rank={i + 1} compact />
+          ))}
+        </ol>
+        {tomorrow ? <p className="text-sm text-ink-muted">{tomorrow}</p> : null}
+      </section>
+    ) : null;
   const summary = (
     <div className="grid gap-2">
       <p className="text-lg text-ink">
@@ -148,6 +191,7 @@ export default async function ScorePage() {
     return shell(
       <>
         {summary}
+        {jobsSection}
         <IssueCard role={best.role} />
         {improve}
         {next}
@@ -162,6 +206,7 @@ export default async function ScorePage() {
   return shell(
     <>
       {summary}
+      {jobsSection}
       <div className="grid items-start gap-8 md:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         <div className="ncj-card mx-auto w-full max-w-[340px]">
           <CardFront face={view} draw />

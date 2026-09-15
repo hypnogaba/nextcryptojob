@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSession } from "@/lib/auth/session";
+import { type JobsDb, readOnlyJobsDb } from "@/lib/jobs-db";
+import { resetCompanyProfiles } from "@/lib/jobs/companies";
+import { resetCrawlPool } from "@/lib/jobs/pool";
 import { exec, harness, RedirectCalled, resetHarness, rows } from "@/test/harness";
+import { jobsTestDb } from "@/test/jobs-db";
 import { ensureScoreAction, issueFirstCardAction } from "../actions/score";
 import ScorePage from "./page";
 
@@ -11,6 +15,27 @@ vi.mock("next/navigation", async () => ({
   ...(await import("@/test/harness")).navigationModule,
   useRouter: () => ({ refresh: () => undefined, push: () => undefined }),
 }));
+
+// База вакансій: прив'язку підміняємо на рівні модуля, як і в тестах /jobs.
+const jobsHolder = vi.hoisted(() => ({ db: null as JobsDb | null }));
+vi.mock("@/lib/jobs-db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jobs-db")>()),
+  jobsDb: () => jobsHolder.db,
+}));
+
+/** Жива вакансія ролі engineer, як мінімум POOL_SQL (db/jobs 0001_schema.sql). */
+function addEngineerJob(): void {
+  const { raw, d1 } = jobsTestDb();
+  raw
+    .prepare(
+      `INSERT INTO jobs_cache (id, url, company, company_key, title, location, remote, source, tags, dedupe_key,
+                               posted_at, fetched_at, first_seen_at)
+       VALUES ('j1', 'https://jobs.example.com/j1', 'Acme', 'acme', 'Protocol Engineer', 'Remote', 1,
+               'board:test', '["web3"]', 'acme-protocol-engineer', datetime('now'), datetime('now'), datetime('now'))`,
+    )
+    .run();
+  jobsHolder.db = readOnlyJobsDb(d1);
+}
 
 /** Людина, що пройшла анкету й кроки балу: ролі, згода, X. */
 async function finished(roles = '["bd","marketing_content"]') {
@@ -44,6 +69,9 @@ async function render(): Promise<string> {
 
 beforeEach(() => {
   resetHarness();
+  resetCrawlPool();
+  resetCompanyProfiles();
+  jobsHolder.db = null;
   harness.headers = new Headers({ host: "nextcryptojob.xyz", "cf-connecting-ip": "203.0.113.9" });
 });
 
@@ -144,5 +172,49 @@ describe("/welcome/score", () => {
     expect(html).toContain("We could not score your roles yet.");
     expect(html).toContain("Connect GitHub to get an Engineer score.");
     expect(html).not.toContain("Download image");
+  });
+});
+
+// Раунд 5, п.4: вакансії важливіші за картку, тож ідуть першими й виділені; під ними «завтра
+// надішлемо ще» за каналом.
+describe("jobs before the card (item 4)", () => {
+  it("shows the matching job above the card, and says jobs keep coming by email (default channel)", async () => {
+    await finished('["engineer"]');
+    addEngineerJob();
+    job("done");
+    score("engineer", 61.2);
+    const issued = await issueFirstCardAction("engineer");
+    if (!issued.ok) throw new Error(issued.message);
+    const html = await render();
+
+    expect(html).toContain("Your jobs");
+    expect(html).toContain("Protocol Engineer");
+    expect(html).toContain("Tomorrow we send you more jobs by email.");
+    // Вакансії йдуть РАНІШЕ картки в розмітці.
+    expect(html.indexOf("Your jobs")).toBeLessThan(html.indexOf("ncj-card"));
+    expect(html.indexOf("Protocol Engineer")).toBeLessThan(html.indexOf("ncj-card"));
+  });
+
+  it("says jobs keep coming in Telegram when that is the chosen channel", async () => {
+    exec("INSERT INTO users (id, email, channel, onboarding_step, roles) VALUES ('u', 'ada@example.com', 'telegram', 'done', '[\"engineer\"]')");
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'scoring', 1, 'v1')");
+    exec("INSERT INTO identities (user_id, kind, value) VALUES ('u', 'x', 'ada')");
+    await createSession("u", null);
+    addEngineerJob();
+    job("done");
+    score("engineer", 61.2);
+    const html = await render();
+    expect(html).toContain("Tomorrow we send you more jobs in Telegram.");
+    expect(html).not.toContain("by email.");
+  });
+
+  it("has no jobs section when nothing matches, and the card still shows", async () => {
+    await finished('["engineer"]');
+    job("done");
+    score("engineer", 61.2);
+    const html = await render();
+    expect(html).not.toContain("Your jobs");
+    expect(html).not.toContain("Tomorrow we send you");
+    expect(html).toContain("Making your card…");
   });
 });
