@@ -6,6 +6,11 @@
   "name": "nextcryptojob",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Публічна адреса гаманця власника, куди компанії платять USDC на Solana (раунд 5, п.8, lib/billing/solana-pay.ts).
+  // Не секрет: ключів у нас немає. SOLANA_RPC_URL натомість секрет (wrangler secret put).
+  "vars": {
+    "NCJ_PAY_ADDRESS": "6XsRJx1yp4AcNk19wZkaK4y3GCcMd4aArny6owTqCt6L"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
