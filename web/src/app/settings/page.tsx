@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { HINT } from "@/components/form/styles";
 import { loadSettings } from "@/lib/account/settings";
 import { timezoneList } from "@/lib/account/timezones";
+import { HISTORY_DAYS } from "@/lib/digest/history";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { AddEmailForm } from "../account/add-email-form";
@@ -77,7 +78,7 @@ export default async function SettingsPage() {
           <Link href="/jobs" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
             See the jobs we sent you
           </Link>{" "}
-          in the last 14 days.
+          in the last {HISTORY_DAYS} days.
         </p>
       </Section>
 

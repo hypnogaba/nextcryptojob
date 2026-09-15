@@ -23,9 +23,13 @@ import { cleanText, companyJobLocation, estimateText, formatSalary, safeUrl } fr
  * каже, що зараз не вийшло (historyError або state 'unavailable').
  */
 
-export const HISTORY_DAYS = 14;
-/** 14 днів по 5 вакансій. */
-export const HISTORY_LIMIT = 70;
+// Раунд 5, п.16: /jobs показує Earlier за 30 днів (було 14), Today/Earlier/Saved вкладками.
+export const HISTORY_DAYS = 30;
+/**
+ * 30 днів по 5 вакансій це 150, але crawlDetails нижче робить WHERE id IN (...ids) до JOBS_DB
+ * тими самими ids, тож межа лишається під 100 параметрів D1 (найсвіжіші перші, ORDER BY DESC).
+ */
+export const HISTORY_LIMIT = 90;
 /**
  * Скільки надісланих посилань читаємо, щоб «Jobs for you now» не повторював надісланого
  * (добірка engine виключає всі). Індекс idx_sent_user (user_id, created_at): читання =

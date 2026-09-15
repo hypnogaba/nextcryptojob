@@ -265,6 +265,19 @@ describe("mergeAccounts: score queue, cards, sessions", () => {
     await mergeAccounts(t.d1, "survivor", "other");
     expect(one<{ user_id: string }>(t, "SELECT user_id FROM sessions WHERE id = 'sess1'").user_id).toBe("survivor");
   });
+
+  // Раунд 5, п.16: збережені вакансії обох профілів переходять до survivor; та сама вже збережена
+  // в обох лишається одним рядком (PRIMARY KEY(user_id, job_ref) не дублюємо).
+  it("moves saved jobs onto the survivor, keeping one row for a job saved by both", async () => {
+    insertUser(t, "survivor", { telegram_id: "1", channel: "telegram" });
+    insertUser(t, "other", { email: "ada@example.com", channel: "email" });
+    exec(t, "INSERT INTO saved_jobs (user_id, job_ref) VALUES ('survivor', 'nr:shared'), ('other', 'nr:shared'), ('other', 'nr:only-other')");
+
+    await mergeAccounts(t.d1, "survivor", "other");
+    const refs = all<{ job_ref: string }>(t, "SELECT job_ref FROM saved_jobs ORDER BY job_ref");
+    expect(refs).toEqual([{ job_ref: "nr:only-other" }, { job_ref: "nr:shared" }]);
+    expect(all<{ user_id: string }>(t, "SELECT user_id FROM saved_jobs").every((r) => r.user_id === "survivor")).toBe(true);
+  });
 });
 
 describe("mergeAccounts: digests", () => {

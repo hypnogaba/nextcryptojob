@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DigestSetup } from "@/lib/digest/history";
+import { HISTORY_DAYS, type DigestSetup } from "@/lib/digest/history";
 import { emptyState, noMatch, scheduleLine } from "./empty-state";
 
 const base: DigestSetup = { paused: false, channel: "email", hasRoles: true, hour: 7, timezone: "America/New_York", lastRun: null };
@@ -33,13 +33,13 @@ describe("emptyState says why there are no jobs", () => {
   it("after a digest with no matches or a failed one, says so", () => {
     expect(emptyState({ ...base, lastRun: "empty" }).title).toBe("No jobs matched your roles yet.");
     expect(emptyState({ ...base, lastRun: "failed" }).title).toBe("We could not deliver your last jobs.");
-    expect(emptyState({ ...base, lastRun: "sent" }).title).toBe("No jobs in the last 14 days.");
+    expect(emptyState({ ...base, lastRun: "sent" }).title).toBe(`No jobs in the last ${HISTORY_DAYS} days.`);
   });
 });
 
 describe("scheduleLine", () => {
   it("tells the hour and the channel, or that the digest is paused", () => {
-    expect(scheduleLine(base)).toBe("Up to 5 jobs a day at 07:00 (America/New York), by email. Here are the last 14 days.");
+    expect(scheduleLine(base)).toBe(`Up to 5 jobs a day at 07:00 (America/New York), by email. Here are the last ${HISTORY_DAYS} days.`);
     expect(scheduleLine({ ...base, paused: true })).toBe("Daily jobs are paused. Jobs we sent before stay here.");
   });
 });

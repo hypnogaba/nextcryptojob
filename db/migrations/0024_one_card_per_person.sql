@@ -1,4 +1,7 @@
--- NextCryptoJob, доріжка web: одна картка на людину (раунд 5, п.7). Досі активна картка була
+-- NextCryptoJob, доріжка web (track/r5-cand): пачка раунду 5, кандидатська сторона. Один файл на
+-- всю доріжку (наступний вільний номер 0024, доріжка компанії/адмінки бере 0025).
+--
+-- Одна картка на людину (раунд 5, п.7). Досі активна картка була
 -- одна на (людина, роль): людина з кількома ролями мала кілька карток одночасно ("Cards 2" в
 -- Overview; власник побачив Community 51 і Marketing 50 разом). Тепер картка одна на людину:
 -- роль = головна роль, яку людина обрала першою в брифі (users.roles[0]), або найвищий бал серед
@@ -46,5 +49,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_active_user ON cards(user_id) WHERE 
 -- Лідерборд (раунд 5, п.7): усі з публічною карткою, за балом. За замовчуванням видима (як
 -- решта картки: /c/<slug> вже публічна сторінка), можна вимкнути в /settings, Privacy.
 ALTER TABLE users ADD COLUMN card_public INTEGER NOT NULL DEFAULT 1 CHECK (card_public IN (0, 1));
+
+-- Раунд 5, п.16: кнопка «Save» на картці вакансії, вкладка Saved на /jobs. job_ref у форматі
+-- sent.job_ref ('nr:<id>' чи 'co:<id>', web/src/lib/jobs/instant.ts). Без FK на sent/jobs_cache:
+-- вакансія може бути ще «зараз» (jobs_now, не в sent) чи з іншої бази (JOBS_DB); перевірка живості
+-- лишається читанню (та сама, що для sent). WITHOUT ROWID: пара і є ключем, окремого id не треба.
+CREATE TABLE IF NOT EXISTS saved_jobs (
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_ref    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, job_ref)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_saved_jobs_user ON saved_jobs(user_id, created_at DESC);
 
 INSERT OR IGNORE INTO schema_migrations(name) VALUES ('0024_one_card_per_person');

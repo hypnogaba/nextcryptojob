@@ -5,6 +5,7 @@ import { logoPath } from "@/lib/jobs/companies";
 import { applyLink, EXTERNAL_JOB_REL, externalJobLink } from "@/lib/jobs/link";
 import { companySiteUrl, type TokenChip } from "@/lib/jobs/token";
 import { CompanyLogo } from "./company-logo";
+import { SaveButton } from "./save-button";
 
 /**
  * Картка вакансії на /jobs: значок і назва компанії, місце й зарплата, «чому підходить», про компанію,
@@ -135,11 +136,18 @@ function Why({ reasons, why, note, label }: { reasons?: readonly string[]; why?:
   );
 }
 
-function Apply({ job, compact }: { job: CardJob; compact: boolean }) {
+function Apply({ job, compact, jobRef, saved }: { job: CardJob; compact: boolean; jobRef?: string; saved?: boolean }) {
   const apply = applyLink(job.url);
   const note = job.postedBy ? `Posted by ${job.postedBy} on NextCryptoJob` : apply?.via ? `via ${apply.via}` : null;
+  const save = jobRef ? <SaveButton jobRef={jobRef} initialSaved={Boolean(saved)} compact={compact} /> : null;
   if (!apply) {
-    return note ? <p className={`mt-4 text-xs text-ink-muted ${WRAP}`}>{note}</p> : null;
+    if (!note && !save) return null;
+    return (
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+        {note ? <p className={`text-xs text-ink-muted ${WRAP}`}>{note}</p> : null}
+        {save}
+      </div>
+    );
   }
   return (
     <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -150,6 +158,7 @@ function Apply({ job, compact }: { job: CardJob; compact: boolean }) {
           {apply.newTab ? <span className="sr-only"> (opens in a new tab)</span> : null}
         </a>
       </Button>
+      {save}
       {note ? <p className={`text-xs text-ink-muted ${WRAP}`}>{note}</p> : null}
     </div>
   );
@@ -162,6 +171,8 @@ export function JobCard({
   note,
   rank,
   compact = false,
+  jobRef,
+  saved,
 }: {
   job: CardJob;
   /** Причини списком (вибір «зараз»). */
@@ -174,6 +185,10 @@ export function JobCard({
   rank?: number;
   /** Надіслане раніше: тихіша кнопка. */
   compact?: boolean;
+  /** job_ref (sent.job_ref, "nr:<id>"/"co:<id>"): показує «Save» (раунд 5, п.16). Без нього кнопки нема. */
+  jobRef?: string;
+  /** Чи вже збережена (Saved на /jobs). */
+  saved?: boolean;
 }) {
   const domain = job.domain ?? null;
   const hasWhy = Boolean(reasons?.length || why);
@@ -212,7 +227,7 @@ export function JobCard({
           ) : null}
         </div>
       ) : null}
-      <Apply job={job} compact={compact} />
+      <Apply job={job} compact={compact} jobRef={jobRef} saved={saved} />
     </li>
   );
 }

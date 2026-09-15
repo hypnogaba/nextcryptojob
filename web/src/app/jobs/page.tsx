@@ -7,66 +7,28 @@ import { HINT } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
-import { dayLabel } from "@/lib/digest/format";
-import { type DigestSetup, loadJobsPage, type SentDigest, type SentJob } from "@/lib/digest/history";
+import { loadJobsPage, type DigestSetup } from "@/lib/digest/history";
 import { instantMatches, type InstantMatches } from "@/lib/jobs/instant";
 import { jobsDb } from "@/lib/jobs-db";
+import { listSavedRefs } from "@/lib/jobs/saved";
 import { briefDone, type SavedStep } from "@/lib/onboarding/steps";
 import { checkedLine, emptyState, noMatch, scheduleLine, whenLabel } from "./empty-state";
+import { HistoryTabs } from "./history-tabs";
 
 export const metadata: Metadata = { title: "Your jobs", robots: { index: false } };
 
-const WRAP = "min-w-0 wrap-anywhere";
 const TEXT_LINK =
   "inline-flex min-h-11 items-center text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand";
 const H2 = "font-display text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] sm:text-[2rem]";
 const PANEL = "grid gap-3 rounded-3xl bg-soft p-5 sm:p-6";
 
-function SentItem({ job }: { job: SentJob }) {
-  if (!job.details) {
-    return (
-      <li className="grid gap-1 rounded-3xl border-[1.5px] border-dashed border-line-strong p-5 sm:p-6">
-        <p className="text-base font-medium text-ink-muted">
-          {job.state === "unavailable" ? "Job details are not available right now." : "This job is no longer listed."}
-        </p>
-        {job.why ? <p className={`${HINT} ${WRAP}`}>{job.why}</p> : null}
-      </li>
-    );
-  }
-  return <JobCard job={job.details} why={job.why} compact />;
-}
-
-function Digest({ digest }: { digest: SentDigest }) {
-  const n = digest.jobs.length;
-  const by = digest.channel === "telegram" ? "in Telegram" : digest.channel === "email" ? "by email" : null;
-  const id = `digest-${digest.digestId}`;
-  return (
-    <section aria-labelledby={id} className="grid gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
-        <h3 id={id} className="font-display text-[1.375rem] leading-tight font-semibold tracking-[-0.015em]">
-          {dayLabel(digest.localDate)}
-        </h3>
-        <p className="text-sm text-ink-muted">
-          {n} job{n === 1 ? "" : "s"}
-          {by ? `, ${by}` : ""}
-        </p>
-      </div>
-      <ol className="grid gap-3">
-        {digest.jobs.map((job) => (
-          <SentItem key={job.ref} job={job} />
-        ))}
-      </ol>
-    </section>
-  );
-}
-
 /** Вибір «зараз»: п'ять найкращих для анкети людини тими самими правилами, що в добірці. */
-function JobsNow({ now }: { now: InstantMatches }) {
+function JobsNow({ now, savedRefs }: { now: InstantMatches; savedRefs: ReadonlySet<string> }) {
   if (now.state === "ok") {
     return (
       <ol className="grid gap-4">
         {now.jobs.map((j, i) => (
-          <JobCard key={j.ref} job={j} reasons={j.reasons} note={j.note} rank={i + 1} />
+          <JobCard key={j.ref} job={j} reasons={j.reasons} note={j.note} rank={i + 1} jobRef={j.ref} saved={savedRefs.has(j.ref)} />
         ))}
       </ol>
     );
@@ -204,15 +166,17 @@ export default async function JobsPage() {
   if (!page) redirect("/login");
   const { setup, digests, historyError } = page;
   // Лише анкета людини з сесії й лише її надіслане: чужого вибір не бачить.
-  const now = await instantMatches(
-    { db: d, env: appEnv(), jobs: jobsDb, now: new Date() },
-    page.brief,
-    page.sentRefs,
-    page.fit,
-  );
+  const [now, savedRefs] = await Promise.all([
+    instantMatches({ db: d, env: appEnv(), jobs: jobsDb, now: new Date() }, page.brief, page.sentRefs, page.fit),
+    listSavedRefs(d, user.id),
+  ]);
   const noHistory = digests.length === 0 && !historyError;
   const empty = noHistory ? emptyState(setup) : null;
   const checked = now.state === "ok" ? checkedLine(now.checked, now.jobs.length) : null;
+  // Раунд 5, п.16: межа Today/Earlier у поясі людини (en-CA дає YYYY-MM-DD напряму).
+  const todayLocalDate = new Intl.DateTimeFormat("en-CA", { timeZone: setup.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
+    new Date(),
+  );
 
   return (
     <AccountShell active="jobs" title="Your jobs" wide>
@@ -231,7 +195,7 @@ export default async function JobsPage() {
               <p className={HINT}>Picked just now by the same rules as your daily list, one job per company.</p>
             ) : null}
           </div>
-          <JobsNow now={now} />
+          <JobsNow now={now} savedRefs={savedRefs} />
         </section>
 
         <aside className="grid gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
@@ -263,11 +227,7 @@ export default async function JobsPage() {
                 </Link>
               </div>
             ) : (
-              <div className="grid gap-8">
-                {digests.map((digest) => (
-                  <Digest key={digest.digestId} digest={digest} />
-                ))}
-              </div>
+              <HistoryTabs digests={digests} savedRefs={[...savedRefs]} todayLocalDate={todayLocalDate} />
             )}
           </section>
         ) : null}

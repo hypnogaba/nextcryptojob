@@ -5,7 +5,7 @@ import { addCompany, crmDb, run } from "@/test/crm-fixtures";
 import { jobsTestDb } from "@/test/jobs-db";
 import { type TestDb } from "@/test/sqlite-d1";
 import { resetCompanyProfiles } from "@/lib/jobs/companies";
-import { HISTORY_LIMIT, loadJobsPage } from "./history";
+import { HISTORY_DAYS, HISTORY_LIMIT, loadJobsPage } from "./history";
 
 let t: TestDb;
 let nr: TestDb;
@@ -146,12 +146,12 @@ describe("loadJobsPage: what it shows", () => {
     expect(jobsCalls).toHaveLength(1);
   });
 
-  it("shows only delivered rows from the last 14 days", async () => {
+  it(`shows only delivered rows from the last ${HISTORY_DAYS} days`, async () => {
     for (const id of ["ok", "failed", "pending", "old"]) nrJob(id);
     digest("ada", "dg_ok", "2026-09-12", ["nr:ok"]);
     digest("ada", "dg_failed", "2026-09-11", ["nr:failed"], { status: "failed", runStatus: "failed" });
     digest("ada", "dg_pending", "2026-09-10", ["nr:pending"], { status: "pending", runStatus: "pending" });
-    digest("ada", "dg_old", "2026-08-20", ["nr:old"], { age: "-15 days" });
+    digest("ada", "dg_old", "2026-08-01", ["nr:old"], { age: `-${HISTORY_DAYS + 1} days` });
 
     expect(refsOf(await loadJobsPage(t.d1, jobs, "ada"))).toEqual([["2026-09-12", ["nr:ok"]]]);
   });
