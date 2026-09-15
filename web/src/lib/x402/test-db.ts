@@ -103,9 +103,10 @@ export interface TestDb {
 
 /**
  * База в пам'яті з накоченими міграціями `db/migrations` до `upTo` включно
- * (типово всі до 0016: ядро, вхід, CRM, оплата, «Paid without result»).
+ * (типово всі до 0025: ядро, вхід, CRM, оплата, «Paid without result», …, svm_transaction і
+ * reminded_at з 0025_solana_pay, п.8).
  */
-export function createTestDb(upTo = "0016"): TestDb {
+export function createTestDb(upTo = "0025"): TestDb {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
   const files = readdirSync(MIGRATIONS_DIR)

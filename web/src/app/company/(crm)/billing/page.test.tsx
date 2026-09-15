@@ -7,7 +7,7 @@ import { syncStripeSubscription } from "@/lib/billing/webhook";
 import type { AppEnv } from "@/lib/db";
 import { addCompany, addMember, addSubscription, addUser, crmDb } from "@/test/crm-fixtures";
 import { exec, harness, RedirectCalled, resetHarness } from "@/test/harness";
-import { openPortalAction, startCheckoutAction } from "./actions";
+import { checkSolanaPayInvoiceAction, createSolanaPayInvoiceAction, openPortalAction, startCheckoutAction } from "./actions";
 import BillingPage from "./page";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
@@ -25,6 +25,10 @@ const STRIPE_ON = {
   STRIPE_SECRET_KEY: "sk_test_fake",
   STRIPE_PRICE_ID: "price_1S9xNcjTestMonthly",
   STRIPE_WEBHOOK_SECRET: "whsec_test",
+};
+const SOLANA_PAY_ON = {
+  NCJ_PAY_ADDRESS: "6XsRJx1yp4AcNk19wZkaK4y3GCcMd4aArny6owTqCt6L",
+  SOLANA_RPC_URL: "https://helius.example/rpc",
 };
 let fake: FakeStripe;
 let company: string;
@@ -66,17 +70,19 @@ async function stripeSays(o: Parameters<typeof subscription>[0]) {
   await syncStripeSubscription({ db: harness.env.DB, stripe: fake }, sub.id);
 }
 
-describe("billing page without Stripe keys", () => {
+describe("billing page (п.8, 15.09: card payment removed, Solana Pay in its place)", () => {
   beforeEach(async () => {
     setup();
     await signIn(owner);
   });
 
-  it("says card payments are coming soon and shows the USDC x402 steps", async () => {
+  it("without NCJ_PAY_ADDRESS/SOLANA_RPC_URL says Solana Pay is not set up, and shows the USDC x402 steps", async () => {
     const html = await render();
-    expect(html).toContain("Card payments are coming soon.");
+    expect(html).toContain("Pay with Solana Pay");
+    expect(html).toContain("Solana Pay is not set up yet. Write to support@nextcryptojob.xyz for access.");
+    expect(html).not.toContain("Card payments");
     expect(html).not.toContain("Start 14-day trial");
-    expect(html).not.toContain("Manage billing");
+    expect(html).not.toContain("plus VAT");
     expect(html).toContain("Pay with USDC (x402)");
     expect(html).toContain("curl -i -X POST https://nextcryptojob.xyz/api/v1/billing/usdc-month");
     expect(html).toContain('-H "PAYMENT-SIGNATURE: $PAYMENT"');
@@ -84,19 +90,9 @@ describe("billing page without Stripe keys", () => {
     expect(html).toContain("No subscription");
   });
 
-  it("the checkout button, if pressed anyway, comes back with the same message", async () => {
+  it("the checkout button, if pressed anyway, still redirects with not_configured (Stripe code stays, just disconnected from the UI)", async () => {
     expect(await redirectOf(startCheckoutAction)).toBe("/company/billing?error=not_configured");
-    expect(await render({ error: "not_configured" })).toContain("Card payments are coming soon.");
-  });
-
-  it("keeps cards off while the webhook secret is missing", async () => {
-    setup({ STRIPE_SECRET_KEY: "sk_test_fake", STRIPE_PRICE_ID: "price_1S9xNcjTestMonthly" });
-    await signIn(owner);
-    const html = await render();
-    expect(html).toContain("Card payments are coming soon.");
-    expect(html).not.toContain("Start 14-day trial");
-    expect(await redirectOf(startCheckoutAction)).toBe("/company/billing?error=not_configured");
-    expect(fake.checkoutCalls).toEqual([]);
+    expect(await render({ error: "not_configured" })).toContain("Payment is not set up yet. Write to support@nextcryptojob.xyz for access.");
   });
 
   it("shows manual access from an admin with the trial banner", async () => {
@@ -107,7 +103,7 @@ describe("billing page without Stripe keys", () => {
     expect(html).toContain("Trial: 5 days left.");
   });
 
-  it("shows a paid USDC period", async () => {
+  it("shows a paid USDC period (x402 or Solana Pay: the same subscriptions row either way)", async () => {
     addSubscription(harness.raw, company, { provider: "usdc", status: "active", end: "2099-01-01 00:00:00" });
     const html = await render();
     expect(html).toContain("Paid in USDC");
@@ -115,14 +111,52 @@ describe("billing page without Stripe keys", () => {
   });
 });
 
-describe("billing page with Stripe", () => {
+describe("Solana Pay section", () => {
+  beforeEach(async () => {
+    setup(SOLANA_PAY_ON);
+    await signIn(owner);
+  });
+
+  it("offers a payment link when configured and no invoice is open yet", async () => {
+    const html = await render();
+    expect(html).toContain("Get payment link");
+    expect(html).not.toContain("Solana Pay is not set up yet");
+  });
+
+  it("creating an invoice redirects to the same page with ?invoice=<id>, which then shows the QR and the wallet link", async () => {
+    const to = await redirectOf(createSolanaPayInvoiceAction);
+    expect(to).toMatch(/^\/company\/billing\?invoice=spi_/);
+    const invoiceId = to.split("invoice=")[1]!;
+    const html = await render({ invoice: invoiceId });
+    expect(html).toContain("100 USDC");
+    expect(html).toContain(`solana:${SOLANA_PAY_ON.NCJ_PAY_ADDRESS}?amount=100`);
+    expect(html).toContain("spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    expect(html).toContain("reference=");
+    expect(html).toContain("<svg");
+    expect(html).toContain("Check now");
+  });
+
+  it("checking an invoice that has not paid yet comes back pending, with a hint to wait", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: [] }), { status: 200 })));
+    const to = await redirectOf(createSolanaPayInvoiceAction);
+    const invoiceId = to.split("invoice=")[1]!;
+    const form = new FormData();
+    form.set("invoice_id", invoiceId);
+    const checked = await redirectOf(() => checkSolanaPayInvoiceAction(form));
+    expect(checked).toBe(`/company/billing?invoice=${invoiceId}&checked=1`);
+    const html = await render({ invoice: invoiceId, checked: "1" });
+    expect(html).toContain("Not found yet");
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("billing page with Stripe (code stays for a legacy customer, no new checkout from the UI)", () => {
   beforeEach(async () => {
     setup(STRIPE_ON);
     await signIn(owner);
   });
 
-  it("offers the 14-day trial to a new company and sends the owner to Checkout", async () => {
-    expect(await render()).toContain("Start 14-day trial");
+  it("starting checkout directly still works (the action is not deleted, only unlinked from the page)", async () => {
     expect(await redirectOf(startCheckoutAction)).toBe("https://checkout.stripe.com/c/pay/cs_test_1");
     expect(fake.checkoutCalls[0]).toMatchObject({
       client_reference_id: company,
@@ -132,21 +166,18 @@ describe("billing page with Stripe", () => {
     });
   });
 
-  it("offers Subscribe without trial after the trial was used, and Manage billing for the old customer", async () => {
+  it("shows a canceled Stripe subscription's status, without a card upsell", async () => {
     await stripeSays({ id: "sub_old", customer: "cus_acme", status: "canceled", trialEnd: days(-40), canceledAt: days(-10) });
     const html = await render();
-    expect(html).toContain("Subscribe");
-    expect(html).not.toContain("Start 14-day trial");
-    expect(html).toContain("Manage billing");
     expect(html).toContain("Canceled");
+    expect(html).not.toContain("Start 14-day trial");
+    expect(html).not.toContain("Subscribe</button>");
   });
 
-  it("shows the trial and only Manage billing while a Stripe trial runs", async () => {
-    await stripeSays({ id: "sub_t", customer: "cus_acme", status: "trialing", periodEnd: days(10), trialEnd: days(10) });
+  it("still shows Payment failed and lets an owner reach the Stripe portal for an existing incomplete payment", async () => {
+    await stripeSays({ id: "sub_inc", customer: "cus_acme", status: "incomplete" });
     const html = await render();
-    expect(html).toContain("Trial until");
-    expect(html).toContain("Trial: 10 days left.");
-    expect(html).not.toContain("Start 14-day trial");
+    expect(html).toContain("Confirm your payment to start the subscription.");
     expect(html).toContain("Manage billing");
     expect(await redirectOf(openPortalAction)).toBe("https://billing.stripe.com/p/session/test_1");
   });
@@ -172,25 +203,6 @@ describe("billing page with Stripe", () => {
     expect(await render()).toContain("It will not renew.");
   });
 
-  it("asks to confirm the payment when the first payment needs action", async () => {
-    await stripeSays({ id: "sub_inc", customer: "cus_acme", status: "incomplete" });
-    const html = await render();
-    expect(html).toContain("Confirm your payment to start the subscription.");
-    expect(html).toContain("Manage billing");
-  });
-
-  it("gives no trial to an owner who already used one in another company", async () => {
-    const old = addCompany(harness.raw, { name: "Old Labs" });
-    addMember(harness.raw, old, owner, "owner");
-    addSubscription(harness.raw, old, { provider: "manual", status: "trialing" });
-    // Сторінка про нову компанію (Acme Labs), не про стару.
-    harness.jar.set("ncj_company", company);
-    const html = await render();
-    expect(html).toContain("Acme Labs");
-    expect(html).toContain("Subscribe");
-    expect(html).not.toContain("Start 14-day trial");
-  });
-
   it("the portal needs a Stripe customer first", async () => {
     expect(await redirectOf(openPortalAction)).toBe("/company/billing?error=no_customer");
   });
@@ -201,16 +213,16 @@ describe("billing page with Stripe", () => {
 });
 
 describe("billing page for people who are not the owner", () => {
-  it("a member sees the status but cannot pay", async () => {
-    setup(STRIPE_ON);
+  it("a member sees the status but cannot pay with Solana Pay or start a card checkout", async () => {
+    setup({ ...STRIPE_ON, ...SOLANA_PAY_ON });
     const member = addUser(harness.raw, { email: "lee@acme.io" });
     addMember(harness.raw, company, member, "member");
     await signIn(member);
     const html = await render();
     expect(html).toContain("Only the company owner can manage billing.");
-    expect(html).not.toContain("Start 14-day trial");
     expect(await redirectOf(startCheckoutAction)).toBe("/company/billing?error=owner_only");
     expect(fake.checkoutCalls).toEqual([]);
+    expect(await redirectOf(createSolanaPayInvoiceAction)).toBe("/company/billing?error=owner_only");
   });
 
   it("a person without a company is told so", async () => {

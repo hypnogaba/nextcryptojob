@@ -141,16 +141,16 @@ describe("requirementsFor", () => {
     [
       "mainnet",
       readX402Config(CDP_ENV, "production"),
-      ["eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
-      ["0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"],
+      ["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
+      ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"],
     ],
     [
       "testnet",
       readX402Config(PAY_TO, "development"),
-      ["eip155:84532", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"],
-      ["0x036CbD53842c5426634e7929541eC2318f3dCF7e", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"],
+      ["solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"],
+      ["4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"],
     ],
-  ])("%s: Base and Solana at the same price for every paid action", async (_mode, config, networks, assets) => {
+  ])("%s: Solana at the same price for every paid action (п.8: лише Solana)", async (_mode, config, networks, assets) => {
     const gate = createPaymentGate({ db: t.db, config });
     for (const [action, amount] of [
       ["search_candidates", "500000"],
@@ -162,14 +162,13 @@ describe("requirementsFor", () => {
       });
       expect(set.accepts.map((a) => a.network)).toEqual(networks);
       expect(set.accepts.map((a) => a.asset)).toEqual(assets);
-      expect(set.accepts.map((a) => a.amount)).toEqual([amount, amount]);
-      expect(set.accepts.map((a) => a.payTo)).toEqual([EVM, SOL]);
+      expect(set.accepts.map((a) => a.amount)).toEqual([amount]);
+      expect(set.accepts.map((a) => a.payTo)).toEqual([SOL]);
       expect(set.accepts.every((a) => a.scheme === "exact" && a.maxTimeoutSeconds === 60)).toBe(true);
     }
     const set = await gate.requirementsFor("search_candidates", SEARCH);
-    expect(set.accepts[0].extra).toEqual(_mode === "mainnet" ? { name: "USD Coin", version: "2" } : { name: "USDC", version: "2" });
     // feePayer для Solana бере фасилітатор із /supported.
-    expect(set.accepts[1].extra).toEqual({ feePayer: FEE_PAYER });
+    expect(set.accepts[0].extra).toEqual({ feePayer: FEE_PAYER });
   });
 
   it("asks the facilitator for /supported once per isolate, not on every request", async () => {
@@ -249,7 +248,7 @@ describe("withPayment", () => {
     expect(out.value).toEqual({ results: ["cand-1", "cand-2"] });
     expect(effect).toHaveBeenCalledOnce();
     expect(facilitator.calls.map((c) => c.op)).toEqual(["verify", "effect", "settle"]);
-    expect(out.settlement).toMatchObject({ success: true, transaction: "0xtx1", network: "eip155:84532" });
+    expect(out.settlement).toMatchObject({ success: true, transaction: "0xtx1", network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" });
 
     const [row] = rows();
     expect(row).toMatchObject({
@@ -257,9 +256,9 @@ describe("withPayment", () => {
       status: "settled",
       tx: "0xtx1",
       payer: PAYER,
-      network: "eip155:84532",
-      asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-      pay_to: EVM,
+      network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+      asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      pay_to: SOL,
       amount_atomic: "500000",
       amount_usd_cents: 50,
       action: "search_candidates",
@@ -296,8 +295,8 @@ describe("withPayment", () => {
   it("accepts the MCP payment object on Solana as well as the base64 header", async () => {
     const { run } = search();
     const set = await freshSet();
-    const solana: PaymentPayload = { x402Version: 2, accepted: set.accepts[1], payload: { transaction: "AQAB-solana-tx" } };
-    facilitator.settle = () => Response.json({ success: true, transaction: "5solSig", network: set.accepts[1].network });
+    const solana: PaymentPayload = { x402Version: 2, accepted: set.accepts[0], payload: { transaction: "AQAB-solana-tx" } };
+    facilitator.settle = () => Response.json({ success: true, transaction: "5solSig", network: set.accepts[0].network });
     const out = await run({ payment: solana, input: PAGE1, resource: SEARCH, context: { channel: "mcp" } });
     expect(out).toMatchObject({ kind: "ok", settlement: { transaction: "5solSig" } });
     expect(rows()[0]).toMatchObject({ network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1", pay_to: SOL, status: "settled" });
@@ -337,7 +336,7 @@ describe("withPayment", () => {
     expect(again).toMatchObject({
       kind: "replay",
       payment: { id: first.payment.paymentId, status: "settled", tx: "0xtx1", paymentIdentifier: "pay_7d5d747be160e280504c" },
-      settlement: { success: true, transaction: "0xtx1", network: "eip155:84532" },
+      settlement: { success: true, transaction: "0xtx1", network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" },
     });
     expect(effect).toHaveBeenCalledOnce();
     expect(facilitator.calls.filter((c) => c.op === "settle")).toHaveLength(1);
@@ -538,7 +537,7 @@ describe("without keys", () => {
     const set = await gate.requirementsFor("search_candidates", SEARCH);
     expect(gate.enabled).toBe(true);
     expect(seen).toEqual(["https://x402.org/facilitator/supported"]);
-    expect(set.accepts.map((a) => a.network)).toEqual(["eip155:84532", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"]);
+    expect(set.accepts.map((a) => a.network)).toEqual(["solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"]);
   });
 });
 
@@ -589,7 +588,7 @@ describe("after money moved (review I1)", () => {
     const log = logged(errorLog);
     expect(log).toContain(String(paymentId));
     expect(log).toContain("0xtx1");
-    expect(log).toContain("eip155:84532");
+    expect(log).toContain("solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1");
   });
 
   it("a non-retryable D1 error is not retried", async () => {
@@ -730,20 +729,20 @@ describe("replay and malleability (review minors)", () => {
     expect(facilitator.calls.filter((c) => c.op === "settle")).toHaveLength(1);
   });
 
-  it("re-encoded variants of one EVM authorization (hex case, extra keys, key order) pay once", async () => {
+  it("re-encoded variants of one Solana payment (extra sibling key, reordered envelope) pay once (svm_transaction, 0025)", async () => {
     const gate = createPaymentGate({ db: t.db, config: devConfig() });
     const effect = vi.fn(async () => "intro");
     const run = gate.withPayment("request_intro", "before_effect", { effect });
     const set = await gate.requirementsFor("request_intro", SEARCH);
-    const a = evmPayment(set);
-    const auth = a.payload.authorization as Record<string, string>;
-    const b = { ...a, payload: { signature: String(a.payload.signature).toUpperCase().replace("0X", "0x"), authorization: { ...auth, from: auth.from.toUpperCase().replace("0X", "0x"), nonce: auth.nonce.toUpperCase().replace("0X", "0x") } } };
-    const c = { ...a, payload: { ...a.payload, junk: 1 } };
+    const a: PaymentPayload = { x402Version: 2, accepted: set.accepts[0], payload: { transaction: "AQAB-test-tx-malleability" } };
+    // Той самий payload.transaction, зайвий сусідній ключ у payload: payload_hash змінюється, а
+    // (network, svm_transaction) ловить, бо це один і той самий підписаний переказ.
+    const b = { ...a, payload: { ...a.payload, junk: 1 } };
     const reordered = Buffer.from(JSON.stringify({ payload: a.payload, accepted: a.accepted, x402Version: 2 })).toString("base64");
 
-    const out = await Promise.all([a, b, c, reordered].map((p) => run({ payment: p, input: PAGE1, resource: SEARCH, context: { channel: "rest" } })));
+    const out = await Promise.all([a, b, reordered].map((p) => run({ payment: p, input: PAGE1, resource: SEARCH, context: { channel: "rest" } })));
     expect(out.filter((o) => o.kind === "ok")).toHaveLength(1);
-    expect(out.filter((o) => o.kind === "error" && o.error.code === "payment_reused")).toHaveLength(3);
+    expect(out.filter((o) => o.kind === "error" && o.error.code === "payment_reused")).toHaveLength(2);
     expect(effect).toHaveBeenCalledOnce();
     expect(facilitator.calls.filter((c) => c.op === "settle")).toHaveLength(1);
   });

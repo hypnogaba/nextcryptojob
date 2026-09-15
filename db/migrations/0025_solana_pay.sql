@@ -12,6 +12,12 @@
 -- reminded_at на subscriptions: нагадування за 3 дні до кінця конкретного оплаченого періоду
 -- (провайдер 'usdc', і x402, і Solana Pay), щоб не надсилати його двічі за той самий рядок.
 --
+-- x402_payments.svm_transaction: другий UNIQUE для Solana, як evm_from/evm_nonce для EVM (0004_billing,
+-- lib/x402/server.ts paymentPayloadHash): payload_hash ловить точний повтор запиту, але лишає повторний
+-- платіж дійсним, якщо клієнт передав той самий payload.transaction із зайвим сусіднім ключем чи іншим
+-- порядком полів обгортки, — а лише Solana тепер (п.8) означає, що це єдина мережа, яку варто цим
+-- покрити. NULL для EVM-платежів (їх уже нема, лишились у базі, якщо колись були).
+--
 -- Номер 0025: 0024 лишений іншій доріжці цієї ж пачки. Накочує controller, ДО деплою коду; локально
 -- перевірено на sqlite (SqliteD1). Код без цієї міграції: створення рахунку Solana Pay ловить
 -- "no such table" і каже, що недоступно, решта білінгу (Stripe, x402) як була.
@@ -35,5 +41,9 @@ CREATE INDEX IF NOT EXISTS idx_solana_pay_pending ON solana_pay_invoices(status,
 CREATE UNIQUE INDEX IF NOT EXISTS uq_solana_pay_tx ON solana_pay_invoices(tx) WHERE tx IS NOT NULL;
 
 ALTER TABLE subscriptions ADD COLUMN reminded_at TEXT;
+
+ALTER TABLE x402_payments ADD COLUMN svm_transaction TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_x402_svm_transaction ON x402_payments(network, svm_transaction)
+    WHERE svm_transaction IS NOT NULL;
 
 INSERT OR IGNORE INTO schema_migrations(name) VALUES ('0025_solana_pay');

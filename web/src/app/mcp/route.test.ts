@@ -212,7 +212,7 @@ describe("x402 through _meta", () => {
       error: "Payment required",
       resource: { url: "mcp://tool/search_candidates" },
     });
-    expect(required.accepts.map((a: { amount: string }) => a.amount)).toEqual(["500000", "500000"]);
+    expect(required.accepts.map((a: { amount: string }) => a.amount)).toEqual(["500000"]);
 
     const paid = await callTool(POST, "search_candidates", {}, { payment: evmPayment(required) });
     expect(paid.isError).toBeUndefined();
@@ -254,7 +254,7 @@ describe("x402 through _meta", () => {
     const res = await callTool(POST, "search_candidates", {});
     expect(res.isError).toBe(true);
     expect(res.structuredContent.error).toMatchObject({ code: "not_configured" });
-    expect(res.structuredContent.error.message).toContain("not configured: X402_PAY_TO_EVM");
+    expect(res.structuredContent.error.message).toContain("not configured: X402_PAY_TO_SOLANA");
     expect(net.verify + net.settle).toBe(0);
   });
 });

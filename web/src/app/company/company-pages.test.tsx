@@ -105,7 +105,7 @@ describe("company registration", () => {
 
     const page = await html(BillingPage(params({ welcome: "1" })));
     expect(page).toContain("Your company is ready. Choose how to start.");
-    expect(page).toContain("Pay 100 USDC for 30 days");
+    expect(page).toContain("Pay 100 USDC on Solana");
     expect(page).toContain("Continue with pay per request (API only)");
     const shell = await html(CrmLayout({ children: null }));
     expect(shell).toContain("Acme Labs");
