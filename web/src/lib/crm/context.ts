@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { sha256Hex } from "@/lib/auth/hash";
 import { currentUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
+import type { SolanaPayEnv } from "@/lib/billing/solana-pay";
 import type { X402Env } from "@/lib/x402/config";
 import type { ActorRole } from "./permissions";
 import { ActionError } from "./types";
@@ -66,7 +67,7 @@ export type Actor =
   | { kind: "admin"; userId: string };
 
 /** Змінні оточення, які читає CRM. Секрети лише як рядки; відсутні = undefined. */
-export type CrmEnv = X402Env & {
+export type CrmEnv = X402Env & SolanaPayEnv & {
   SESSION_SECRET?: string;
   RL_API?: RateLimit;
   RL_WEB?: RateLimit;
