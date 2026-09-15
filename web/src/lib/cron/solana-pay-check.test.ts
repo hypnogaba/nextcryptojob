@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createInvoice, findConfirmedMonth, loadInvoice, USDC_MINT_MAINNET } from "@/lib/billing/solana-pay";
+import { createInvoice, findConfirmedMonth, loadInvoice, SOLANA_PAY_INVOICE_TTL_MINUTES, USDC_MINT_MAINNET } from "@/lib/billing/solana-pay";
 import { addCompany, crmDb } from "@/test/crm-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
 import { checkPendingSolanaPay } from "./solana-pay-check";
@@ -20,7 +20,7 @@ beforeEach(() => {
 describe("checkPendingSolanaPay", () => {
   it("without NCJ_PAY_ADDRESS/SOLANA_RPC_URL only expires stale invoices, asks the network for nothing", async () => {
     vi.stubGlobal("fetch", vi.fn());
-    const stale = await createInvoice(db.d1, company, null, new Date(NOW.getTime() - 120 * 60_000));
+    const stale = await createInvoice(db.d1, company, null, new Date(NOW.getTime() - 2 * SOLANA_PAY_INVOICE_TTL_MINUTES * 60_000));
     const res = await checkPendingSolanaPay(db.d1, {}, NOW);
     expect(res).toEqual({ expired: 1, checked: 0, confirmed: 0, errors: 0 });
     expect(fetch).not.toHaveBeenCalled();

@@ -112,7 +112,8 @@ export async function checkSolanaPayInvoiceAction(form: FormData): Promise<void>
   const invoiceId = String(form.get("invoice_id") ?? "");
   const invoice = await loadInvoice(db(), companyId, invoiceId);
   if (!invoice) fail("not_found");
-  if (invoice.status !== "pending") redirect(`${BILLING}?invoice=${invoice.id}`);
+  // Прострочений рахунок теж перевіряємо: платіж міг прийти після строку посилання, гроші вже в гаманці власника.
+  if (invoice.status === "confirmed") redirect(`${BILLING}?invoice=${invoice.id}`);
 
   const config = readSolanaPayConfig(appEnv() as unknown as SolanaPayEnv);
   if (!config.enabled) fail("not_configured");

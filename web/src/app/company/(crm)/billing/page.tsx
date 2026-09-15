@@ -176,7 +176,7 @@ function Banners({
   return out.length > 0 ? <div className="grid gap-3">{out}</div> : null;
 }
 
-const CLOCK = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false });
+const CLOCK = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false });
 
 /**
  * Solana Pay (п.8, 15.09, РІШЕННЯ ВЛАСНИКА: лише Solana): 100 USDC/міс з власного гаманця людини,
@@ -264,7 +264,22 @@ function SolanaPaySection({
             100 USDC for 30 days, from your own wallet: scan a QR or open the link with any Solana wallet (Phantom,
             Solflare, and the rest). No card, no VAT. Access does not renew on its own.
           </p>
-          {invoice?.status === "expired" ? <p className="mt-2 text-sm text-ink-muted">That payment link expired. Get a new one below.</p> : null}
+          {invoice?.status === "expired" ? (
+            <div className="mt-2 grid gap-2">
+              <p className="text-sm text-ink-muted">That payment link expired. Get a new one below. Already paid with it? Check it first.</p>
+              {checked ? (
+                <p role="status" className="rounded-lg border border-line bg-wash px-4 py-3 text-sm text-ink">
+                  No payment found for that link.
+                </p>
+              ) : null}
+              <form action={checkSolanaPayInvoiceAction}>
+                <input type="hidden" name="invoice_id" value={invoice.id} />
+                <Button type="submit" variant="outline" className="h-11 px-4 text-base">
+                  Check my payment
+                </Button>
+              </form>
+            </div>
+          ) : null}
           <form action={createSolanaPayInvoiceAction} className="mt-4">
             <Button type="submit" className="h-11 px-4 text-base">
               Get payment link

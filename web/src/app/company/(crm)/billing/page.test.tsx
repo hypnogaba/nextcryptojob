@@ -148,6 +148,29 @@ describe("Solana Pay section", () => {
     expect(html).toContain("Not found yet");
     vi.unstubAllGlobals();
   });
+
+  it("a payment that lands after the link expired still gives access when the owner checks it", async () => {
+    const usdc = (owner: string, amount: number) => ({
+      accountIndex: 0, mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", owner, uiTokenAmount: { amount: String(amount * 1_000_000), decimals: 6 },
+    });
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { method: string; id: number };
+      const result = body.method === "getSignaturesForAddress"
+        ? [{ signature: "sigLate", err: null }]
+        : { meta: { err: null, preTokenBalances: [usdc(SOLANA_PAY_ON.NCJ_PAY_ADDRESS, 0)], postTokenBalances: [usdc(SOLANA_PAY_ON.NCJ_PAY_ADDRESS, 100)] } };
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, result }), { status: 200 });
+    }));
+    const to = await redirectOf(createSolanaPayInvoiceAction);
+    const invoiceId = to.split("invoice=")[1]!;
+    exec("UPDATE solana_pay_invoices SET status = 'expired', expires_at = '2020-01-01 00:00:00' WHERE id = ?", invoiceId);
+    expect(await render({ invoice: invoiceId })).toContain("Check my payment");
+
+    const form = new FormData();
+    form.set("invoice_id", invoiceId);
+    expect(await redirectOf(() => checkSolanaPayInvoiceAction(form))).toBe(`/company/billing?invoice=${invoiceId}`);
+    expect(await render()).toContain("Paid in USDC");
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("billing page with Stripe (code stays for a legacy customer, no new checkout from the UI)", () => {

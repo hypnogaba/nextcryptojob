@@ -20,8 +20,12 @@ export const SOLANA_PAY_AMOUNT_USDC = 100;
 export const SOLANA_PAY_MONTH_DAYS = 30;
 /** За стільки днів до кінця оплаченого періоду нагадати (lib/cron/billing-reminders.ts). */
 export const SOLANA_PAY_REMINDER_DAYS = 3;
-/** Рахунок, який довше не підтвердився, більше не рахуємо «pending» на очах у людини (cron все одно спробує востаннє). */
-export const SOLANA_PAY_INVOICE_TTL_MINUTES = 60;
+/**
+ * Рахунок, який довше не підтвердився, більше не рахуємо «pending» і cron його не перевіряє. Доба, а не година:
+ * людина може відкрити QR зі старої вкладки; «Check now» перевіряє й прострочений рахунок (billing/actions.ts),
+ * щоб пізній платіж не загубився.
+ */
+export const SOLANA_PAY_INVOICE_TTL_MINUTES = 24 * 60;
 
 /** USDC на mainnet-beta (адреса з завдання, та сама, що X402_PAY_TO_SOLANA дивиться зі свого mint). */
 export const USDC_MINT_MAINNET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
