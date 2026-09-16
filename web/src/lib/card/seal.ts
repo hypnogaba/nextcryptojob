@@ -22,7 +22,12 @@ const OUTER = 92;
 /** Кожен наступний шар менший на 8.5% від зовнішнього. */
 const STEP = 0.085;
 
-export type SealDensity = "page" | "share";
+/**
+ * «dense» (16.09, власник: «мені оцей дизайн більше подобався, як для соцмереж»): густа розетка,
+ * як на аватарі бренду, з підлогою в 8 шарів і більшою кількістю пелюсток. Саме її носить картка
+ * й картинки для X. «page» лишається для дрібних місць, «share» для мініатюр.
+ */
+export type SealDensity = "page" | "share" | "dense";
 
 export type SealLayer = {
   /** Кількість пелюсток (порядок симетрії). */
@@ -50,14 +55,18 @@ export function sealSeed(source: { wallet?: string | null; slug?: string | null 
  */
 export function makeSeal(seed: number, level: number, density: SealDensity = "page"): SealLayer[] {
   if (!Number.isFinite(level)) throw new RangeError(`level must be a finite number, got ${level}`);
-  const layers = Math.min(10, Math.max(1, Math.trunc(level)));
+  const floor = density === "dense" ? 8 : 1;
+  const layers = Math.min(10, Math.max(floor, Math.trunc(level)));
   const rand = mulberry32(seed);
   const out: SealLayer[] = [];
   for (let i = 0; i < layers; i++) {
     const pagePetals = 8 + Math.floor(rand() * 18); // 8..25
     const ratio = 0.14 + rand() * 0.46; // перо 0.14..0.6 від основного кола
     const turn = rand();
-    const petals = density === "share" ? 5 + Math.floor((pagePetals - 8) / 2) : pagePetals;
+    const petals =
+      density === "share" ? 5 + Math.floor((pagePetals - 8) / 2)
+      : density === "dense" ? pagePetals + 8
+      : pagePetals;
     const reach = OUTER * (1 - i * STEP);
     const a = reach / (1 + ratio);
     out.push({ petals, a, b: a * ratio, phase: (turn * 2 * Math.PI) / petals });

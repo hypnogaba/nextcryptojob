@@ -83,12 +83,14 @@ describe("Seal", () => {
 });
 
 describe("Seal motion", () => {
-  it("spins only where asked: the landing's small card and the /scoring card, never a real card by default", () => {
+  it("spins on every card by default, and stands still where a page asks for it (lists of many cards)", () => {
     const seal = (spin?: boolean) => renderToStaticMarkup(<Seal seed={42} level={8} inks={["#000000", "#555555"]} spin={spin} />);
     expect(seal(true)).toContain('class="ncj-seal ncj-seal-spin"');
     expect(seal()).not.toContain("ncj-seal-spin");
-    expect(renderToStaticMarkup(<CardFront face={exampleFace()} draw />)).not.toContain("ncj-seal-spin");
-    expect(renderToStaticMarkup(<CardFront face={exampleFace()} draw spin />)).toContain("ncj-seal ncj-seal-draw ncj-seal-spin");
+    // Власник 16.09: «щоб рухалися всі елементи, так крутилися». Картка крутиться скрізь,
+    // окрім місць, де їх багато на сторінці (лідерборд просить spin={false}).
+    expect(renderToStaticMarkup(<CardFront face={exampleFace()} draw />)).toContain("ncj-seal-spin");
+    expect(renderToStaticMarkup(<CardFront face={exampleFace()} spin={false} />)).not.toContain("ncj-seal-spin");
   });
 });
 

@@ -19,7 +19,7 @@ import { Seal } from "./seal";
 export function CardFront({
   face,
   draw = false,
-  spin = false,
+  spin = true,
   /** Світлова смуга по аркушу (лише жива картка на головній). */
   sweep = false,
   /** Не показувати позначку «Example card»: на головній її замінює підпис під карткою. */
@@ -57,8 +57,9 @@ export function CardFront({
               seed={face.sealSeed}
               level={t.sealLayers}
               inks={t.sealInks}
-              strokeWidth={0.9}
+              strokeWidth={0.7}
               segments={8}
+              density="dense"
               draw={draw}
               spin={spin}
               className="ncj-medal-seal"

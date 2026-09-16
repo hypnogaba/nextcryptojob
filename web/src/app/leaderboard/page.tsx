@@ -108,7 +108,7 @@ export default async function LeaderboardPage() {
                     {rank}
                   </span>
                   <span className="ncj-card w-[104px] shrink-0 sm:w-[148px]">
-                    <CardFront face={face} hideTag />
+                    <CardFront face={face} spin={false} hideTag />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-lg font-semibold text-ink">{row.display_name}</span>

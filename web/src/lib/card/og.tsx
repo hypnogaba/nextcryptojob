@@ -75,7 +75,7 @@ const flex = (style: CSSProperties): CSSProperties => ({ display: "flex", ...sty
 function sealImage(view: CardView, ring: number): string {
   const t = view.tier;
   const strokeWidth = Math.max(0.28, 240 / ring);
-  return sealDataUri(makeSeal(view.sealSeed ?? 0, t.sealLayers), { inks: t.sealInks, strokeWidth, size: ring });
+  return sealDataUri(makeSeal(view.sealSeed ?? 0, t.sealLayers, "dense"), { inks: t.sealInks, strokeWidth, size: ring });
 }
 
 /**
