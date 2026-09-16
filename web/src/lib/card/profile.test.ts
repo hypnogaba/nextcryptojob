@@ -87,13 +87,16 @@ describe("profileView public", () => {
     expect(x.lines.map((l) => l.id)).toEqual(["x.followers", "x.own30d"]);
   });
 
-  it("sums wallets without addresses", () => {
-    const w = view.groups.find((g) => g.key === "wallets")!;
-    expect(w.lines.map((l) => l.text)).toEqual(["Onchain for 6+ years", "Active on Ethereum", "400 transactions", "20 trades"]);
+  it("never shows onchain activity to a stranger (item 4): no wallets group, no transaction counts", () => {
+    expect(view.groups.some((g) => g.key === "wallets")).toBe(false);
+    const json = JSON.stringify(view);
+    expect(json).not.toContain("transaction");
+    expect(json).not.toContain("trade");
+    expect(json).not.toContain("Onchain for");
   });
 
-  it("drops sources without facts", () => {
-    expect(view.groups.map((g) => g.key)).toEqual(["github", "x", "wallets"]);
+  it("drops sources without facts, and the wallets group even though it has facts", () => {
+    expect(view.groups.map((g) => g.key)).toEqual(["github", "x"]);
   });
 });
 
@@ -126,5 +129,11 @@ describe("profileView full", () => {
 
   it("refuses a malformed Telegram name", () => {
     expect(profileView({ ...INPUT, telegramUsername: "a b/c" }, "full").contact.telegram).toBeNull();
+  });
+
+  it("still sums onchain activity when the owner unlocked full view with their own key", () => {
+    const view = profileView(INPUT, "full");
+    const w = view.groups.find((g) => g.key === "wallets")!;
+    expect(w.lines.map((l) => l.text)).toEqual(["Onchain for 6+ years", "Active on Ethereum", "400 transactions", "20 trades"]);
   });
 });
