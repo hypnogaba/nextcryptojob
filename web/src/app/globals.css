@@ -874,24 +874,23 @@
      разом, а не лише сам фон на волосок темніший. Власник 16.09, п.8: ще помітніше, без нового
      кольору: межа товщає до 2px, кільце фокуса ширше й щільніше, а фон трохи темніший за soft-2,
      той самий прийом, що вже є на кнопках (color-mix soft-2 + ink, button.tsx). */
+  /* Межа завжди 2px: анімувати товщину не можна, це смикає верстку на кожен фокус
+     (міняється лише колір, кільце фокуса і фон). */
   .ncj-brief {
-    border: 1.5px solid var(--line-strong);
+    border: 2px solid var(--line-strong);
     border-radius: 18px;
     background: var(--surface);
     padding: 16px 16px 12px;
-    transition: border-color 300ms var(--ease-out), border-width 300ms var(--ease-out), box-shadow 300ms var(--ease-out),
-      background-color 300ms var(--ease-out);
+    transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out), background-color 300ms var(--ease-out);
   }
   .ncj-brief:focus-within {
     border-color: var(--ink);
-    border-width: 2px;
     box-shadow: 0 0 0 5px rgb(14 15 18 / 16%);
     background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
   }
   .ncj-brief:has(textarea:not(:placeholder-shown)) {
     background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
     border-color: var(--ink);
-    border-width: 2px;
   }
   .ncj-brief textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: 18px; line-height: 28px; min-height: 56px; }
   .ncj-brief textarea::placeholder { color: var(--ink-faint); }
@@ -900,15 +899,14 @@
      той самий явний перехід у прийнятий стан, зверху над спільними класами поля (form/styles.ts),
      тож інші поля форм фону не міняють (власник 16.09, п.5: лише це поле). Те саме посилення
      (власник 16.09, п.8), що на .ncj-brief вище: товща межа, ширше кільце, темніший фон. */
+  /* Той самий принцип: товщину не анімуємо, поле само по собі вже має межу зі спільних стилів. */
   textarea.ncj-role-active:not(:placeholder-shown) {
     background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
     border-color: var(--ink);
-    border-width: 2px;
   }
   textarea.ncj-role-active:focus-visible {
     background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
     border-color: var(--ink);
-    border-width: 2px;
     box-shadow: 0 0 0 5px rgb(14 15 18 / 16%);
   }
 }
