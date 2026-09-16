@@ -95,7 +95,25 @@ export default async function WelcomePage({ searchParams }: Props) {
     case "target":
       return shell(
         step,
-        "Tell us about the job you want next, the way you would tell a friend. The more you say, the better we match jobs for you.",
+        // Власник 16.09, п.2: одразу після входу, перед першим питанням, кажемо, чого чекати:
+        // кілька коротких питань, не мотиваційний лист, профіль з того, що людина вже зробила,
+        // а джерела (X, GitHub, гаманець) додає пізніше, не тут. Лише на першому проході
+        // (!editing): хто вже пройшов анкету й правує відповідь, це вже знає.
+        editing ? (
+          "Tell us about the job you want next, the way you would tell a friend. The more you say, the better we match jobs for you."
+        ) : (
+          <>
+            <p>
+              A few short questions next, not a cover letter. We build your profile from what you have already done
+              and published, not from what you write here. You will add sources like X, GitHub or a wallet in a later
+              step, not now.
+            </p>
+            <p className="mt-3">
+              Tell us about the job you want next, the way you would tell a friend. The more you say, the better we
+              match jobs for you.
+            </p>
+          </>
+        ),
         // Порожній бриф бере чернетку з головної (кука з /start).
         <TargetForm initial={answers.targetText || readBriefCookie((await cookies()).get(BRIEF_COOKIE)?.value)} />,
       );
