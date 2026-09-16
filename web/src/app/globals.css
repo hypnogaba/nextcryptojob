@@ -871,24 +871,46 @@
      коли текст уже є (:not(:placeholder-shown)), щоб було видно, що текст прийнято, навіть
      коли поле розфокусоване. Власник 16.09, п.5: попередня зміна фону (surface → soft) була
      ледь помітною; тепер і фокус, і прийнятий текст дають темніший фон (soft-2) і чорну межу
-     разом, а не лише сам фон на волосок темніший. */
+     разом, а не лише сам фон на волосок темніший. Власник 16.09, п.8: ще помітніше, без нового
+     кольору: межа товщає до 2px, кільце фокуса ширше й щільніше, а фон трохи темніший за soft-2 —
+     той самий прийом, що вже є на кнопках (color-mix soft-2 + ink, button.tsx). */
   .ncj-brief {
     border: 1.5px solid var(--line-strong);
     border-radius: 18px;
     background: var(--surface);
     padding: 16px 16px 12px;
-    transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out), background-color 300ms var(--ease-out);
+    transition: border-color 300ms var(--ease-out), border-width 300ms var(--ease-out), box-shadow 300ms var(--ease-out),
+      background-color 300ms var(--ease-out);
   }
-  .ncj-brief:focus-within { border-color: var(--ink); box-shadow: 0 0 0 4px rgb(14 15 18 / 10%); background: var(--soft-2); }
-  .ncj-brief:has(textarea:not(:placeholder-shown)) { background: var(--soft-2); border-color: var(--ink); }
+  .ncj-brief:focus-within {
+    border-color: var(--ink);
+    border-width: 2px;
+    box-shadow: 0 0 0 5px rgb(14 15 18 / 16%);
+    background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
+  }
+  .ncj-brief:has(textarea:not(:placeholder-shown)) {
+    background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
+    border-color: var(--ink);
+    border-width: 2px;
+  }
   .ncj-brief textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: 18px; line-height: 28px; min-height: 56px; }
   .ncj-brief textarea::placeholder { color: var(--ink-faint); }
 
   /* Те саме поле, слово в слово (питання «яку роль шукаєш»), на кроці 1 анкети /welcome:
      той самий явний перехід у прийнятий стан, зверху над спільними класами поля (form/styles.ts),
-     тож інші поля форм фону не міняють (власник 16.09, п.5: лише це поле). */
-  textarea.ncj-role-active:not(:placeholder-shown) { background: var(--soft-2); border-color: var(--ink); }
-  textarea.ncj-role-active:focus-visible { background: var(--soft-2); border-color: var(--ink); box-shadow: 0 0 0 4px rgb(14 15 18 / 10%); }
+     тож інші поля форм фону не міняють (власник 16.09, п.5: лише це поле). Те саме посилення
+     (власник 16.09, п.8), що на .ncj-brief вище: товща межа, ширше кільце, темніший фон. */
+  textarea.ncj-role-active:not(:placeholder-shown) {
+    background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
+    border-color: var(--ink);
+    border-width: 2px;
+  }
+  textarea.ncj-role-active:focus-visible {
+    background: color-mix(in oklch, var(--soft-2), var(--ink) 8%);
+    border-color: var(--ink);
+    border-width: 2px;
+    box-shadow: 0 0 0 5px rgb(14 15 18 / 16%);
+  }
 }
 
 @layer components {
