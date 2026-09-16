@@ -81,7 +81,7 @@ export default async function HomePage() {
           </form>
         </div>
 
-        <CardStack face={exampleFace(10)} />
+        <CardStack faces={[exampleFace(10), exampleFace(6), exampleFace(4), exampleFace(2)]} />
         <div className="ncj-wave" aria-hidden="true" style={{ backgroundImage: `url("${underprint}")` }} />
       </section>
 

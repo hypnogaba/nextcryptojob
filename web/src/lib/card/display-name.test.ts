@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DISPLAY_NAME_MAX, DisplayNameError, nameFontScale, normalizeDisplayName, suggestDisplayName } from "./display-name";
+import { DISPLAY_NAME_MAX, DisplayNameError, nameFitsOneLine, nameFontScale, normalizeDisplayName, suggestDisplayName } from "./display-name";
 
 describe("normalizeDisplayName", () => {
   it.each([
@@ -54,19 +54,29 @@ describe("suggestDisplayName", () => {
 
 // K2, раунд 5: довгий нік на картці («@KESTREL.DELACROIX») зменшує кегль, а не обрізає «…».
 describe("nameFontScale", () => {
-  it("keeps full size for short names", () => {
+  it("keeps full size for names that already fit on one line", () => {
     expect(nameFontScale("alice")).toBe(1);
     expect(nameFontScale("@ada_ships")).toBe(1);
   });
 
-  it("shrinks steadily as the name gets longer, never below the floor", () => {
+  it("shrinks a name that would wrap, in proportion to its length", () => {
+    // «@KESTREL.DEV» (12 символів) переносився на два рядки: тепер кегель трохи менший.
+    expect(nameFontScale("@KESTREL.DEV")).toBeLessThan(1);
+    expect(nameFontScale("@KESTREL.DEV")).toBeGreaterThan(0.85);
+    // Довге ім'я не мілішає нескінченно: нижче межі читабельності його краще перенести.
+    expect(nameFontScale("A".repeat(DISPLAY_NAME_MAX))).toBeGreaterThanOrEqual(0.62);
+    expect(nameFitsOneLine("@KESTREL.DEV")).toBe(true);
+    expect(nameFitsOneLine("A".repeat(DISPLAY_NAME_MAX))).toBe(false);
+  });
+
+  it("shrinks as the name gets longer, and stops at a readable floor", () => {
     const short = nameFontScale("@kestrel.dev");
     const long = nameFontScale("@kestrel.delacroix1234");
-    const max = nameFontScale("A".repeat(DISPLAY_NAME_MAX));
     expect(long).toBeLessThan(short);
-    expect(max).toBeLessThan(long);
-    expect(max).toBeGreaterThanOrEqual(0.55);
     expect(short).toBeLessThanOrEqual(1);
+    // Нижче межі читабельності кегель не падає, замість цього ім'я переноситься (nameFitsOneLine).
+    expect(nameFontScale("A".repeat(DISPLAY_NAME_MAX))).toBe(nameFontScale("A".repeat(DISPLAY_NAME_MAX * 2)));
+    expect(nameFitsOneLine("A".repeat(DISPLAY_NAME_MAX))).toBe(false);
   });
 
   it("never returns a scale that would need truncation logic to hide overflow", () => {

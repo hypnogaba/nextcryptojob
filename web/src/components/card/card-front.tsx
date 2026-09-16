@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { LogoMark } from "@/components/wordmark";
-import { nameFontScale } from "@/lib/card/display-name";
+import { nameFitsOneLine, nameFontScale } from "@/lib/card/display-name";
 import { MAX_LEVEL, tierVars } from "@/lib/card/tiers";
 import type { CardFace } from "@/lib/card/view";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,12 @@ export function CardFront({
           )}
         </div>
         <div className="ncj-bot">
-          <div className="ncj-bot-col ncj-name" style={{ "--name-scale": nameFontScale(face.displayName) } as CSSProperties}>
+          <div className="ncj-bot-col ncj-name" style={
+              {
+                "--name-scale": nameFontScale(face.displayName),
+                "--name-wrap": nameFitsOneLine(face.displayName) ? "nowrap" : "normal",
+              } as CSSProperties
+            }>
             <span>Name</span>
             <b>{face.displayName}</b>
           </div>

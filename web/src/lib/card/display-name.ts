@@ -62,14 +62,25 @@ export function isAllowedDisplayNameChar(char: string): boolean {
 }
 
 /**
- * Множник кегля для імені на картці (K2, раунд 5): 1 до 14 символів, далі плавно менше,
- * до DISPLAY_NAME_MAX (32) символів. Довге ім'я лишається читабельним, а не обрізаним «…».
+ * Множник кегля для імені на картці (K2, раунд 5; виправлено 16.09: «@KESTREL.DEV» переносився
+ * на два рядки). Ім'я мусить стояти в ОДИН рядок, тож кегель рахуємо від колонки NAME: при
+ * повному кеглі в неї входить FITS великих літер, довше ім'я зменшуємо рівно в стільки разів.
  * Спільна чиста функція для HTML-картки (card-front.tsx, cqw) і PNG (lib/card/og.tsx, px).
  */
 export function nameFontScale(name: string): number {
   const length = [...name].length || 1;
-  const SHORT = 14;
-  const FLOOR = 0.55;
-  if (length <= SHORT) return 1;
-  return Math.max(FLOOR, 1 - ((length - SHORT) * (1 - FLOOR)) / (DISPLAY_NAME_MAX - SHORT));
+  return Math.max(NAME_SCALE_FLOOR, Math.min(1, NAME_FITS / length));
+}
+
+/** Скільки великих літер стає в колонку NAME при повному кеглі (зміряно на картці 460 px). */
+const NAME_FITS = 11;
+/** Дрібніше вже не читається на телефоні, тож рідкісне довге ім'я краще перенести, ніж змилити. */
+const NAME_SCALE_FLOOR = 0.62;
+
+/**
+ * Чи стоїть ім'я в один рядок. До ~17 символів кегель ще дозволяє один рядок; довше ім'я
+ * (рідкість, ліміт DISPLAY_NAME_MAX) переносимо, бо менший кегель уже не прочитати.
+ */
+export function nameFitsOneLine(name: string): boolean {
+  return NAME_FITS / ([...name].length || 1) >= NAME_SCALE_FLOOR;
 }

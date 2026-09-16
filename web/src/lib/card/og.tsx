@@ -6,7 +6,7 @@
 // 24 px, тож обрізання до 1.91:1 нічого не з'їдає.
 import { ImageResponse } from "next/og";
 import type { CSSProperties } from "react";
-import { nameFontScale } from "./display-name";
+import { nameFitsOneLine, nameFontScale } from "./display-name";
 import cyrillic from "./fonts/ncj-cyrillic-600";
 import funnelDisplay from "./fonts/funnel-display-700";
 import funnelSans from "./fonts/funnel-sans-500";
@@ -128,10 +128,10 @@ function ShareCard({ view, width }: { view: CardView; width: number }) {
               lineHeight: 1.1,
               letterSpacing: u(0.005),
               textTransform: "uppercase",
-              // K2: кегель уже підібраний під довжину (nameFontScale); перенос лишається лише
-              // запасним планом, ніколи не обрізаємо «…».
+              // K2: кегель підібраний під довжину (nameFontScale), тож ім'я стоїть в один рядок
+              // і ніколи не обрізається «…».
+              whiteSpace: nameFitsOneLine(view.displayName) ? "nowrap" : "normal",
               overflowWrap: "break-word",
-              wordBreak: "break-word",
             }}
           >
             {view.displayName}
