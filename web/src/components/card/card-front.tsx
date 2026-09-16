@@ -12,7 +12,8 @@ import { Seal } from "./seal";
  * Квадрат ще й найкраще стоїть у стрічці X.
  *
  * Будова: знак і рядок сезону вгорі; печатка на весь аркуш, а бал у ЧИСТОМУ крузі посередині
- * (лінії печатки не йдуть по цифрах: круг непрозорий і лежить поверх); унизу нік і рівень.
+ * (лінії печатки не йдуть по цифрах: круг непрозорий і лежить поверх); у крузі лише бал і роль,
+ * рівень і обробка в рядку сезону, унизу нік і номер.
  * Шари печатки повільно обертаються (spin), сусідні в різні боки, і малюються один за одним
  * при появі (draw). Позначка «Example card» лише на face.kind === "example" і лише без hideTag.
  */
@@ -48,7 +49,9 @@ export function CardFront({
             <LogoMark className="ncj-brand-mark" />
             NextCryptoJob
           </span>
-          <span className="ncj-set">Season 1 · {t.finishName}</span>
+          <span className="ncj-set">
+            Season 1 · {t.finishName} · Level {face.level} of {MAX_LEVEL}
+          </span>
         </div>
 
         <div className="ncj-medal">
@@ -68,13 +71,11 @@ export function CardFront({
             <span aria-hidden="true" className="ncj-medal-seal-empty" />
           )}
           <span aria-hidden="true" className="ncj-medal-ring" />
+          {/* У крузі лише бал і роль (власник 16.09: «можна просто цифру лишити і напис
+              інженер»); рівень і обробка стоять у рядку сезону вгорі. */}
           <div className="ncj-medal-core">
             <span className="ncj-num">{face.score}</span>
-            <span className="ncj-of">of 100</span>
             <b className="ncj-role">{face.roleName}</b>
-            <span className="ncj-lvl">
-              Level {face.level} of {MAX_LEVEL}
-            </span>
           </div>
         </div>
 

@@ -87,8 +87,8 @@ export function SealCard({ view, size }: { view: CardView; size: number }) {
   const t = view.tier;
   const u = (k: number) => Math.round(size * k);
   const ring = u(0.7);
-  const disc = u(0.41);
-  const halo = u(0.017);
+  const disc = u(0.36);
+  const halo = u(0.012);
   const ringBorder = u(0.045);
   const seal = sealImage(view, ring);
   return (
@@ -126,7 +126,7 @@ export function SealCard({ view, size }: { view: CardView; size: number }) {
             marginTop: u(0.006),
           }}
         >
-          {`Season 1 · ${t.finishName}`}
+          {`Season 1 · ${t.finishName} · Level ${view.level} of 10`}
         </span>
       </div>
       <div style={flex({ position: "relative", width: ring, height: ring, alignItems: "center", justifyContent: "center" })}>
@@ -153,31 +153,20 @@ export function SealCard({ view, size }: { view: CardView; size: number }) {
             height: disc,
             borderRadius: disc,
             backgroundColor: t.window,
+            border: `${Math.max(1, u(0.002))}px solid ${t.hairline}`,
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             boxShadow: `0 0 0 ${halo}px ${t.window}`,
           })}
         >
-          <span style={{ fontFamily: DISPLAY, fontSize: u(0.165), lineHeight: 0.85, fontWeight: 700, color: t.ink }}>
+          {/* У крузі лише бал і роль (власник 16.09); рівень і обробка стоять у рядку сезону. */}
+          <span style={{ fontFamily: DISPLAY, fontSize: u(0.15), lineHeight: 0.85, fontWeight: 700, color: t.ink }}>
             {String(view.score)}
           </span>
-          <span
-            style={{
-              fontFamily: TEXT,
-              fontSize: u(0.019),
-              letterSpacing: u(0.0023),
-              textTransform: "uppercase",
-              color: t.ink2,
-              marginTop: u(0.005),
-            }}
-          >
-            of 100
-          </span>
-          <span style={{ fontFamily: DISPLAY, fontSize: u(0.036), fontWeight: 700, color: t.ink, marginTop: u(0.013) }}>
+          <span style={{ fontFamily: DISPLAY, fontSize: u(0.034), fontWeight: 700, color: t.ink, marginTop: u(0.008) }}>
             {view.roleName}
           </span>
-          <span style={{ fontFamily: TEXT, fontSize: u(0.0205), color: t.ink2 }}>{`Level ${view.level} of 10`}</span>
         </div>
       </div>
       <div

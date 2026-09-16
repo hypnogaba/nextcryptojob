@@ -114,7 +114,9 @@ describe("square seal layout (напрям D)", () => {
     const texts = collectText(ShareImage({ view, format: "square" }));
     expect(texts).toContain(String(view.score));
     expect(texts).toContain(view.roleName);
-    expect(texts).toContain(`Level ${view.level} of 10`);
+    // Рівень і обробка стоять у рядку сезону, у крузі лише бал і роль (власник 16.09).
+    expect(texts.some((t) => t.includes(`Level ${view.level} of 10`))).toBe(true);
+    expect(texts).not.toContain("of 100");
     expect(texts).toContain(view.displayName);
     expect(texts).toContain(view.number);
   });

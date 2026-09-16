@@ -354,14 +354,17 @@
     border-radius: 50%;
     opacity: 0.55;
   }
+  /* Круг менший за печатку (власник 16.09: «більше розетки видно»), з тонкою межею, бо на
+     чорному аркуші він інакше зливається з тлом. */
   .ncj-medal-core {
     position: relative;
     z-index: 1;
-    width: 58%;
+    width: 50%;
     aspect-ratio: 1;
     border-radius: 50%;
     background: var(--card-window);
-    box-shadow: 0 0 0 2.2cqw var(--card-window);
+    border: 0.25cqw solid var(--card-hairline);
+    box-shadow: 0 0 0 1.6cqw var(--card-window);
     display: grid;
     place-content: center;
     justify-items: center;
@@ -372,7 +375,7 @@
   .ncj-num {
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: 21cqw;
+    font-size: 19cqw;
     line-height: 0.82;
     letter-spacing: -0.05em;
     font-variant-numeric: lining-nums tabular-nums;
@@ -386,7 +389,7 @@
     color: var(--card-ink-2);
   }
   .ncj-role {
-    margin-top: 1.4cqw;
+    margin-top: 0.6cqw;
     font-family: var(--font-display);
     font-weight: 600;
     font-size: 5cqw;
