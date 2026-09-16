@@ -67,7 +67,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   const proofApply = card0 && proof ? await applyUrl(env.SESSION_SECRET, origin, card0.slug, proof) : null;
 
   return (
-    <AccountShell active="card" title="Your card and score">
+    <AccountShell active="card" title="Your card and score" sub="Your score, your sources and your card, explained.">
       <div className="grid gap-6">
       {done ? (
         <div className="-mt-2 flex justify-end">

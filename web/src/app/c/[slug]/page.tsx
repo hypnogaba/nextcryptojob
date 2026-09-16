@@ -120,19 +120,11 @@ export default async function CardPage({ params, searchParams }: Props) {
             <div className="flex flex-wrap items-center gap-3">
               {/* Квадрат основний: у стрічці X він займає найбільше місця (напрям D, 16.09). */}
               <ShareOnX text={shareText(view)} cardUrl={cardUrl} imageUrl={`${cardPath(slug)}/share/square`} trackHref={shareUrl} />
+              {/* Одна кнопка, без розміру в назві (власник 16.09, п.4): квадрат, той самий файл,
+                  що йде в X. /share/wide і /share/tall і далі працюють за прямим посиланням. */}
               <Button asChild size="lg" variant="outline">
                 <a href={`${cardPath(slug)}/share/square`} download>
-                  Image 1:1
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <a href={`${cardPath(slug)}/share/wide`} download>
-                  Image 16:9
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <a href={`${cardPath(slug)}/share/tall`} download>
-                  Image 4:5
+                  Download image
                 </a>
               </Button>
             </div>

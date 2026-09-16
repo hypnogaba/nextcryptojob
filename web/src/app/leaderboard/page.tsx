@@ -26,6 +26,9 @@ export const dynamic = "force-dynamic";
  * картку, щоб побачити, які там бали в людини за що; публічно, видно навіть без акаунта»):
  * табло рядками згори вниз, місце, картка, нік, роль, рівень і бал; увесь рядок веде на публічну
  * сторінку картки /c/<slug>, де вже є розбір балу за джерелами. Сторінка без входу, пункт у шапці.
+ *
+ * Сторінки (власник 16.09, п.2 «якщо в нас буде 100 людей»): рядки менші (мініатюра картки,
+ * відступи, шрифт), 25 на сторінку, `?page=` у запиті, читається на сервері, без стану на клієнті.
  */
 
 type Row = {
@@ -36,20 +39,28 @@ type Row = {
   display_name: string;
 };
 
-const MAX_ROWS = 300;
+const PAGE_SIZE = 25;
 
-async function loadBoard(): Promise<Row[]> {
+function parsePage(raw: string | string[] | undefined): number {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const n = value ? Number.parseInt(value, 10) : 1;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+}
+
+async function loadBoard(page: number): Promise<{ rows: Row[]; hasNext: boolean }> {
+  const offset = (page - 1) * PAGE_SIZE;
+  // Тягнемо на один рядок більше за сторінку, щоб знати, чи є ще одна, без окремого count(*).
   const { results } = await db()
     .prepare(
       `SELECT c.slug, c.role, c.score, c.level, c.display_name
          FROM cards c JOIN users u ON u.id = c.user_id
         WHERE c.revoked_at IS NULL AND u.card_public = 1
         ORDER BY c.score DESC, c.created_at ASC
-        LIMIT ?`,
+        LIMIT ? OFFSET ?`,
     )
-    .bind(MAX_ROWS)
+    .bind(PAGE_SIZE + 1, offset)
     .all<Row>();
-  return results;
+  return { rows: results.slice(0, PAGE_SIZE), hasNext: results.length > PAGE_SIZE };
 }
 
 function faceFor(row: Row, rank: number): CardFace | null {
@@ -73,8 +84,12 @@ function faceFor(row: Row, rank: number): CardFace | null {
   return face;
 }
 
-export default async function LeaderboardPage() {
-  const board = await loadBoard();
+type Props = { searchParams?: Promise<{ page?: string | string[] }> };
+
+export default async function LeaderboardPage({ searchParams }: Props) {
+  const page = parsePage((await searchParams)?.page);
+  const { rows, hasNext } = await loadBoard(page);
+  const rankOffset = (page - 1) * PAGE_SIZE;
 
   return (
     <section className="mx-auto max-w-[900px] px-[clamp(16px,4vw,32px)] pt-8 pb-24 sm:pt-14">
@@ -89,47 +104,72 @@ export default async function LeaderboardPage() {
         .
       </p>
 
-      {board.length === 0 ? (
+      {rows.length === 0 && page === 1 ? (
         <p className="mt-10 text-ink-muted">No public cards yet. Be the first: make a card from your profile.</p>
       ) : (
-        <ol className="mt-10 grid gap-3">
-          {board.map((row, i) => {
-            const rank = i + 1;
-            const face = faceFor(row, rank);
-            if (!face) return null;
-            return (
-              <li key={row.slug}>
+        <>
+          <ol className="mt-8 grid gap-1.5">
+            {rows.map((row, i) => {
+              const rank = rankOffset + i + 1;
+              const face = faceFor(row, rank);
+              if (!face) return null;
+              return (
+                <li key={row.slug}>
+                  <Link
+                    href={cardPath(row.slug)}
+                    aria-label={`${face.summary} See how this score was built.`}
+                    className="group flex items-center gap-3 rounded-xl border border-line bg-surface p-2 transition-[border-color,background-color] duration-200 hover:border-line-strong hover:bg-soft has-[:focus-visible]:border-line-strong sm:gap-4 sm:p-2.5"
+                  >
+                    <span className="w-6 shrink-0 text-center font-display text-sm font-semibold tabular-nums text-ink-muted sm:w-8 sm:text-base">
+                      {rank}
+                    </span>
+                    <span className="ncj-card w-[44px] shrink-0 sm:w-[56px]">
+                      <CardFront face={face} spin={false} hideTag />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-ink sm:text-base">{row.display_name}</span>
+                      <span className="mt-0.5 block truncate text-xs text-ink-muted">
+                        {ROLES[row.role as RoleKey].name} · Level {row.level} of 10
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-display text-lg leading-none font-extrabold tabular-nums text-ink sm:text-xl">
+                        {row.score}
+                      </span>
+                      <span className="mt-0.5 block text-[0.65rem] text-ink-muted">of 100</span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+
+          {page > 1 || hasNext ? (
+            <nav aria-label="Leaderboard pages" className="mt-8 flex items-center justify-between gap-4">
+              {page > 1 ? (
                 <Link
-                  href={cardPath(row.slug)}
-                  aria-label={`${face.summary} See how this score was built.`}
-                  className="group flex items-center gap-4 rounded-2xl border-[1.5px] border-line bg-surface p-3 transition-[border-color,background-color] duration-200 hover:border-line-strong hover:bg-soft has-[:focus-visible]:border-line-strong sm:gap-6 sm:p-4"
+                  href={page === 2 ? "/leaderboard" : `/leaderboard?page=${page - 1}`}
+                  className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
                 >
-                  <span className="w-8 shrink-0 text-center font-display text-xl font-semibold tabular-nums text-ink-muted sm:w-12 sm:text-3xl">
-                    {rank}
-                  </span>
-                  <span className="ncj-card w-[104px] shrink-0 sm:w-[148px]">
-                    <CardFront face={face} spin={false} hideTag />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-lg font-semibold text-ink">{row.display_name}</span>
-                    <span className="mt-0.5 block text-sm text-ink-muted">
-                      {ROLES[row.role as RoleKey].name} · Level {row.level} of 10
-                    </span>
-                    <span className="mt-2 block text-sm text-ink-muted underline decoration-line-strong underline-offset-4 group-hover:decoration-brand">
-                      See how this score was built
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block font-display text-3xl leading-none font-extrabold tabular-nums text-ink sm:text-5xl">
-                      {row.score}
-                    </span>
-                    <span className="mt-1 block text-xs text-ink-muted">of 100</span>
-                  </span>
+                  Previous
                 </Link>
-              </li>
-            );
-          })}
-        </ol>
+              ) : (
+                <span />
+              )}
+              <span className="text-sm text-ink-muted">Page {page}</span>
+              {hasNext ? (
+                <Link
+                  href={`/leaderboard?page=${page + 1}`}
+                  className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span />
+              )}
+            </nav>
+          ) : null}
+        </>
       )}
     </section>
   );

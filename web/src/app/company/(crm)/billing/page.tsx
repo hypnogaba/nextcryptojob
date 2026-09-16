@@ -216,8 +216,8 @@ function SolanaPaySection({
       ) : invoice && invoice.status === "pending" ? (
         <>
           <p className="mt-3 max-w-[65ch] text-sm text-ink-muted">
-            100 USDC for 30 days, from your own wallet. No card, no VAT. Access does not renew on its own: pay again
-            when the 30 days are up.
+            Payment in crypto: 100 USDC on Solana, from your own wallet, one payment for 30 days. Access does not
+            renew on its own: pay again when the 30 days are up.
           </p>
           {checked ? (
             <p role="status" className="mt-3 rounded-lg border border-line bg-wash px-4 py-3 text-sm text-ink">
@@ -261,8 +261,8 @@ function SolanaPaySection({
       ) : (
         <>
           <p className="mt-3 max-w-[65ch] text-sm text-ink-muted">
-            100 USDC for 30 days, from your own wallet: scan a QR or open the link with any Solana wallet (Phantom,
-            Solflare, and the rest). No card, no VAT. Access does not renew on its own.
+            Payment in crypto: 100 USDC on Solana, from your own wallet, one payment for 30 days. Scan a QR or open
+            the link with any Solana wallet (Phantom, Solflare, and the rest). Access does not renew on its own.
           </p>
           {invoice?.status === "expired" ? (
             <div className="mt-2 grid gap-2">
