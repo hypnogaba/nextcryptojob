@@ -118,7 +118,13 @@ export default async function CardPage({ params, searchParams }: Props) {
         {shareUrl ? (
           <div className="grid gap-4 border-t border-line pt-6">
             <div className="flex flex-wrap items-center gap-3">
-              <ShareOnX text={shareText(view)} cardUrl={cardUrl} imageUrl={`${cardPath(slug)}/share/wide`} trackHref={shareUrl} />
+              {/* Квадрат основний: у стрічці X він займає найбільше місця (напрям D, 16.09). */}
+              <ShareOnX text={shareText(view)} cardUrl={cardUrl} imageUrl={`${cardPath(slug)}/share/square`} trackHref={shareUrl} />
+              <Button asChild size="lg" variant="outline">
+                <a href={`${cardPath(slug)}/share/square`} download>
+                  Image 1:1
+                </a>
+              </Button>
               <Button asChild size="lg" variant="outline">
                 <a href={`${cardPath(slug)}/share/wide`} download>
                   Image 16:9

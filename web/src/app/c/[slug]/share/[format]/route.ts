@@ -1,8 +1,10 @@
 import { renderCardImage, type ShareFormat } from "@/lib/card/og";
 import { loadCardView } from "../../card-data";
 
-// Картинки для допису в X: /c/<slug>/share/wide (1200×675) і /c/<slug>/share/tall (1080×1350).
+// Картинки для допису в X: /c/<slug>/share/square (1200×1200, основна після напряму D),
+// /c/<slug>/share/wide (1200×675) і /c/<slug>/share/tall (1080×1350).
 const FORMATS: Partial<Record<string, { format: ShareFormat; name: string }>> = {
+  square: { format: "square", name: "1x1" },
   wide: { format: "wide", name: "16x9" },
   tall: { format: "tall", name: "4x5" },
 };
