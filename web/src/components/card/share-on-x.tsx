@@ -23,6 +23,18 @@ import { Button } from "@/components/ui/button";
  * - на комп'ютері НЕ перехоплюємо клік: X відкривається звичайним переходом за href, а в буфер
  *   пишемо тим самим кліком через `ClipboardItem` з обіцянкою (Safari приймає лише таку форму).
  */
+/**
+ * Системне вікно «Поділитись» лишаємо телефонам і планшетам. На Mac у Safari `navigator.share`
+ * теж є, і клік відкривав меню AirDrop замість X (власник 16.09: «отак шер в х виглядає, це не те
+ * що треба, повинен бути авторедірект»). Ознака дотикового пристрою: грубий вказівник або
+ * мобільний рядок браузера.
+ */
+export function prefersSystemShare(nav: Navigator, coarsePointer: boolean): boolean {
+  const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent || "");
+  const touchMac = /Mac/.test(nav.platform || "") && nav.maxTouchPoints > 1;
+  return (coarsePointer && mobileUa) || (mobileUa && !/Mac/.test(nav.platform || "")) || touchMac;
+}
+
 export function ShareOnX({
   text,
   cardUrl,
@@ -75,7 +87,14 @@ export function ShareOnX({
     const ready = file.current;
 
     // Телефон: ділимось файлом. Виклик share() іде без await перед ним, інакше згорає дозвіл кліку.
-    if (ready && typeof nav.share === "function" && typeof nav.canShare === "function" && nav.canShare({ files: [ready] })) {
+    const coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    if (
+      ready &&
+      prefersSystemShare(nav, coarse) &&
+      typeof nav.share === "function" &&
+      typeof nav.canShare === "function" &&
+      nav.canShare({ files: [ready] })
+    ) {
       e.preventDefault();
       setBusy(true);
       track();
