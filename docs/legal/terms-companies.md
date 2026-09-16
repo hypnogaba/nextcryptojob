@@ -1,11 +1,7 @@
 # NextCryptoJob Terms for Companies
 
-> **DRAFT. Not in force. For review by a French lawyer before launch.**
-> This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version: 0.1 (draft), 2026-09-12.
-
 These terms are a contract between [LEGAL NAME], sole trader, France, SIRET [SIRET],
-[ADDRESS], [CONTACT EMAIL] ("we", "us") and the company or agency that subscribes to
+[ADDRESS], hello@nextcryptojob.xyz ("we", "us") and the company or agency that subscribes to
 NextCryptoJob ("you"). They apply to the CRM, the job posting tools, the REST API, the
 MCP server and paid requests through x402.
 
@@ -82,16 +78,17 @@ The score is an input to your judgment. It is not a decision.
 ## 9. Security
 
 - Keep API keys secret. Do not put them in public code or client-side apps. Rotate a key at once if it leaks.
-- Tell us within 48 hours at [CONTACT EMAIL] if you suspect unauthorised access to your account, your keys or candidate data. [to confirm with lawyer: notice period]
+- Tell us within 48 hours at hello@nextcryptojob.xyz if you suspect unauthorised access to your account, your keys or candidate data. [to confirm with lawyer: notice period]
 - We keep a log of access to candidate data. We may review it to check that you follow these terms.
 
 ## 10. Subscription and payment
 
-- **Price.** [PRICE, about USD 100] per month per company, unless your order says otherwise. Prices exclude VAT.
-- **Card payment (Stripe).** The subscription renews each month until you cancel. You can cancel at any time. Access stays until the end of the paid month.
-- **USDC payment.** You pay each month by transfer to the address we give. Access runs for the month paid. [to confirm product: networks and confirmation rules]
-- **Refunds.** We do not refund part of a month, except where the law requires or where we ended the contract without a fault on your side. [to confirm with lawyer]
-- **Trial.** [to confirm product: trial access terms]
+- **Price.** 100 USDC per 30 days per company, unless your order says otherwise.
+- **How you pay.** In crypto only: USDC on Solana, to the address shown in your billing page.
+  Each payment opens 30 days of access, counted from the moment the transfer is confirmed on
+  chain. Nothing renews by itself: you pay again when you want the next 30 days.
+- **Refunds.** We do not refund part of a paid period, except where the law requires it or where
+  we ended the contract without a fault on your side.
 - **Taxes.** [to confirm with lawyer: VAT status of the sole trader. If under the franchise scheme, invoices state that VAT does not apply, with the legal reference. For business customers in other EU countries, the reverse charge applies, <https://www.impots.gouv.fr/professionnel/prestations-entre-assujettis>.]
 - **Late payment.** For invoices paid late, penalties apply at [RATE] and a fixed recovery fee of EUR 40 is due (art. L441-10 French Commercial Code, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038414392>; art. D441-5, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043197457>).
 - **Price changes.** We tell you at least 30 days before a price change. You can cancel before it applies.

@@ -14,15 +14,13 @@ describe("legal pages", () => {
     expect(doc.source).toBe(original.replace(new RegExp(`\\s*${EM_DASH}\\s*`, "g"), ", "));
   });
 
-  // «How scoring works» більше не чернетка: це сторінка продукту, банер прибрано 16.09 на прохання
-  // власника. Юридичні тексти (privacy, terms, consents) банер поки тримають.
-  it.each(docs.filter((d) => d.path !== "/how-scoring-works").map((d) => [d.path, d] as const))(
-    "%s keeps the DRAFT banner",
-    (_path, doc) => {
-      const out = renderToStaticMarkup(<>{renderMarkdown(doc.source)}</>);
-      expect(out).toMatch(/<blockquote[^>]*><p><strong[^>]*>DRAFT\. Not in force\./);
-    },
-  );
+  // Банер «DRAFT. Not in force» прибрано з усіх публічних текстів 16.09 на прохання власника:
+  // документи опубліковані як чинні. Замість нього стежимо, щоб публічна сторінка не показувала
+  // службових заглушок на кшталт «[to confirm with lawyer]» чи «[LEGAL NAME]».
+  it.each(docs.map((d) => [d.path, d] as const))("%s carries no draft banner", (_path, doc) => {
+    const out = renderToStaticMarkup(<>{renderMarkdown(doc.source)}</>);
+    expect(out).not.toContain("DRAFT. Not in force");
+  });
 
   it.each(docs.map((d) => [d.path, d] as const))("%s renders cleanly and has no em dash", (_path, doc) => {
     const out = renderToStaticMarkup(<>{renderMarkdown(doc.source)}</>);

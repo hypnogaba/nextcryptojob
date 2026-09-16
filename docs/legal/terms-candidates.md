@@ -1,12 +1,8 @@
 # NextCryptoJob Terms for Candidates
 
-> **DRAFT. Not in force. For review by a French lawyer before launch.**
-> This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version: 0.2 (draft), 2026-09-14.
-
 These terms apply when you use NextCryptoJob (nextcryptojob.xyz) to look for a job.
 The service is run by [LEGAL NAME], sole trader, France, SIRET [SIRET], [ADDRESS],
-[CONTACT EMAIL] ("we", "us").
+hello@nextcryptojob.xyz ("we", "us").
 
 Our Privacy Policy explains how we use your data. It is part of these terms.
 
@@ -39,7 +35,7 @@ Companies pay for access. You do not.
 
 If anyone, including a company or an agency that uses NextCryptoJob, asks you to pay
 to get a job, an interview or an introduction, do not pay. Report it to
-[CONTACT EMAIL]. We will suspend that company.
+hello@nextcryptojob.xyz. We will suspend that company.
 
 ## 2. Who can use the service
 
@@ -81,7 +77,7 @@ it is a scam.
 - We may change the formula. Each change gets a version number, and we explain it on the public scoring page.
 
 **Appeal.** You can ask for a person to review any score, give your view and contest
-it. Use the "Appeal this score" button or write to [CONTACT EMAIL]. We answer within
+it. Use the "Appeal this score" button or write to hello@nextcryptojob.xyz. We answer within
 one month.
 
 ## 6. Your card
@@ -105,7 +101,7 @@ one month.
 
 - You can receive a daily digest of jobs by email or Telegram. You can stop it at any time, including with one click in each email.
 - Jobs come from public job boards and from companies that use NextCryptoJob. We do not check every job.
-- Be careful. A real employer never asks you to pay, to send crypto, or to share your keys. Report suspicious jobs to [CONTACT EMAIL].
+- Be careful. A real employer never asks you to pay, to send crypto, or to share your keys. Report suspicious jobs to hello@nextcryptojob.xyz.
 
 ## 9. Acceptable use
 
@@ -142,7 +138,7 @@ terms limits rights that consumer law gives you and that cannot be excluded.
 
 - **You** can delete your account at any time in Settings. We delete your data as the Privacy Policy explains.
 - **Inactivity.** If you do not use the service for 24 months, we warn you and then delete your account.
-- **We** can suspend or close your account if you break these terms, for example by impersonation or score manipulation. We tell you the reason, except where the law forbids it. For less serious breaches, we warn you first. You can contest our decision at [CONTACT EMAIL].
+- **We** can suspend or close your account if you break these terms, for example by impersonation or score manipulation. We tell you the reason, except where the law forbids it. For less serious breaches, we warn you first. You can contest our decision at hello@nextcryptojob.xyz.
 
 ## 14. Changes to these terms
 
@@ -155,7 +151,7 @@ your account. The free-for-candidates rule in section 1 will not change.
 These terms are governed by French law. If you live in another country, you keep the
 protection of the mandatory rules of that country.
 
-If you have a complaint, write to [CONTACT EMAIL] first. If we cannot solve it, you can
+If you have a complaint, write to hello@nextcryptojob.xyz first. If we cannot solve it, you can
 use a consumer mediator free of charge (art. L612-1 French Consumer Code,
 <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032224805>): [MEDIATOR NAME AND
 WEBSITE]. [to confirm with lawyer: whether a mediator is required for a free service,
@@ -163,4 +159,4 @@ and which one]
 
 ## 16. Contact
 
-[LEGAL NAME], [ADDRESS], [CONTACT EMAIL].
+[LEGAL NAME], [ADDRESS], hello@nextcryptojob.xyz.

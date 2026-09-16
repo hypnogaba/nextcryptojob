@@ -1,9 +1,5 @@
 # NextCryptoJob In-Product Consent Texts
 
-> **DRAFT. Not in force. For review by a French lawyer before launch.**
-> This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version of this file: 0.3 (draft), 2026-09-14.
-
 These are the exact short texts shown in the product. Since 2026-09-14 (owner decision,
 third test round: "signing two documents is too much, using the service means agreeing")
 the setup has no consent boxes at all. The last button of setup accepts the terms

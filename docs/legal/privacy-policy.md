@@ -1,9 +1,5 @@
 # NextCryptoJob Privacy Policy
 
-> **DRAFT. Not in force. For review by a French lawyer before launch.**
-> This text is not legal advice. Points marked "[to confirm with lawyer]" are open.
-> Version: 0.2 (draft), 2026-09-14.
-
 This policy explains what personal data NextCryptoJob processes, why, on what legal
 basis, who receives it, how long we keep it, and what rights you have. It covers the
 information required by articles 13 and 14 of the GDPR
@@ -28,7 +24,7 @@ The controller is:
 - [LEGAL NAME], sole trader (entrepreneur individuel), France
 - SIRET: [SIRET]
 - Address: [ADDRESS]
-- Contact for all privacy questions: [CONTACT EMAIL]
+- Contact for all privacy questions: hello@nextcryptojob.xyz
 
 We have not appointed a data protection officer. [to confirm with lawyer: whether article 37(1)(b) GDPR applies, <https://gdpr-info.eu/art-37-gdpr/>]
 
@@ -170,7 +166,7 @@ the safeguards of article 22 anyway:
 - You can see how your score was calculated.
 
 **How to appeal.** Use the "Appeal this score" button next to any score, or write to
-[CONTACT EMAIL]. A person reviews your data, the breakdown and your arguments. We
+hello@nextcryptojob.xyz. A person reviews your data, the breakdown and your arguments. We
 answer within one month (art. 12(3) GDPR, <https://gdpr-info.eu/art-12-gdpr/>). If we
 find an error, we correct the score. If the formula is wrong for a whole group, we fix
 the formula and publish a new version.
@@ -225,7 +221,7 @@ directly" is on, or after you approve their request, they receive your contact. 
 disclosures, for example standard contractual clauses in the company terms, or explicit
 consent under art. 49(1)(a) GDPR, <https://gdpr-info.eu/art-49-gdpr/>]
 
-You can ask us for a copy of the safeguards at [CONTACT EMAIL].
+You can ask us for a copy of the safeguards at hello@nextcryptojob.xyz.
 
 ## 9. How long we keep your data
 
@@ -260,7 +256,7 @@ You have the right to:
 - give instructions about your data after your death (art. 85 French Data Protection Act, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000039280582>). You can also choose to have your data sent to a person you name.
 
 **How.** Settings has "Download my data" and "Delete my account". For anything else,
-write to [CONTACT EMAIL]. We answer within one month. We may ask you to confirm your
+write to hello@nextcryptojob.xyz. We answer within one month. We may ask you to confirm your
 identity by signing in.
 
 **Complaint.** You can complain to the CNIL, the French data protection authority
@@ -284,7 +280,7 @@ are publicly known in crypto. We collected public data about them from the sourc
 section 3.2 and labelled their level by hand. We use it only to check that the formula
 is accurate before we apply it to users. We do not show these people's scores to
 anyone, and we do not contact companies about them. If you think you are in this set,
-you can object and ask for deletion at [CONTACT EMAIL]. We publish this notice here to
+you can object and ask for deletion at hello@nextcryptojob.xyz. We publish this notice here to
 meet article 14(5)(b) GDPR. [to confirm with lawyer: legal basis and whether this notice is enough]
 
 **Other people in your data.** Your transactions involve other wallets. Your followers
@@ -317,4 +313,4 @@ before the change takes effect. If a change needs new consent, we ask for it aga
 
 ## 16. Contact
 
-[LEGAL NAME], [ADDRESS], [CONTACT EMAIL].
+[LEGAL NAME], [ADDRESS], hello@nextcryptojob.xyz.
