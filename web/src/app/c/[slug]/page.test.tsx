@@ -35,11 +35,16 @@ describe("public card page (trust model of 13.09)", () => {
     expect(html).not.toContain("Share on X");
   });
 
-  it("the owner sees Share on X and the images, not the report form", async () => {
+  it("the owner sees Share on X and one plain download button, not the report form", async () => {
     await createSession("u", null);
     const html = await render();
     expect(html).toContain("Share on X");
-    expect(html).toContain(`/c/${slug}/share/tall`);
+    expect(html).toContain("Download image");
+    expect(html).toContain(`href="/c/${slug}/share/square"`);
+    // Один плаский текст, без розміру в назві (власник 16.09, п.4).
+    expect(html).not.toMatch(/Image \d/);
+    expect(html).not.toContain(`/c/${slug}/share/wide`);
+    expect(html).not.toContain(`/c/${slug}/share/tall`);
     expect(html).not.toContain("Report this card");
   });
 });
