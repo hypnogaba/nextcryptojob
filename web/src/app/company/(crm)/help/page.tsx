@@ -85,8 +85,8 @@ export default async function CompanyHelpPage() {
               <Link href="/company/billing" className={LINK}>
                 Billing
               </Link>{" "}
-              for the payment link and QR. No card, no VAT. Or pay per request through the API with USDC (x402), no
-              subscription.
+              for the payment link and QR: payment in crypto, one payment for 30 days. Or pay per request through the
+              API with USDC (x402), no subscription.
             </p>
           </Q>
           <Q q="Do you hold our funds or keys?">
