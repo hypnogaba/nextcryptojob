@@ -5,7 +5,9 @@ import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
 
 /**
- * Лист щоденної добірки (W7). Вакансії приходять з чужих дощок через engine,
+ * Лист щоденної добірки (W7). Вигляд: плитки на світлому полотні, з чипами зарплати й токена, як
+ * картка людини на сайті (варіант 5 з п'яти, вибір власника 16.09: «щоб більше відповідав нашому
+ * сайту»). Вакансії приходять з чужих дощок через engine,
  * тож кожне поле в HTML екрануємо, а посиланням стає лише адреса http(s) або mailto.
  * Текст англійською, без довгого тире. Відписка одним натисканням: заголовки
  * List-Unsubscribe (RFC 8058) і видиме посилання «Pause daily jobs» унизу.
@@ -46,6 +48,8 @@ export const DIGEST_FOOTER_REASON = "You get this because you turned on daily jo
 type Job = {
   title: string; meta: string; why: string; url: string | null; postedBy: string | null; via: string | null;
   estimate: string | null; about: string | null; companySite: string | null; token: string | null;
+  /** Окремо від meta: у HTML це підпис плитки й чипи (варіант 5), у тексті лишається той самий рядок. */
+  place: string; salary: string | null;
 };
 
 function tidy(j: DigestEmailJob): Job {
@@ -53,6 +57,8 @@ function tidy(j: DigestEmailJob): Job {
   return {
     title: cleanText(j.title, 200),
     meta: meta.filter(Boolean).join(" · "),
+    place: [cleanText(j.company, 100), j.location ? cleanText(j.location, 100) : null].filter(Boolean).join(" · "),
+    salary: j.salary ? cleanText(j.salary, 60) : null,
     why: cleanText(j.why, 300),
     // Адреса як є (safeUrl лише перевіряє): умови web3.career забороняють міняти apply_url.
     url: safeUrl(j.url),
@@ -76,7 +82,20 @@ export function checkedLine(checked: number | null | undefined, shown: number): 
 const INK = "#141a1b";
 const MUTED = "#58646a";
 const BRAND = "#0b6e63";
-const LINE = "#d5dcda";
+const LINE = "#dce3df";
+/** Полотно листа під плитками (варіант 5, вибір власника 16.09): лист має бути схожий на сайт. */
+const CANVAS = "#f3f6f4";
+const CHIP_BG = "#e4f2eb";
+const TOKEN_BG = "#efeaf6";
+const TOKEN_INK = "#5b4b7a";
+
+/** Чип: заокруглена мітка, як на картці людини. Старий Outlook зробить її прямокутною, і це не біда. */
+function chip(text: string, bg: string, color: string): string {
+  return (
+    `<span style="display:inline-block;background:${bg};color:${color};border-radius:99px;` +
+    `padding:3px 10px;font-size:12px;font-weight:600;margin:0 6px 6px 0">${escapeHtml(text)}</span>`
+  );
+}
 
 export type DigestEmailInput = {
   localDate: string;
@@ -130,21 +149,19 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
     .map((j, i) => {
       const title = `${i + 1}. ${escapeHtml(j.title)}`;
       // Без rel: у листі це follow-посилання, як і вимагає web3.career.
-      const titleHtml = j.url ? `<a href="${escapeHtml(j.url)}" style="color:${BRAND}">${title}</a>` : title;
+      const titleHtml = j.url ? `<a href="${escapeHtml(j.url)}" style="color:${INK};text-decoration:none">${title}</a>` : title;
+      const chips = [j.salary ? chip(j.salary, CHIP_BG, BRAND) : "", j.token ? chip(j.token, TOKEN_BG, TOKEN_INK) : ""].join("");
       return (
-        `<div style="border:1px solid ${LINE};border-radius:8px;padding:16px;margin:0 0 12px;background:#ffffff">` +
-        `<p style="margin:0 0 4px;font-size:16px;font-weight:600">${titleHtml}</p>` +
-        (j.meta ? `<p style="margin:0 0 8px;color:${MUTED}">${escapeHtml(j.meta)}</p>` : "") +
+        `<div style="background:#ffffff;border:1px solid ${LINE};border-radius:14px;padding:16px;margin:0 0 12px">` +
+        `<p style="margin:0;font-size:16px;font-weight:600;line-height:1.35">${titleHtml}</p>` +
+        (j.place ? `<p style="margin:4px 0 0;color:${MUTED};font-size:14px">${escapeHtml(j.place)}</p>` : "") +
+        (chips ? `<p style="margin:10px 0 0;font-size:0">${chips}</p>` : "") +
         (j.estimate ? `<p style="margin:0 0 8px;color:${MUTED};font-size:13px">${escapeHtml(j.estimate)}</p>` : "") +
-        `<p style="margin:0">${escapeHtml(j.why)}</p>` +
+        `<p style="margin:10px 0 0">${escapeHtml(j.why)}</p>` +
         (j.about ? `<p style="margin:8px 0 0;color:${MUTED};font-size:14px">${escapeHtml(j.about)}</p>` : "") +
-        (j.companySite || j.token
-          ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">` +
-            [j.companySite ? `<a href="${escapeHtml(j.companySite)}" style="color:${BRAND}">${escapeHtml(j.companySite.replace(/^https:\/\//, ""))}</a>` : null,
-              j.token ? escapeHtml(j.token) : null]
-              .filter(Boolean)
-              .join(" · ") +
-            `</p>`
+        (j.companySite
+          ? `<p style="margin:8px 0 0;font-size:13px">` +
+            `<a href="${escapeHtml(j.companySite)}" style="color:${BRAND}">${escapeHtml(j.companySite.replace(/^https:\/\//, ""))}</a></p>`
           : "") +
         (j.postedBy
           ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob</p>`
@@ -155,17 +172,19 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
     })
     .join("");
   const html =
-    `<div style="max-width:560px;margin:0 auto;padding:24px 16px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;` +
+    `<div style="background:${CANVAS};padding:20px 16px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;` +
     `font-size:15px;line-height:1.5;color:${INK}">` +
-    `<h1 style="font-size:20px;line-height:1.3;margin:0 ${checked ? "0 6px" : "0 16px"}">${escapeHtml(heading)}</h1>` +
-    (checked ? `<p style="margin:0 0 16px;color:${MUTED}">${escapeHtml(checked)}</p>` : "") +
+    `<div style="max-width:600px;margin:0 auto">` +
+    `<p style="margin:0 0 2px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:${BRAND}">NextCryptoJob</p>` +
+    `<h1 style="font-size:21px;line-height:1.25;margin:0 0 4px">${escapeHtml(heading)}</h1>` +
+    (checked ? `<p style="margin:0 0 16px;color:${MUTED};font-size:14px">${escapeHtml(checked)}</p>` : `<p style="margin:0 0 16px"></p>`) +
     htmlJobs +
     `<p style="margin:16px 0 0;color:${MUTED};font-size:13px">` +
     `<a href="${escapeHtml(jobsUrl)}" style="color:${BRAND}">All jobs we sent you</a>. ` +
     `<a href="${escapeHtml(settingsUrl)}" style="color:${BRAND}">Change the channel or the hour</a>. ` +
     `<a href="${escapeHtml(pauseUrl)}" style="color:${BRAND}">Pause daily jobs</a>.</p>` +
     `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">${DIGEST_FOOTER_REASON}</p>` +
-    `</div>`;
+    `</div></div>`;
 
   // Email Service приймає List-Unsubscribe лише з https (не http), і One-Click лише разом з ним.
   const headers = pauseUrl.startsWith("https://")

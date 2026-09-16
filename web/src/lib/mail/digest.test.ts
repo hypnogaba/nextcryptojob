@@ -40,7 +40,10 @@ describe("digestEmail", () => {
         `All jobs we sent you: ${ORIGIN}/jobs\nChange the channel or the hour: ${ORIGIN}/settings\nPause daily jobs: ${UNSUB}\n${DIGEST_FOOTER_REASON}`,
       ].join("\n\n") + "\n",
     );
-    expect(mail.html).toContain('<a href="https://jobs.example.com/1" style="color:#0b6e63">1. Protocol Engineer</a>');
+    // Плитка вакансії: назва з номером веде на саму вакансію, місце і зарплата поруч (варіант 5).
+    expect(mail.html).toMatch(/<a href="https:\/\/jobs\.example\.com\/1"[^>]*>1\. Protocol Engineer<\/a>/);
+    expect(mail.html).toContain("Paying Labs · Remote");
+    expect(mail.html).toContain("$120k to $150k");
     expect(mail.html).toContain("Posted by Acme on NextCryptoJob");
     expect(mail.html).toContain(DIGEST_FOOTER_REASON);
     expect(mail.html).toContain(`href="${ORIGIN}/settings"`);
