@@ -87,14 +87,51 @@ const SALARY_RE = new RegExp(`(?:${CUR}\\s*${NUM}|${NUM}\\s*${CUR})`, "iu");
 const MONTH = /^[\s,]*(a|per|\/|в|на)?\s*(month|mo|monthly|місяць|месяц)/iu;
 const MONTHLY_WORD = /^[\s,]*monthly/iu;
 
+/** Число без валюти: «120000», «120 000», «120k». Шукаємо всі, беремо перше, схоже на зарплату. */
+const BARE_NUM_RE = new RegExp(`(?<![\\p{L}\\d$€£])${NUM}(?![\\p{L}\\d])`, "giu");
+/** Слова, після яких число це не гроші: «20 partnerships», «5 років», «3000 followers». */
+const NOT_MONEY_AFTER =
+  /^[\s,]*(%|x\b|partnership|project|year|month\w*\s+of|people|users?|followers?|subscribers?|stars?|commits?|prs?\b|pull|tx\b|transactions?|hours?|днів|дні|рок\p{L}*|років|люд\p{L}*|підписник\p{L}*|проєкт\p{L}*|проект\p{L}*)/iu;
+/** Найменша річна сума, яку читаємо як зарплату з голого числа: нижче це радше рік, вік чи лічилка. */
+const BARE_YEARLY_MIN = 10_000;
+/** Найменша місячна сума, коли поруч сказано «a month»: 1 000 на місяць це 12 000 на рік. */
+const BARE_MONTHLY_MIN = 500;
+
+/** Голе число зарплатою (п.1 раунду 6, власник: «я долар не поставив, просто цифру написав»). */
+function bareSalary(text: string): number | null {
+  BARE_NUM_RE.lastIndex = 0;
+  for (let m = BARE_NUM_RE.exec(text); m; m = BARE_NUM_RE.exec(text)) {
+    const raw = m[1] ?? "";
+    const k = Boolean(m[2]);
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 24);
+    if (NOT_MONEY_AFTER.test(after)) continue;
+    const grouped = /^\d{1,3}(?:[ ,.’']\d{3})+$/.test(raw);
+    const base = Number(grouped ? raw.replace(/[ ,.’']/g, "") : raw.replace(",", "."));
+    if (!Number.isFinite(base)) continue;
+    const monthly = MONTH.test(after) || MONTHLY_WORD.test(after);
+    const amount = Math.round(base * (k ? 1000 : 1) * (monthly ? 12 : 1));
+    const floor = monthly ? BARE_MONTHLY_MIN * 12 : BARE_YEARLY_MIN;
+    // Рік («in 2024») сам по собі не зарплата: його рятує лише роздільник тисяч, «k» чи «a month».
+    const yearLike = !grouped && !k && !monthly && base >= 1900 && base <= 2100;
+    if (yearLike || amount < floor || amount > SALARY_MAX) continue;
+    return amount;
+  }
+  return null;
+}
+
 /**
- * «BD lead, remote, from 3,000 EUR a month» → віддалено й 36 000 EUR на рік. Лише те, що сказано
- * явно: число без валюти зарплатою не вважаємо, місто не вгадуємо. Людина бачить і править.
+ * «BD lead, remote, from 3,000 EUR a month» → віддалено й 36 000 EUR на рік. Місто не вгадуємо.
+ * Число без валюти теж беремо (власник писав суму самою цифрою), але лише схоже на зарплату:
+ * від 10 000 на рік, або з «k», або з роздільником тисяч, або сказано «a month». Валюта тоді USD,
+ * як за замовчуванням у формі. Людина бачить підставлене і править.
  */
 export function placeFromText(text: string): PlaceGuess {
   const where = REMOTE_WORDS.test(text) ? "remote" : null;
   const m = SALARY_RE.exec(text);
-  if (!m) return { where, salary: null, currency: null };
+  if (!m) {
+    const bare = bareSalary(text);
+    return { where, salary: bare, currency: bare === null ? null : "USD" };
+  }
   const cur = (m[1] ?? m[6] ?? "").toLowerCase();
   const rawNum = m[2] ?? m[4] ?? "";
   const k = Boolean(m[3] ?? m[5]);

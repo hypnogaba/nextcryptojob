@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -8,12 +8,20 @@ import { Button } from "@/components/ui/button";
  * публікації). Робимо так, щоб картинка була в пості одразу:
  * - телефон: Web Share API з файлом PNG картки (navigator.canShare({files})): картинка
  *   прикріплюється в X сама, разом із текстом і посиланням;
- * - комп'ютер: кнопка копіює картинку в буфер обміну (ClipboardItem), відкриває X із текстом
- *   і показує підказку «Paste the image» з правильною клавішею (Cmd на Mac, інакше Ctrl);
+ * - комп'ютер: буфер обміну (ClipboardItem) плюс звичайний перехід за посиланням на X;
  * - немає жодного з цих API (старий браузер): звичайне посилання на x.com через /go/share-x,
  *   як і раніше (OG-прев'ю запасним планом). У кожному шляху трек share_click лишається:
  *   `trackHref` (/go/share-x?...) або йде переходом, або опитується у фоні (keepalive), коли
- *   JS сам відкриває X чи ділиться файлом.
+ *   JS сам ділиться файлом.
+ *
+ * Раунд 6 (власник: «не хоче відкривати ікс разом з цією картинкою»): і буфер, і нове вікно
+ * дозволені браузеру лише ПОКИ триває дозвіл від кліку. Перша версія спершу чекала на
+ * `fetch` картинки, і до `clipboard.write` та `window.open` дозвіл уже згорав: Safari відмовляв
+ * у буфері, Chrome блокував вікно. Тепер:
+ * - PNG тягнемо наперед, щойно кнопка з'явилась (і ще раз на pointerdown), тож на кліку
+ *   файл уже в руках і `navigator.share` викликається без жодного await перед ним;
+ * - на комп'ютері НЕ перехоплюємо клік: X відкривається звичайним переходом за href, а в буфер
+ *   пишемо тим самим кліком через `ClipboardItem` з обіцянкою (Safari приймає лише таку форму).
  */
 export function ShareOnX({
   text,
@@ -32,6 +40,27 @@ export function ShareOnX({
 }) {
   const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** PNG картки, завантажений наперед: на кліку вже має бути тут. */
+  const file = useRef<File | null>(null);
+  const loading = useRef<Promise<File | null> | null>(null);
+
+  function fetchImage(): Promise<File | null> {
+    if (file.current) return Promise.resolve(file.current);
+    loading.current ??= fetch(imageUrl)
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        file.current = blob ? new File([blob], "nextcryptojob-card.png", { type: blob.type || "image/png" }) : null;
+        return file.current;
+      })
+      .catch(() => null);
+    return loading.current;
+  }
+
+  useEffect(() => {
+    void fetchImage();
+    // imageUrl не змінюється за життя сторінки картки; окремий ключ не потрібен.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageUrl]);
 
   function track(): void {
     try {
@@ -41,50 +70,55 @@ export function ShareOnX({
     }
   }
 
-  async function handleClick(e: React.MouseEvent<HTMLAnchorElement>): Promise<void> {
+  function handleClick(e: React.MouseEvent<HTMLAnchorElement>): void {
     const nav = navigator;
+    const ready = file.current;
 
-    if (typeof nav.share === "function" && typeof nav.canShare === "function") {
+    // Телефон: ділимось файлом. Виклик share() іде без await перед ним, інакше згорає дозвіл кліку.
+    if (ready && typeof nav.share === "function" && typeof nav.canShare === "function" && nav.canShare({ files: [ready] })) {
       e.preventDefault();
       setBusy(true);
-      try {
-        const blob = await (await fetch(imageUrl)).blob();
-        const file = new File([blob], "nextcryptojob-card.png", { type: blob.type || "image/png" });
-        if (nav.canShare({ files: [file] })) {
-          track();
-          await nav.share({ files: [file], text, url: cardUrl });
-          setBusy(false);
-          return;
-        }
-      } catch {
-        // Людина скасувала чи файл не вийшов: пробуємо шлях комп'ютера нижче.
-      }
+      track();
+      nav
+        .share({ files: [ready], text, url: cardUrl })
+        .catch(() => {
+          // Людина скасувала або система відмовила: лишаємо кнопку, наступний клік піде за href.
+        })
+        .finally(() => setBusy(false));
+      return;
     }
 
+    // Комп'ютер: X відкривається звичайним переходом (href), а картинка лягає в буфер цим же кліком.
     if (typeof nav.clipboard?.write === "function" && typeof window.ClipboardItem === "function") {
-      e.preventDefault();
       try {
-        const blob = await (await fetch(imageUrl)).blob();
-        const type = blob.type || "image/png";
-        await nav.clipboard.write([new window.ClipboardItem({ [type]: blob })]);
-        track();
-        const mac = /Mac|iPhone|iPad|iPod/.test(nav.platform || nav.userAgent);
-        setHint(`Paste the image (${mac ? "Cmd" : "Ctrl"}+V)`);
-        window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(cardUrl)}`, "_blank", "noopener,noreferrer");
-        setBusy(false);
-        return;
+        const png = fetchImage().then((f) => f ?? Promise.reject(new Error("no card image")));
+        nav.clipboard
+          .write([new window.ClipboardItem({ "image/png": png })])
+          .then(() => {
+            const mac = /Mac|iPhone|iPad|iPod/.test(nav.platform || nav.userAgent);
+            setHint(`Paste the image (${mac ? "Cmd" : "Ctrl"}+V)`);
+          })
+          .catch(() => {
+            // Буфер відмовив (дозвіл, старий браузер): пост усе одно відкрився, лише без картинки.
+          });
       } catch {
-        // Буфер обміну відмовив (дозвіл, старий браузер): звичайне посилання нижче, без картинки.
+        // ClipboardItem не прийняв обіцянку: теж не біда, перехід за href уже триває.
       }
     }
-    setBusy(false);
-    // Ні Web Share, ні буфер обміну: звичайний перехід за href (trackHref рахує клік сам).
+    // Клік не перехоплено: браузер сам відкриває trackHref, який рахує share_click і веде на X.
   }
 
   return (
     <div className="grid gap-2">
       <Button asChild size="lg">
-        <a href={trackHref} target="_blank" rel="noopener noreferrer" onClick={handleClick} aria-busy={busy || undefined}>
+        <a
+          href={trackHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onPointerDown={() => void fetchImage()}
+          onClick={handleClick}
+          aria-busy={busy || undefined}
+        >
           Share on X
         </a>
       </Button>

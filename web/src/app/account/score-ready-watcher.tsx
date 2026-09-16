@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { pollDelayMs } from "@/lib/score/result";
 import { checkScoreReadyAction } from "./ready-actions";
@@ -20,6 +21,7 @@ export function ScoreReadyWatcher({ watch }: { watch: boolean }) {
   const [ready, setReady] = useState<{ slug: string; path: string } | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const started = useRef(0);
+  const router = useRouter();
 
   useEffect(() => {
     if (!watch) return;
@@ -37,6 +39,9 @@ export function ScoreReadyWatcher({ watch }: { watch: boolean }) {
         const res = await checkScoreReadyAction();
         if (res.ready) {
           setReady({ slug: res.slug, path: res.path });
+          // Раунд 6 (власник: «натиснув пропустити, картинка потім сама не з'явилась»): саме
+          // сповіщення мало, сторінку треба перемалювати, щоб картка стала на своє місце в кабінеті.
+          router.refresh();
           return;
         }
       } catch {
@@ -50,13 +55,13 @@ export function ScoreReadyWatcher({ watch }: { watch: boolean }) {
       stopped = true;
       if (timer) clearTimeout(timer);
     };
-  }, [watch]);
+  }, [watch, router]);
 
   if (!ready || dismissed) return null;
   return (
     <div role="status" aria-live="polite" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
       <p className="text-sm text-ink">
-        Your card is ready.{" "}
+        Your card is ready, it is on this page now.{" "}
         <Link href={ready.path} className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand">
           Open your card
         </Link>

@@ -175,9 +175,18 @@ describe("placeFromText: remote and pay from the words of step 1", () => {
     expect(placeFromText("віддалено, від 2000 доларів на місяць")).toEqual({ where: "remote", salary: 24_000, currency: "USD" });
   });
 
-  it("does not guess: a number without a currency is not a salary, and no city is read", () => {
+  it("takes a bare number as a salary in dollars, the way people write it", () => {
+    expect(placeFromText("community manager in Paris, 120000")).toEqual({ where: null, salary: 120_000, currency: "USD" });
+    expect(placeFromText("remote devrel, 90k")).toEqual({ where: "remote", salary: 90_000, currency: "USD" });
+    expect(placeFromText("від 120 000 на рік")).toEqual({ where: null, salary: 120_000, currency: "USD" });
+    expect(placeFromText("from 4000 a month")).toEqual({ where: null, salary: 48_000, currency: "USD" });
+  });
+
+  it("does not read a counter, a year or an age as a salary, and no city is read", () => {
     expect(placeFromText("I closed 20+ partnerships in 2024")).toEqual({ where: null, salary: null, currency: null });
     expect(placeFromText("Engineer in Lisbon")).toEqual({ where: null, salary: null, currency: null });
     expect(placeFromText("tip me $5")).toEqual({ where: null, salary: null, currency: null });
+    expect(placeFromText("5 years in crypto, 30000 followers on X")).toEqual({ where: null, salary: null, currency: null });
+    expect(placeFromText("I am 34 and shipped 12 projects")).toEqual({ where: null, salary: null, currency: null });
   });
 });
