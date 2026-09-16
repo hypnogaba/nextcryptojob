@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/lib/db";
+import { WANTED_JOB_COOKIE, takeWantedJob } from "@/lib/jobs/wanted";
 import { randomToken, sha256Hex } from "./hash";
 
 /**
@@ -54,7 +55,16 @@ export async function createSession(userId: string, method: SessionMethod | null
       .prepare("INSERT INTO sessions (id, user_id, expires_at, method) VALUES (?, ?, datetime('now', ?), ?)")
       .bind(id, userId, `+${SESSION_DAYS} days`, method),
   ]);
-  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions());
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, token, sessionCookieOptions());
+
+  // Раунд 6: вакансія, заради якої людина прийшла з головної (/start?job=…), стає збереженою,
+  // тож вона знайде її в кабінеті, вкладка Saved на /jobs.
+  const wanted = jar.get(WANTED_JOB_COOKIE)?.value;
+  if (wanted) {
+    await takeWantedJob(d, userId, wanted);
+    jar.delete(WANTED_JOB_COOKIE);
+  }
 }
 
 /**

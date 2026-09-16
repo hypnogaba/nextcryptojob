@@ -1,6 +1,10 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { jobDetailHref } from "@/components/jobs/job-card";
 import type { TickerJob } from "@/lib/jobs/home-board";
+
+/** Джерело, чиї умови вимагають прямого follow-посилання на їхній apply_url. */
+const WEB3CAREER = "web3.career";
 
 /** Стільки рядків треба, щоб коло стрічки не показувало дірку у вікні на 5 рядків. */
 export const FEED_MIN_TO_ROLL = 7;
@@ -38,13 +42,20 @@ function Row({ job, copy }: { job: TickerJob; copy: boolean }) {
   );
   // Копія лише для безшовного кола: з клавіатури й для читачів екрана її немає.
   const tab = copy ? -1 : undefined;
-  // Зовнішня: адреса й rel з lib/jobs/link.ts (web3.career лише "noopener", follow).
-  return job.external ? (
-    <a href={job.href} target="_blank" rel={job.rel ?? undefined} aria-label={label} tabIndex={tab} className="ncj-feed-row">
-      {body}
-    </a>
-  ) : (
-    <Link href={job.href} prefetch={false} aria-label={label} tabIndex={tab} className="ncj-feed-row">
+  // Раунд 6 (власник 16.09: «коли хочемо натиснути на конкретну роботу, треба щоб нас кидало на
+  // створення профілю»): рядок веде на НАШУ сторінку вакансії, а там кнопка створити профіль
+  // (запам'ятовує саме цю вакансію) і Apply назовні.
+  // Виняток web3.career: їхні умови (engine/deploy/README §8) вимагають вести людину прямо на
+  // apply_url посиланням follow, тож ці рядки лишаються прямими, як і були.
+  if (job.external && job.via === WEB3CAREER) {
+    return (
+      <a href={job.href} target="_blank" rel={job.rel ?? undefined} aria-label={label} tabIndex={tab} className="ncj-feed-row">
+        {body}
+      </a>
+    );
+  }
+  return (
+    <Link href={jobDetailHref(job.ref)} prefetch={false} aria-label={label} tabIndex={tab} className="ncj-feed-row">
       {body}
     </Link>
   );

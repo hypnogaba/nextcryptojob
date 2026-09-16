@@ -128,6 +128,28 @@ async function reasonsFor(ref: string): Promise<string[] | null> {
   );
 }
 
+/**
+ * Раунд 6 (власник 16.09): людина, що клацнула вакансію на головній, має потрапити до створення
+ * профілю, а сама вакансія чекати на неї в кабінеті. /start?job=<ref> кладе вакансію в куку й веде
+ * на вхід; після входу вона вже в збережених (lib/jobs/wanted.ts).
+ */
+function CreateProfile({ jobRef }: { jobRef: string }) {
+  return (
+    <section aria-labelledby="make-profile-h" className="grid gap-3 rounded-2xl border-[1.5px] border-ink bg-soft p-5 sm:p-6">
+      <h2 id="make-profile-h" className="font-display text-xl leading-tight font-semibold tracking-[-0.01em]">
+        Want jobs like this one every day?
+      </h2>
+      <p className="max-w-[60ch] text-ink">
+        Make your profile: we read your X, GitHub and wallets, score the role you want, and send matching jobs daily.
+        This job waits for you in Saved.
+      </p>
+      <Button asChild size="lg" className="h-11 w-full px-6 text-base sm:w-fit">
+        <Link href={`/start?job=${encodeURIComponent(jobRef)}`}>Create my profile</Link>
+      </Button>
+    </section>
+  );
+}
+
 function Reasons({ reasons }: { reasons: string[] | null }) {
   if (!reasons || reasons.length === 0) return null;
   return (
@@ -149,7 +171,7 @@ function Reasons({ reasons }: { reasons: string[] | null }) {
   );
 }
 
-function ScannedJobView({ job, reasons }: { job: ScannedJobPage; reasons: string[] | null }) {
+function ScannedJobView({ job, reasons, signedIn }: { job: ScannedJobPage; reasons: string[] | null; signedIn: boolean }) {
   const apply = applyLink(job.url);
   return (
     <article className="mx-auto grid max-w-3xl gap-8 px-4 pt-10 pb-20 sm:px-6 sm:pt-16">
@@ -199,6 +221,8 @@ function ScannedJobView({ job, reasons }: { job: ScannedJobPage; reasons: string
 
       <Reasons reasons={reasons} />
 
+      {signedIn ? null : <CreateProfile jobRef={`nr:${job.id}`} />}
+
       <footer className="grid gap-2 border-t border-line pt-6 text-sm text-ink-muted">
         <p>We do not have the full description for this one: it comes from {job.site ?? "the company's own listing"}, above.</p>
         <p>
@@ -214,6 +238,7 @@ function ScannedJobView({ job, reasons }: { job: ScannedJobPage; reasons: string
 
 export default async function PublicJobPageView({ params }: Props) {
   const { id } = await params;
+  const signedIn = (await currentUser()) !== null;
   const job = await loadJob(id);
   if (job) {
     const place = placeText(job.workMode, job.city);
@@ -257,6 +282,8 @@ export default async function PublicJobPageView({ params }: Props) {
           <p className="text-sm text-ink-muted">You apply directly with {job.company}.</p>
         </div>
 
+        {signedIn ? null : <CreateProfile jobRef={`co:${job.id}`} />}
+
         {job.description.trim() ? (
           <section aria-labelledby="about-job" className="grid gap-3">
             <h2 id="about-job" className="text-xl font-semibold tracking-tight">
@@ -294,5 +321,5 @@ export default async function PublicJobPageView({ params }: Props) {
   const scanned = await loadScanned(id);
   if (!scanned) notFound();
   const reasons = await reasonsFor(`nr:${scanned.id}`);
-  return <ScannedJobView job={scanned} reasons={reasons} />;
+  return <ScannedJobView job={scanned} reasons={reasons} signedIn={signedIn} />;
 }

@@ -55,10 +55,12 @@ describe("JobFeed", () => {
     expect(renderToStaticMarkup(<JobFeed jobs={[]} />)).toBe("");
   });
 
-  it("links company jobs to our own page in the same tab, and boards in a new tab without referrer", () => {
-    const html = renderToStaticMarkup(<JobFeed jobs={[job(1, { href: "/jobs/job_a", external: false }), job(2)]} />);
+  it("sends a click to our own job page, where a visitor is offered a profile (round 6)", () => {
+    const html = renderToStaticMarkup(<JobFeed jobs={[job(1, { ref: "co:job_a", href: "/jobs/job_a", external: false }), job(2)]} />);
+    // Вакансія компанії і вакансія з дошки ведуть однаково: на нашу сторінку, у тій самій вкладці.
     expect(html).toMatch(/<a[^>]*href="\/jobs\/job_a"(?![^>]*target)[^>]*>/);
-    expect(html).toContain('href="https://boards.example.com/2" target="_blank" rel="noopener noreferrer nofollow"');
+    expect(html).toMatch(/<a[^>]*href="\/jobs\/2"(?![^>]*target)[^>]*>/);
+    expect(html).not.toContain("https://boards.example.com/2");
   });
 
   it("never shows a board estimate as a salary", () => {

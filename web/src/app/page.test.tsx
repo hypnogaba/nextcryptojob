@@ -88,7 +88,9 @@ describe("home page", () => {
     expect(board).toContain('<span class="ncj-odo-col" style="--rows:11;--seq:&quot;0\\A 1\\A 2');
     // Сьогоднішні п'ять і далі стрічка: 14 рядків, одна вакансія на компанію.
     expect(board).toContain('aria-label="Protocol Engineer, Aave, Remote, $140k to $170k"');
-    expect(board).toContain('href="https://boards.example.com/a" target="_blank" rel="noopener noreferrer nofollow"');
+    // Раунд 6: рядок веде на нашу сторінку вакансії, а не одразу на чужу дошку.
+    expect(board).toMatch(/<a[^>]*href="\/jobs\/[A-Za-z0-9_-]+"(?![^>]*target)[^>]*>/);
+    expect(board).not.toContain('href="https://boards.example.com/a"');
     expect(board).toContain('data-moving="true"');
     const lists = board.match(/<ul[^>]*>/g) ?? [];
     expect(lists).toHaveLength(2);

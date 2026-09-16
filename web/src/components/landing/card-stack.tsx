@@ -24,10 +24,15 @@ const SLOTS = [
   { x: "-54px", y: "-42px", rot: "-4deg", d: "0.05s" },
 ] as const;
 
+/** Затримка руху за місцем у стосі: стос перекладається хвилею, а не разом. */
+const WAVE_STEP_MS = 70;
+
 export function CardStack({ faces }: { faces: readonly CardFace[] }) {
   const front = useRef<HTMLDivElement>(null);
   // Порядок карток у стосі: перша спереду. Клік по задній міняє її з передньою місцями.
   const [order, setOrder] = useState<readonly number[]>(() => faces.map((_, i) => i));
+  // Картка, яку щойно витягли: грає коротку «здачу» зверху (CSS .ncj-deal).
+  const [dealt, setDealt] = useState<number | null>(null);
 
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     const el = front.current;
@@ -48,6 +53,7 @@ export function CardStack({ faces }: { faces: readonly CardFace[] }) {
 
   function bringForward(index: number) {
     setOrder((prev) => [index, ...prev.filter((i) => i !== index)]);
+    setDealt(index);
     onPointerLeave();
   }
 
@@ -60,11 +66,25 @@ export function CardStack({ faces }: { faces: readonly CardFace[] }) {
         {order.map((faceIndex, position) => {
           const slot = SLOTS[Math.min(position, SLOTS.length - 1)]!;
           const face = faces[faceIndex]!;
-          const style = { "--x": slot.x, "--y": slot.y, "--rot": slot.rot, "--d": slot.d, zIndex: order.length - position } as CSSProperties;
+          const style = {
+            "--x": slot.x,
+            "--y": slot.y,
+            "--rot": slot.rot,
+            // Затримка ПОЧАТКОВОГО віяла належить самій картці, не місцю: інакше при перекладанні
+            // змінилась би вже відіграна анімація і картка блимнула б.
+            "--d": SLOTS[Math.min(faceIndex, SLOTS.length - 1)]!.d,
+            // Хвиля: що далі картка в стосі, то пізніше рушає.
+            "--wave": `${position * WAVE_STEP_MS}ms`,
+            zIndex: order.length - position,
+          } as CSSProperties;
           if (position === 0) {
             return (
               <div key={faceIndex} className="ncj-slot" style={style}>
-                <div ref={front} className="ncj-card ncj-tilt">
+                <div
+                  ref={front}
+                  className={dealt === faceIndex ? "ncj-card ncj-tilt ncj-deal" : "ncj-card ncj-tilt"}
+                  onAnimationEnd={() => setDealt(null)}
+                >
                   <CardFront face={face} spin sweep hideTag />
                 </div>
               </div>
