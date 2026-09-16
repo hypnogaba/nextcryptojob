@@ -179,7 +179,7 @@ export default async function JobsPage() {
   );
 
   return (
-    <AccountShell active="jobs" title="Your jobs" wide>
+    <AccountShell active="jobs" title="Your jobs">
       <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section aria-labelledby="now-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-1">
           <div className="grid gap-2">
