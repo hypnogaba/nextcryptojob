@@ -73,7 +73,7 @@ export default async function AccountPage() {
 
   if (!briefDone(step)) {
     return (
-      <AccountShell active="overview" title="Account">
+      <AccountShell active="overview" title="Account" sub="Finish your brief to unlock jobs and your score.">
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
           <p className="text-ink">Finish your brief to get jobs and your score.</p>
           <Button asChild size="lg" className="w-fit">
