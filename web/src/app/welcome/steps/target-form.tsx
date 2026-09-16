@@ -72,7 +72,7 @@ export function TargetForm({ initial }: { initial: string }) {
           placeholder={`For example: ${TARGET_EXAMPLES[0].text}`}
           aria-invalid={error ? true : undefined}
           aria-describedby="target-hint target-error"
-          className={TEXTAREA}
+          className={cn(TEXTAREA, "ncj-role-active")}
         />
         <p id="target-hint" aria-live="polite" className={cn(HINT, hint.ok && "text-ink")}>
           {hint.text} Any language is fine.
