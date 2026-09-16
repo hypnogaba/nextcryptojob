@@ -14,9 +14,18 @@ describe("legal pages", () => {
     expect(doc.source).toBe(original.replace(new RegExp(`\\s*${EM_DASH}\\s*`, "g"), ", "));
   });
 
-  it.each(docs.map((d) => [d.path, d] as const))("%s keeps the DRAFT banner and has no em dash", (_path, doc) => {
+  // «How scoring works» більше не чернетка: це сторінка продукту, банер прибрано 16.09 на прохання
+  // власника. Юридичні тексти (privacy, terms, consents) банер поки тримають.
+  it.each(docs.filter((d) => d.path !== "/how-scoring-works").map((d) => [d.path, d] as const))(
+    "%s keeps the DRAFT banner",
+    (_path, doc) => {
+      const out = renderToStaticMarkup(<>{renderMarkdown(doc.source)}</>);
+      expect(out).toMatch(/<blockquote[^>]*><p><strong[^>]*>DRAFT\. Not in force\./);
+    },
+  );
+
+  it.each(docs.map((d) => [d.path, d] as const))("%s renders cleanly and has no em dash", (_path, doc) => {
     const out = renderToStaticMarkup(<>{renderMarkdown(doc.source)}</>);
-    expect(out).toMatch(/<blockquote[^>]*><p><strong[^>]*>DRAFT\. Not in force\./);
     expect(out).not.toContain(EM_DASH);
     // Сутності складені з частин, щоб цей файл не спіткнувся об no-em-dash.test.ts.
     expect(out).not.toMatch(new RegExp(["&", "mdash;|&#", "8212;"].join("")));

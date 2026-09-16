@@ -87,7 +87,7 @@ export function SealCard({ view, size }: { view: CardView; size: number }) {
   const t = view.tier;
   const u = (k: number) => Math.round(size * k);
   const ring = u(0.7);
-  const disc = u(0.36);
+  const disc = u(0.28);
   const halo = u(0.012);
   const ringBorder = u(0.045);
   const seal = sealImage(view, ring);
@@ -161,10 +161,10 @@ export function SealCard({ view, size }: { view: CardView; size: number }) {
           })}
         >
           {/* У крузі лише бал і роль (власник 16.09); рівень і обробка стоять у рядку сезону. */}
-          <span style={{ fontFamily: DISPLAY, fontSize: u(0.15), lineHeight: 0.85, fontWeight: 700, color: t.ink }}>
+          <span style={{ fontFamily: DISPLAY, fontSize: u(0.092), lineHeight: 0.85, fontWeight: 700, color: t.ink }}>
             {String(view.score)}
           </span>
-          <span style={{ fontFamily: DISPLAY, fontSize: u(0.034), fontWeight: 700, color: t.ink, marginTop: u(0.008) }}>
+          <span style={{ fontFamily: DISPLAY, fontSize: u(0.026), fontWeight: 700, color: t.ink, marginTop: u(0.006) }}>
             {view.roleName}
           </span>
         </div>
