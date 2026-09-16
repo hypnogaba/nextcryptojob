@@ -815,6 +815,7 @@
   .acct-item {
     display: flex;
     flex: none;
+    box-sizing: border-box;
     align-items: center;
     gap: 12px;
     height: 40px;
@@ -830,7 +831,9 @@
   .acct-item:hover { background: var(--soft); color: var(--ink); }
   .acct-item[aria-current="page"] { background: var(--soft-2); color: var(--ink); }
   @media (min-width: 1024px) {
-    .acct-item { flex: none; }
+    /* Кожен пункт на всю ширину бічного меню (власник 16.09, п.3): та сама висота, відступи й
+       розмір тексту вже були спільні; тепер і ширина однакова, замість ширини за довжиною тексту. */
+    .acct-item { flex: none; width: 100%; }
     .acct-item[aria-current="page"]::before {
       content: "";
       position: absolute;
