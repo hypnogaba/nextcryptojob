@@ -6,7 +6,7 @@ import { explainRole, sourceState, type RoleView, type ScoreRow } from "@/lib/sc
 import { fromSqlTime } from "@/lib/time";
 
 /**
- * /admin/scores і /admin/scores/[userId] (C, docs/plans/2026-09-15-launch-readiness.md):
+ * /admin/scores і /admin/scores/[userId] (C):
  * розподіл балів, ворота якості, «підозрілі» бали, і розбір балу однієї людини. Ваги й
  * пояснення читаємо тим самим кодом, що сторінка балу кандидата (lib/score/explain.ts):
  * жодного числа з формули тут не написано вручну.

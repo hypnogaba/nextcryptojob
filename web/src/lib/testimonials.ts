@@ -2,7 +2,7 @@ import { newId } from "@/lib/ids";
 import { sqlTime } from "@/lib/time";
 
 /**
- * «Got a job through NextCryptoJob? Tell us» (B, docs/plans/2026-09-15-launch-readiness.md):
+ * «Got a job through NextCryptoJob? Tell us» (B):
  * /feedback (кожен, підключений чи ні) і /admin/testimonials (approve/hide). Таблиця
  * testimonials (0023). Публічний блок (components/testimonials.tsx) читає лише approved.
  */

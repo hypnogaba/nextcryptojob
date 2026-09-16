@@ -3,7 +3,7 @@ import { loadVisits, utcDay } from "@/lib/analytics/visits";
 import { sqlTime } from "@/lib/time";
 
 /**
- * /admin/funnel (D, docs/plans/2026-09-15-launch-readiness.md): visitors → brief started →
+ * /admin/funnel (D): visitors → brief started →
  * X added → wallet added → score ready → card viewed → share on X click → digest active →
  * apply clicks, за 1/7/30 днів, з конверсією між кроками.
  *

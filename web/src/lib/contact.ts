@@ -4,7 +4,7 @@ import { sqlTime } from "@/lib/time";
 import type { Limits } from "@/lib/auth/ratelimit";
 
 /**
- * /contact (A, docs/plans/2026-09-15-launch-readiness.md): форма з полями email, тема,
+ * /contact (A): форма з полями email, тема,
  * текст, honeypot і обмеження частоти за IP. Записи в contact_messages (0023).
  *
  * Honeypot: приховане поле, яке людина не бачить і не заповнює; форма-бот майже завжди

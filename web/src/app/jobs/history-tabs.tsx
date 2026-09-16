@@ -12,7 +12,7 @@ const WRAP = "min-w-0 wrap-anywhere";
 /**
  * «Sent to you» у трьох вкладках (раунд 5, п.16): Today, Earlier (усе за 30 днів, з пошуком по
  * назві) і Saved (Save на картці, збережене з обох вкладок незалежно від дати). Власник ще не
- * підтвердив цю форму, зроблено як запропоновано (docs/plans/round5-feedback.md, п.16).
+ * підтвердив цю форму, зроблено як запропоновано (фідбек власника, п.16).
  */
 
 const TAB = "inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition-colors";
