@@ -46,24 +46,16 @@ describe("EXAMPLE tag", () => {
 });
 
 describe("CardFront", () => {
-  it("shows score, role, name, level and finish in the footer, the card number, and no per-source stats", () => {
+  it("shows the score in the seal, with role, level, name, number and finish around it", () => {
     const html = renderToStaticMarkup(<CardFront face={exampleFace()} />);
-    for (const text of [
-      ">73<",
-      "of 100<b>Engineer</b>",
-      "@kestrel.dev",
-      ">Level<",
-      "<b>8 of 10</b>",
-      ">Finish<",
-      "<b>Chrome</b>",
-      "No. kSt7rEl0dv",
-      "Season 1",
-    ]) {
+    for (const text of [">73<", "of 100", "Engineer", "Level 8 of 10", "@kestrel.dev", "No. kSt7rEl0dv", "Season 1 · Chrome"]) {
       expect(html).toContain(text);
     }
-    expect(html).toContain("ncj-mid-seal");
-    // Джерела бала («GH 74 X 46 ONC 92») на лицьовому боці більше немає (лише на звороті).
-    for (const gone of [">GH<", ">ONC<", "ncj-stats", "ncj-face-badge"]) expect(html).not.toContain(gone);
+    // Напрям D: печатка на весь аркуш, бал у чистому крузі поверх неї.
+    expect(html).toContain("ncj-medal-seal");
+    expect(html).toContain("ncj-medal-core");
+    // Джерела бала («GH 74 X 46 ONC 92») на лицьовому боці немає (лише на звороті), як і банківського підпису.
+    for (const gone of [">GH<", ">ONC<", "ncj-stats", "ncj-face-badge", "ncj-mid-seal"]) expect(html).not.toContain(gone);
   });
 
   it("prints a long name in full, never cut to an ellipsis (K2)", () => {
@@ -73,11 +65,11 @@ describe("CardFront", () => {
     expect(html).not.toContain("…");
   });
 
-  it("draws the seal only once the card is issued, and keeps the level in the footer either way", () => {
+  it("draws the seal only once the card is issued, and keeps the level either way", () => {
     const html = renderToStaticMarkup(<CardFront face={{ ...exampleFace(), sealSeed: null, kind: "draft" }} />);
     expect(html).not.toContain("ncj-seal");
-    expect(html).toContain("ncj-mid-seal-empty");
-    expect(html).toContain("<b>8 of 10</b>");
+    expect(html).toContain("ncj-medal-seal-empty");
+    expect(html).toContain("Level 8 of 10");
   });
 });
 

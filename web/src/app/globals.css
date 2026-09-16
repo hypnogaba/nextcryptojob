@@ -236,14 +236,15 @@
     color: var(--ink-3);
   }
 
-  /* ─── Картка у форматі банківської (1.586, напрям «Payday») ───
-     Розміри всередині в cqw, тож та сама картка працює і на 300 px, і на 520 px.
+  /* ─── Картка: круглa печатка на квадратному аркуші (напрям D, 16.09) ───
+     Банківський формат 1.586 прибрано: картку плутали з платіжною. Квадрат ще й найкраще
+     стоїть у стрічці X. Розміри всередині в cqw, тож та сама картка працює і на 240 px, і на 520 px.
      Фарби приходять змінними з tiers.ts (style на .ncj-face). */
   .ncj-card {
     container-type: inline-size;
     position: relative;
     width: 100%;
-    aspect-ratio: 1.586;
+    aspect-ratio: 1;
   }
   .ncj-face {
     position: absolute;
@@ -295,9 +296,9 @@
     inset: 0;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    padding: 6.2cqw 7cqw 5.6cqw;
+    padding: 5.5cqw 6cqw 5cqw;
   }
-  .ncj-top { display: grid; gap: 1cqw; justify-items: start; padding-right: 30cqw; }
+  .ncj-top { display: grid; gap: 0.8cqw; justify-items: start; }
   .ncj-brand {
     display: inline-flex;
     align-items: center;
@@ -320,48 +321,95 @@
     text-overflow: ellipsis;
     max-width: 100%;
   }
-  .ncj-mid { align-self: end; display: flex; align-items: flex-end; gap: 3cqw; min-width: 0; }
-  /* Печатка на полі: лише прикраса, без числа всередині (round4: рівень і бал стоять окремо). */
-  .ncj-mid-seal { flex: none; width: 26cqw; height: 26cqw; margin-left: auto; color: var(--card-ink); }
-  .ncj-mid-seal-empty {
-    flex: none;
-    width: 26cqw;
-    height: 26cqw;
-    margin-left: auto;
+  /* Медальйон: печатка на весь аркуш, кільце і ЧИСТИЙ круг із балом поверх неї.
+     Круг непрозорий (var(--card-window)), тож лінії печатки ніколи не йдуть по цифрах. */
+  .ncj-medal {
+    position: relative;
+    align-self: center;
+    justify-self: center;
+    width: min(74cqw, 74cqh);
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+  }
+  .ncj-medal-seal {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    color: var(--card-ink);
+    opacity: 0.85;
+  }
+  .ncj-medal-seal-empty {
+    position: absolute;
+    inset: 6%;
     border-radius: 50%;
     outline: 0.4cqw dashed var(--card-ink-2);
     outline-offset: -0.4cqw;
   }
+  .ncj-medal-ring {
+    position: absolute;
+    inset: 4%;
+    border: 0.3cqw solid var(--card-ink);
+    border-radius: 50%;
+    opacity: 0.55;
+  }
+  .ncj-medal-core {
+    position: relative;
+    z-index: 1;
+    width: 58%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--card-window);
+    box-shadow: 0 0 0 2.2cqw var(--card-window);
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 0.2cqw;
+    text-align: center;
+    padding: 2cqw;
+  }
   .ncj-num {
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: 24cqw;
-    line-height: 0.8;
+    font-size: 21cqw;
+    line-height: 0.82;
     letter-spacing: -0.05em;
     font-variant-numeric: lining-nums tabular-nums;
+    color: var(--card-ink);
   }
   .ncj-of {
-    min-width: 0;
-    max-width: 50cqw;
-    padding-bottom: 0.6cqw;
-    font-size: 3.9cqw;
-    line-height: 1.25;
+    font-size: 2.7cqw;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: var(--card-ink-2);
   }
-  .ncj-of b { display: block; font-weight: 600; font-size: 4.8cqw; line-height: 1.15; color: var(--card-ink); text-wrap: balance; }
-  /* Підпис картки: Name / Level n of 10 / Finish, три колонки з розділювачами (round4).
-     Джерела бала («GH 74 X 46») тут більше немає: лише ці три поля. */
+  .ncj-role {
+    margin-top: 1.4cqw;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 5cqw;
+    line-height: 1.1;
+    color: var(--card-ink);
+    text-wrap: balance;
+    max-width: 100%;
+  }
+  .ncj-lvl { font-size: 3cqw; line-height: 1.2; color: var(--card-ink-2); }
+  /* Підпис аркуша: нік ліворуч, номер картки й адреса сайту праворуч (напрям D).
+     Рівень і обробка переїхали в круг і в рядок сезону, тож тут лише дві колонки. */
   .ncj-bot {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2.4cqw;
-    margin-top: 4.5cqw;
-    padding-top: 3cqw;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 3cqw;
+    margin-top: 3.5cqw;
+    padding-top: 2.6cqw;
     border-top: 1px solid var(--card-hairline);
     min-width: 0;
   }
   .ncj-bot-col { min-width: 0; }
-  .ncj-bot-col + .ncj-bot-col { border-left: 1px solid var(--card-hairline); padding-left: 3cqw; }
+  .ncj-bot-right { text-align: right; display: grid; gap: 0.4cqw; }
   .ncj-bot-col span {
     display: block;
     font-size: 2.6cqw;
@@ -813,10 +861,10 @@
     .ncj-feed { height: 300px; }
     .ncj-feed-row { grid-template-columns: 36px minmax(0, 1fr); }
     .ncj-feed-p { grid-column: 2; text-align: left; }
-    .ncj-stack { width: 330px; height: 208px; --k: 0.7; }
+    .ncj-stack { width: 320px; height: auto; --k: 0.7; }
   }
   @media (max-width: 520px) {
-    .ncj-stack { width: 290px; height: 183px; --k: 0.5; }
+    .ncj-stack { width: 260px; height: auto; --k: 0.5; }
   }
 
   /* Поле брифу: межа лінією, у фокусі чорнило. Раунд 5, п.13(а): фон теж міняється у фокусі й

@@ -92,8 +92,12 @@ const BARE_NUM_RE = new RegExp(`(?<![\\p{L}\\d$€£])${NUM}(?![\\p{L}\\d])`, "g
 /** Слова, після яких число це не гроші: «20 partnerships», «5 років», «3000 followers». */
 const NOT_MONEY_AFTER =
   /^[\s,]*(%|x\b|partnership|project|year|month\w*\s+of|people|users?|followers?|subscribers?|stars?|commits?|prs?\b|pull|tx\b|transactions?|hours?|днів|дні|рок\p{L}*|років|люд\p{L}*|підписник\p{L}*|проєкт\p{L}*|проект\p{L}*)/iu;
-/** Найменша річна сума, яку читаємо як зарплату з голого числа: нижче це радше рік, вік чи лічилка. */
-const BARE_YEARLY_MIN = 10_000;
+/**
+ * Найменша сума, яку читаємо як зарплату з голого числа. 1 000, а не 10 000 (16.09, власник
+ * написав «solidity engineer 4990 in ai startup», і 4990 не підтягнулось): від року, віку й
+ * лічильників число рятують окремі правила нижче, а не поріг.
+ */
+const BARE_YEARLY_MIN = 1_000;
 /** Найменша місячна сума, коли поруч сказано «a month»: 1 000 на місяць це 12 000 на рік. */
 const BARE_MONTHLY_MIN = 500;
 
@@ -122,7 +126,7 @@ function bareSalary(text: string): number | null {
 /**
  * «BD lead, remote, from 3,000 EUR a month» → віддалено й 36 000 EUR на рік. Місто не вгадуємо.
  * Число без валюти теж беремо (власник писав суму самою цифрою), але лише схоже на зарплату:
- * від 10 000 на рік, або з «k», або з роздільником тисяч, або сказано «a month». Валюта тоді USD,
+ * від 1 000 на рік, або з «k», або з роздільником тисяч, або сказано «a month». Валюта тоді USD,
  * як за замовчуванням у формі. Людина бачить підставлене і править.
  */
 export function placeFromText(text: string): PlaceGuess {

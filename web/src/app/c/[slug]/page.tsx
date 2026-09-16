@@ -84,7 +84,7 @@ export default async function CardPage({ params, searchParams }: Props) {
     <section className="mx-auto grid max-w-[1280px] items-start gap-12 px-[clamp(16px,4vw,32px)] pt-6 pb-24 sm:pt-10 lg:grid-cols-[minmax(0,480px)_minmax(0,1fr)] lg:gap-16">
       <div className="grid gap-6">
         <div className="rounded-[32px] border border-line bg-soft p-6 sm:p-10">
-          <div className="ncj-card mx-auto max-w-[440px] -rotate-3">
+          <div className="ncj-card mx-auto max-w-[380px] -rotate-3">
             <CardFront face={view} draw spin />
           </div>
         </div>

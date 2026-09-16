@@ -101,7 +101,7 @@ export default function ScoringPage() {
           </div>
           </div>
           <div className="grid gap-6">
-            <div className="ncj-card mx-auto max-w-[440px]">
+            <div className="ncj-card mx-auto max-w-[380px]">
               <CardFront face={face} draw spin />
             </div>
             <CardBackFace face={face} back={EXAMPLE_BACK} meta={`Formula ${EXAMPLE_BREAKDOWN.formula}. Example data.`} />

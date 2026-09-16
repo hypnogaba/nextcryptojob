@@ -7,19 +7,22 @@ import { cn } from "@/lib/utils";
 import { Seal } from "./seal";
 
 /**
- * Лицьовий бік картки у форматі банківської (round4, макет dir-6): знак і номер, бал і роль,
- * гільош-печатка прикрасою поруч з балом (без числа всередині), підпис Name / Level n of 10 /
- * Finish трьома колонками. Джерела бала на лицьовому боці більше немає (лише на звороті).
- * Позначка «Example card» лише на face.kind === "example", і лише коли hideTag не задано (на
- * головній її замінює підпис під стосом карток).
+ * Лицьовий бік картки: КРУГЛА ПЕЧАТКА на квадратному аркуші (напрям D, вибір власника 16.09).
+ * Банківський формат 1.586 прибрано: люди казали, що картка схожа на платіжну й вводить в оману.
+ * Квадрат ще й найкраще стоїть у стрічці X.
+ *
+ * Будова: знак і рядок сезону вгорі; печатка на весь аркуш, а бал у ЧИСТОМУ крузі посередині
+ * (лінії печатки не йдуть по цифрах: круг непрозорий і лежить поверх); унизу нік і рівень.
+ * Шари печатки повільно обертаються (spin), сусідні в різні боки, і малюються один за одним
+ * при появі (draw). Позначка «Example card» лише на face.kind === "example" і лише без hideTag.
  */
 export function CardFront({
   face,
   draw = false,
   spin = false,
-  /** Світлова смуга по картці (лише жива картка на головній). */
+  /** Світлова смуга по аркушу (лише жива картка на головній). */
   sweep = false,
-  /** Не показувати позначку «Example card»: на головній її замінює підпис під стосом. */
+  /** Не показувати позначку «Example card»: на головній її замінює підпис під карткою. */
   hideTag = false,
   className,
 }: {
@@ -45,40 +48,51 @@ export function CardFront({
             <LogoMark className="ncj-brand-mark" />
             NextCryptoJob
           </span>
-          <span className="ncj-set">
-            Season 1 · {face.number ?? "not issued yet"}
-          </span>
+          <span className="ncj-set">Season 1 · {t.finishName}</span>
         </div>
-        <div className="ncj-mid">
-          <span className="ncj-num">{face.score}</span>
-          <span className="ncj-of">
-            of 100<b>{face.roleName}</b>
-          </span>
+
+        <div className="ncj-medal">
           {face.sealSeed !== null ? (
-            <Seal seed={face.sealSeed} level={t.sealLayers} inks={t.sealInks} strokeWidth={1.1} segments={6} draw={draw} spin={spin} className="ncj-mid-seal" />
+            <Seal
+              seed={face.sealSeed}
+              level={t.sealLayers}
+              inks={t.sealInks}
+              strokeWidth={0.9}
+              segments={8}
+              draw={draw}
+              spin={spin}
+              className="ncj-medal-seal"
+            />
           ) : (
-            <span aria-hidden="true" className="ncj-mid-seal-empty" />
+            <span aria-hidden="true" className="ncj-medal-seal-empty" />
           )}
+          <span aria-hidden="true" className="ncj-medal-ring" />
+          <div className="ncj-medal-core">
+            <span className="ncj-num">{face.score}</span>
+            <span className="ncj-of">of 100</span>
+            <b className="ncj-role">{face.roleName}</b>
+            <span className="ncj-lvl">
+              Level {face.level} of {MAX_LEVEL}
+            </span>
+          </div>
         </div>
+
         <div className="ncj-bot">
-          <div className="ncj-bot-col ncj-name" style={
+          <div
+            className="ncj-bot-col ncj-name"
+            style={
               {
                 "--name-scale": nameFontScale(face.displayName),
                 "--name-wrap": nameFitsOneLine(face.displayName) ? "nowrap" : "normal",
               } as CSSProperties
-            }>
+            }
+          >
             <span>Name</span>
             <b>{face.displayName}</b>
           </div>
-          <div className="ncj-bot-col">
-            <span>Level</span>
-            <b>
-              {face.level} of {MAX_LEVEL}
-            </b>
-          </div>
-          <div className="ncj-bot-col">
-            <span>Finish</span>
-            <b>{t.finishName}</b>
+          <div className="ncj-bot-col ncj-bot-right">
+            <span>{face.number ?? "not issued yet"}</span>
+            <span>nextcryptojob.xyz</span>
           </div>
         </div>
       </div>

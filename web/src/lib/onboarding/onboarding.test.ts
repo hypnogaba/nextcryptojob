@@ -180,6 +180,8 @@ describe("placeFromText: remote and pay from the words of step 1", () => {
     expect(placeFromText("remote devrel, 90k")).toEqual({ where: "remote", salary: 90_000, currency: "USD" });
     expect(placeFromText("від 120 000 на рік")).toEqual({ where: null, salary: 120_000, currency: "USD" });
     expect(placeFromText("from 4000 a month")).toEqual({ where: null, salary: 48_000, currency: "USD" });
+    // Власник 16.09: сума самою цифрою, хай і невелика, це його сума, а не наша здогадка.
+    expect(placeFromText("solidity engineer 4990 in ai startup")).toEqual({ where: null, salary: 4_990, currency: "USD" });
   });
 
   it("does not read a counter, a year or an age as a salary, and no city is read", () => {

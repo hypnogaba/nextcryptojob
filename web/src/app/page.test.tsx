@@ -61,21 +61,24 @@ describe("home page", () => {
     expect(html).not.toContain("The brief, about 5 clicks");
   });
 
-  it("puts a level 10 example card in front of the hero stack, with the finishes behind it as buttons", async () => {
+  it("puts one level 10 example card in the hero, with the seal drawing and spinning", async () => {
     const html = await home();
     const stage = html.slice(html.indexOf('class="ncj-stage"'), html.indexOf('id="board-h"'));
     expect(stage).toContain("ncj-tilt");
     expect(stage).toContain("ncj-sweep");
-    expect(stage).toContain("ncj-seal ncj-seal-spin");
+    expect(stage).toContain("ncj-seal-draw");
+    expect(stage).toContain("ncj-seal-spin");
     // Позначку «Example card» на головній замінює підпис під стосом (власник 15.09, п.8).
     expect(text(stage)).not.toContain("Example card");
-    expect(text(stage)).toContain("Black finish, level 10 of 10.");
-    expect(text(stage)).toContain("Click a card behind to see another finish.");
-    // Раунд 6: три заготовки позаду це кнопки, кожна називає свою обробку.
-    expect(stage.match(/class="ncj-slot ncj-slot-back"/g)).toHaveLength(3);
-    for (const finish of ["Lavender", "Mint", "Paper"]) {
-      expect(stage).toContain(`Show the ${finish} card`);
-    }
+    expect(text(stage)).toContain(
+      "Your card is built from what you have done. It is unique, matches only you, and is made to share on X.",
+    );
+    // Напрям D (16.09): одна картка, без стосу й без кнопок обробок.
+    expect(stage.match(/class="ncj-slot"/g)).toHaveLength(1);
+    expect(stage).not.toContain("ncj-slot-back");
+    expect(stage).not.toContain("Show the Mint card");
+    // Бал стоїть у крузі печатки.
+    expect(stage).toContain("ncj-medal-core");
   });
 
   it("counts live jobs with a rolling counter and lists them in a vertical feed", async () => {
