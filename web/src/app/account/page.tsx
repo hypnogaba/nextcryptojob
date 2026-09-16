@@ -119,9 +119,11 @@ export default async function AccountPage() {
               <span className="text-sm text-ink-muted">Roles scored</span>
               <b className="block font-display text-[1.75rem] leading-none">{scores.size}</b>
             </div>
+            {/* Одна картка на людину (раунд 5, п.7): рахунок карток тут не потрібен, лише її
+                стан, тому не "Cards" з числом, а "Card" зі станом (власник 16.09, п.7). */}
             <div className="rounded-xl border border-line p-3.5">
-              <span className="text-sm text-ink-muted">Cards</span>
-              <b className="block font-display text-[1.75rem] leading-none">{cards.length}</b>
+              <span className="text-sm text-ink-muted">Card</span>
+              <b className="block font-display text-[1.75rem] leading-none">{best ? "Live" : "Not yet"}</b>
             </div>
           </div>
 
