@@ -61,3 +61,10 @@ export async function unlocks(secret: string | undefined, loaded: LoadedProfile,
   return keyMatches(await profileKey(secret, loaded.userId, version), given);
 }
 
+
+/** Особисте посилання для подачі або null, поки власник його не створив (чи немає секрета). */
+export async function applyUrl(secret: string | undefined, origin: string, slug: string, loaded: LoadedProfile): Promise<string | null> {
+  const version = loaded.input.prefs.keyVersion;
+  if (!secret || version < 1) return null;
+  return `${origin}/c/${slug}?k=${await profileKey(secret, loaded.userId, version)}`;
+}

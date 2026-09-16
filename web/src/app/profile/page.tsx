@@ -6,7 +6,10 @@ import { requireUser } from "@/lib/auth/session";
 import { suggestDisplayName } from "@/lib/card/display-name";
 import { cardEligibility } from "@/lib/card/eligibility";
 import { hasScoringBasis } from "@/lib/consent";
-import { db } from "@/lib/db";
+import { appEnv, db } from "@/lib/db";
+import { profileView } from "@/lib/card/profile";
+import { applyUrl, loadProfileInput } from "@/lib/card/profile-load";
+import { siteOrigin } from "@/lib/site";
 import { listIdentities } from "@/lib/identity/store";
 import { briefDone } from "@/lib/onboarding/steps";
 import { loadAnswers } from "@/lib/onboarding/store";
@@ -21,6 +24,7 @@ import { parseWait } from "../welcome/flow";
 import { RescoreButton } from "./rescore-button";
 import { RoleCard } from "./role-card";
 import { SourcesPanel } from "./sources-panel";
+import { ProofPanel } from "./proof-panel";
 import { StatusPanel } from "./status-panel";
 
 export const metadata: Metadata = { title: "Your profile", robots: { index: false } };
@@ -55,6 +59,12 @@ export default async function ProfilePage({ searchParams }: Props) {
   const wallet = identities.find((i) => (i.kind === "evm" || i.kind === "solana") && i.verifiedAt)?.value ?? null;
   // Раунд 5, п.7: одна картка на людину, роль = головна (перша обрана в брифі), не найвищий бал.
   const main = mainRole(answers.roles, rankRoles(answers.roles, scores));
+  // Профіль-доказ під карткою: лише коли картка є (одна на людину).
+  const card0 = cards[0] ?? null;
+  const proof = card0 ? await loadProfileInput(d, card0.slug, new Date()) : null;
+  const env = appEnv();
+  const origin = siteOrigin(env);
+  const proofApply = card0 && proof ? await applyUrl(env.SESSION_SECRET, origin, card0.slug, proof) : null;
 
   return (
     <AccountShell active="card" title="Your card and score">
@@ -147,6 +157,16 @@ export default async function ProfilePage({ searchParams }: Props) {
             );
           })}
         </div>
+      ) : null}
+
+      {card0 && proof ? (
+        <ProofPanel
+          view={profileView(proof.input, "owner")}
+          publicUrl={`/c/${card0.slug}`}
+          applyUrl={proofApply}
+          pdfUrl={`/c/${card0.slug}/profile.pdf`}
+          showWallet={proof.input.prefs.showWallet}
+        />
       ) : null}
 
       <SourcesPanel identities={identities} />

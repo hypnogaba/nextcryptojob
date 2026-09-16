@@ -8,7 +8,7 @@ import { currentAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { fromSqlTime } from "@/lib/time";
 import { markXPostedAction, skipXPostAction } from "../jobs/actions";
-import { CopyButton } from "./copy-button";
+import { CopyButton } from "@/components/form/copy-button";
 
 export const metadata: Metadata = { title: "X queue", robots: { index: false } };
 
