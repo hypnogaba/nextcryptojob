@@ -40,8 +40,20 @@ describe("digestEmail", () => {
         `All jobs we sent you: ${ORIGIN}/jobs\nChange the channel or the hour: ${ORIGIN}/settings\nPause daily jobs: ${UNSUB}\n${DIGEST_FOOTER_REASON}`,
       ].join("\n\n") + "\n",
     );
-    // Плитка вакансії: назва з номером веде на саму вакансію, місце і зарплата поруч (варіант 5).
+    // Раунд 6: плитка веде на нашу сторінку вакансії, а пряме посилання на джерело лишається окремо.
     expect(mail.html).toMatch(/<a href="https:\/\/jobs\.example\.com\/1"[^>]*>1\. Protocol Engineer<\/a>/);
+    const withOurs = digestEmail({
+      localDate: "2026-09-12",
+      jobs: [job({ job_id: "j0123456789abcdef01234567" })],
+      site: ORIGIN, unsubscribeUrl: UNSUB,
+    });
+    expect(withOurs.html).toContain(`href="${ORIGIN}/jobs/j0123456789abcdef01234567"`);
+    expect(withOurs.html).toContain("Open in your jobs");
+    // Пряме посилання на джерело лишається follow: цього вимагають умови web3.career.
+    expect(withOurs.html).toContain('href="https://jobs.example.com/1"');
+    expect(withOurs.html).not.toMatch(/rel="[^"]*nofollow/);
+    expect(withOurs.text).toContain(`Open in your jobs: ${ORIGIN}/jobs/j0123456789abcdef01234567`);
+    expect(withOurs.text).toContain("Apply directly: https://jobs.example.com/1");
     expect(mail.html).toContain("Paying Labs · Remote");
     expect(mail.html).toContain("$120k to $150k");
     expect(mail.html).toContain("Posted by Acme on NextCryptoJob");

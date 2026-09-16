@@ -31,6 +31,8 @@ export type DigestEmailJob = {
   company_domain?: string | null;
   /** Рядок токена «$ARB $0.42 · MC $1.9B · +3.1%» (з 14.09.2026, необов'язкове), лише свіжі ціни. */
   token?: string | null;
+  /** id вакансії на сайті (з 16.09.2026): плитка веде на /jobs/<id>; старий engine поля не шле. */
+  job_id?: string | null;
 };
 
 /** Екранування для тексту й атрибутів у лапках. */
@@ -50,9 +52,11 @@ type Job = {
   estimate: string | null; about: string | null; companySite: string | null; token: string | null;
   /** Окремо від meta: у HTML це підпис плитки й чипи (варіант 5), у тексті лишається той самий рядок. */
   place: string; salary: string | null;
+  /** Наша сторінка вакансії (/jobs/<id>) або null, якщо engine не прислав id. */
+  ours: string | null;
 };
 
-function tidy(j: DigestEmailJob): Job {
+function tidy(j: DigestEmailJob, site: string): Job {
   const meta = [cleanText(j.company, 100), j.location ? cleanText(j.location, 100) : null, j.salary ? cleanText(j.salary, 60) : null];
   return {
     title: cleanText(j.title, 200),
@@ -68,6 +72,7 @@ function tidy(j: DigestEmailJob): Job {
     about: j.about ? cleanText(j.about, 240) : null,
     // companySiteUrl ще раз перевіряє домен (захист від чужих даних, як safeUrl вище).
     companySite: companySiteUrl(j.company_domain),
+    ours: j.job_id ? new URL(`/jobs/${encodeURIComponent(j.job_id)}`, site).toString() : null,
     token: j.token ? cleanText(j.token, 80) : null,
   };
 }
@@ -109,7 +114,7 @@ export type DigestEmailInput = {
 };
 
 export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
-  const jobs = [...input.jobs].sort((a, b) => a.position - b.position).map(tidy);
+  const jobs = [...input.jobs].sort((a, b) => a.position - b.position).map((j) => tidy(j, input.site));
   const n = jobs.length;
   const heading = `Your ${n} crypto job${n === 1 ? "" : "s"} for ${shortDate(input.localDate)}`;
   const jobsUrl = new URL("/jobs", input.site).toString();
@@ -128,7 +133,8 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
       [j.companySite, j.token].filter(Boolean).join(" · ") || null,
       j.postedBy ? `Posted by ${j.postedBy} on NextCryptoJob` : null,
       j.via ? `via ${j.via}` : null,
-      j.url,
+      j.ours ? `Open in your jobs: ${j.ours}` : null,
+      j.url ? (j.ours ? `Apply directly: ${j.url}` : j.url) : null,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -148,8 +154,13 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const htmlJobs = jobs
     .map((j, i) => {
       const title = `${i + 1}. ${escapeHtml(j.title)}`;
-      // Без rel: у листі це follow-посилання, як і вимагає web3.career.
-      const titleHtml = j.url ? `<a href="${escapeHtml(j.url)}" style="color:${INK};text-decoration:none">${title}</a>` : title;
+      // Раунд 6 (власник 16.09: «хотілося б клікнути на вакансію і щоб перевело на сайт, у профіль,
+      // там де мої вакансії, і звідти подаватися»): плитка веде на НАШУ сторінку вакансії. Пряме
+      // посилання на джерело лишається окремим рядком нижче, follow, як вимагають умови web3.career.
+      const openHref = j.ours ?? j.url;
+      const titleHtml = openHref
+        ? `<a href="${escapeHtml(openHref)}" style="color:${INK};text-decoration:none">${title}</a>`
+        : title;
       const chips = [j.salary ? chip(j.salary, CHIP_BG, BRAND) : "", j.token ? chip(j.token, TOKEN_BG, TOKEN_INK) : ""].join("");
       return (
         `<div style="background:#ffffff;border:1px solid ${LINE};border-radius:14px;padding:16px;margin:0 0 12px">` +
@@ -167,6 +178,11 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
           ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob</p>`
           : "") +
         (j.via ? `<p style="margin:8px 0 0;color:${MUTED};font-size:13px">via ${escapeHtml(j.via)}</p>` : "") +
+        (j.ours && j.url
+          ? `<p style="margin:10px 0 0;font-size:13px">` +
+            `<a href="${escapeHtml(j.ours)}" style="color:${BRAND};font-weight:600">Open in your jobs</a>` +
+            ` &nbsp;·&nbsp; <a href="${escapeHtml(j.url)}" style="color:${MUTED}">Apply directly</a></p>`
+          : "") +
         `</div>`
       );
     })

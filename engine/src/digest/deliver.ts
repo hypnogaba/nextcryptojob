@@ -34,6 +34,8 @@ export interface DeliveryJob {
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
   source: "nextrole" | "company";
+  /** id вакансії: сайт робить з нього адресу своєї сторінки /jobs/<id> (раунд 6, лист). */
+  jobId?: string | null;
   /** «est. $180k to $225k (web3.career estimate)», лише коли вилки роботодавця немає; оцінка, не зарплата. */
   salaryEstimate?: string | null;
   /** Одне-два речення про компанію (companies.about, db/jobs 0005); null, якщо не знаємо. */
@@ -265,6 +267,8 @@ export interface EmailPayload {
   jobs: Array<{
     position: number; title: string; company: string; location: string | null; salary: string | null;
     why: string; url: string; posted_by: string | null; source: "nextrole" | "company";
+    /** id вакансії на сайті: плитка листа веде на /jobs/<id>, а не одразу назовні (раунд 6). */
+    job_id?: string | null;
     /** Оцінка дошки підписом (DeliveryJob.salaryEstimate); сайт показує її приглушено. */
     salary_estimate: string | null;
     /** Одне-два речення про компанію (з 14.09.2026, необов'язкове). */
@@ -283,7 +287,8 @@ export function emailPayload(m: DigestMessage, now: Date): EmailPayload {
     jobs: m.jobs.map((j) => ({
       position: j.position, title: cleanText(j.title, 200), company: cleanText(j.company, 100),
       location: j.location ? cleanText(j.location, 100) : null, salary: j.salary, why: j.why, url: j.url,
-      posted_by: j.postedBy, source: j.source, salary_estimate: j.salary ? null : j.salaryEstimate ?? null,
+      posted_by: j.postedBy, source: j.source, job_id: j.jobId ?? null,
+      salary_estimate: j.salary ? null : j.salaryEstimate ?? null,
       about: j.about ? cleanText(j.about, 240) : null,
       company_domain: companySiteUrl(j.companyDomain) ? j.companyDomain!.trim().toLowerCase().replace(/^www\./, "") : null,
       token: j.token ? cleanText(j.token, 80) : null,

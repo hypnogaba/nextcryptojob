@@ -58,6 +58,8 @@ const Job = z.object({
   url: z.string().min(1).max(2048),
   posted_by: Maybe(300),
   source: z.enum(["nextrole", "company"]),
+  /** id вакансії на сайті (з 16.09.2026): плитка листа веде на /jobs/<id>; старий engine не шле. */
+  job_id: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/).nullish(),
   /** Оцінка дошки підписом («est. … (web3.career estimate)»); старий engine поля не шле. */
   salary_estimate: Maybe(200).optional(),
   /** Одне-два речення про компанію (з 14.09.2026); старий engine поля не шле. */
