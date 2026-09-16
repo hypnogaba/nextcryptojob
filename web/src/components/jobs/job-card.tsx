@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { logoPath } from "@/lib/jobs/companies";
 import { applyLink, EXTERNAL_JOB_REL, externalJobLink } from "@/lib/jobs/link";
 import { companySiteUrl, type TokenChip } from "@/lib/jobs/token";
+import { cn } from "@/lib/utils";
 import { CompanyLogo } from "./company-logo";
 import { SaveButton } from "./save-button";
 
@@ -214,7 +215,16 @@ export function JobCard({
   // посилання" (overlay нижче, вміст поверх): Title, Apply і Save лишаються своїми посиланнями.
   const detailHref = jobRef ? jobDetailHref(jobRef) : null;
   return (
-    <li className="relative rounded-3xl border-[1.5px] border-line bg-surface p-5 transition-[border-color,box-shadow] duration-300 hover:border-[#d5d7dd] hover:shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)] sm:p-7">
+    <li
+      className={cn(
+        // Уся плитка виділяється, не лише межа-по-піксельних, і клавіатурний фокус на посиланні
+        // чи кнопці всередині виглядає так само, як наведення (власник 16.09, п.4).
+        "relative rounded-3xl border-[1.5px] border-line bg-surface p-5 transition-[border-color,background-color,box-shadow] duration-200 sm:p-7",
+        "hover:border-line-strong hover:bg-soft hover:shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)]",
+        "has-[:focus-visible]:border-line-strong has-[:focus-visible]:bg-soft has-[:focus-visible]:shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)]",
+        detailHref && "cursor-pointer",
+      )}
+    >
       {detailHref ? (
         <Link href={detailHref} prefetch={false} aria-hidden="true" tabIndex={-1} className="absolute inset-0 z-0 rounded-3xl" />
       ) : null}

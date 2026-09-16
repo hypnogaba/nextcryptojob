@@ -722,7 +722,11 @@
     color: var(--ink);
     transition: background-color 300ms var(--ease-out);
   }
-  .ncj-feed-row:hover { background: var(--soft); }
+  /* Наведення й клавіатурний фокус виглядають так само (власник 16.09, п.4): виразніший фон
+     на всьому рядку плюс видима рамка фокуса для клавіатури. */
+  .ncj-feed-row:hover,
+  .ncj-feed-row:focus-visible { background: var(--soft-2); }
+  .ncj-feed-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
   .ncj-feed-av {
     display: grid;
     place-items: center;
