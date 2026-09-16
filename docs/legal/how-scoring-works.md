@@ -122,7 +122,8 @@ changes or when we release a new formula version.
 ## Who sees your score
 
 - You.
-- The public, only on your card page if you publish it: score, role and level. No wallets, no links.
+- The public, only on your card page if you publish it: score, role, level and the facts behind the score as numbers. No wallets, no links, no contacts.
+- Anyone you give your apply link or PDF to: also your source links, your own words, your contacts and the links you added. Hiding a line never changes your score.
 - Paying companies, while "Show me to companies" is on. It is on when you finish setting up, and you can turn it off at any time in Settings. They can filter by score. While "Show my Telegram directly" is also on, they also see your Telegram, X, GitHub, YouTube, website and wallet addresses. They never see your email without your approval, or raw data.
 
 Companies must not decide to hire or reject anyone based only on the score. A person

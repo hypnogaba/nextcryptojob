@@ -42,6 +42,7 @@ export const MERGE_REFS: Record<string, "merged" | "moved" | "deleted"> = {
   "sent.user_id": "merged",
   "digest_runs.user_id": "merged",
   "saved_jobs.user_id": "merged",
+  "profile_prefs.user_id": "merged",
   "company_members.user_id": "merged",
   "company_members.invited_by": "moved",
   "companies.created_by": "moved",
@@ -251,6 +252,9 @@ export async function mergeAccounts(d: D1Database, survivorId: string, otherId: 
   st.push(q("UPDATE OR IGNORE sent SET user_id = ?1 WHERE user_id = ?2", S, O));
   // Раунд 5, п.16: збережені вакансії обох профілів; та сама вже збережена в обох лишається одна.
   st.push(q("UPDATE OR IGNORE saved_jobs SET user_id = ?1 WHERE user_id = ?2", S, O));
+  // Профіль-доказ: налаштування survivor лишаються; якщо своїх немає, беруться налаштування другого
+  // профілю (його ключ виводився з іншого id, тож старе посилання подачі стає публічним).
+  st.push(q("UPDATE OR IGNORE profile_prefs SET user_id = ?1 WHERE user_id = ?2", S, O));
 
   // --- Команди компаній ------------------------------------------------------------------------
   st.push(
