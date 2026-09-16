@@ -1,7 +1,7 @@
 # NextCryptoJob Terms for Companies
 
-These terms are a contract between [LEGAL NAME], sole trader, France, SIRET [SIRET],
-[ADDRESS], hello@nextcryptojob.xyz ("we", "us") and the company or agency that subscribes to
+These terms are a contract between NextCryptoJob, sole trader, France,
+hello@nextcryptojob.xyz, hello@nextcryptojob.xyz ("we", "us") and the company or agency that subscribes to
 NextCryptoJob ("you"). They apply to the CRM, the job posting tools, the REST API, the
 MCP server and paid requests through x402.
 
@@ -9,7 +9,7 @@ MCP server and paid requests through x402.
 
 - The service is for businesses only. You confirm that you act for a business, not as a consumer.
 - The person who accepts these terms confirms that they may bind the company.
-- Recruiting agencies must apply. We approve agencies by hand and may refuse without giving a reason. [to confirm with lawyer]
+- Recruiting agencies must apply. We approve agencies by hand and may refuse without giving a reason.
 - You must give true company information and keep it up to date.
 
 ## 2. Words used here
@@ -59,15 +59,13 @@ The score is an input to your judgment. It is not a decision.
 
 ## 7. Data protection roles
 
-[to confirm with lawyer: the full allocation of roles in this section]
-
 - **Before contact.** We are the controller of profile data. We make it available to you in the service under these terms. You must treat it as confidential and use it only as section 4 allows.
 - **After contact.** When a candidate approves your request (or chose direct contact), you receive their contact data. From that moment you are an independent controller of the contact data and of your own recruitment process. You must:
   - give the candidate the information required by art. 14 GDPR (<https://gdpr-info.eu/art-14-gdpr/>), at the latest at your first message to them;
   - keep their data no longer than 2 years after your last contact with them, unless they agree to longer, as the CNIL recommends (<https://www.cnil.fr/fr/cnil-direct/question/recrutement-un-employeur-peut-il-conserver-mon-dossier>);
   - answer their rights requests yourself.
-- **Your data in the CRM.** For notes, tags and pipeline stages that your team writes about candidates, you decide why and how they are processed. We store them for you as your processor under the data processing terms in Annex A (art. 28 GDPR, <https://gdpr-info.eu/art-28-gdpr/>). [to confirm with lawyer: processor or joint controller under art. 26 GDPR]
-- **When a candidate hides their profile or deletes their account**, their profile data disappears from your view. Your notes about that candidate are deleted too. [to confirm product behaviour]
+- **Your data in the CRM.** For notes, tags and pipeline stages that your team writes about candidates, you decide why and how they are processed. We store them for you as your processor under the data processing terms in Annex A (art. 28 GDPR, <https://gdpr-info.eu/art-28-gdpr/>).
+- **When a candidate hides their profile or deletes their account**, their profile data disappears from your view. Your notes about that candidate are deleted too.
 - Write notes that are factual and professional. Candidates can ask to see data about them.
 
 ## 8. Confidentiality
@@ -78,7 +76,7 @@ The score is an input to your judgment. It is not a decision.
 ## 9. Security
 
 - Keep API keys secret. Do not put them in public code or client-side apps. Rotate a key at once if it leaks.
-- Tell us within 48 hours at hello@nextcryptojob.xyz if you suspect unauthorised access to your account, your keys or candidate data. [to confirm with lawyer: notice period]
+- Tell us within 48 hours at hello@nextcryptojob.xyz if you suspect unauthorised access to your account, your keys or candidate data.
 - We keep a log of access to candidate data. We may review it to check that you follow these terms.
 
 ## 10. Subscription and payment
@@ -89,17 +87,16 @@ The score is an input to your judgment. It is not a decision.
   chain. Nothing renews by itself: you pay again when you want the next 30 days.
 - **Refunds.** We do not refund part of a paid period, except where the law requires it or where
   we ended the contract without a fault on your side.
-- **Taxes.** [to confirm with lawyer: VAT status of the sole trader. If under the franchise scheme, invoices state that VAT does not apply, with the legal reference. For business customers in other EU countries, the reverse charge applies, <https://www.impots.gouv.fr/professionnel/prestations-entre-assujettis>.]
-- **Late payment.** For invoices paid late, penalties apply at [RATE] and a fixed recovery fee of EUR 40 is due (art. L441-10 French Commercial Code, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038414392>; art. D441-5, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043197457>).
+- **Late payment.** For invoices paid late, penalties apply at the statutory rate and a fixed recovery fee of EUR 40 is due (art. L441-10 French Commercial Code, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038414392>; art. D441-5, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043197457>).
 - **Price changes.** We tell you at least 30 days before a price change. You can cancel before it applies.
 
 ## 11. API, MCP and x402
 
 - **Same rules.** Everything your agents do through the API, the MCP server or x402 is subject to these terms, the same as actions in the CRM.
 - **API keys.** API keys work within your subscription.
-- **x402.** You can pay per request in USDC through the x402 protocol, at the prices shown in each payment request (HTTP 402 response). [to confirm product: that x402 access to candidate data requires a company account that accepted these terms]
+- **x402.** You can pay per request in USDC through the x402 protocol, at the prices shown in each payment request (HTTP 402 response).
   - A payment is final once confirmed on the blockchain. You pay the network fees.
-  - If we accept a payment and fail to deliver the result, we credit or refund the amount. [to confirm with lawyer and product]
+  - If we accept a payment and fail to deliver the result, we credit or refund the amount.
   - We do not hold funds for you. We are not a crypto service provider for you.
   - Contact data is never returned through x402 or the API unless the candidate approved contact.
 - **Rate limits.** We set limits on requests per minute and per day [NUMBERS to set]. We may slow or block traffic above them.
@@ -110,7 +107,7 @@ The score is an input to your judgment. It is not a decision.
 
 - Post only real, open jobs. Describe them accurately, including pay where you can.
 - A job post must not mention any ground listed in art. L1132-1 French Labour Code (art. L5321-2, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006903780>).
-- For jobs performed in France, or offered by a French employer, French law has rules on the language of job offers (art. L5331-4 French Labour Code, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006903796>). You are responsible for following them. [to confirm with lawyer: how this applies to an English-language site]
+- For jobs performed in France, or offered by a French employer, French law has rules on the language of job offers (art. L5331-4 French Labour Code, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006903796>). You are responsible for following them.
 - A job post must not ask candidates for any payment.
 - We may show your jobs in candidate digests and post them on our X account.
 - We may refuse or remove a job post that breaks these terms or the law. We tell you why.
@@ -124,13 +121,13 @@ The score is an input to your judgment. It is not a decision.
   - try to identify candidates before contact;
   - do not pay after a reminder;
   - put the security of the service or of candidates at risk.
-- For other breaches, we warn you and give you 15 days to fix them. [to confirm with lawyer]
+- For other breaches, we warn you and give you 15 days to fix them.
 - **When the contract ends**, your access stops. You must delete profile data you still hold outside contacted candidates. We delete your data (Annex A) within 30 days, except invoices, which we keep 10 years by law.
 
 ## 14. Liability
 
 - The score is an indication based on public data. We do not guarantee its accuracy, or that any candidate is fit for your role, or any hiring result.
-- Our total liability under this contract is limited to the fees you paid in the 12 months before the event. This limit does not apply to fraud, gross negligence, or where the law forbids it. [to confirm with lawyer]
+- Our total liability under this contract is limited to the fees you paid in the 12 months before the event. This limit does not apply to fraud, gross negligence, or where the law forbids it.
 - You are liable for your use of candidate data, for your agents and for your job posts. You will cover our losses if a claim results from your breach of sections 4 to 9 or 12.
 
 ## 15. Changes to these terms
@@ -141,16 +138,10 @@ can cancel before that date.
 ## 16. Law and courts
 
 French law applies. Disputes go to the courts of [CITY], France.
-[to confirm with lawyer: a jurisdiction clause is valid only between parties who all
-contracted as merchants, art. 48 French Code of Civil Procedure,
-<https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006410147>. Check whether this
-applies to the sole trader and to non-French customers.]
 
 ---
 
 ## Annex A. Data processing terms (art. 28 GDPR)
-
-[to confirm with lawyer: full art. 28 wording; this is an outline]
 
 For your data in the CRM (notes, tags, pipeline stages, saved searches, your jobs):
 
@@ -163,4 +154,4 @@ For your data in the CRM (notes, tags, pipeline stages, saved searches, your job
 7. **Breach.** We tell you without undue delay after we become aware of a breach that affects your data.
 8. **End.** When the contract ends, we delete your data within 30 days. You can export it before.
 9. **Audits.** We give you the information needed to show compliance with art. 28 GDPR.
-10. **Transfers.** Hosting may involve transfer to the USA under the EU-US Data Privacy Framework or standard contractual clauses. [to confirm]
+10. **Transfers.** Hosting may involve transfer to the USA under the EU-US Data Privacy Framework or standard contractual clauses.

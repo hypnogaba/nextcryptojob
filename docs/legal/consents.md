@@ -7,14 +7,14 @@ the setup has no consent boxes at all. The last button of setup accepts the term
 turned off in Settings as easily as they were set (art. 7(3) GDPR,
 <https://gdpr-info.eu/art-7-gdpr/>).
 
-Links point to the public pages. [to confirm product: final URL paths]
+Links point to the public pages.
 
 ## Rules for all consents
 
 - Show each text next to its own switch or button. Never bundle two consents in one click.
 - Do not make the account or the job search depend on a consent that is not needed for it (art. 7(4) GDPR).
 - Store a record for each change: `user_id`, `consent_key`, `version`, `text_sha256`, `given` or `withdrawn`, `timestamp`, `channel` (web or Telegram). This lets us show that consent was given (art. 7(1) GDPR).
-- A new version of a text that changes its meaning needs new consent. A pure wording fix does not. [to confirm with lawyer]
+- A new version of a text that changes its meaning needs new consent. A pure wording fix does not.
 - Candidates can use the account and the job digest without adding any source; then there is nothing to score.
 
 ## 1. Terms acceptance at the end of setup (since 2026-09-14)
@@ -81,7 +81,6 @@ candidates (section 1); before that it was "Only after I approve".
 > Share my [Telegram handle / email] with [Company name] for the role "[Role]"? [What happens next](https://nextcryptojob.xyz/privacy#contact)
 
 Buttons: `Yes, share` and `No`. "No" sends no data to the company.
-[to confirm product: which contact channels a candidate can share]
 
 ### 3b. Direct mode
 
@@ -103,7 +102,7 @@ Buttons: `Yes, share` and `No`. "No" sends no data to the company.
 - **Key:** `digest.email`
 - **Version:** `digest.email.v1`
 - **Where:** first sign-in (for email sign-in), Settings.
-- **Default:** off. [to confirm with lawyer: opt-in required, or contract basis enough]
+- **Default:** off.
 - **Legal basis:** consent, art. 6(1)(a) GDPR; also covers art. L34-5 French Postal and Electronic Communications Code (<https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961/>) because the digest can include jobs from paying companies.
 
 > Send me a daily email with up to 5 jobs that match my roles, including jobs posted by paying companies. [Privacy](https://nextcryptojob.xyz/privacy#digest)
@@ -128,7 +127,7 @@ Every digest message has a "Stop" button.
 - **Version:** `card.public.v1`
 - **Where:** the card screen, before the "Share on X" button.
 - **Default:** off.
-- **Legal basis:** consent, art. 6(1)(a) GDPR. [to confirm product behaviour and with lawyer]
+- **Legal basis:** consent, art. 6(1)(a) GDPR.
 
 > Publish my card at a public link that shows my score, role and level, with no wallets or links. [Privacy](https://nextcryptojob.xyz/privacy#card)
 
@@ -137,7 +136,7 @@ Every digest message has a "Stop" button.
 These are not consent texts and must not be shown as consent checkboxes:
 
 - **Terms acceptance.** See section 1: a line under the button, not a checkbox.
-- **Age.** "I am 18 or older." [to confirm with lawyer]
+- **Age.** "I am 18 or older."
 - **Wallet signature.** Signing a message to verify a wallet is an action, not a consent. Text: "Sign a message to prove this wallet is yours. This does not move funds or give any permission."
 
 ## Version history

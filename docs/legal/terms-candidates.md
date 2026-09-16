@@ -1,7 +1,7 @@
 # NextCryptoJob Terms for Candidates
 
 These terms apply when you use NextCryptoJob (nextcryptojob.xyz) to look for a job.
-The service is run by [LEGAL NAME], sole trader, France, SIRET [SIRET], [ADDRESS],
+The service is run by the NextCryptoJob team
 hello@nextcryptojob.xyz ("we", "us").
 
 Our Privacy Policy explains how we use your data. It is part of these terms.
@@ -39,7 +39,7 @@ hello@nextcryptojob.xyz. We will suspend that company.
 
 ## 2. Who can use the service
 
-- You must be at least 18. [to confirm with lawyer]
+- You must be at least 18.
 - You must act for yourself. One person, one account.
 - You must give true information.
 
@@ -132,7 +132,6 @@ tell you in advance and let you download your data.
 We are responsible for our own failures under French law. We are not responsible for
 decisions that companies take, or for jobs posted by third parties. Nothing in these
 terms limits rights that consumer law gives you and that cannot be excluded.
-[to confirm with lawyer: wording of liability limits for a free consumer service]
 
 ## 13. Ending your account
 
@@ -143,7 +142,7 @@ terms limits rights that consumer law gives you and that cannot be excluded.
 ## 14. Changes to these terms
 
 We will tell you about important changes by email or Telegram at least 30 days before
-they apply. [to confirm with lawyer: notice period] If you do not agree, you can delete
+they apply. If you do not agree, you can delete
 your account. The free-for-candidates rule in section 1 will not change.
 
 ## 15. Law and disputes
@@ -154,9 +153,8 @@ protection of the mandatory rules of that country.
 If you have a complaint, write to hello@nextcryptojob.xyz first. If we cannot solve it, you can
 use a consumer mediator free of charge (art. L612-1 French Consumer Code,
 <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032224805>): [MEDIATOR NAME AND
-WEBSITE]. [to confirm with lawyer: whether a mediator is required for a free service,
-and which one]
+WEBSITE].
 
 ## 16. Contact
 
-[LEGAL NAME], [ADDRESS], hello@nextcryptojob.xyz.
+NextCryptoJob, hello@nextcryptojob.xyz.

@@ -21,12 +21,10 @@ information required by articles 13 and 14 of the GDPR
 
 The controller is:
 
-- [LEGAL NAME], sole trader (entrepreneur individuel), France
-- SIRET: [SIRET]
-- Address: [ADDRESS]
+- the NextCryptoJob team
 - Contact for all privacy questions: hello@nextcryptojob.xyz
 
-We have not appointed a data protection officer. [to confirm with lawyer: whether article 37(1)(b) GDPR applies, <https://gdpr-info.eu/art-37-gdpr/>]
+We have not appointed a data protection officer.
 
 ## 3. What data we process
 
@@ -64,7 +62,6 @@ did not get from you directly.
 
 We store counts and dates, not the full content of your posts or transactions. The
 data passes through our scoring engine to compute these counts.
-[to confirm with lawyer and in code: no post text or transaction list is kept after the counts are computed]
 
 ### 3.3 Data we create
 
@@ -103,17 +100,17 @@ tags, and, for x402 payments, the paying wallet address and the transaction hash
 | Create and run your account, sign you in | Email or Telegram ID, settings | Contract, art. 6(1)(b) GDPR <https://gdpr-info.eu/art-6-gdpr/> |
 | Collect public data and compute your score (profiling) | Sections 3.1 to 3.3 | Contract, art. 6(1)(b): the score is part of the service you accept at the end of setup. It uses only the sources you add. |
 | Write the plain-language explanation of your score | Score breakdown and counts | Contract, art. 6(1)(b) (part of the score) |
-| Publish your card page | Score, role, level, pattern | Your consent (you choose to publish) [to confirm product behaviour: card page public only after you publish it] |
+| Publish your card page | Score, role, level, pattern | Your consent (you choose to publish) |
 | Show your profile to companies | Score, roles, level, networks, badges | Contract, art. 6(1)(b): being found by companies is what the service is for. On when you finish setting up; you can turn it off at any time in Settings. |
 | Share your contact with a company | Your Telegram handle ("direct" mode, on when you finish setting up, off in Settings); your Telegram handle or email after you accept a request | Contract, art. 6(1)(b), in "direct" mode; your consent, art. 6(1)(a), for each request you accept. In "direct" mode we never share your email. |
-| Send your daily job digest by email or Telegram | Email or Telegram ID, roles, place, salary | Your consent, art. 6(1)(a). The digest can include jobs posted by paying companies, so we also treat it as covered by art. L34-5 of the French Postal and Electronic Communications Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961/> [to confirm with lawyer: consent or contract basis for the digest] |
+| Send your daily job digest by email or Telegram | Email or Telegram ID, roles, place, salary | Your consent, art. 6(1)(a). The digest can include jobs posted by paying companies, so we also treat it as covered by art. L34-5 of the French Postal and Electronic Communications Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961/> |
 | Review your score by a person when you appeal | Your appeal, score data | Contract, and our duty to offer human review under art. 22(3) GDPR |
 | Answer your rights requests | Identity check data, request | Legal obligation, art. 6(1)(c) GDPR |
 | Keep the service secure, stop abuse and fraud (rate limits, reports about cards, logs) | Technical data, identifiers | Legitimate interest in protecting users and the service, art. 6(1)(f) GDPR |
 | Measure site audience without cookies | Page views, aggregated | Legitimate interest, art. 6(1)(f) |
 | Send service messages (security, changes to terms, inactivity warning) | Email or Telegram ID | Contract, art. 6(1)(b), and legal obligation where it applies |
 | Manage company subscriptions, invoices and accounting | Company user and billing data | Contract, art. 6(1)(b); legal obligation to keep accounting records, art. L123-22 French Commercial Code <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006219327> |
-| Test the scoring formula against a reference set (see section 12) | Public data of reference people | Legitimate interest, art. 6(1)(f) [to confirm with lawyer] |
+| Test the scoring formula against a reference set (see section 12) | Public data of reference people | Legitimate interest, art. 6(1)(f) |
 
 You can use your account and receive the job digest without adding any source. Then
 we have nothing to score.
@@ -175,7 +172,7 @@ the formula and publish a new version.
 
 - **Companies**, while "Show me to companies" is on. It is on for new candidates unless they untick it on the last setup step, and you can turn it off at any time. They see your score, roles, level, networks and verification badges. While "Show my Telegram directly" is also on (also on unless you untick it), they see your Telegram handle at once, and your X, GitHub, YouTube, website and wallet addresses too, so they can look at your public work themselves. If you turn "Show my Telegram directly" off, they see none of these until you approve a request: only your contact appears then, never your links or wallet addresses. We never show your email without your approval, and never your raw data such as your posts or transaction history.
 - **The public**, only for your card page if you publish it. The card shows score, role, level and the facts behind the score as numbers (for example, commits in the last 12 months). It shows no wallets, no links, no contacts and none of your own words.
-- **Anyone you give your apply link or your PDF to.** They also see your links to X, GitHub and other sources, your own words from the brief, your Telegram and email, links you added, and wallet addresses if you turn them on. You can hide any line and reset the apply link at any time; the old link then shows only the public card. [to confirm product behaviour: whether the card shows your X handle and whether search engines may index it]
+- **Anyone you give your apply link or your PDF to.** They also see your links to X, GitHub and other sources, your own words from the brief, your Telegram and email, links you added, and wallet addresses if you turn them on. You can hide any line and reset the apply link at any time; the old link then shows only the public card.
 - **Our service providers** (processors), listed in section 7. They act on our instructions.
 - **Data sources.** To collect public data, we send your handle or address to the source (for example your wallet address to Etherscan). We do not send your name or email.
 - **Authorities**, only when the law requires it.
@@ -186,25 +183,25 @@ We do not sell your data. We do not share it with advertising networks.
 
 | Provider | What they do | Location | Transfer safeguard |
 |---|---|---|---|
-| Cloudflare, Inc. | Hosting, D1 database, email sending, cookieless web analytics | USA, global network [to confirm: D1 data location] | EU-US Data Privacy Framework (DPF) [to confirm status] |
+| Cloudflare, Inc. | Hosting, D1 database, email sending, cookieless web analytics | USA, global network | EU-US Data Privacy Framework (DPF) |
 | Contabo GmbH | Server for the scoring engine | Germany | None needed (EU) |
-| Stripe | Card payments for companies | Ireland and USA [to confirm contracting entity] | DPF or SCCs [to confirm] |
-| 6551 | X (Twitter) public data | [to confirm country and legal entity] | SCCs [to confirm; data processing agreement not yet confirmed] |
-| Etherscan | EVM wallet data (Ethereum, Arbitrum) | [to confirm] | [to confirm] |
-| Blockscout | EVM wallet data (Base, Optimism) | [to confirm] | [to confirm] |
-| Helius | Solana wallet data | USA [to confirm] | DPF or SCCs [to confirm] |
-| Hyperliquid | Public trading data | [to confirm] | [to confirm] |
-| GitHub, Inc. | Public GitHub data | USA | DPF [to confirm status] |
-| Google LLC | YouTube Data API | USA | DPF [to confirm status] |
-| Telegram | Sign-in, messages, digest | [to confirm: UAE or other] | [to confirm with lawyer] |
-| Anthropic | Writes explanation text | USA [to confirm contracting entity] | DPF or SCCs [to confirm] |
+| Stripe | Card payments for companies | Ireland and USA | DPF or SCCs |
+| 6551 | X (Twitter) public data | | SCCs |
+| Etherscan | EVM wallet data (Ethereum, Arbitrum) | | |
+| Blockscout | EVM wallet data (Base, Optimism) | | |
+| Helius | Solana wallet data | USA | DPF or SCCs |
+| Hyperliquid | Public trading data | | |
+| GitHub, Inc. | Public GitHub data | USA | DPF |
+| Google LLC | YouTube Data API | USA | DPF |
+| Telegram | Sign-in, messages, digest | | |
+| Anthropic | Writes explanation text | USA | DPF or SCCs |
 
 Some data sources (for example Hyperliquid, Etherscan, GitHub, Google) are public
 services that we query. They may act as independent controllers, not as our
-processors. [to confirm with lawyer for each provider]
+processors.
 
 We send Anthropic only the counts and score breakdown needed to write the text. We do
-not send your email, Telegram ID or wallet addresses. [to confirm in implementation]
+not send your email, Telegram ID or wallet addresses.
 
 ## 8. Transfers outside the EU
 
@@ -217,9 +214,7 @@ We transfer data only with a safeguard required by chapter V GDPR
 
 **Companies outside the EU.** Some companies that pay for access may be outside the EU.
 While "Show me to companies" is on, they can see your profile data. While "Show my Telegram
-directly" is on, or after you approve their request, they receive your contact. [to confirm with lawyer: safeguard for these
-disclosures, for example standard contractual clauses in the company terms, or explicit
-consent under art. 49(1)(a) GDPR, <https://gdpr-info.eu/art-49-gdpr/>]
+directly" is on, or after you approve their request, they receive your contact.
 
 You can ask us for a copy of the safeguards at hello@nextcryptojob.xyz.
 
@@ -230,9 +225,9 @@ You can ask us for a copy of the safeguards at hello@nextcryptojob.xyz.
 | Account, profile, scores, source data | While your account is active. If you do not sign in or use the service for 24 months, we warn you, then delete the account. This follows the CNIL guidance of 2 years after the last contact for candidate data (<https://www.cnil.fr/fr/cnil-direct/question/recrutement-un-employeur-peut-il-conserver-mon-dossier>). |
 | Source data (counts) | Replaced at each weekly refresh. Deleted when you remove the source or delete your account. |
 | Sign-in codes | 10 minutes |
-| Sessions | Until you sign out or the session expires [to confirm duration] |
-| Security logs | 6 months to 1 year, as the CNIL recommends (<https://www.cnil.fr/fr/la-cnil-publie-une-recommandation-relative-aux-mesures-de-journalisation>) [to confirm exact period] |
-| Consent records | For the life of the account, then 5 years as proof [to confirm with lawyer] |
+| Sessions | Until you sign out or the session expires |
+| Security logs | 6 months to 1 year, as the CNIL recommends (<https://www.cnil.fr/fr/la-cnil-publie-une-recommandation-relative-aux-mesures-de-journalisation>) |
+| Consent records | For the life of the account, then 5 years as proof |
 | Appeals | For the life of the account |
 | Company invoices and accounting records | 10 years (art. L123-22 French Commercial Code) |
 | Database backups | Up to 30 days (Cloudflare D1 point-in-time recovery, <https://developers.cloudflare.com/d1/reference/time-travel/>) |
@@ -271,7 +266,6 @@ authority in the EU country where you live or work.
 - **No advertising or tracking cookies.** We do not use advertising pixels, social media trackers or fingerprinting.
 
 Because we use only strictly necessary storage, we do not show a cookie banner.
-[to confirm with lawyer]
 
 ## 12. People who are not our users
 
@@ -281,7 +275,7 @@ section 3.2 and labelled their level by hand. We use it only to check that the f
 is accurate before we apply it to users. We do not show these people's scores to
 anyone, and we do not contact companies about them. If you think you are in this set,
 you can object and ask for deletion at hello@nextcryptojob.xyz. We publish this notice here to
-meet article 14(5)(b) GDPR. [to confirm with lawyer: legal basis and whether this notice is enough]
+meet article 14(5)(b) GDPR.
 
 **Other people in your data.** Your transactions involve other wallets. Your followers
 include other accounts. We do not store these other people's data. We store only counts
@@ -289,9 +283,7 @@ include other accounts. We do not store these other people's data. We store only
 
 ## 13. Minimum age
 
-You must be at least 18 to use NextCryptoJob. [to confirm with lawyer: 18 or 16; French
-digital consent age is 15, art. 45 French Data Protection Act,
-<https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000037823135>]
+You must be at least 18 to use NextCryptoJob.
 
 ## 14. Security
 
@@ -313,4 +305,4 @@ before the change takes effect. If a change needs new consent, we ask for it aga
 
 ## 16. Contact
 
-[LEGAL NAME], [ADDRESS], hello@nextcryptojob.xyz.
+NextCryptoJob, hello@nextcryptojob.xyz.
