@@ -26,8 +26,16 @@ export async function enqueueScoreJob(
   db: D1Database,
   userId: string,
   reason: "connect" | "manual",
+  /**
+   * Пропустити правило 60 секунд (16.09, власник: картка не з'явилась сама). Перше завдання
+   * ставиться ще на вході, коли джерел немає, і рахує нуль ролей; наступні спроби після кроків
+   * X, гаманців і джерел відкидало саме це правило, і бал не рахувався взагалі, доки людина не
+   * натисне «Update» руками. Форсуємо лише там, де людина щойно дійшла до балу і бала ще немає:
+   * «вже в черзі» і згода лишаються в силі.
+   */
+  options: { force?: boolean } = {},
 ): Promise<EnqueueResult> {
-  const spacing = `-${ENQUEUE_SPACING_SECONDS} seconds`;
+  const spacing = options.force ? "-0 seconds" : `-${ENQUEUE_SPACING_SECONDS} seconds`;
   const inserted = await db
     .prepare(
       `INSERT INTO score_jobs (user_id, reason)

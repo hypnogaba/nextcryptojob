@@ -18,7 +18,11 @@ export type EnsureResult = { state: "queued" } | { state: "wait"; seconds: numbe
  */
 export async function ensureScoreAction(): Promise<EnsureResult> {
   const user = await requireUser();
-  const res = await enqueueScoreJob(db(), user.id, "connect");
+  const d = db();
+  // Людина щойно пройшла анкету й стоїть перед балом: якщо бала ще немає, ставимо завдання
+  // навіть у межах 60 секунд від попереднього (те, на вході, рахувало ще без джерел).
+  const scored = await d.prepare("SELECT 1 AS yes FROM scores WHERE user_id = ? LIMIT 1").bind(user.id).first<{ yes: number }>();
+  const res = await enqueueScoreJob(d, user.id, "connect", { force: !scored });
   if (res.ok || res.reason === "already_queued") return { state: "queued" };
   if (res.reason === "too_soon") return { state: "wait", seconds: res.retryAfterSeconds };
   return { state: "no_consent" };

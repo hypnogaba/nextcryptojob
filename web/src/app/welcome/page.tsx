@@ -103,12 +103,17 @@ export default async function WelcomePage({ searchParams }: Props) {
           "Tell us about the job you want next, the way you would tell a friend. The more you say, the better we match jobs for you."
         ) : (
           <>
+            <div className="mb-5 grid gap-2 rounded-2xl border-[1.5px] border-ink bg-soft p-4 sm:p-5">
+              <p className="font-display text-lg leading-tight font-semibold tracking-[-0.01em] text-ink">
+                Before we start
+              </p>
+              <ul className="grid gap-1.5 text-[0.9375rem] text-ink">
+                <li>A few short questions. This is not a cover letter.</li>
+                <li>Your profile is built from what you have already done and published.</li>
+                <li>Sources like X, GitHub or a wallet come in a later step, not now.</li>
+              </ul>
+            </div>
             <p>
-              A few short questions next, not a cover letter. We build your profile from what you have already done
-              and published, not from what you write here. You will add sources like X, GitHub or a wallet in a later
-              step, not now.
-            </p>
-            <p className="mt-3">
               Tell us about the job you want next, the way you would tell a friend. The more you say, the better we
               match jobs for you.
             </p>

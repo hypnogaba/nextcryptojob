@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { getIdentity } from "@/lib/identity/store";
 import { loadAnswers } from "@/lib/onboarding/store";
+import { enqueueScoreJob } from "@/lib/score/queue";
 import { loadScores } from "@/lib/score/load";
 import { mainRole, nextPollStep, rankRoles } from "@/lib/score/result";
 import { profileStatus } from "@/lib/score/status";
@@ -24,7 +25,14 @@ export async function checkScoreReadyAction(): Promise<ReadyCheck> {
   const user = await requireUser();
   const d = db();
   const status = await profileStatus(d, user.id);
-  if (nextPollStep(status) !== "done") return { ready: false };
+  if (nextPollStep(status) !== "done") {
+    // Кабінет сам добиває чергу (16.09): перше завдання на вході рахувало ще без джерел, а
+    // наступні спроби відкидало правило 60 секунд, тож без цього бал не з'являвся, доки людина
+    // не натисне «Update» руками. Ставимо лише тим, у кого бала ще немає; черга сама не дублює.
+    const scored = await d.prepare("SELECT 1 AS yes FROM scores WHERE user_id = ? LIMIT 1").bind(user.id).first<{ yes: number }>();
+    if (!scored) await enqueueScoreJob(d, user.id, "connect", { force: true });
+    return { ready: false };
+  }
 
   const [answers, scores, cards] = await Promise.all([loadAnswers(d, user.id), loadScores(d, user.id), listActiveCards(d, user.id)]);
   const ranked = rankRoles(answers.roles, scores);

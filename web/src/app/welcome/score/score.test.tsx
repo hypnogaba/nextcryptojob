@@ -83,12 +83,21 @@ describe("ensureScoreAction", () => {
     expect(rows("SELECT status FROM score_jobs")).toEqual([{ status: "queued" }]);
   });
 
-  it("says how long to wait when the last job is under a minute old", async () => {
+  it("says how long to wait when the last job is under a minute old and the person is already scored", async () => {
     await finished();
+    score("bd", 40);
     job("done", 20);
     const res = await ensureScoreAction();
     expect(res.state).toBe("wait");
     expect(res.state === "wait" && res.seconds).toBeGreaterThan(30);
+  });
+
+  it("queues anyway when the person has no score yet: the first job ran before the sources were added", async () => {
+    await finished();
+    // Те саме, що в проді 16.09: завдання на вході відпрацювало за секунду й нічого не порахувало.
+    job("done", 20);
+    const res = await ensureScoreAction();
+    expect(res.state).toBe("queued");
   });
 });
 

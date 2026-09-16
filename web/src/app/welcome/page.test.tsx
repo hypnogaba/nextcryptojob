@@ -68,15 +68,15 @@ describe("step 1: the intro right after sign-in, before the first question", () 
   it("tells a fresh sign-in what is coming: a few short questions, no cover letter, sources added later", async () => {
     await signIn({ step: "target" });
     const html = await render();
-    expect(html).toContain("A few short questions next, not a cover letter.");
-    expect(html).toContain("We build your profile from what you have already done");
-    expect(html).toContain("You will add sources like X, GitHub or a wallet in a later step, not now.");
+    expect(html).toContain("Before we start");
+    expect(html).toContain("Your profile is built from what you have already done and published.");
+    expect(html).toContain("Sources like X, GitHub or a wallet come in a later step, not now.");
   });
 
   it("does not repeat the intro when editing an already-finished brief", async () => {
     await signIn({ step: "done", roles: '["bd"]' });
     const html = await render("target");
-    expect(html).not.toContain("A few short questions next, not a cover letter.");
+    expect(html).not.toContain("Before we start");
     expect(html).toContain("Tell us about the job you want next");
   });
 });
