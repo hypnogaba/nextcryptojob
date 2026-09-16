@@ -43,3 +43,39 @@ describe("public card page (trust model of 13.09)", () => {
     expect(html).not.toContain("Report this card");
   });
 });
+
+describe("proof profile under the card", () => {
+  beforeEach(() => {
+    exec(
+      `INSERT INTO source_facts (user_id, source, facts_json) VALUES ('u', 'x', '{"followers":5000,"own30d":9}')`,
+    );
+    exec("UPDATE users SET telegram_username = 'ada_tg', role_text = 'BD at secretcorp' WHERE id = 'u'");
+  });
+
+  const renderWith = async (k?: string) =>
+    renderToStaticMarkup(
+      await CardPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve(k ? { k } : {}) }),
+    );
+
+  it("without a key shows facts only", async () => {
+    const html = await renderWith();
+    expect(html).toContain("5k followers on X");
+    expect(html).toContain('data-proof="public"');
+    for (const p of ["ada_tg", "secretcorp", "x.com/ada", "u@example.com"]) expect(html).not.toContain(p);
+  });
+
+  it("the current owner key opens links, words and contact; an old or wrong key does not", async () => {
+    const { ensureKeyVersion, profileKey, resetKey } = await import("@/lib/card/profile-prefs");
+    await ensureKeyVersion(harness.env.DB, "u");
+    const key1 = await profileKey(harness.env.SESSION_SECRET!, "u", 1);
+    const html = await renderWith(key1);
+    expect(html).toContain('data-proof="full"');
+    expect(html).toContain("https://x.com/ada");
+    expect(html).toContain("https://t.me/ada_tg");
+    expect(html).toContain("secretcorp");
+
+    await resetKey(harness.env.DB, "u");
+    expect(await renderWith(key1)).toContain('data-proof="public"');
+    expect(await renderWith("0".repeat(32))).toContain('data-proof="public"');
+  });
+});

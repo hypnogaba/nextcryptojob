@@ -10,13 +10,15 @@ import { cardPath, shareText, xShareUrl } from "@/lib/card/share";
 import { getCardRedirect } from "@/lib/card/store";
 import { db } from "@/lib/db";
 import { isScoredRoleKey, recipeBonus, recipeCore } from "@/lib/roles/recipes";
-import { loadCardView, loadIsOwner, requestOrigin } from "./card-data";
+import { loadCardView, loadIsOwner, loadProfileView, requestOrigin } from "./card-data";
+import { Proof } from "./proof";
 import { ReportForm } from "./report-form";
 
 // Публічна сторінка картки: єдине, що видно без входу. Бал, роль, рівень, ім'я
 // для показу і розклад балу на звороті; ні гаманців, ні посилань, ні того, чий це акаунт.
+// Під ними Proof: факти без імен; з особистим ключем ?k= (профіль-доказ) ще посилання, слова й контакт.
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ k?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
@@ -41,6 +43,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: { canonical: cardPath(slug) },
     // Людина ділиться карткою в X сама; у пошуковиках її бал не потрібен.
     robots: { index: false, follow: true },
+    // Ключ ?k= не має піти далі разом з переходом на GitHub чи X.
+    referrer: "no-referrer",
     openGraph: {
       type: "website",
       siteName: "NextCryptoJob",
@@ -53,8 +57,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function CardPage({ params }: Props) {
+export default async function CardPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const k = (await searchParams)?.k;
   const view = await loadCardView(slug);
   if (!view) {
     // Раунд 5, п.7: стара адреса прибраної картки (консолідація на одну картку на людину) веде
@@ -64,7 +69,7 @@ export default async function CardPage({ params }: Props) {
     notFound();
   }
   // Власник бачить «Share on X» і картинки; хто він, у HTML не потрапляє.
-  const owner = await loadIsOwner(slug);
+  const [owner, profile] = await Promise.all([loadIsOwner(slug), loadProfileView(slug, typeof k === "string" ? k : null)]);
   const origin = await requestOrigin();
   // Клік іде через /go/share-x, який рахує funnel_days ('share_click', /admin/funnel) і
   // веде далі на x.com з тими самими параметрами (без відкритого редіректу: хост фіксований).
@@ -140,6 +145,7 @@ export default async function CardPage({ params }: Props) {
             <ReportForm slug={slug} />
           </div>
         )}
+        {profile ? <Proof view={profile} /> : null}
       </div>
     </section>
   );

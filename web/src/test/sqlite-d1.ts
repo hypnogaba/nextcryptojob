@@ -51,6 +51,8 @@ export const APPLIED_AFTER_CRM = [
   "0022_identities_shared.sql",
   // Раунд 5 (п.7): одна картка на людину, redirect_to для старих адрес. Ще НЕ накочено.
   "0024_one_card_per_person.sql",
+  // Профіль-доказ (16.09): profile_prefs. Ще НЕ накочено.
+  "0026_profile_prefs.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

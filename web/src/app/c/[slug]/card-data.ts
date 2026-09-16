@@ -3,8 +3,11 @@ import { headers } from "next/headers";
 import { cache } from "react";
 import { currentUser } from "@/lib/auth/session";
 import { isCardOwner } from "@/lib/card/owner";
+import { profileView, type ProfileView } from "@/lib/card/profile";
+import { loadProfileInput, unlocks } from "@/lib/card/profile-load";
 import { getCard, getCardEvidence } from "@/lib/card/store";
 import { cardView } from "@/lib/card/view";
+import type { AppEnv } from "@/lib/db";
 
 /** Картка за slug з D1; cache() дає одне читання на запит для сторінки й метаданих. */
 export const loadCard = cache(async (slug: string) => {
@@ -43,4 +46,16 @@ export async function requestOrigin(): Promise<URL> {
   if (!host || !/^[a-z0-9.-]+(:\d+)?$/i.test(host)) return new URL(FALLBACK_ORIGIN);
   const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host);
   return new URL(`${local ? "http" : "https"}://${host}`);
+}
+
+/**
+ * Профіль-доказ під карткою. `key` з ?k=: підходить лише ключ власника поточної версії,
+ * інакше публічний вигляд без підказки, чому.
+ */
+export async function loadProfileView(slug: string, key: string | null): Promise<ProfileView | null> {
+  const { env } = await getCloudflareContext({ async: true });
+  const loaded = await loadProfileInput(env.DB, slug, new Date());
+  if (!loaded) return null;
+  const full = await unlocks((env as AppEnv).SESSION_SECRET, loaded, key);
+  return profileView(loaded.input, full ? "full" : "public");
 }
