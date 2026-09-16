@@ -52,6 +52,14 @@ describe("/leaderboard (item 7)", () => {
     expect(html).not.toContain(`href="/c/${first}"`);
   });
 
+  it("each row opens that card, where the score breakdown is public", async () => {
+    user("a");
+    const slug = await card("a", "engineer", 90, "@high");
+    const html = await render();
+    expect(html).toContain(`href="/c/${slug}"`);
+    expect(html).toContain("See how this score was built");
+  });
+
   it("says so when no one has a public card yet", async () => {
     const html = await render();
     expect(html).toContain("No public cards yet.");

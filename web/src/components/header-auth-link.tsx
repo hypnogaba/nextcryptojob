@@ -15,11 +15,10 @@ const PILL =
 /**
  * Другорядне в одному меню «More» (власник 14.09, C1): сайт для пошуку роботи, решта окремо.
  * Раунд 5, п.9: Agents прибрано (лишається за прямим посиланням /agents для агентів і openapi).
- * Раунд 5, п.7: Leaderboard додано (усі публічні картки, за балом).
+ * Раунд 6 (власник 16.09): Leaderboard вийшов з «More» у саму шапку, він публічний і без акаунта.
  */
 const MORE = [
   { href: "/scoring", label: "How scoring works", note: "What we read and how the score adds up" },
-  { href: "/leaderboard", label: "Leaderboard", note: "Public cards, ranked by score" },
   { href: "/company", label: "For companies", note: "Search candidates by proof" },
   { href: "/faq", label: "FAQ", note: "Answers for candidates and companies" },
   { href: "/contact", label: "Contact", note: "Write to the team" },
@@ -72,6 +71,9 @@ export function HeaderNav() {
         <Link href={jobsHref} aria-current={current("/jobs")} className={`${NAV_LINK} max-md:hidden`}>
           Jobs
         </Link>
+        <Link href="/leaderboard" aria-current={current("/leaderboard")} className={`${NAV_LINK} max-md:hidden`}>
+          Leaderboard
+        </Link>
         {signedIn ? (
           <Link href="/profile" aria-current={current("/profile")} className={`${NAV_LINK} max-md:hidden`}>
             Your card
@@ -87,6 +89,10 @@ export function HeaderNav() {
           <div className="absolute top-[calc(100%+8px)] right-0 z-30 w-[260px] rounded-[18px] border border-line bg-surface p-2 shadow-[0_18px_40px_-16px_rgb(17_19_24/25%)] max-md:right-[-88px]">
             <Link href={jobsHref} className={`${MENU_LINK} md:hidden`}>
               Jobs
+            </Link>
+            <Link href="/leaderboard" className={`${MENU_LINK} md:hidden`}>
+              Leaderboard
+              <small className="block text-[0.8125rem] leading-[1.125rem] font-normal text-ink-muted">Public cards, ranked by score</small>
             </Link>
             {signedIn ? (
               <Link href="/profile" className={`${MENU_LINK} md:hidden`}>
