@@ -55,7 +55,7 @@ async function agency() {
     country: "GB",
     kind: "agency",
   });
-  const admin = addUser(db.raw, { email: "hypnogaba@gmail.com" });
+  const admin = addUser(db.raw, { email: "owner@example.com" });
   return { ann, companyId, admin, ctx: () => contextFor(db, { sessionUserId: ann }) };
 }
 
@@ -244,7 +244,7 @@ describe("agency edge cases", () => {
       kind: "agency",
     });
     const { applicationId } = await submitApplication(await contextFor(db, { sessionUserId: tg }), application());
-    const admin = addUser(db.raw, { email: "hypnogaba@gmail.com" });
+    const admin = addUser(db.raw, { email: "owner@example.com" });
     const mailer = fakeMailer();
     const res = await reviewApplication(db.d1, { userId: admin }, { applicationId, decision: "approve", note: "" }, { mailer, origin: ORIGIN });
     expect(res).toMatchObject({ ok: true, status: "approved", emailed: false });

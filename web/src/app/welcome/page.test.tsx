@@ -235,14 +235,14 @@ describe("wallets step: required like X, no 'Skip for now'; sources step: option
 
 describe("admin", () => {
   it("an admin signed in by email is told the setup is optional, with a link to /admin", async () => {
-    await signIn({ email: "hypnogaba@gmail.com", step: null }, "email");
+    await signIn({ email: "owner@example.com", step: null }, "email");
     const html = await render();
     expect(html).toContain("You are signed in as an admin. This setup is optional for you.");
     expect(html).toContain('href="/admin"');
   });
 
   it("the same account signed in by Telegram is not", async () => {
-    await signIn({ email: "hypnogaba@gmail.com", step: null }, "telegram");
+    await signIn({ email: "owner@example.com", step: null }, "telegram");
     expect(await render()).not.toContain("signed in as an admin");
   });
 

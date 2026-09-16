@@ -56,14 +56,14 @@ describe("admin guard", () => {
   });
 
   it("the owner signed in through Telegram is not admin", async () => {
-    await signIn("hypnogaba@gmail.com", "telegram");
+    await signIn("owner@example.com", "telegram");
     await expect(AdminMessagesPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });
 
 describe("mark answered", () => {
   beforeEach(async () => {
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
   });
 
   it("lists messages and toggles answered", async () => {
@@ -90,7 +90,7 @@ describe("mark answered", () => {
     const { raw, d1 } = migratedD1();
     harness.raw = raw;
     harness.env.DB = d1;
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
     const html = renderToStaticMarkup(await AdminMessagesPage({ searchParams: Promise.resolve({}) }));
     expect(html).toContain("migration 0023");
   });

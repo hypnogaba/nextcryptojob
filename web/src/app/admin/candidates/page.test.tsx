@@ -42,7 +42,7 @@ describe("admin guard", () => {
 
 describe("candidates list", () => {
   it("each person links to /admin/scores/<id>, newest first, search visible at the top", async () => {
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
     const ada = addUser(harness.raw, { email: "ada@example.com" });
     run(
       harness.raw,
@@ -59,7 +59,7 @@ describe("candidates list", () => {
   });
 
   it("filters by the ?q= search term", async () => {
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
     addUser(harness.raw, { email: "ada@example.com" });
     addUser(harness.raw, { email: "bob@example.com" });
     const html = renderToStaticMarkup(await AdminCandidatesPage({ searchParams: Promise.resolve({ q: "ada" }) }));

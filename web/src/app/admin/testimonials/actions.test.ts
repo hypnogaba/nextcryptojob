@@ -60,7 +60,7 @@ describe("admin guard", () => {
 
 describe("approve / hide", () => {
   beforeEach(async () => {
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
   });
 
   it("approves a pending story, then hides it, then puts it back to pending", async () => {

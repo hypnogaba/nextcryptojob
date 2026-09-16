@@ -61,7 +61,7 @@ describe("admin guard", () => {
 
 describe("rescore now", () => {
   beforeEach(async () => {
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
   });
 
   it("queues a score job for a person with consent, same as their own Update my score", async () => {

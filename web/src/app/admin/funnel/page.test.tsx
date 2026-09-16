@@ -42,7 +42,7 @@ describe("admin guard", () => {
 
 describe("steps", () => {
   it("shows every funnel step and switches window on ?window=", async () => {
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
     run(harness.raw, "INSERT INTO funnel_days (day, step, count) VALUES (?, 'brief_started', 3)", new Date().toISOString().slice(0, 10));
     const html = renderToStaticMarkup(await AdminFunnelPage({ searchParams: Promise.resolve({ window: "30" }) }));
     for (const label of ["Visitors", "Brief started", "X added", "Wallet added", "Score ready", "Card viewed", "Share on X click", "Digest active", "Apply clicks"]) {

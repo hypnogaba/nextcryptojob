@@ -41,10 +41,14 @@ export const harness = {
   headers: new Headers(),
 };
 
+export const TEST_ADMIN_EMAIL = "owner@example.com";
+
 export function resetHarness(env: Partial<AppEnv> = {}): void {
   const { raw, d1 } = migratedD1();
   harness.raw = raw;
-  harness.env = { DB: d1, SESSION_SECRET: TEST_SECRET, ...env } as AppEnv;
+  // ADMIN_EMAILS: у проді це секрет Worker, у коді адмінів за замовчуванням немає (lib/auth/admin-list.ts).
+  // Тести підставляють пошту власника-тестувальника, щоб перевіряти сторінки адмінки.
+  harness.env = { DB: d1, SESSION_SECRET: TEST_SECRET, ADMIN_EMAILS: TEST_ADMIN_EMAIL, ...env } as AppEnv;
   harness.jar = fakeCookieJar();
   harness.headers = new Headers();
 }

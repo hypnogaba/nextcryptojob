@@ -1,11 +1,12 @@
 /**
- * Хто адмін за поштою: змінна Worker `ADMIN_EMAILS` (пошти через кому, без розрізнення
- * регістру); не задано або порожньо = лише власник продукту. Без залежностей: це читає й
- * cron у точці входу Worker (сповіщення власнику, lib/admin/alerts.ts). Правило сесії
- * (вхід поштою) у ./admin.ts.
+ * Хто адмін за поштою: секрет Worker `ADMIN_EMAILS` (пошти через кому, без розрізнення регістру).
+ * Не задано або порожньо = адмінів немає: жодна сторінка /admin не відкриється і сповіщення нікуди
+ * не підуть. Так навмисно: репозиторій публічний, і чиясь особиста пошта не має лежати в коді як
+ * «адмін за замовчуванням». Без залежностей: це читає й cron у точці входу Worker (сповіщення,
+ * lib/admin/alerts.ts). Правило сесії (лише вхід поштою) у ./admin.ts.
  */
 
-export const DEFAULT_ADMIN_EMAILS: readonly string[] = ["hypnogaba@gmail.com"];
+export const DEFAULT_ADMIN_EMAILS: readonly string[] = [];
 
 export function adminEmails(raw: string | undefined): string[] {
   const list = (raw ?? "")

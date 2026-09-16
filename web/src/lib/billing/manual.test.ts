@@ -12,7 +12,7 @@ let admin: string;
 beforeEach(() => {
   db = crmDb();
   company = addCompany(db.raw, { name: "Acme Labs" });
-  admin = addUser(db.raw, { email: "hypnogaba@gmail.com" });
+  admin = addUser(db.raw, { email: "owner@example.com" });
 });
 
 function grant(o: Partial<Parameters<typeof grantManualAccess>[1]> = {}) {

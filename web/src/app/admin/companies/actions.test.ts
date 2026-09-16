@@ -74,7 +74,7 @@ describe("admin guard", () => {
   });
 
   it("the owner signed in through Telegram is not admin", async () => {
-    await signIn("hypnogaba@gmail.com", "telegram");
+    await signIn("owner@example.com", "telegram");
     expect(
       await redirectOf(grantAccessAction(form({ company_id: company, status: "active", period_end: inDays(30), note: "x" }))),
     ).toBe("/admin/companies?error=not_admin");
@@ -84,7 +84,7 @@ describe("admin guard", () => {
 
   it("ADMIN_EMAILS replaces the default list", async () => {
     setup({ ADMIN_EMAILS: " Ops@NextCryptoJob.xyz , other@example.com" });
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
     await expect(AdminCompaniesPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_NOT_FOUND");
 
     setup({ ADMIN_EMAILS: " Ops@NextCryptoJob.xyz , other@example.com" });
@@ -97,7 +97,7 @@ describe("admin guard", () => {
 describe("grant and revoke", () => {
   let admin: string;
   beforeEach(async () => {
-    admin = await signIn("hypnogaba@gmail.com");
+    admin = await signIn("owner@example.com");
   });
 
   it("lists companies with their access and card payment state", async () => {

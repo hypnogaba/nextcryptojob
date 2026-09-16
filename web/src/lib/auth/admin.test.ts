@@ -17,7 +17,7 @@ beforeEach(() => {
 describe("admin list", () => {
   it("reads ADMIN_EMAILS without case and falls back to the owner", () => {
     expect(adminEmails(" Boss@Example.com , x ")).toEqual(["boss@example.com"]);
-    expect(adminEmails(undefined)).toEqual(["hypnogaba@gmail.com"]);
+    expect(adminEmails(undefined)).toEqual([]);
     expect(isAdminEmail("BOSS@example.com", "boss@example.com")).toBe(true);
     expect(isAdminEmail(null, "boss@example.com")).toBe(false);
   });

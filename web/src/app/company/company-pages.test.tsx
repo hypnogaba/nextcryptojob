@@ -154,7 +154,7 @@ describe("agency: from application to access", () => {
     expect(await html(SettingsPage())).toContain("Company settings");
 
     // Адмін схвалює.
-    await signIn("hypnogaba@gmail.com");
+    await signIn("owner@example.com");
     const queue = await html(AgencyApplicationsPage(params()));
     expect(queue).toContain("Hire Co");
     expect(queue).toContain("Ask for more info");

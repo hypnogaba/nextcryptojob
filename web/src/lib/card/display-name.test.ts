@@ -43,7 +43,7 @@ describe("suggestDisplayName", () => {
 
   it("falls back to the first part of the email, without dots or tags", () => {
     expect(suggestDisplayName(null, "ada.lovelace+jobs@example.com")).toBe("ada lovelace");
-    expect(suggestDisplayName(null, "hypnogaba@gmail.com")).toBe("hypnogaba");
+    expect(suggestDisplayName(null, "owner@example.com")).toBe("owner");
   });
 
   it("leaves the field empty when the email part is not an allowed name", () => {
