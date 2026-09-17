@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { D1Client } from "../src/d1.js";
 import { companyKey, isNonCryptoCompany } from "../src/digest/clean.js";
 import { assertReadOnlySql, readOnlyJobsDb, type JobsDb } from "../src/digest/jobs-db.js";
-import { hostSlug } from "../src/jobs/sources/ats.js";
+import { comeetSlug, hostSlug, workdaySlug } from "../src/jobs/sources/ats.js";
 import { type BoardRegistry, boardsSql, loadBoardRegistry } from "../src/jobs/job-boards.js";
 import { registryUpdateSql, type SeedCompany, type SeedGetro, type SeedRegistry, type SeedSource, seedProblems, seedSql } from "../src/jobs/seed.js";
 import { isAtsProvider } from "../src/jobs/types.js";
@@ -207,9 +207,11 @@ const SPEEDRUN: SeedSource = {
 };
 
 function validAtsSlug(provider: string, slug: string): boolean {
-  if (["workable", "smartrecruiters", "recruitee", "breezy", "bamboohr", "rippling", "personio"].includes(provider)) {
+  if (["workable", "smartrecruiters", "recruitee", "breezy", "bamboohr", "rippling", "personio", "gem", "pinpoint", "hibob"].includes(provider)) {
     try { hostSlug(slug, provider); return true; } catch { return false; }
   }
+  if (provider === "workday") { try { workdaySlug(slug); return true; } catch { return false; } }
+  if (provider === "comeet") { try { comeetSlug(slug); return true; } catch { return false; } }
   return /^[a-z0-9][a-z0-9_.%-]{0,80}$/i.test(slug) && !slug.includes("..");
 }
 

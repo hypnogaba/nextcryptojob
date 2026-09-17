@@ -1,0 +1,32 @@
+{
+  "total": 27,
+  "jobPostings": [
+    {
+      "title": "Director, Exchange Sales",
+      "externalPath": "/job/New-York/Director--Exchange-Sales_JR2001274-1",
+      "locationsText": "New York",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+        "JR2001274"
+      ]
+    },
+    {
+      "title": "Creative Director",
+      "externalPath": "/job/New-York/Creative-Director_JR2001243-1",
+      "locationsText": "New York",
+      "postedOn": "Posted 3 Days Ago",
+      "bulletFields": [
+        "JR2001243"
+      ]
+    },
+    {
+      "title": "AI Forward Deployed Engineer",
+      "externalPath": "/job/Hong-Kong/AI-Engineer_JR2001256",
+      "locationsText": "Hong Kong",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+        "JR2001256"
+      ]
+    }
+  ]
+}

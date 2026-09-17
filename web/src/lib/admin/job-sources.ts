@@ -141,6 +141,12 @@ const ATS: Record<string, { label: string; url: ((slug: string) => string) | nul
   rippling: { label: "Rippling", url: (s) => `https://ats.rippling.com/${s}/jobs` },
   personio: { label: "Personio", url: (s) => `https://${s}.jobs.personio.de/` },
   bamboohr: { label: "BambooHR", url: (s) => `https://${s}.bamboohr.com/careers` },
+  gem: { label: "Gem", url: (s) => `https://jobs.gem.com/${s}` },
+  pinpoint: { label: "Pinpoint", url: (s) => `https://${s}.pinpointhq.com/` },
+  hibob: { label: "HiBob", url: (s) => `https://${s}.careers.hibob.com/` },
+  // Слаг Comeet несе токен, а в ключі джерела лише uid: окремої сторінки компанії зі слага не скласти.
+  comeet: { label: "Comeet", url: null },
+  workday: { label: "Workday", url: (s) => { const [t, wd, ...site] = s.split("."); return `https://${t}.${wd}.myworkdayjobs.com/${site.join(".")}`; } },
 };
 
 /** Агрегатори, яких може не бути в таблиці sources (Superteam вмикається змінною engine): назва й сайт. */

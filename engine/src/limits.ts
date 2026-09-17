@@ -162,6 +162,9 @@ const SUFFIX_ALIASES: Array<[suffix: string, budget: string]> = [
   [".bamboohr.com", "bamboohr"],
   [".jobs.personio.de", "personio"],
   [".teamtailor.com", "teamtailor"],
+  [".pinpointhq.com", "pinpoint"],
+  [".careers.hibob.com", "hibob"],
+  [".myworkdayjobs.com", "workday"],
 ];
 
 /** Бюджет CoinGecko (api.coingecko.com). */
@@ -213,6 +216,12 @@ const BUDGET_DEFAULTS: Record<string, LimiterOptions> = {
   bamboohr: { concurrency: 2, minIntervalMs: 300 },
   personio: { concurrency: 2, minIntervalMs: 300 },
   teamtailor: { concurrency: 1, minIntervalMs: 500 },
+  "api.gem.com": { concurrency: 2, minIntervalMs: 300 },
+  pinpoint: { concurrency: 2, minIntervalMs: 300 },
+  hibob: { concurrency: 1, minIntervalMs: 500 },
+  "www.comeet.co": { concurrency: 1, minIntervalMs: 500 },
+  // Workday гортається сторінками по 20: по одному запиту.
+  workday: { concurrency: 1, minIntervalMs: 500 },
   // Офіційний Web3 Jobs API (src/jobs/sources/web3career.ts): ліміт не названо, лише 429 при надмірі.
   // 51 запит раз на добу, по одному, з паузою 1,5 с: близько 80 с на скан.
   web3career: { concurrency: 1, minIntervalMs: 1_500 },

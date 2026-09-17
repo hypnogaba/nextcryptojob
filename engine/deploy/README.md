@@ -323,7 +323,7 @@ quality gate: PASSED (within-one >= 85%)
 
 | Джерело | Як | Вимикач | Умови |
 |---|---|---|---|
-| Роботодавці з реєстру (`companies`, 325 увімкнених з 369 після доповнення 14.09) | публічні API ATS: Greenhouse (з `pay_transparency`), Lever і Lever EU, Ashby (з `includeCompensation`), Workable, SmartRecruiters, Recruitee, Teamtailor (RSS), Breezy, BambooHR, Rippling, Personio | `companies.enabled` | API існують, щоб вакансії читали й показували |
+| Роботодавці з реєстру (`companies`, 325 увімкнених з 369 після доповнення 14.09) | публічні API ATS: Greenhouse (з `pay_transparency`), Lever і Lever EU, Ashby (з `includeCompensation`), Workable, SmartRecruiters, Recruitee, Teamtailor (RSS), Breezy, BambooHR, Rippling, Personio; з 17.09 ще Gem, Pinpoint, HiBob, Comeet і Workday (міграція `db/jobs/0006_more_ats.sql`, див. «ATS, додані 17.09») | `companies.enabled` | API існують, щоб вакансії читали й показували |
 | web3.career (`board:web3career`) | лише офіційний Web3 Jobs API з токеном `WEB3CAREER_TOKEN` (`src/jobs/sources/web3career.ts`), з 14.09 | `sources.enabled` | умови API обов'язкові, див. «web3.career: офіційний API» нижче. Сторінки сайту скан не читає (`fetchBoard` відмовляє будь-якій адресі web3.career) |
 | JobStash (`board:jobstash`) | потік Next.js головної; лише вакансії, які дошка сама позначила крипто | `sources.enabled` | умов немає, robots `Allow: /`. 14.09 їхній бекенд відповідав 503, і головна віддавала каркас: 0 вакансій, скан це переживає |
 | Remote3 (`board:remote3`) | їхній RSS `/api/rss` | `sources.enabled` | умови забороняють автоматичні запити до сайту, тому лише їхня стрічка |
@@ -340,6 +340,23 @@ quality gate: PASSED (within-one >= 85%)
 останньому вдалому скані свого джерела (`src/digest/jobs.ts`); дедуп за адресою й за ключем «компанія + назва» (лишається
 запис із зарплатою); вилка лише річна (`src/jobs/pay.ts`, погодинна й місячна переводяться, незрозуміла не
 пишеться). Джерело, що падає 7 днів поспіль, стає `dead` і читається раз на тиждень (`source_state`).
+
+### ATS, додані 17.09
+
+Сухий прогін розвідки 17.09 показав 77 компаній дошок на ATS, яких скан не читав (384 вакансії). Додано ті, що
+мають публічний JSON (`src/jobs/sources/ats.ts`):
+
+| Провайдер | Адреса | Слаг у `companies.ats_slug` | Розвідка знаходить сама |
+|---|---|---|---|
+| `gem` | `api.gem.com/job_board/v0/<slug>/job_posts/` | vanity path з `jobs.gem.com/<slug>` | так |
+| `pinpoint` | `<slug>.pinpointhq.com/postings.json` | піддомен | так |
+| `hibob` | `<slug>.careers.hibob.com/api/job-ad`, заголовок `companyidentifier: <slug>` | піддомен | так |
+| `workday` | POST `<tenant>.<wdN>.myworkdayjobs.com/wday/cxs/<tenant>/<site>/jobs`, сторінки по 20 | `<tenant>.<wdN>.<site>` (сайт чутливий до регістру) | так |
+| `comeet` | `www.comeet.co/careers-api/2.0/company/<uid>/positions?token=<token>` | `<uid>.<token>`; токен публічний, стоїть на сторінці `comeet.com/jobs/<company>/<uid>` | ні, лише руками; ключ джерела `comeet:<uid>` без токена |
+
+Не додано: Dover (сторінку малює браузер за Turnstile), JazzHR (публічної стрічки не знайшли), Notion, LinkedIn,
+Wellfound (не ATS або умови забороняють збір). Накочування: `npx wrangler d1 execute nextcryptojob-jobs --remote
+--file ../db/jobs/0006_more_ats.sql` (перебудова `companies`, дані й стовпці ті самі).
 
 ### web3.career: офіційний API
 

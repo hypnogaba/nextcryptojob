@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hostSlug } from "./sources/ats.js";
+import { comeetSlug, hostSlug, workdaySlug } from "./sources/ats.js";
 import { type AtsProvider, type BoardSource, type Company, type GetroCollection, isAtsProvider, type SourceKind } from "./types.js";
 
 export interface SeedCompany {
@@ -49,8 +49,14 @@ export function seedProblems(reg: SeedRegistry): string[] {
     if (boards.has(board)) out.push(`companies.${c.slug}: дошка ${board} уже є`);
     boards.add(board);
     if (!/^[a-z0-9][a-z0-9_.%-]{0,80}$/i.test(c.ats_slug)) out.push(`companies.${c.slug}: дивний ats_slug ${c.ats_slug}`);
-    if (["workable", "smartrecruiters", "recruitee", "breezy", "bamboohr", "rippling", "personio"].includes(c.ats_provider)) {
+    if (["workable", "smartrecruiters", "recruitee", "breezy", "bamboohr", "rippling", "personio", "gem", "pinpoint", "hibob"].includes(c.ats_provider)) {
       try { hostSlug(c.ats_slug, c.ats_provider); } catch (e) { out.push(`companies.${c.slug}: ${(e as Error).message}`); }
+    }
+    if (c.ats_provider === "workday") {
+      try { workdaySlug(c.ats_slug); } catch (e) { out.push(`companies.${c.slug}: ${(e as Error).message}`); }
+    }
+    if (c.ats_provider === "comeet") {
+      try { comeetSlug(c.ats_slug); } catch (e) { out.push(`companies.${c.slug}: ${(e as Error).message}`); }
     }
   }
   for (const s of reg.sources) {

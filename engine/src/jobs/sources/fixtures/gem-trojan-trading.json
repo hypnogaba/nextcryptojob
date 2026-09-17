@@ -1,0 +1,149 @@
+[
+  {
+    "absolute_url": "https://jobs.gem.com/trojan-trading/am9icG9zdDrT7W4vSkgg-QQ4p2UNQRBe",
+    "content": null,
+    "content_plain": "About Trojan Trading\nTrojan Trading is at the forefront of crypto trading technology. Trojan Trading is a non-custodial trading and data platform. It is a unified base of operations, a place where use",
+    "created_at": "2025-06-12T14:58:12.693Z",
+    "departments": [
+      {
+        "child_ids": [],
+        "id": "ZGVwdDqY_hecLzSmm9V2n5EdnXqE",
+        "name": "Engineering",
+        "parent_id": null
+      }
+    ],
+    "employment_type": "full_time",
+    "first_published_at": "2025-06-12T14:58:22.887Z",
+    "id": "am9icG9zdDrT7W4vSkgg-QQ4p2UNQRBe",
+    "internal_job_id": "am9iOouKl_SSfJeBs7ew3sd1_ow",
+    "location": {
+      "name": "France - Remote"
+    },
+    "location_type": "remote",
+    "offices": [
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jOt8g5er8yA6YR-P0XgvjxJM",
+        "location": {
+          "name": "France - Remote"
+        },
+        "name": "Remote - European time zones",
+        "parent_id": null,
+        "parent_office_external_id": null
+      },
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jOvOKTZj8zOhYCZKy-cVTBNc",
+        "location": {
+          "name": "New York, United States"
+        },
+        "name": "Remote - United States",
+        "parent_id": null,
+        "parent_office_external_id": null
+      }
+    ],
+    "requisition_id": "R6",
+    "title": "Technical Project Manager",
+    "updated_at": "2026-04-04T01:26:29.829Z"
+  },
+  {
+    "absolute_url": "https://jobs.gem.com/trojan-trading/am9icG9zdDrlVxRNcQf-WW79oAiq-cUR",
+    "content": null,
+    "content_plain": "About Trojan Trading\nTrojan Trading is at the forefront of crypto trading technology. Trojan Trading is a non-custodial trading and data platform. It is a unified base of operations, a place where use",
+    "created_at": "2025-07-15T19:30:24.281Z",
+    "departments": [
+      {
+        "child_ids": [],
+        "id": "ZGVwdDqQzqovaLeU67LG8Wd7Og9G",
+        "name": "Design",
+        "parent_id": null
+      }
+    ],
+    "employment_type": "full_time",
+    "first_published_at": "2025-07-15T19:36:24.737Z",
+    "id": "am9icG9zdDrlVxRNcQf-WW79oAiq-cUR",
+    "internal_job_id": "am9iOr53QfQMc9S0brzjV0md7U0",
+    "location": {
+      "name": "France - Remote"
+    },
+    "location_type": "remote",
+    "offices": [
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jOt8g5er8yA6YR-P0XgvjxJM",
+        "location": {
+          "name": "France - Remote"
+        },
+        "name": "Remote - European time zones",
+        "parent_id": null,
+        "parent_office_external_id": null
+      },
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jOvOKTZj8zOhYCZKy-cVTBNc",
+        "location": {
+          "name": "New York, United States"
+        },
+        "name": "Remote - United States",
+        "parent_id": null,
+        "parent_office_external_id": null
+      }
+    ],
+    "requisition_id": "R10",
+    "title": "UX/UI Designer",
+    "updated_at": "2026-04-04T01:26:56.257Z"
+  },
+  {
+    "absolute_url": "https://jobs.gem.com/trojan-trading/am9icG9zdDrc8Flx7smfR5vXM2LbROnf",
+    "content": null,
+    "content_plain": "About Trojan Trading\nTrojan Trading is at the forefront of crypto trading technology. Trojan Trading is a non-custodial trading and data platform. It is a unified base of operations, a place where use",
+    "created_at": "2026-04-10T18:20:43.564Z",
+    "departments": [
+      {
+        "child_ids": [],
+        "id": "ZGVwdDqY_hecLzSmm9V2n5EdnXqE",
+        "name": "Engineering",
+        "parent_id": null
+      }
+    ],
+    "employment_type": "full_time",
+    "first_published_at": "2026-04-10T18:23:05.566Z",
+    "id": "am9icG9zdDrc8Flx7smfR5vXM2LbROnf",
+    "internal_job_id": "am9iOoV7MK8zGAvCQ4WmwHsJW0A",
+    "location": {
+      "name": "France - Remote"
+    },
+    "location_type": "remote",
+    "offices": [
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jOt8g5er8yA6YR-P0XgvjxJM",
+        "location": {
+          "name": "France - Remote"
+        },
+        "name": "Remote - European time zones",
+        "parent_id": null,
+        "parent_office_external_id": null
+      },
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jOvOKTZj8zOhYCZKy-cVTBNc",
+        "location": {
+          "name": "New York, United States"
+        },
+        "name": "Remote - United States",
+        "parent_id": null,
+        "parent_office_external_id": null
+      }
+    ],
+    "requisition_id": "R19",
+    "title": "Principal Engineer, Frontend",
+    "updated_at": "2026-04-10T18:23:05.566Z"
+  }
+]

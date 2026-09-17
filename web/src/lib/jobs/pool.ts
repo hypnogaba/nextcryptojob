@@ -37,7 +37,7 @@ export const ATS_WINDOW_DAYS = 90;
 /** Провайдери ATS, чиї дошки сканер читає як власні фіди роботодавців (engine/src/jobs/types.ts ATS_PROVIDERS). */
 export const ATS_PROVIDERS = [
   "greenhouse", "lever", "lever_eu", "ashby", "workable", "smartrecruiters", "recruitee", "teamtailor",
-  "breezy", "bamboohr", "rippling", "personio",
+  "breezy", "bamboohr", "rippling", "personio", "gem", "pinpoint", "hibob", "comeet", "workday",
 ] as const;
 
 /** Джерело = власний фід роботодавця: `<ats>:<slug>` з відомим провайдером (як isEmployerFeed в engine). */

@@ -9,7 +9,7 @@ import { extractAts } from "./getro.js";
 export interface AtsHit { provider: AtsProvider; slug: string }
 
 /** Адреси в розмітці: href/src і будь-який рядок, схожий на адресу ATS (скрипти вбудовування). */
-const URLISH = /(?:https?:)?\/\/[a-z0-9.-]+\.(?:greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|breezy\.hr|rippling\.com|personio\.(?:de|com)|bamboohr\.com|recruitee\.com|teamtailor\.com)[^\s"'<>)\\]*/gi;
+const URLISH = /(?:https?:)?\/\/[a-z0-9.-]+\.(?:greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|breezy\.hr|rippling\.com|personio\.(?:de|com)|bamboohr\.com|recruitee\.com|teamtailor\.com|gem\.com|pinpointhq\.com|hibob\.com|myworkdayjobs\.com)[^\s"'<>)\\]*/gi;
 
 /**
  * ATS з розмітки сторінки: найчастіша пара «провайдер + слаг» (сторінка з десятком посилань на

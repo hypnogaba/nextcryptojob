@@ -353,10 +353,12 @@ describe("jobs-discover", () => {
     const r = await runJobsDiscover({ store: new JobsStore(db, true), env: { JOBS_GETRO_DISCOVERY: "1", JOBS_SPEEDRUN: "0" },
       now: NOW, log: () => undefined, fetch: o() });
     expect(r.getro).toEqual([{ board: "coinbase-ventures", id: 1625, label: "Coinbase Ventures", companies: 4, withJobs: 4, cryptoOrgs: 3,
-      known: 0, ats: 2, viaCareerPage: 0, hostedOnly: 0, otherAts: 1, unresolved: 0, knownBoard: 0, added: 2, requests: 4 }]);
+      known: 0, ats: 3, viaCareerPage: 0, hostedOnly: 0, otherAts: 0, unresolved: 0, knownBoard: 0, added: 2, requests: 4 }]);
     expect(r.added.map((c) => `${c.provider}:${c.atsSlug} ${c.discoveredVia}`)).toEqual(["greenhouse:taxbit getro:1625", "greenhouse:bvnk getro:1625"]);
     expect(r.added[0]!.note).toMatch(/^found via getro:1625 \(Coinbase Ventures board, only there\): its jobs link greenhouse:taxbit \(\d+ open on 2026-09-14\)$/);
-    expect(r.otherAts).toEqual([{ company: "VALR", boards: ["coinbase-ventures"], jobs: 1, detail: "hibob" }]);
+    // VALR на HiBob (з 17.09 читаємо): дошку видно, але в реєстр вона йде лише після живої відповіді API.
+    expect(r.otherAts).toEqual([]);
+    expect(r.unverified.map((u) => [u.company, u.detail?.split(":").slice(0, 2).join(":")])).toEqual([["VALR", "hibob:valr"]]);
     // Список компаній (1 сторінка) і вакансії лише трьох крипто-компаній, яких реєстр не знає; Notion не читається.
     expect(urls.filter((u) => u.includes("api.getro.com"))).toHaveLength(4);
     expect(urls.some((u) => u.includes("consider") || u.includes("pantera"))).toBe(false);

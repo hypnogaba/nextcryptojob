@@ -19,7 +19,7 @@ import type { EngineEnv } from "../pipeline/registry.js";
 import { envFlag, envInt } from "./env.js";
 import type { CryptoScope, GetroBoard } from "./job-boards.js";
 import { mapLimit } from "./run.js";
-import { ATS, atsSourceKey, hostSlug } from "./sources/ats.js";
+import { ATS, atsSourceKey, comeetSlug, hostSlug, workdaySlug } from "./sources/ats.js";
 import { atsHintFromUrl, resolveCareerPage } from "./sources/careers.js";
 import { classifyLink, extractAts, fetchGetroCompanies, fetchGetroOrgLinks, type GetroLink, type OrgIndustry } from "./sources/getro.js";
 import { fetchApplyUrl, fetchSpeedrunCryptoCompanies, firstJobId } from "./sources/speedrun.js";
@@ -86,12 +86,14 @@ export interface DiscoverReport {
   rowsWritten: { estimated: number; measured: number | null };
 }
 
-const HOST_SLUG_PROVIDERS: readonly AtsProvider[] = ["workable", "smartrecruiters", "recruitee", "breezy", "bamboohr", "rippling", "personio"];
+const HOST_SLUG_PROVIDERS: readonly AtsProvider[] = ["workable", "smartrecruiters", "recruitee", "breezy", "bamboohr", "rippling", "personio", "gem", "pinpoint", "hibob"];
 
 /** Слаг ATS, який скан зможе прочитати; null, якщо форма підозріла. */
 function usableSlug(provider: AtsProvider, slug: string): string | null {
   try {
     if (HOST_SLUG_PROVIDERS.includes(provider)) return hostSlug(slug, provider);
+    if (provider === "workday") { const w = workdaySlug(slug); return `${w.tenant}.${w.wd}.${w.site}`; }
+    if (provider === "comeet") { comeetSlug(slug); return slug; }
     if (provider === "teamtailor") return slug.split(".").every((l) => /^[a-z0-9][a-z0-9-]{0,62}$/i.test(l)) ? slug.toLowerCase() : null;
     return /^[a-z0-9][a-z0-9_.%-]{0,80}$/i.test(slug) && !slug.includes("..") ? slug : null;
   } catch {

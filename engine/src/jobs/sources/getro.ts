@@ -204,6 +204,12 @@ const ATS_PATTERNS: Array<[AtsProvider, RegExp]> = [
   ["bamboohr", /\/\/([a-z0-9_-]+)\.bamboohr\.com\/(?:careers|jobs)/i],
   ["recruitee", /\/\/([a-z0-9_-]+)\.recruitee\.com\/o\//i],
   ["teamtailor", /\/\/([a-z0-9-]+(?:\.(?:na|eu))?)\.teamtailor\.com\/jobs/i],
+  // 17.09.2026: Gem, Pinpoint, HiBob, Workday (слаг «tenant.wdN.site», назва сайту після мовного префікса).
+  // Comeet не тут: його слагу потрібен токен зі сторінки компанії, тож компанію додають руками.
+  ["gem", /\/\/(?:jobs\.gem\.com|api\.gem\.com\/job_board\/v0)\/([a-z0-9_-]+)/i],
+  ["pinpoint", /\/\/([a-z0-9-]+)\.pinpointhq\.com/i],
+  ["hibob", /\/\/([a-z0-9-]+)\.careers\.hibob\.com/i],
+  ["workday", /\/\/([a-z0-9-]+\.wd\d{1,3})\.myworkdayjobs\.com\/(?:[a-z]{2}-[a-z]{2}\/)?(?!wday\/)([a-z0-9_-]+)/i],
 ];
 
 /** Слова, що стоять на місці слага в службових адресах ATS, а не назва дошки. */
@@ -213,6 +219,11 @@ export function extractAts(url: string): { provider: AtsProvider; slug: string }
   for (const [provider, rx] of ATS_PATTERNS) {
     const m = rx.exec(url);
     if (!m?.[1] || NOT_A_SLUG.has(m[1].toLowerCase())) continue;
+    // Workday: хост і назва сайту; сайт чутливий до регістру (Bullish).
+    if (provider === "workday") {
+      if (!m[2] || NOT_A_SLUG.has(m[2].toLowerCase())) continue;
+      return { provider, slug: `${m[1].toLowerCase()}.${m[2]}` };
+    }
     // Слаг Ashby чутливий до регістру (Sui%20Foundation): лишаємо як є, решта в нижньому.
     return { provider, slug: provider === "ashby" ? m[1] : m[1].toLowerCase() };
   }

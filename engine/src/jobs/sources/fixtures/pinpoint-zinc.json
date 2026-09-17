@@ -1,0 +1,142 @@
+{
+  "data": [
+    {
+      "id": "193873",
+      "benefits": null,
+      "benefits_header": "Benefits",
+      "compensation": "Competitive",
+      "compensation_minimum": null,
+      "compensation_maximum": null,
+      "compensation_currency": null,
+      "compensation_frequency": null,
+      "compensation_visible": true,
+      "deadline_at": null,
+      "description": "<div><!--block-->Vape tattooed gentrify pug, hell of raw denim viral sustainable actually chambray tilde taiyaki. Banh mi glossier neutra occupy. Messenger bag af cliche actually quinoa chartreuse fou",
+      "employment_type": "full_time",
+      "employment_type_text": "Full Time",
+      "key_responsibilities": null,
+      "key_responsibilities_header": "Key Responsibilities",
+      "reporting_to": null,
+      "skills_knowledge_expertise": null,
+      "skills_knowledge_expertise_header": "Skills, Knowledge and Experience",
+      "title": "Head of DEI - Belfast",
+      "url": "https://zinc.pinpointhq.com/en/postings/a654df0a-56fd-4bf3-bcf6-9d01aca571e9",
+      "path": "/en/postings/a654df0a-56fd-4bf3-bcf6-9d01aca571e9",
+      "workplace_type": "onsite",
+      "workplace_type_text": "Onsite",
+      "job": {
+        "id": "212189",
+        "requisition_id": "0005",
+        "department": {
+          "id": "40544",
+          "name": "Finance"
+        },
+        "division": {
+          "id": "4948",
+          "name": "Hooli"
+        },
+        "structure_custom_group_one": null
+      },
+      "location": {
+        "id": "33855",
+        "city": null,
+        "name": "Belfast",
+        "postal_code": null,
+        "province": null,
+        "street_address": null
+      }
+    },
+    {
+      "id": "193874",
+      "benefits": null,
+      "benefits_header": "Benefits",
+      "compensation": "Competitive",
+      "compensation_minimum": null,
+      "compensation_maximum": null,
+      "compensation_currency": null,
+      "compensation_frequency": null,
+      "compensation_visible": true,
+      "deadline_at": null,
+      "description": "<div><!--block-->Vape tattooed gentrify pug, hell of raw denim viral sustainable actually chambray tilde taiyaki. Banh mi glossier neutra occupy. Messenger bag af cliche actually quinoa chartreuse fou",
+      "employment_type": "full_time",
+      "employment_type_text": "Full Time",
+      "key_responsibilities": null,
+      "key_responsibilities_header": "Key Responsibilities",
+      "reporting_to": null,
+      "skills_knowledge_expertise": null,
+      "skills_knowledge_expertise_header": "Skills, Knowledge and Experience",
+      "title": "Head of DEI - US",
+      "url": "https://zinc.pinpointhq.com/en/postings/28768506-bc35-43ad-9e22-901ebfbb2f8b",
+      "path": "/en/postings/28768506-bc35-43ad-9e22-901ebfbb2f8b",
+      "workplace_type": "onsite",
+      "workplace_type_text": "Onsite",
+      "job": {
+        "id": "212190",
+        "requisition_id": "0004",
+        "department": {
+          "id": "40548",
+          "name": "Sales"
+        },
+        "division": {
+          "id": "4947",
+          "name": "ACME"
+        },
+        "structure_custom_group_one": null
+      },
+      "location": {
+        "id": "33857",
+        "city": null,
+        "name": "Washington",
+        "postal_code": null,
+        "province": null,
+        "street_address": null
+      }
+    },
+    {
+      "id": "193875",
+      "benefits": null,
+      "benefits_header": "Benefits",
+      "compensation": "Competitive",
+      "compensation_minimum": null,
+      "compensation_maximum": null,
+      "compensation_currency": null,
+      "compensation_frequency": null,
+      "compensation_visible": true,
+      "deadline_at": null,
+      "description": "<div><!--block-->Vape tattooed gentrify pug, hell of raw denim viral sustainable actually chambray tilde taiyaki. Banh mi glossier neutra occupy. Messenger bag af cliche actually quinoa chartreuse fou",
+      "employment_type": "full_time",
+      "employment_type_text": "Full Time",
+      "key_responsibilities": null,
+      "key_responsibilities_header": "Key Responsibilities",
+      "reporting_to": null,
+      "skills_knowledge_expertise": null,
+      "skills_knowledge_expertise_header": "Skills, Knowledge and Experience",
+      "title": "Head of DEI - UK",
+      "url": "https://zinc.pinpointhq.com/en/postings/d4a0d15a-cf35-4fd2-8e16-3629adeec5c7",
+      "path": "/en/postings/d4a0d15a-cf35-4fd2-8e16-3629adeec5c7",
+      "workplace_type": "onsite",
+      "workplace_type_text": "Onsite",
+      "job": {
+        "id": "212191",
+        "requisition_id": "0003",
+        "department": {
+          "id": "40547",
+          "name": "Product"
+        },
+        "division": {
+          "id": "4947",
+          "name": "ACME"
+        },
+        "structure_custom_group_one": null
+      },
+      "location": {
+        "id": "33854",
+        "city": null,
+        "name": "London",
+        "postal_code": null,
+        "province": null,
+        "street_address": null
+      }
+    }
+  ]
+}

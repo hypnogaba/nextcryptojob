@@ -76,7 +76,7 @@ export interface SourceResult {
 
 export const ATS_PROVIDERS = [
   "greenhouse", "lever", "lever_eu", "ashby", "workable", "smartrecruiters", "recruitee", "teamtailor",
-  "breezy", "bamboohr", "rippling", "personio",
+  "breezy", "bamboohr", "rippling", "personio", "gem", "pinpoint", "hibob", "comeet", "workday",
 ] as const;
 export type AtsProvider = (typeof ATS_PROVIDERS)[number];
 export const isAtsProvider = (v: unknown): v is AtsProvider =>

@@ -248,7 +248,7 @@ describe("Getro: лише посилання для розвідки (колек
     expect(links.map((l) => [l.company, l.industry, extractAts(l.url)])).toEqual([
       ["Tactic", "crypto", { provider: "greenhouse", slug: "taxbit" }],
       ["BVNK", "crypto", { provider: "greenhouse", slug: "bvnk" }],
-      ["VALR", "crypto", null],
+      ["VALR", "crypto", { provider: "hibob", slug: "valr" }], // з 17.09 HiBob читаємо
       ["Notion", "other", { provider: "ashby", slug: "notion" }],
     ]);
     expect(orgIndustry(undefined)).toBe("unknown");
@@ -261,6 +261,118 @@ describe("Getro: лише посилання для розвідки (колек
     expect(extractAts("https://acme.recruitee.com/o/senior-engineer")).toEqual({ provider: "recruitee", slug: "acme" });
     expect(extractAts("https://jobs.eu.lever.co/aavelabs/1")).toEqual({ provider: "lever_eu", slug: "aavelabs" });
     expect(extractAts("https://crossmint.na.teamtailor.com/jobs/697262-anti-fraud")).toEqual({ provider: "teamtailor", slug: "crossmint.na" });
-    expect(extractAts("https://valr.careers.hibob.com/jobs/1")).toBeNull();
+    expect(extractAts("https://valr.careers.hibob.com/jobs/1")).toEqual({ provider: "hibob", slug: "valr" });
+    expect(extractAts("https://jobs.gem.com/trojan-trading/am9icG9zdDrT7W4v")).toEqual({ provider: "gem", slug: "trojan-trading" });
+    expect(extractAts("https://zinc.pinpointhq.com/en/postings/a654df0a")).toEqual({ provider: "pinpoint", slug: "zinc" });
+    // Workday: мовний префікс пропускаємо, регістр назви сайту лишаємо; службова адреса cxs не дошка.
+    expect(extractAts("https://bullish.wd3.myworkdayjobs.com/en-US/Bullish/job/New-York/Director_JR1")).toEqual({ provider: "workday", slug: "bullish.wd3.Bullish" });
+    expect(extractAts("https://Bullish.wd3.myworkdayjobs.com/Bullish")).toEqual({ provider: "workday", slug: "bullish.wd3.Bullish" });
+    expect(extractAts("https://bullish.wd3.myworkdayjobs.com/wday/cxs/bullish/Bullish/jobs")).toBeNull();
+    // Comeet лише руками: у посиланні немає токена.
+    expect(extractAts("https://www.comeet.com/jobs/blockaid/69.00B/backend-engineer/F2.C56")).toBeNull();
+  });
+});
+
+/** fetch з готовою відповіддю: для вилок, яких немає в знятих файлах. */
+function answer(body: unknown) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl = (async (url: string, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  }) as unknown as typeof fetch;
+  return { calls, o: { fetchImpl, retries: 0 } };
+}
+
+describe("ATS, додані 17.09 (форми зняті 17.09 з публічних адрес)", () => {
+  it("Gem (Trojan Trading): адреса API, remote з location_type, дата першої публікації", async () => {
+    const { urls, o } = serve("gem-trojan-trading.json");
+    const jobs = await ats.fetchGem("trojan-trading", "Trojan", o);
+    expect(urls[0]).toBe("https://api.gem.com/job_board/v0/trojan-trading/job_posts/");
+    expect(jobs).toHaveLength(3);
+    expect(jobs[0]).toMatchObject({ title: "Technical Project Manager", location: "France - Remote", remote: true,
+      url: "https://jobs.gem.com/trojan-trading/am9icG9zdDrT7W4vSkgg-QQ4p2UNQRBe",
+      postedAt: "2025-06-12T14:58:22.887Z", source: "gem:trojan-trading", crypto: true });
+  });
+
+  it("Pinpoint (Zinc): postings.json, без дати, onsite не remote", async () => {
+    const { urls, o } = serve("pinpoint-zinc.json");
+    const jobs = await ats.fetchPinpoint("zinc", "Zinc", o);
+    expect(urls[0]).toBe("https://zinc.pinpointhq.com/postings.json");
+    expect(jobs.map((j) => [j.title, j.location, j.remote, j.postedAt])).toEqual([
+      ["Head of DEI - Belfast", "Belfast", false, null], ["Head of DEI - US", "Washington", false, null], ["Head of DEI - UK", "London", false, null]]);
+    expect(jobs[0]!.source).toBe("pinpoint:zinc");
+    expect(pay(jobs)).toEqual([[null, null, null], [null, null, null], [null, null, null]]);
+  });
+
+  it("Pinpoint: місячна вилка стає річною; прихована не пишеться", async () => {
+    const row = { title: "Engineer", url: "https://acme.pinpointhq.com/en/postings/1", location: { name: "London" }, workplace_type: "remote",
+      compensation_minimum: 5000, compensation_maximum: 6000, compensation_currency: "gbp", compensation_frequency: "month" };
+    const { o } = answer({ data: [row, { ...row, compensation_visible: false }] });
+    const jobs = await ats.fetchPinpoint("acme", "Acme", o);
+    expect(pay(jobs)).toEqual([[60_000, 72_000, "GBP"], [null, null, null]]);
+    expect(jobs[0]!.remote).toBe(true);
+  });
+
+  it("HiBob (VALR): заголовок companyidentifier, адреса вакансії з id, місце без повтору", async () => {
+    const { urls, o } = serve("hibob-valr.json");
+    const jobs = await ats.fetchHiBob("valr", "VALR", o);
+    expect(urls[0]).toBe("https://valr.careers.hibob.com/api/job-ad");
+    expect(jobs[0]).toMatchObject({ title: "Senior Infrastructure Engineer", location: "South Africa", remote: true,
+      url: "https://valr.careers.hibob.com/jobs/fc23ce11-483c-44cf-bd5f-5f66304116bb",
+      postedAt: "2026-09-11T13:59:24.724Z", source: "hibob:valr" });
+    expect(jobs[1]!.location).toBe("Nigeria");
+    const { calls, o: o2 } = answer({ jobAdDetails: [{ id: "a", title: "PM", site: "Cape-Town", country: "South Africa",
+      payTransparencyMinSalary: 900_000, payTransparencyMaxSalary: 1_200_000, payTransparencySalaryCurrency: "ZAR",
+      payTransparencySalaryPayPeriod: "Annual" }] });
+    const [pm] = await ats.fetchHiBob("valr", "VALR", o2);
+    expect(new Headers(calls[0]!.init?.headers).get("companyidentifier")).toBe("valr");
+    expect(pm).toMatchObject({ location: "Cape Town, South Africa", salaryMin: 900_000, salaryMax: 1_200_000, salaryCurrency: "ZAR" });
+  });
+
+  it("Comeet (Blockaid): uid і токен зі слага, токен не йде в ключ джерела", async () => {
+    const slug = "69.00B.96B41ED041ED12D654C3388241ED12D654C3";
+    const { urls, o } = serve("comeet-blockaid.json");
+    const jobs = await ats.fetchComeet(slug, "Blockaid", o);
+    expect(urls[0]).toBe("https://www.comeet.co/careers-api/2.0/company/69.00B/positions?token=96B41ED041ED12D654C3388241ED12D654C3&details=false");
+    expect(jobs[1]).toMatchObject({ title: "Backend Engineer", location: "Tel Aviv-Yafo, IL", remote: false,
+      url: "https://www.comeet.com/jobs/blockaid/69.00B/backend-engineer/F2.C56", source: "comeet:69.00B" });
+    expect(ats.atsSourceKey("comeet", slug)).toBe("comeet:69.00B");
+    expect(() => ats.comeetSlug("69.00B")).toThrow();
+    expect(() => ats.comeetSlug("evil.com/x.ABCDEF0123456789")).toThrow();
+  });
+
+  it("Workday (Bullish): POST cxs, адреса з externalPath, дата зі слів, «30+» без дати", async () => {
+    const { urls, o } = serve("workday-bullish.json");
+    const jobs = await ats.fetchWorkday("bullish.wd3.Bullish", "Bullish", o);
+    expect(urls[0]).toBe("https://bullish.wd3.myworkdayjobs.com/wday/cxs/bullish/Bullish/jobs");
+    expect(jobs[0]).toMatchObject({ title: "Director, Exchange Sales", location: "New York",
+      url: "https://bullish.wd3.myworkdayjobs.com/Bullish/job/New-York/Director--Exchange-Sales_JR2001274-1",
+      source: "workday:bullish.wd3.Bullish" });
+    expect(jobs.at(-1)!.postedAt).toBeNull();
+    expect(ats.atsSourceKey("workday", "bullish.wd3.Bullish")).toBe("workday:bullish.wd3.Bullish");
+    const now = new Date("2026-09-17T12:00:00Z");
+    expect(ats.workdayPosted("Posted Today", now)).toBe("2026-09-17T12:00:00.000Z");
+    expect(ats.workdayPosted("Posted Yesterday", now)).toBe("2026-09-16T12:00:00.000Z");
+    expect(ats.workdayPosted("Posted 3 Days Ago", now)).toBe("2026-09-14T12:00:00.000Z");
+    expect(ats.workdayPosted("Posted 30+ Days Ago", now)).toBeNull();
+    expect(() => ats.workdaySlug("evil.com/x.wd3.site")).toThrow();
+  });
+
+  it("Workday гортає сторінки по 20, поки сторінка повна", async () => {
+    const page = (n: number) => ({ jobPostings: Array.from({ length: n }, (_, i) => ({ title: `Role ${i}`, externalPath: `/job/x_${i}`, locationsText: "2 Locations", postedOn: "Posted Today" })) });
+    const bodies = [page(20), page(5)];
+    const offsets: number[] = [];
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      offsets.push(JSON.parse(String(init?.body)).offset);
+      return new Response(JSON.stringify(bodies.shift()), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const jobs = await ats.fetchWorkday("acme.wd1.External", "Acme", { fetchImpl, retries: 0 });
+    expect(offsets).toEqual([0, 20]);
+    expect(jobs).toHaveLength(25);
+    expect(jobs[0]!.location).toBeNull();
+  });
+
+  it("реєстр ATS знає всі п'ять", () => {
+    for (const p of ["gem", "pinpoint", "hibob", "comeet", "workday"] as const) expect(typeof ats.ATS[p]).toBe("function");
   });
 });

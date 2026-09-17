@@ -268,6 +268,125 @@ export async function fetchBambooHr(rawSlug: string, name: string, o: FetchOptio
   }));
 }
 
+// ── Gem ─── публічний Job Board API (форма як у Greenhouse), слаг = «vanity path» дошки jobs.gem.com
+export async function fetchGem(slug: string, name: string, o: FetchOptions = {}): Promise<RawJob[]> {
+  const s = hostSlug(slug, "gem");
+  const posts = await fetchJson<Array<{ title: string; absolute_url: string; location?: { name?: string } | null;
+    location_type?: string | null; first_published_at?: string | null; created_at?: string | null;
+    content_plain?: string | null; pay_input_ranges?: GreenhouseRange[] | null }>>(
+    `https://api.gem.com/job_board/v0/${s}/job_posts/`, {}, o);
+  return withCrypto(posts.map((j) => {
+    const loc = j.location?.name ?? null;
+    return { url: j.absolute_url, company: name, title: j.title, location: loc,
+      remote: j.location_type === "remote" || REMOTE.test(loc ?? ""),
+      postedAt: iso(j.first_published_at ?? j.created_at), source: `gem:${s}`,
+      description: j.content_plain ?? null, ...greenhousePay(j.pay_input_ranges) };
+  }));
+}
+
+// ── Pinpoint ─── `postings.json` кар'єрного сайту, вилка окремими полями
+export async function fetchPinpoint(rawSlug: string, name: string, o: FetchOptions = {}): Promise<RawJob[]> {
+  const slug = hostSlug(rawSlug, "pinpoint");
+  const p = await fetchJson<{ data?: Array<{ title: string; url: string; location?: { name?: string | null; city?: string | null } | null;
+    workplace_type?: string | null; description?: string | null; compensation_visible?: boolean;
+    compensation_minimum?: number | null; compensation_maximum?: number | null;
+    compensation_currency?: string | null; compensation_frequency?: string | null }> }>(
+    `https://${slug}.pinpointhq.com/postings.json`, {}, o);
+  return withCrypto((p.data ?? []).map((j) => {
+    const loc = j.location?.name ?? j.location?.city ?? null;
+    const shown = j.compensation_visible !== false;
+    // Дати публікації ця стрічка не віддає (лише deadline_at).
+    return { url: j.url, company: name, title: j.title, location: loc,
+      remote: j.workplace_type === "remote" || REMOTE.test(loc ?? ""), postedAt: null, source: `pinpoint:${slug}`,
+      description: j.description?.replace(/<[^>]+>/g, " ") ?? null,
+      ...(shown ? payFor(j.compensation_minimum ?? null, j.compensation_maximum ?? null,
+        currencyCode(j.compensation_currency), payPeriod(j.compensation_frequency)) : {}) };
+  }));
+}
+
+// ── HiBob ─── API кар'єрного сайту: компанію називає заголовок `companyidentifier`
+export async function fetchHiBob(rawSlug: string, name: string, o: FetchOptions = {}): Promise<RawJob[]> {
+  const slug = hostSlug(rawSlug, "hibob");
+  const p = await fetchJson<{ jobAdDetails?: Array<{ id: string; title: string; site?: string | null; country?: string | null;
+    workspaceTypeId?: string | null; publishedAt?: string | null; description?: string | null;
+    payTransparencyMinSalary?: number | null; payTransparencyMaxSalary?: number | null;
+    payTransparencySalaryCurrency?: string | null; payTransparencySalaryPayPeriod?: string | null }> }>(
+    `https://${slug}.careers.hibob.com/api/job-ad`, { headers: { companyidentifier: slug } }, o);
+  return withCrypto((p.jobAdDetails ?? []).map((j) => {
+    const loc = [j.site?.replace(/-/g, " "), j.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || null;
+    return { url: `https://${slug}.careers.hibob.com/jobs/${encodeURIComponent(j.id)}`, company: name, title: j.title,
+      location: loc, remote: j.workspaceTypeId === "remote" || REMOTE.test(loc ?? ""),
+      postedAt: iso(j.publishedAt), source: `hibob:${slug}`,
+      description: j.description?.replace(/<[^>]+>/g, " ") ?? null,
+      ...payFor(j.payTransparencyMinSalary ?? null, j.payTransparencyMaxSalary ?? null,
+        currencyCode(j.payTransparencySalaryCurrency), payPeriod(j.payTransparencySalaryPayPeriod)) };
+  }));
+}
+
+// ── Comeet ─── Careers API; слаг «<uid компанії>.<публічний токен>» (токен стоїть на її кар'єрній сторінці)
+const COMEET_SLUG = /^([0-9A-F]{2}\.[0-9A-F]{3})\.([0-9A-F]{16,64})$/i;
+export function comeetSlug(slug: string): { uid: string; token: string } {
+  const m = COMEET_SLUG.exec(slug);
+  if (!m) throw new Error(`comeet: неприпустимий slug «${slug.slice(0, 40)}»`);
+  return { uid: m[1]!.toUpperCase(), token: m[2]!.toUpperCase() };
+}
+
+export async function fetchComeet(slug: string, name: string, o: FetchOptions = {}): Promise<RawJob[]> {
+  const { uid, token } = comeetSlug(slug);
+  const posts = await fetchJson<Array<{ name: string; url_comeet_hosted_page?: string | null; url_active_page?: string | null;
+    workplace_type?: string | null; time_updated?: string | null;
+    location?: { city?: string | null; country?: string | null; is_remote?: boolean } | null }>>(
+    `https://www.comeet.co/careers-api/2.0/company/${uid}/positions?token=${token}&details=false`, {}, o);
+  return withCrypto(posts.filter((j) => j.url_comeet_hosted_page || j.url_active_page).map((j) => {
+    const loc = [j.location?.city, j.location?.country].filter(Boolean).join(", ") || null;
+    // Лише час останньої правки: дати публікації Comeet не віддає.
+    return { url: (j.url_comeet_hosted_page ?? j.url_active_page)!, company: name, title: j.name, location: loc,
+      remote: /remote/i.test(j.workplace_type ?? "") || REMOTE.test(loc ?? ""),
+      postedAt: iso(j.time_updated), source: `comeet:${uid}` };
+  }));
+}
+
+// ── Workday ─── JSON кар'єрного сайту (cxs); слаг «<tenant>.<wdN>.<site>»
+const WORKDAY_SLUG = /^([a-z0-9][a-z0-9-]{0,62})\.(wd\d{1,3})\.([a-z0-9][a-z0-9_-]{0,62})$/i;
+export function workdaySlug(slug: string): { tenant: string; wd: string; site: string } {
+  const m = WORKDAY_SLUG.exec(slug);
+  if (!m) throw new Error(`workday: неприпустимий slug «${slug.slice(0, 40)}»`);
+  return { tenant: m[1]!.toLowerCase(), wd: m[2]!.toLowerCase(), site: m[3]! };
+}
+
+/** «Posted Today / Yesterday / 3 Days Ago»; «30+ Days Ago» точної дати не має. */
+export function workdayPosted(text: string | null | undefined, now = new Date()): string | null {
+  const t = (text ?? "").toLowerCase();
+  const days = /today/.test(t) ? 0 : /yesterday/.test(t) ? 1 : /\+/.test(t) ? null : Number(/(\d+)\s+days?/.exec(t)?.[1] ?? NaN);
+  if (days === null || !Number.isFinite(days)) return null;
+  return new Date(now.getTime() - days * 86_400_000).toISOString();
+}
+
+const WORKDAY_PAGE = 20;
+const WORKDAY_MAX_PAGES = 10;
+
+export async function fetchWorkday(slug: string, name: string, o: FetchOptions = {}): Promise<RawJob[]> {
+  const { tenant, wd, site } = workdaySlug(slug);
+  const host = `https://${tenant}.${wd}.myworkdayjobs.com`;
+  const out: RawJob[] = [];
+  for (let page = 0; page < WORKDAY_MAX_PAGES; page++) {
+    const p = await fetchJson<{ jobPostings?: Array<{ title?: string; externalPath?: string; locationsText?: string; postedOn?: string }> }>(
+      `${host}/wday/cxs/${tenant}/${site}/jobs`,
+      { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE, offset: page * WORKDAY_PAGE, searchText: "" }) }, o);
+    const rows = p.jobPostings ?? [];
+    for (const j of rows) {
+      if (!j.title || !j.externalPath?.startsWith("/")) continue;
+      const loc = j.locationsText && !/^\d+ locations?$/i.test(j.locationsText) ? j.locationsText : null;
+      out.push({ url: `${host}/${site}${j.externalPath}`, company: name, title: j.title, location: loc,
+        remote: REMOTE.test(`${loc ?? ""} ${j.title}`), postedAt: workdayPosted(j.postedOn),
+        source: `workday:${tenant}.${wd}.${site}`, crypto: true });
+    }
+    if (rows.length < WORKDAY_PAGE) break;
+  }
+  return out;
+}
+
 export type AtsFetcher = (slug: string, name: string, o?: FetchOptions) => Promise<RawJob[]>;
 
 export const ATS: Record<AtsProvider, AtsFetcher> = {
@@ -283,9 +402,17 @@ export const ATS: Record<AtsProvider, AtsFetcher> = {
   rippling: fetchRippling,
   personio: fetchPersonio,
   bamboohr: fetchBambooHr,
+  gem: fetchGem,
+  pinpoint: fetchPinpoint,
+  hibob: fetchHiBob,
+  comeet: fetchComeet,
+  workday: fetchWorkday,
 };
 
 /** Ключ джерела в jobs_cache.source і source_state: `<провайдер>:<слаг>`, як пишуть fetch* вище. */
 export function atsSourceKey(provider: AtsProvider, atsSlug: string): string {
+  // Comeet: токен у ключ не йде (ключ видно в адмінці й журналі); Workday: назва сайту чутлива до регістру.
+  if (provider === "comeet") return `comeet:${comeetSlug(atsSlug).uid}`;
+  if (provider === "workday") { const w = workdaySlug(atsSlug); return `workday:${w.tenant}.${w.wd}.${w.site}`; }
   return `${provider}:${["greenhouse", "lever", "lever_eu", "ashby"].includes(provider) ? atsSlug : atsSlug.toLowerCase()}`;
 }
