@@ -6,6 +6,8 @@
 -- стовпці в тому самому порядку (0001 + 0004 + 0005), лише ширший список ats_provider.
 -- Зовнішніх ключів на companies немає; індекси лише автоматичні (PRIMARY KEY і UNIQUE).
 
+-- Залишок невдалого запуску не має зупиняти повтор. Перед накочуванням на прод: резервна копія companies.
+DROP TABLE IF EXISTS companies_new;
 CREATE TABLE companies_new (
     slug           TEXT PRIMARY KEY,
     name           TEXT NOT NULL,
