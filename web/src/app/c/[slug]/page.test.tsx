@@ -48,6 +48,20 @@ describe("public card page (trust model of 13.09)", () => {
     expect(html).not.toContain("Report this card");
   });
 
+  it("the owner sees one short line about their own score, not the product explanation", async () => {
+    await createSession("u", null);
+    const html = await render();
+    expect(html).toContain("This is your score, built from your own onchain and social activity. Share it on X.");
+    expect(html).not.toContain("NextCryptoJob turns a public track record");
+    expect(html).not.toContain("The round seal belongs to this card");
+    expect(html).not.toContain("Self-reported: the card owner");
+    // Обіцянка про самозаявлені джерела лишається там, де картку бачать інші.
+    const asPublic = renderToStaticMarkup(
+      await CardPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ as: "public" }) }),
+    );
+    expect(asPublic).toContain("Self-reported: the card owner added their X, GitHub and wallets themselves.");
+  });
+
   it("?as=public shows the owner what others see: no owner actions, a note and a way back", async () => {
     await createSession("u", null);
     const html = renderToStaticMarkup(await CardPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ as: "public" }) }));
