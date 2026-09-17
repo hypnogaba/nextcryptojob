@@ -146,4 +146,12 @@ describe("company profiles", () => {
     expect(logoPath(null)).toBeNull();
     for (const bad of ["javascript:alert(1)", "aave", "a b.com", "aave.com/x", "../x.com"]) expect(cleanDomain(bad)).toBeNull();
   });
+  it("a cached logo saved with old headers is served with the current ones", async () => {
+    const stale = new Response(png, { headers: { "Content-Type": "image/png", "Cross-Origin-Resource-Policy": "same-origin" } });
+    const cache = { match: async () => stale, put: async () => undefined } as unknown as Cache;
+    const res = await logoResponse(req("aave.com"), "aave.com", { jobs, fetchImpl: upstream(png, "image/png"), cache });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cross-Origin-Resource-Policy")).toBe("cross-origin");
+    expect(res.headers.get("Content-Type")).toBe("image/png");
+  });
 });

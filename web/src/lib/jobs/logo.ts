@@ -76,7 +76,12 @@ export async function logoResponse(request: Request, raw: string, deps: LogoDeps
   const cache = deps.cache === undefined ? edgeCache() : deps.cache;
   const key = new Request(new URL(`/api/logo/${domain}`, request.url).toString(), { method: "GET" });
   const hit = cache ? await cache.match(key).catch(() => undefined) : undefined;
-  if (hit) return hit;
+  if (hit) {
+    // Заголовки безпеки беремо свіжі, не з кешу: значки, збережені до 17.09, несли CORP same-origin.
+    const fresh = new Response(hit.body, hit);
+    for (const [k, v] of Object.entries(SAFE)) fresh.headers.set(k, v);
+    return fresh;
+  }
 
   const res = await fromUpstream(domain, deps.fetchImpl ?? fetch);
   if (cache && res.headers.get("Cache-Control") !== "no-store") await cache.put(key, res.clone()).catch(() => undefined);
