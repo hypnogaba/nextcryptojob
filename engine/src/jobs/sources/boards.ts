@@ -3,7 +3,8 @@
 // Національних дошок і розбору їхніх заголовків тут немає.
 //
 // web3.career тут НЕ читається: з 14.09.2026 лише їхній офіційний API з токеном (web3career.ts), а
-// fetchBoard відмовляє будь-якій адресі web3.career, щоб сторінки не збирались удруге. Розбір
+// fetchBoard відмовляє будь-якій адресі web3.career, щоб сторінки не збирались удруге. З 17.09.2026
+// так само закрито jobstash.xyz: його власник попросив припинити читання (BLOCKED_BOARDS). Розбір
 // розмітки JobPosting лишився для інших дошок; знімок web3career-list.html лише зразок розмітки.
 import { fetchXml, type FetchOptions } from "../../http.js";
 import { extractSalary } from "../salary-text.js";
@@ -85,10 +86,27 @@ export function isWeb3CareerHost(url: string): boolean {
   try { return /(^|\.)web3\.career$/i.test(new URL(url).hostname); } catch { return false; }
 }
 
+/**
+ * Дошки, сторінок яких сканер не читає НІКОЛИ, хоч би що казав реєстр. Причина в кожної своя,
+ * наслідок один: рядок у `sources` можна помилково ввімкнути, а запиту все одно не буде.
+ */
+const BLOCKED_BOARDS: ReadonlyArray<{ host: RegExp; why: string }> = [
+  { host: /(^|\.)web3\.career$/i, why: "web3.career читається лише через офіційний API (web3career.ts), не сторінками" },
+  // 17.09.2026 власник JobStash написав нам, що не хоче, щоб ми читали його дошку. Рішення власника
+  // NextCryptoJob того ж дня: джерело вимкнено, його вакансії з бази видалено, запитів більше немає.
+  { host: /(^|\.)jobstash\.xyz$/i, why: "jobstash.xyz: власник дошки попросив припинити 17.09.2026, джерело закрито назавжди" },
+];
+
+/** Причина відмови для цієї адреси, або null, якщо дошку читати можна. */
+export function blockedBoardReason(url: string): string | null {
+  let host: string;
+  try { host = new URL(url).hostname; } catch { return null; }
+  return BLOCKED_BOARDS.find((b) => b.host.test(host))?.why ?? null;
+}
+
 export async function fetchBoard(board: BoardSource, windowDays: number, o: FetchOptions = {}, now: Date = new Date()): Promise<RawJob[]> {
-  if (isWeb3CareerHost(board.feedUrl)) {
-    throw new Error(`${board.name}: web3.career читається лише через офіційний API (web3career.ts), не сторінками`);
-  }
+  const blocked = blockedBoardReason(board.feedUrl);
+  if (blocked) throw new Error(`${board.name}: ${blocked}`);
   if (board.kind === "jsonld") return fetchJsonLd(board, o, windowDays, now);
   if (board.kind === "nextjs") return fetchNextBoard(board, o, windowDays, now);
   if (board.kind === "rss") return fetchRss(board, o);

@@ -139,13 +139,21 @@ export function shortDate(localDate: string): string {
 }
 
 /**
- * Дошка, яку треба назвати джерелом вакансії, за адресою: web3.career (умови їхнього API: посилання
- * на apply_url як є, follow, і web3.career названо джерелом). Адреса при цьому не міняється ніде:
- * у Telegram вона йде в href рядком, як лежить у базі. null для решти.
+ * Дошка, яку треба назвати джерелом вакансії, за адресою. Список той самий, що на сайті
+ * (web/src/lib/jobs/link.ts BOARDS): чужу дошку називаємо вголос скрізь, де показуємо вакансію.
+ * Для web3.career це ще й умова їхнього API (посилання на apply_url як є, follow, джерело названо).
+ * Адреса при цьому не міняється ніде: у Telegram вона йде в href рядком, як лежить у базі.
+ * null для ATS роботодавця: там джерело це сам роботодавець.
  */
+const BOARDS: ReadonlyArray<{ host: RegExp; label: string }> = [
+  { host: /^(.+\.)?web3\.career$/i, label: "web3.career" },
+  { host: /^(.+\.)?remote3\.co$/i, label: "remote3.co" },
+];
+
 export function jobVia(url: string): string | null {
   const host = /^https?:\/\/([^/?#:]+)/i.exec(url.trim())?.[1]?.toLowerCase();
-  return host === "web3.career" || host?.endsWith(".web3.career") ? "web3.career" : null;
+  if (!host) return null;
+  return BOARDS.find((b) => b.host.test(host))?.label ?? null;
 }
 
 /**

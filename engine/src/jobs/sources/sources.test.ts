@@ -140,6 +140,7 @@ describe("ATS: форми відповідей, зняті 14.09", () => {
 const W3: BoardSource = { name: "board:web3career", label: "Web3.career", kind: "jsonld", feedUrl: "https://web3.career/", cryptoOnly: true };
 /** Дошка з розміткою JobPosting. Знімок сторінки web3.career тут лише зразок розмітки: сам web3.career читається через API. */
 const LD: BoardSource = { name: "board:ld-example", label: "LD", kind: "jsonld", feedUrl: "https://jobs.example/", cryptoOnly: true };
+/** Знімок дошки на Next.js. Саму jobstash.xyz сканер з 17.09.2026 не читає (BLOCKED_BOARDS); знімок лишився зразком формату. */
 const JS: BoardSource = { name: "board:jobstash", label: "JobStash", kind: "nextjs", feedUrl: "https://jobstash.xyz/", cryptoOnly: false };
 const R3: BoardSource = { name: "board:remote3", label: "Remote3", kind: "rss", feedUrl: "https://www.remote3.co/api/rss", cryptoOnly: true };
 
@@ -148,6 +149,13 @@ describe("дошки", () => {
     const { urls, o } = serve("web3career-list.html");
     await expect(fetchBoard(W3, 30, o)).rejects.toThrow(/офіційний API/);
     await expect(fetchBoard({ ...LD, feedUrl: "https://www.web3.career/remote-jobs" }, 30, o)).rejects.toThrow(/офіційний API/);
+    expect(urls).toHaveLength(0);
+  });
+
+  it("jobstash.xyz закрито 17.09.2026 на прохання власника дошки: жодного запиту, хоч би що в реєстрі", async () => {
+    const { urls, o } = serve("web3career-list.html"); // до файлу не дійде: запиту немає
+    await expect(fetchBoard(JS, 30, o)).rejects.toThrow(/jobstash\.xyz/);
+    await expect(fetchBoard({ ...LD, feedUrl: "https://www.jobstash.xyz/jobs" }, 30, o)).rejects.toThrow(/jobstash\.xyz/);
     expect(urls).toHaveLength(0);
   });
 

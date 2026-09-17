@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const DOCS = fileURLToPath(new URL("../../docs/legal/", import.meta.url));
 const OUT = fileURLToPath(new URL("../content/legal/", import.meta.url));
 
-const FILES = ["privacy-policy.md", "terms-candidates.md", "terms-companies.md", "how-scoring-works.md"];
+const FILES = ["privacy-policy.md", "terms-candidates.md", "terms-companies.md", "how-scoring-works.md", "sources.md"];
 
 if (!existsSync(DOCS)) {
   console.log("legal-content: docs/legal not found, keeping web/content/legal as it is");

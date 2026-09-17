@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/scoring", label: "How scoring works" },
   { href: "/company", label: "For companies" },
   { href: "/faq", label: "FAQ" },
+  { href: "/sources", label: "Sources" },
   { href: "/contact", label: "Contact" },
   { href: "/feedback", label: "Got a job? Tell us" },
   { href: "https://x.com/nextcryptojob", label: "X" },

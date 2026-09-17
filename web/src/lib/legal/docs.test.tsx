@@ -35,6 +35,7 @@ describe("legal pages", () => {
       "NextCryptoJob Privacy Policy",
       "NextCryptoJob Terms for Candidates",
       "NextCryptoJob Terms for Companies",
+      "Where NextCryptoJob jobs come from",
       "How Scoring Works",
     ]);
   });

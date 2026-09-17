@@ -1,5 +1,5 @@
 // Щоденний скан вакансій NextCryptoJob (`jobs-scan [--dry]`): крипто-роботодавці з реєстру через
-// публічні API їхніх ATS, крипто-дошки (web3.career через їхній офіційний API, JobStash, remote3), крипто-компанії speedrun,
+// публічні API їхніх ATS, крипто-дошки (web3.career через їхній офіційний API, remote3), крипто-компанії speedrun,
 // за бажанням Superteam Earn. Пише лише в базу вакансій NextCryptoJob (db/jobs); насухо не пише нічого.
 //
 // Ідея прогону перенесена з NextRole (crypto-jobs-agent, scanner: scan-core.ts, dry-scan.ts), але

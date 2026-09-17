@@ -1,0 +1,49 @@
+# Where NextCryptoJob jobs come from
+
+NextCryptoJob shows crypto jobs from many places. This page says exactly which places, what we take,
+and what to do if you run one of them and want something changed.
+
+Last updated: 17 September 2026.
+
+## Employers' own job boards
+
+Most of our jobs come from the public API of the employer's own hiring system: Greenhouse, Lever,
+Ashby, Workable, SmartRecruiters, Recruitee, Teamtailor, Breezy, BambooHR, Rippling, Personio, Gem,
+Pinpoint, HiBob, Comeet and Workday. These APIs exist so that open jobs get read and shown. Every
+such job links to the employer's own page, and the employer gets the candidate.
+
+## Other job boards
+
+Some jobs come from other job boards. Three rules hold for all of them:
+
+1. We name the board on the job card, for example "via web3.career". You do not have to guess who
+   sent the candidate.
+2. The link goes to that board's own page, byte for byte as we received it. We add no tracking
+   parameters of our own.
+3. We take only what the board's terms and robots.txt allow: an official API, a feed, or nothing.
+
+Today these boards are web3.career (their official Web3 Jobs API, links stay follow links),
+remote3.co (their RSS feed) and the a16z speedrun network (their open API).
+
+## Boards we do not read
+
+If the terms of a board say no crawling and no scraping, we do not read that board, even when the
+pages are public. Among others, we leave cryptocurrencyjobs.co, crypto-careers.com and
+cryptojobslist.com alone. Pages of web3.career are not read either: only their API.
+
+## Our crawler
+
+Our crawler calls itself `NextCryptoJobBot/0.1 (+https://nextcryptojob.xyz)`. It reads public job
+pages only, one request at a time per site, with at least half a second between requests. It obeys
+robots.txt. It collects job data, not personal data.
+
+## If you run a board or a careers site
+
+Write to hello@nextcryptojob.xyz and tell us what you want. Two answers are always available:
+
+- **Different credit or a different link.** Tell us the wording or the URL you want and we use it.
+- **Stop.** We stop on the same day. We switch the source off, delete its jobs from our database,
+  and block your host in the scanner code, so that no one on our side can turn it back on by
+  mistake. We have already done this once, at the request of a board owner.
+
+An email is enough. You do not need to send a legal notice first.

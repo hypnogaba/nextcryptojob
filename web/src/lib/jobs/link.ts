@@ -33,9 +33,23 @@ export function isWeb3CareerUrl(url: string | null | undefined): boolean {
   return host === WEB3CAREER || (host?.endsWith(`.${WEB3CAREER}`) ?? false);
 }
 
-/** Кого назвати джерелом поруч із вакансією: «web3.career» або null. */
+/**
+ * Чужі дошки, з яких приходять вакансії, і підпис, яким ми називаємо дошку на картці. Правило одне
+ * для всіх: вакансія з чужої дошки веде на цю дошку й називає її вголос, тож дошка бачить нас у
+ * своїх переходах з ім'ям, а не здогадується, хто її читає. Для web3.career це ще й умова API.
+ * ATS роботодавця сюди не входить: там джерело це сам роботодавець, і посилання веде до нього.
+ * Публічне пояснення для власників дощок: docs/legal/sources.md (сторінка /sources).
+ */
+const BOARDS: ReadonlyArray<{ host: RegExp; label: string }> = [
+  { host: /^(.+\.)?web3\.career$/i, label: WEB3CAREER },
+  { host: /^(.+\.)?remote3\.co$/i, label: "remote3.co" },
+];
+
+/** Кого назвати джерелом поруч із вакансією: підпис дошки або null. */
 export function jobVia(url: string | null | undefined): string | null {
-  return isWeb3CareerUrl(url) ? WEB3CAREER : null;
+  const host = url ? hostOf(url) : null;
+  if (!host) return null;
+  return BOARDS.find((b) => b.host.test(host))?.label ?? null;
 }
 
 /** rel для зовнішнього посилання на цю адресу. */

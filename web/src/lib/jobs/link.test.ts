@@ -43,6 +43,17 @@ describe("externalJobLink", () => {
     }
   });
 
+  it("every other board we read is named too, and a lookalike host is not", () => {
+    // Правило /sources: вакансія з чужої дошки веде на цю дошку й називає її. rel лишається суворим:
+    // follow без noreferrer це умова лише web3.career.
+    expect(externalJobLink("https://www.remote3.co/job/123")).toEqual({
+      href: "https://www.remote3.co/job/123", rel: EXTERNAL_JOB_REL, via: "remote3.co" });
+    expect(jobVia("https://remote3.co/job/1")).toBe("remote3.co");
+    for (const url of ["https://remote3.co.evil.example/j/1", "https://notremote3.co/j/1", "https://boards.greenhouse.io/acme/jobs/1"]) {
+      expect(jobVia(url)).toBeNull();
+    }
+  });
+
   it("nothing but http(s) or mailto becomes a link, and an address that would need rewriting is not linked", () => {
     for (const bad of ["javascript:alert(1)", "data:text/html,x", "not a url", "", null, undefined, "https://web3.career/r/a b", "https://web3.career/r/a\tb"]) {
       expect(externalJobLink(bad)).toBeNull();

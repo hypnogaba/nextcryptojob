@@ -1,6 +1,7 @@
 import { plainText } from "./markdown";
 import howScoring from "../../../content/legal/how-scoring-works";
 import privacy from "../../../content/legal/privacy-policy";
+import sources from "../../../content/legal/sources";
 import termsCandidates from "../../../content/legal/terms-candidates";
 import termsCompanies from "../../../content/legal/terms-companies";
 
@@ -29,6 +30,12 @@ export const LEGAL_DOCS = {
     file: "terms-companies.md",
     source: termsCompanies,
     description: "Terms for companies and agencies that use the NextCryptoJob CRM, API and job posting.",
+  },
+  sources: {
+    path: "/sources",
+    file: "sources.md",
+    source: sources,
+    description: "Where NextCryptoJob jobs come from, how our crawler behaves, and how a board asks us to change or stop.",
   },
   howScoring: {
     path: "/how-scoring-works",
