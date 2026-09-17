@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EvmChainFacts, GithubFacts, PersonFacts, RoleKey, SiteFacts, SourceKey, XFacts, YoutubeFacts } from "../types.js";
-import { FORMULA_VERSION, levelOf, scorePerson } from "./score.js";
+import { FORMULA_VERSION, levelOf, scorePersonV6 as scorePerson } from "./score-v6.js";
 import { SCORED_ROLES } from "./roles.js";
 
 const NOW = Date.UTC(2026, 8, 12);

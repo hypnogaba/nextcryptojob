@@ -134,7 +134,8 @@ describe("quality-gate: прогін", () => {
 
   it("синтетичні люди різної сили справді дають різні рівні", () => {
     expect(new Set(actualBands()).size).toBeGreaterThanOrEqual(2);
-    expect(actualBands()[0]).toBe("A");
+    // v7: лише X дає роботу й репутацію без ширини, тож найсильніший тут B (власник 17.09, п.1).
+    expect(actualBands()[0]).toBe("B");
     expect(actualBands()[2]).toBe("D");
   });
 

@@ -68,7 +68,8 @@ describe("createRealRegistry", () => {
     const db = new SqliteD1();
     try {
       db.addUser("u1");
-      db.addIdentity("u1", "x", "someone", true);
+      // Непідтверджений X: інакше рушій сам шукав би аудити (v7) і пішов би в мережу.
+      db.addIdentity("u1", "x", "someone");
       db.addIdentity("u1", "github", "someone");
       const s = await scoreUser("u1", { registry: createRealRegistry(), db, env: {}, deadlineMs: 5_000 });
       expect(s.sources).toMatchObject({

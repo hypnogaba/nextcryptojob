@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scorePerson } from "../src/formula/score.js";
+import { scorePersonV6 as scorePerson } from "../src/formula/score-v6.js";
 import type { RoleKey } from "../src/types.js";
 import { adaptHarness, type RawExtra, type RawPerson } from "./adapt-harness.js";
 

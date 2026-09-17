@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetLimiters } from "../limits.js";
-import { collectGithub } from "./github.js";
+import { collectGithub, TEAM_MIN_COMMITS, teamQuery, teamWork } from "./github.js";
 import { GITHUB_MAX_WAIT_MS, rateLimitWaitMs } from "./github-api.js";
 import { ctxWith, json, mockFetch, NOW } from "./testkit.js";
 
@@ -26,6 +26,19 @@ const USER = {
     contributionsCollection: { totalCommitContributions: 812, totalPullRequestReviewContributions: 37 },
   } },
 };
+// Відповідь запиту командної роботи (аліаси за роками).
+const TEAM = { data: { user: {
+  y2025: { commitContributionsByRepository: [
+    { contributions: { totalCount: 15 }, repository: { nameWithOwner: "acme/protocol", stargazerCount: 9000, isFork: false, owner: { login: "acme" } } },
+    { contributions: { totalCount: 50 }, repository: { nameWithOwner: "test-dev/own", stargazerCount: 700, isFork: false, owner: { login: "Test-Dev" } } },
+  ] },
+  y2026: { commitContributionsByRepository: [
+    { contributions: { totalCount: 10 }, repository: { nameWithOwner: "acme/protocol", stargazerCount: 9000, isFork: false, owner: { login: "acme" } } },
+    { contributions: { totalCount: 99 }, repository: { nameWithOwner: "x/fork", stargazerCount: 50, isFork: true, owner: { login: "x" } } },
+    { contributions: { totalCount: 3 }, repository: { nameWithOwner: "big/lib", stargazerCount: 40000, isFork: false, owner: { login: "big" } } },
+  ] },
+} } };
+const isTeam = (body: unknown) => String((body as { query?: string } | null)?.query ?? "").includes("commitContributionsByRepository");
 const NOT_FOUND = { data: { user: null }, errors: [{ type: "NOT_FOUND", path: ["user"], message: "Could not resolve to a User with the login of 'nobody-here'." }] };
 const resetIn = (s: number) => String(Math.floor(NOW / 1000) + s);
 
@@ -33,15 +46,16 @@ beforeEach(() => { __resetLimiters(); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe("collectGithub", () => {
-  it("один запит GraphQL і факти за договором", async () => {
-    const { fetchImpl, calls } = mockFetch(() => json(USER));
+  it("запит профілю, запит командної роботи і факти за договором", async () => {
+    const { fetchImpl, calls } = mockFetch((_u, _i, body) => json(isTeam(body) ? TEAM : USER));
     const r = await collectGithub("Test-Dev", ctxWith(fetchImpl, env));
     expect(r).toEqual({ ok: true, facts: {
       createdAt: "2019-04-01T10:00:00Z", followers: 250, stars: 150, commits12m: 812, reviews12m: 37,
       mergedPrsElsewhere: 20,   // 40 × 2/4 чужих власників (регістр логіна не важить)
       reposPushed12m: 2, reposWithSite: 1,
+      teamStars: 9000, teamCommits: 25,   // acme/protocol: 15 + 10 комітів; свій, форк і 3 коміти не рахуються
     } });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     const c = calls[0]!;
     expect(c.url.toString()).toBe("https://api.github.com/graphql");
     expect(c.init.method).toBe("POST");
@@ -77,7 +91,7 @@ describe("collectGithub", () => {
     const { fetchImpl, calls } = mockFetch(() => json(++n <= 2 ? BROKEN : USER));
     const r = await collectGithub("test-dev", ctxWith(fetchImpl, env));
     expect(r).toMatchObject({ ok: true, facts: { followers: 250 } });
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);   // 2 збої, профіль, командна робота
   });
 
   it("збій GraphQL на боці GitHub щоразу: прогалина після повторів, а не 'no user'", async () => {
@@ -115,7 +129,7 @@ describe("collectGithub", () => {
     const ctx = ctxWith(fetchImpl, env);
     const r = await collectGithub("test-dev", ctx);
     expect(r.ok).toBe(true);
-    expect(n).toBe(2);
+    expect(n).toBe(3);
     expect(ctx.sleeps).toEqual([1_000]);
   });
 
@@ -124,6 +138,37 @@ describe("collectGithub", () => {
     const r = await collectGithub("test-dev", ctxWith(fetchImpl, env));
     expect(r).toEqual({ ok: false, gap: "github: GitHub HTTP 503" });
     expect(calls).toHaveLength(3);
+  });
+});
+
+describe("командна робота (v7)", () => {
+  it("рахує лише чужі не-форки від TEAM_MIN_COMMITS комітів за всі роки", () => {
+    expect(TEAM_MIN_COMMITS).toBe(20);
+    expect(teamWork(TEAM.data.user, "test-dev")).toEqual({ teamStars: 9000, teamCommits: 25 });
+    expect(teamWork(null, "test-dev")).toEqual({ teamStars: 0, teamCommits: 0 });
+  });
+
+  it("збій запиту командної роботи не робить GitHub прогалиною", async () => {
+    const { fetchImpl } = mockFetch((_u, _i, body) => (isTeam(body) ? json({}, 404) : json(USER)));
+    const r = await collectGithub("test-dev", ctxWith(fetchImpl, env));
+    expect(r.ok).toBe(true);
+    expect(r.ok && "teamStars" in r.facts).toBe(false);
+  });
+
+  it("не встигає до межі збору: без запиту командної роботи", async () => {
+    const { fetchImpl, calls } = mockFetch((_u, _i, body) => json(isTeam(body) ? TEAM : USER));
+    const r = await collectGithub("test-dev", ctxWith(fetchImpl, env, { deadlineAt: NOW + 3_000 }));
+    expect(r.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("запит іде від року створення акаунта, не більше 10 років", () => {
+    const q = teamQuery("2023-05-01T00:00:00Z", NOW);
+    expect(q).toContain("y2023: contributionsCollection(from:\"2023-01-01T00:00:00Z\"");
+    expect(q).not.toContain("y2022");
+    const old = teamQuery("2008-01-01T00:00:00Z", Date.parse("2026-06-01T00:00:00Z"));
+    expect(old).toContain("y2017:");
+    expect(old).not.toContain("y2016:");
   });
 });
 
@@ -142,7 +187,7 @@ describe("collectGithub: ліміт GitHub", () => {
     });
     const r = await settle(collectGithub("test-dev", ctxWith(fetchImpl, env)));
     expect(r.ok).toBe(true);
-    expect(starts).toEqual([0, 11_000]);
+    expect(starts.slice(0, 2)).toEqual([0, 11_000]);
   });
 
   it("GraphQL 200 з RATE_LIMITED теж ліміт", async () => {
@@ -153,7 +198,7 @@ describe("collectGithub: ліміт GitHub", () => {
       : json(USER)));
     const r = await settle(collectGithub("test-dev", ctxWith(fetchImpl, env)));
     expect(r.ok).toBe(true);
-    expect(n).toBe(2);
+    expect(n).toBe(3);
   });
 
   it("скидання далі за 15 с: одразу прогалина, без сну", async () => {

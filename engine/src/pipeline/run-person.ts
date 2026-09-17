@@ -4,7 +4,7 @@ import { FORMULA_VERSION, scorePerson } from "../formula/score.js";
 import type { RoleKey, SourceKey } from "../types.js";
 import { collectPerson, DEFAULT_DEADLINE_MS, type Outcomes, partialReason, toPersonFacts } from "./collect.js";
 import type { Db } from "./db.js";
-import { type CollectorInputs, groupIdentities, loadIdentities, plannedSources, selfReportedSources } from "./identities.js";
+import { type CollectorInputs, groupIdentities, withAutoAudits, loadIdentities, plannedSources, selfReportedSources } from "./identities.js";
 import type { CollectorRegistry, EngineEnv } from "./registry.js";
 
 /**
@@ -50,6 +50,26 @@ export type ScoreSummary = {
   selfReported: SourceKey[];
 };
 
+/**
+ * v7: скільки посилань на роботи людина додала (profile_prefs.links_json, веб). Лише кількість, без
+ * перевірки (власник 17.09, п.4). Таблиці ще немає (старі бази, тести): 0.
+ */
+export async function loadLinkCount(db: Db, userId: string): Promise<number> {
+  let rows: { links_json: string | null }[];
+  try {
+    rows = await db.query<{ links_json: string | null }>("SELECT links_json FROM profile_prefs WHERE user_id = ?", [userId]);
+  } catch (e) {
+    if (e instanceof Error && /no such table/i.test(e.message)) return 0;
+    throw e;
+  }
+  try {
+    const list = JSON.parse(rows[0]?.links_json ?? "[]") as unknown;
+    return Array.isArray(list) ? list.filter((l) => l && typeof (l as { url?: unknown }).url === "string").length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 const UPSERT_FACTS =
   "INSERT INTO source_facts (user_id, source, facts_json, gap_reason, fetched_at) VALUES (?, ?, ?, ?, datetime('now')) " +
   "ON CONFLICT (user_id, source) DO UPDATE SET facts_json = excluded.facts_json, gap_reason = excluded.gap_reason, " +
@@ -70,13 +90,13 @@ const UPSERT_SCORE =
  * тим самим кодом у ті самі рядки, другий переписує перший.
  */
 async function collectScoreWrite(
-  userId: string, inputs: CollectorInputs, db: Db,
+  userId: string, inputs: CollectorInputs, db: Db, linkCount: number,
   collectOpts: { registry: CollectorRegistry; env: EngineEnv; deadlineMs: number; signal?: AbortSignal; now?: () => number },
 ): Promise<{ outcomes: Outcomes; collectMs: number; scoredRoles: number }> {
   const { outcomes, ms: collectMs } = await collectPerson(inputs, collectOpts);
   collectOpts.signal?.throwIfAborted();
 
-  const facts = toPersonFacts(outcomes);
+  const facts = { ...toPersonFacts(outcomes), links: linkCount > 0 ? { count: linkCount } : null };
   const result = scorePerson(facts, (collectOpts.now ?? Date.now)());
   const planned = plannedSources(inputs);
 
@@ -114,12 +134,13 @@ async function collectScoreWrite(
  */
 export async function scoreUser(userId: string, o: ScoreUserOptions): Promise<ScoreSummary> {
   const t0 = performance.now();
-  const inputs = groupIdentities(await loadIdentities(o.db, userId));
+  const inputs = withAutoAudits(groupIdentities(await loadIdentities(o.db, userId)));
+  const linkCount = await loadLinkCount(o.db, userId);
   const deadlineMs = o.deadlineMs ?? DEFAULT_DEADLINE_MS;
 
   if (o.fastFirstPass) {
     try {
-      await collectScoreWrite(userId, inputs, o.db, {
+      await collectScoreWrite(userId, inputs, o.db, linkCount, {
         registry: o.registry, env: { ...o.env, SOL_SAMPLE: String(FAST_FIRST_PASS_SAMPLE) },
         deadlineMs: Math.min(deadlineMs, FAST_FIRST_PASS_DEADLINE_MS),
         ...(o.signal ? { signal: o.signal } : {}), ...(o.now ? { now: o.now } : {}),
@@ -130,7 +151,7 @@ export async function scoreUser(userId: string, o: ScoreUserOptions): Promise<Sc
     }
   }
 
-  const { outcomes, collectMs, scoredRoles } = await collectScoreWrite(userId, inputs, o.db, {
+  const { outcomes, collectMs, scoredRoles } = await collectScoreWrite(userId, inputs, o.db, linkCount, {
     registry: o.registry, env: o.env, deadlineMs, ...(o.signal ? { signal: o.signal } : {}), ...(o.now ? { now: o.now } : {}),
   });
 

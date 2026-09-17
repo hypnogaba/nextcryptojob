@@ -4,9 +4,9 @@
 // зберігала. Файл еталону (реальні люди) живе поза репозиторієм; у базу йдуть лише id.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { SCORED_ROLES, type ScoredRoleKey, UNSCORED_ROLES } from "../formula/roles.js";
+import { ROLE_ORDER } from "../formula/roles.js";
+import { V7_ROLES, type V7Source } from "../formula/v7.js";
 import { FORMULA_VERSION, type PersonScore, scorePerson } from "../formula/score.js";
-import type { ScoreSource } from "../formula/sources.js";
 import type { RoleKey, SourceKey } from "../types.js";
 import { collectPerson, DEFAULT_DEADLINE_MS, type Outcomes, TIMEOUT_GAP, toPersonFacts } from "./collect.js";
 import type { Db } from "./db.js";
@@ -82,24 +82,25 @@ export type GateReport = {
 };
 
 /** Які джерела фактів стоять за балом джерела формули. */
-const FACT_SOURCES: Record<ScoreSource, readonly SourceKey[]> = {
+const FACT_SOURCES: Record<V7Source, readonly SourceKey[]> = {
   gh_eng: ["github"], gh_builder: ["github"], x: ["x"], yt: ["youtube"],
   onchain: ["evm", "hyperliquid", "solana"], trading: ["evm", "hyperliquid", "solana"], site: ["site"],
-  audits: ["audits"], dune: ["dune"], media: ["x", "youtube"], output: ["site", "github", "dune"],
+  audits: ["audits"], dune: ["dune"], media: ["x", "youtube"], output: ["site", "github", "dune"], links: [],
+  best: ["x", "github", "youtube", "site", "evm", "hyperliquid", "solana", "audits"],
 };
 
-/** Джерела фактів ядра й головних джерел ролі (додатки до 7 балів не зсувають на 2 рівні). */
+/** Джерела фактів роботи й головних джерел ролі (репутація й ширина окремо не зсувають на 2 рівні). */
 function roleFactSources(role: RoleKey): Set<SourceKey> {
   const out = new Set<SourceKey>();
-  const spec = SCORED_ROLES[role as ScoredRoleKey];
+  const spec = V7_ROLES[role];
   if (!spec) return out;
-  const keys = new Set<ScoreSource>(spec.anchors);
-  for (const p of spec.paths) for (const k of Object.keys(p.core) as ScoreSource[]) keys.add(k);
+  const keys = new Set<V7Source>(spec.anchors);
+  for (const p of spec.paths) for (const k of Object.keys(p.work) as V7Source[]) keys.add(k);
   for (const k of keys) for (const s of FACT_SOURCES[k]) out.add(s);
   return out;
 }
 
-const isRole = (r: string): r is RoleKey => r in SCORED_ROLES || r in UNSCORED_ROLES;
+const isRole = (r: string): r is RoleKey => (ROLE_ORDER as readonly string[]).includes(r);
 
 /**
  * Чиста звірка: бал кожної людини → рівень, вердикт і межа воріт.

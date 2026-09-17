@@ -7,7 +7,7 @@ import {
   sampleSolana, sampleX,
 } from "./fake-registry.js";
 import { groupIdentities, type IdentityRow } from "./identities.js";
-import { FAST_FIRST_PASS_DEADLINE_MS, FAST_FIRST_PASS_SAMPLE, scoreUser } from "./run-person.js";
+import { FAST_FIRST_PASS_DEADLINE_MS, FAST_FIRST_PASS_SAMPLE, loadLinkCount, scoreUser } from "./run-person.js";
 
 const USER = "user-0001-aaaa";
 const EVM_A = "0x" + "a".repeat(40);
@@ -73,7 +73,8 @@ describe("scoreUser", () => {
     expect(s.engineer!.score).toBeGreaterThan(0);
     expect(JSON.parse(s.engineer!.breakdown_json).gaps).toEqual({ site: "site: HTTP 404" });
     expect(s.designer).toMatchObject({ score: null });
-    expect(JSON.parse(s.designer!.breakdown_json).reason).toBe("needs_portfolio");
+    // v7: Designer рахується з посилань на роботи; без них бал не ставимо.
+    expect(JSON.parse(s.designer!.breakdown_json).reason).toBe("missing_anchor:links");
 
     expect(summary.gaps).toEqual(["site"]);
     expect(summary.sources.site).toMatchObject({ gap: "site: HTTP 404" });
@@ -126,6 +127,41 @@ describe("scoreUser", () => {
     expect(registry.calls.find((c) => c.collector === "collectAudits")!.input).toEqual({ sherlock: "alice", github: null, x: null });
     expect(facts().audits).toMatchObject({ facts_json: null, gap_reason: expect.stringMatching(/no GitHub or X/) });
     expect(JSON.parse(scores().security_auditor!.breakdown_json).sources.audits).toBeNull();
+  });
+
+  it("v7: без ніка Sherlock аудити шукаються за підтвердженим GitHub; без підтверджених не шукаються", async () => {
+    db.addIdentity(USER, "github", "alice-gh", true);
+    const registry = fakeRegistry();
+    await scoreUser(USER, { registry, db, env: {}, now: () => NOW });
+    expect(registry.calls.find((c) => c.collector === "collectAudits")!.input).toEqual({ sherlock: "alice-gh", github: "alice-gh", x: null });
+
+    const other = new SqliteD1();
+    try {
+      other.addUser(USER);
+      other.addIdentity(USER, "github", "alice-gh");
+      const r2 = fakeRegistry();
+      await scoreUser(USER, { registry: r2, db: other, env: {}, now: () => NOW });
+      expect(r2.calls.some((c) => c.collector === "collectAudits")).toBe(false);
+    } finally {
+      other.close();
+    }
+  });
+
+  it("v7: посилання з profile_prefs дають джерело links і бал дизайнеру", async () => {
+    db.sqlite.exec(`CREATE TABLE profile_prefs (user_id TEXT PRIMARY KEY, links_json TEXT NOT NULL DEFAULT '[]')`);
+    db.sqlite.prepare("INSERT INTO profile_prefs (user_id, links_json) VALUES (?, ?)")
+      .run(USER, JSON.stringify([{ label: "Dribbble", url: "https://dribbble.com/a" }, { label: "Case", url: "https://a.dev/case" }, { bad: 1 }]));
+    expect(await loadLinkCount(db, USER)).toBe(2);
+    db.addIdentity(USER, "x", "alice");
+    await scoreUser(USER, { registry: fakeRegistry(), db, env: {}, now: () => NOW });
+    const designer = JSON.parse(scores().designer!.breakdown_json);
+    expect(scores().designer!.score).toBeGreaterThan(0);
+    expect(designer.sources.links).toBe(20);
+    expect(designer.selfAddedLinks).toBe(true);
+  });
+
+  it("v7: без таблиці profile_prefs посилань просто немає", async () => {
+    expect(await loadLinkCount(db, USER)).toBe(0);
   });
 
   it("збирачі отримують межу збору: старт + deadlineMs, і годинник", async () => {

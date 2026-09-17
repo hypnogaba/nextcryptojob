@@ -59,6 +59,16 @@ export function groupIdentities(rows: readonly IdentityRow[]): CollectorInputs {
   };
 }
 
+/**
+ * v7 (власник 17.09, п.5): аудити шукаємо самі. Нік Sherlock: вписаний людиною, інакше підтверджений
+ * GitHub, інакше підтверджений X (звірка профілю й далі лише з підтвердженими, auditLinks).
+ * Лише для робочого прогону (scoreUser); ворота якості беруть нік з еталону.
+ */
+export function withAutoAudits(i: CollectorInputs): CollectorInputs {
+  const sherlock = i.sherlock ?? (i.github?.verified ? i.github.login : null) ?? (i.x?.verified ? i.x.handle : null);
+  return { ...i, sherlock };
+}
+
 /** Джерела, які стосуються людини (рядки `source_facts`), у сталому порядку. */
 export function plannedSources(i: CollectorInputs): SourceKey[] {
   const out: SourceKey[] = [];

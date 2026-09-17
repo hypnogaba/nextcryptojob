@@ -36,7 +36,13 @@ export type XFacts = { followers: number|null; kol: number|null; kolSourceGap: b
 
 export type GithubFacts = { createdAt: string; followers: number; stars: number;   // зірки власних не-форків
   commits12m: number; reviews12m: number; mergedPrsElsewhere: number;       // злиті PR у репо чужих власників
-  reposPushed12m: number; reposWithSite: number };
+  reposPushed12m: number; reposWithSite: number;
+  /**
+   * v7: командна робота (засновники, власник 17.09, п.6). Чужі репозиторії без форків, куди людина зробила
+   * щонайменше TEAM_MIN_COMMITS комітів за останні роки: їхні зірки й коміти. undefined у фактах до v7
+   * або коли додатковий запит не вдався.
+   */
+  teamStars?: number; teamCommits?: number };
 
 export type EvmChainFacts = { sent: number|null; sentCapped: boolean; firstTs: number|null;
   swaps: number|null; source: 'etherscan'|'blockscout'; gap?: string };
@@ -74,6 +80,8 @@ export type DuneFacts = { spellbookPrs: number | null; spellbookPrs12m: number |
  * Ключ `gaps`: назва джерела (усе джерело без фактів) або `<джерело>.<деталь>` (частина джерела,
  * наприклад `solana.BGjMfx96`: адреса без відповіді чи з невідомими обмінами; факти джерела лишаються).
  */
+export type LinksFacts = { count: number };
+
 export type PersonFacts = {
   x?: XFacts | null;
   github?: GithubFacts | null;
@@ -84,5 +92,7 @@ export type PersonFacts = {
   site?: SiteFacts | null;
   audits?: AuditsFacts | null;
   dune?: DuneFacts | null;
+  /** v7: посилання на роботи, які людина додала сама (profile_prefs.links_json): лише кількість, без перевірки. */
+  links?: LinksFacts | null;
   gaps?: Record<string, string>;
 };
