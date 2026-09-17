@@ -1,6 +1,6 @@
 import { DEFAULT_SITE_URL } from "@/lib/site";
 import type { MailMessage } from "./index";
-import { MAIL_INK, MAIL_LINE, MAIL_SOFT, mailLayout } from "./layout";
+import { MAIL_DISPLAY, MAIL_INK, MAIL_LINE, MAIL_SOFT, mailLayout } from "./layout";
 
 /** Листи з кодом складаються без оточення під рукою, тож знак і посилання з домену за замовчуванням. */
 const SITE = DEFAULT_SITE_URL;
@@ -9,7 +9,7 @@ const SITE = DEFAULT_SITE_URL;
 function codeHtml(heading: string, lead: string, code: string, rest: string[]): string {
   const p = (t: string) => `<p style="margin:0 0 14px">${t}</p>`;
   const body =
-    `<h1 style="margin:0 0 24px;font-size:28px;line-height:1.25;font-weight:400;color:${MAIL_INK}">${heading}</h1>` +
+    `<h1 style="margin:0 0 24px;font-family:${MAIL_DISPLAY};font-size:30px;line-height:1.2;font-weight:500;color:${MAIL_INK}">${heading}</h1>` +
     p(lead) +
     `<div style="margin:8px 0 24px;display:inline-block;padding:14px 22px;background:${MAIL_SOFT};border:1px solid ${MAIL_LINE};` +
     `border-radius:8px;font-size:32px;font-weight:600;letter-spacing:6px;font-family:ui-monospace,Menlo,Consolas,monospace;color:${MAIL_INK}">${code}</div>` +

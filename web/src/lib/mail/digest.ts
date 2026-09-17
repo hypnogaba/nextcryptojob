@@ -3,7 +3,7 @@ import { jobVia } from "@/lib/jobs/link";
 import { companySiteUrl } from "@/lib/jobs/token";
 import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
-import { escapeHtml, MAIL_FAINT, MAIL_INK, MAIL_LINE, MAIL_MUTED, MAIL_SOFT, mailButton, mailLayout } from "./layout";
+import { escapeHtml, MAIL_DISPLAY, MAIL_FAINT, MAIL_INK, MAIL_LINE, MAIL_MUTED, MAIL_SOFT, mailButton, mailLayout } from "./layout";
 import { logoPath } from "@/lib/jobs/companies";
 
 /**
@@ -105,6 +105,25 @@ function logoCell(j: Job): string {
   return `<td width="${LOGO + 2}" valign="top" style="width:${LOGO + 2}px"><div style="${box};overflow:hidden">${inner}</div></td>`;
 }
 
+/**
+ * Блок картки під кнопкою: печатка, як на картці людини, і шлях до неї. Лише в нас, у Getro такого нема.
+ */
+function cardBlock(site: string): string {
+  const seal = new URL("/brand/email-seal.png", site).toString();
+  const profile = new URL("/profile", site).toString();
+  return (
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
+    `style="margin:0 0 28px;background:${MAIL_SOFT};border:1px solid ${MAIL_LINE};border-radius:14px"><tr>` +
+    `<td width="72" valign="middle" style="padding:18px 0 18px 18px;width:72px">` +
+    `<img src="${escapeHtml(seal)}" width="64" height="64" alt="" style="display:block;border:0;width:64px;height:64px"></td>` +
+    `<td valign="middle" style="padding:18px 18px 18px 16px">` +
+    `<div style="font-family:${MAIL_DISPLAY};font-size:17px;font-weight:700;color:${MAIL_INK}">Your score card</div>` +
+    `<div style="margin-top:2px;font-size:14px;line-height:1.5;color:${MAIL_MUTED}">Picks follow your score. Connect more sources and they get sharper. ` +
+    `<a href="${escapeHtml(profile)}" style="color:${MAIL_INK};font-weight:600">Open your card</a></div>` +
+    `</td></tr></table>`
+  );
+}
+
 export type DigestEmailInput = {
   localDate: string;
   jobs: DigestEmailJob[];
@@ -167,34 +186,46 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         ? `<a href="${escapeHtml(j.companySite)}" style="color:${MAIL_MUTED};text-decoration:none">${escapeHtml(j.company)}</a>`
         : escapeHtml(j.company);
       const money = [j.salary ?? j.estimate, j.token].filter(Boolean).map((t) => escapeHtml(t!)).join(" &nbsp;·&nbsp; ");
+      // Кнопка «Apply» (17.09, власник: «слово податися»): веде туди ж, куди назва (наша сторінка, звідти подача).
+      const apply = openHref
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px"><tr>` +
+          `<td style="background:${MAIL_INK};border-radius:10px"><a href="${escapeHtml(openHref)}" style="display:inline-block;` +
+          `padding:8px 16px;font-size:14px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:10px">Apply</a></td>` +
+          // Вакансія компанії й так живе в нас: друге посилання вело б на ту саму сторінку.
+          (j.ours && j.url && new URL(j.url).origin !== new URL(input.site).origin
+            ? `<td style="padding-left:12px;font-size:13px"><a href="${escapeHtml(j.url)}" style="color:${MAIL_FAINT}">or apply directly</a></td>`
+            : "") +
+          `</tr></table>`
+        : "";
       const links = [
-        j.ours && j.url ? `<a href="${escapeHtml(j.url)}" style="color:${MAIL_FAINT}">Apply directly</a>` : "",
         j.postedBy ? `Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob` : "",
         j.via ? `via ${escapeHtml(j.via)}` : "",
       ].filter(Boolean).join(" &nbsp;·&nbsp; ");
       const line = (html: string, style: string) => `<div style="${style}">${html}</div>`;
       return (
-        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px"><tr>` +
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px"><tr>` +
         logoCell(j) +
         `<td valign="top" style="padding-left:18px">` +
-        line(titleHtml, `font-size:18px;line-height:1.35;color:${MAIL_INK};font-weight:500`) +
+        line(titleHtml, `font-family:${MAIL_DISPLAY};font-size:19px;line-height:1.3;color:${MAIL_INK};font-weight:500`) +
         line(company, `margin-top:3px;font-size:16px;line-height:1.4;color:${MAIL_MUTED}`) +
         (j.location ? line(escapeHtml(j.location), `font-size:16px;line-height:1.4;color:${MAIL_MUTED}`) : "") +
         (money ? line(money, `margin-top:4px;font-size:14px;line-height:1.4;color:${MAIL_INK};font-weight:600`) : "") +
         line(escapeHtml(j.why), `margin-top:6px;font-size:14px;line-height:1.5;color:${MAIL_MUTED}`) +
         (links ? line(links, `margin-top:4px;font-size:13px;line-height:1.5;color:${MAIL_FAINT}`) : "") +
+        apply +
         `</td></tr></table>`
       );
     })
     .join("");
   const p = (html: string, style = "") => `<p style="margin:0 0 14px;${style}">${html}</p>`;
   const body =
-    `<h1 style="margin:0 0 32px;font-size:28px;line-height:1.25;font-weight:400;color:${MAIL_INK}">` +
+    `<h1 style="margin:0 0 32px;font-family:${MAIL_DISPLAY};font-size:30px;line-height:1.2;font-weight:500;letter-spacing:-0.01em;color:${MAIL_INK}">` +
     `${n} new crypto job${n === 1 ? "" : "s"} matching your profile</h1>` +
     p(`&#128075; ${escapeHtml(checked ?? `Here ${n === 1 ? "is" : "are"} today's best match${n === 1 ? "" : "es"} for you:`)}`, "margin-bottom:24px") +
     htmlJobs +
     `<div style="height:8px;line-height:8px">&nbsp;</div>` +
     mailButton(jobsUrl, "See all your jobs") +
+    cardBlock(input.site) +
     p(escapeHtml(DIGEST_FOOTER_REASON)) +
     p(`To change the channel or the hour, <a href="${escapeHtml(settingsUrl)}" style="color:${MAIL_INK}">open your settings</a>.`);
   const afterBody =

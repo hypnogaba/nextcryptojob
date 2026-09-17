@@ -50,7 +50,8 @@ describe("digestEmail", () => {
     expect(withOurs.html).toContain(`href="${ORIGIN}/jobs/j0123456789abcdef01234567"`);
     // Назва вакансії веде на нашу сторінку, окремої кнопки «Open in your jobs» у HTML немає (17.09).
     expect(withOurs.html).toMatch(new RegExp(`<a href="${ORIGIN}/jobs/j0123456789abcdef01234567"[^>]*>Protocol Engineer</a>`));
-    expect(withOurs.html).toContain("Apply directly");
+    expect(withOurs.html).toContain(">or apply directly</a>");
+    expect(withOurs.html).toContain(">Apply</a>");
     // Пряме посилання на джерело лишається follow: цього вимагають умови web3.career.
     expect(withOurs.html).toContain('href="https://jobs.example.com/1"');
     expect(withOurs.html).not.toMatch(/rel="[^"]*nofollow/);
@@ -137,5 +138,16 @@ describe("digestEmail", () => {
     const mail = digestEmail({ localDate: "2026-09-12", jobs: [job({ title: "Engineer \u2014 DeFi" })], site: ORIGIN, unsubscribeUrl: UNSUB });
     expect(mail.text).toContain("Engineer - DeFi");
     expect(mail.html).not.toContain("\u2014");
+  });
+  it("every job gets an Apply button; a job hosted on our site has no second apply link", () => {
+    const mail = digestEmail({
+      localDate: "2026-09-12",
+      jobs: [job({ job_id: "j1", posted_by: "Acme", url: `${ORIGIN}/jobs/j1` })],
+      site: ORIGIN, unsubscribeUrl: UNSUB,
+    });
+    expect(mail.html).toMatch(new RegExp(`<a href="${ORIGIN}/jobs/j1"[^>]*>Apply</a>`));
+    expect(mail.html).not.toContain("or apply directly");
+    expect(mail.html).toContain(`src="${ORIGIN}/brand/email-logo.png"`);
+    expect(mail.html).toContain(`href="${ORIGIN}/profile"`);
   });
 });

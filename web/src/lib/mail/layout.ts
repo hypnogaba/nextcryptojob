@@ -2,6 +2,8 @@
  * Спільна рамка HTML-листів (17.09, власник: «щось типу такого», зразок листи Getro).
  * Біле полотно, колонка 600 px ліворуч-по-центру, угорі знак і назва, унизу риска й тихий підвал.
  * Кольори з сайту (globals.css, раунд 4 «Frost»): чорнило замість синього Getro.
+ * Наше (власник 17.09: «щоб була наша ізюминка»): шапка = печатка + назва шрифтом Funnel Display,
+ * як на сайті (public/brand/email-logo.png), заголовки тим самим шрифтом, кнопки з кутом 10 px.
  * Верстка таблицями з вбудованими стилями: так лист однаково виглядає в Gmail, Apple Mail і Outlook.
  * Картинки лише PNG з нашого сайту: Gmail не показує SVG.
  */
@@ -13,6 +15,8 @@ export const MAIL_FAINT = "#8a8e97";
 export const MAIL_LINE = "#e8e9ec";
 export const MAIL_SOFT = "#f5f6f7";
 export const MAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+/** Шрифт заголовків сайту; Apple Mail і iOS його підтягнуть, Gmail покаже запасний. */
+export const MAIL_DISPLAY = `'Funnel Display',${MAIL_FONT}`;
 
 /** Екранування для тексту й атрибутів у лапках. */
 export function escapeHtml(text: string): string {
@@ -28,9 +32,9 @@ export function escapeHtml(text: string): string {
 export function mailButton(href: string, label: string): string {
   return (
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 28px"><tr>` +
-    `<td style="background:${MAIL_INK};border-radius:6px">` +
+    `<td style="background:${MAIL_INK};border-radius:10px">` +
     `<a href="${escapeHtml(href)}" style="display:inline-block;padding:13px 24px;font-family:${MAIL_FONT};` +
-    `font-size:16px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(label)}</a>` +
+    `font-size:16px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:10px">${escapeHtml(label)}</a>` +
     `</td></tr></table>`
   );
 }
@@ -48,7 +52,7 @@ export type MailLayoutInput = {
 
 export function mailLayout(input: MailLayoutInput): string {
   const home = new URL("/", input.site).toString();
-  const mark = new URL("/apple-icon.png", input.site).toString();
+  const logo = new URL("/brand/email-logo.png", input.site).toString();
   const year = new Date().getUTCFullYear();
   const preheader = input.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(input.preheader)}</div>`
@@ -57,21 +61,18 @@ export function mailLayout(input: MailLayoutInput): string {
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">` +
+    `<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;700&display=swap" rel="stylesheet">` +
     `</head><body style="margin:0;padding:0;background:#ffffff">` +
     preheader +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff"><tr>` +
     `<td align="center" style="padding:40px 20px">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
     `style="max-width:600px;font-family:${MAIL_FONT};font-size:16px;line-height:1.5;color:${MAIL_TEXT};text-align:left">` +
-    // Шапка: знак квадратом і назва, як «Cyber job board» у Getro.
+    // Шапка: печатка й назва однією картинкою, як на сайті.
     `<tr><td style="padding:0 0 36px">` +
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>` +
-    `<td style="width:56px;height:56px;border:1px solid ${MAIL_LINE};border-radius:8px;background:#ffffff" width="56">` +
-    `<a href="${escapeHtml(home)}"><img src="${escapeHtml(mark)}" width="56" height="56" alt="NextCryptoJob" ` +
-    `style="display:block;border:0;border-radius:8px"></a></td>` +
-    `<td style="padding-left:14px;font-size:22px;font-weight:700;color:${MAIL_INK};letter-spacing:-0.01em">` +
-    `<a href="${escapeHtml(home)}" style="color:${MAIL_INK};text-decoration:none">NextCryptoJob</a></td>` +
-    `</tr></table></td></tr>` +
+    `<a href="${escapeHtml(home)}"><img src="${escapeHtml(logo)}" width="300" height="48" alt="NextCryptoJob" ` +
+    `style="display:block;border:0;width:300px;height:48px;font-family:${MAIL_DISPLAY};font-size:26px;font-weight:700;color:${MAIL_INK}"></a>` +
+    `</td></tr>` +
     `<tr><td>${input.body}</td></tr>` +
     (input.afterBody ? `<tr><td>${input.afterBody}</td></tr>` : "") +
     // Підвал за рискою, як у Getro.
