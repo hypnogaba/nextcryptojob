@@ -370,6 +370,11 @@ function Boards({ report, now }: { report: BoardsReport; now: number }) {
           Manual: the board&apos;s platform does not allow reading it, so its portfolio companies were added by hand.
           Skip: not read, the reason is in the row.
         </p>
+        <p className="text-ink-muted">
+          <b className="text-ink">What you do with this.</b> Nothing, while the numbers above look sane. The list is
+          the log of last Sunday&apos;s run, kept for one case: a board that stops giving employers. You hear about that
+          in an alert; then open its link, and if it moved or changed platform, fix it in db/jobs/seed/boards.json.
+        </p>
       </div>
       <dl className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile value={NUM.format(report.boards.length)} label="Boards" note={`${NUM.format(discover.length)} read by discovery`} />
@@ -387,16 +392,23 @@ function Boards({ report, now }: { report: BoardsReport; now: number }) {
           alert={d !== null && !d.getroEnabled}
         />
       </dl>
-      <div className={`mt-5 ${BOARD}`}>
-        <table className={`${TABLE} min-w-[820px]`} data-table="boards">
-          <BoardsHead />
-          <tbody>
-            {read.map((b) => (
-              <BoardRow key={b.slug} b={b} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <details className="group mt-5" data-boards={read.length}>
+        <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-line-strong">
+          <span className="group-open:hidden">Show the board list ({NUM.format(read.length)})</span>
+          <span className="hidden group-open:inline">Hide the board list</span>
+          <span className="font-normal text-ink-muted">Nothing to do here while discovery runs: it is a log, not a task list</span>
+        </summary>
+        <div className={`mt-3 ${BOARD}`}>
+          <table className={`${TABLE} min-w-[820px]`} data-table="boards">
+            <BoardsHead />
+            <tbody>
+              {read.map((b) => (
+                <BoardRow key={b.slug} b={b} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
       {skipped.length > 0 ? (
         <details className="group mt-4" data-skipped-boards={skipped.length}>
           <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-line-strong">

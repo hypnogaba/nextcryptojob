@@ -40,10 +40,10 @@ describe("admin-only", () => {
   it("refuses everyone but an admin signed in by email, and changes nothing", async () => {
     for (const [user, method] of [["ada", "email"], ["boss", "telegram"]] as const) {
       await createSession(user, method);
-      expect(await redirectOf(createDemoAction())).toBe("/admin?error=not_admin");
-      expect(await redirectOf(deleteDemoAction())).toBe("/admin?error=not_admin");
-      expect(await redirectOf(sendWeeklyNowAction())).toBe("/admin?error=not_admin");
-      expect(await redirectOf(openDemoAction(form({ company_id: "co_x" })))).toBe("/admin?error=not_admin");
+      expect(await redirectOf(createDemoAction())).toBe("/admin/health?error=not_admin");
+      expect(await redirectOf(deleteDemoAction())).toBe("/admin/health?error=not_admin");
+      expect(await redirectOf(sendWeeklyNowAction())).toBe("/admin/health?error=not_admin");
+      expect(await redirectOf(openDemoAction(form({ company_id: "co_x" })))).toBe("/admin/health?error=not_admin");
     }
     expect(rows("SELECT * FROM companies")).toEqual([]);
     expect(net.tg).toEqual([]);
@@ -57,23 +57,23 @@ describe("for the admin", () => {
   });
 
   it("creates the demo company, opens it as the current company, and deletes all demo data", async () => {
-    expect(await redirectOf(createDemoAction())).toBe("/admin?done=demo_created&n=12#demo");
+    expect(await redirectOf(createDemoAction())).toBe("/admin/health?done=demo_created&n=12#demo");
     const [{ id }] = rows<{ id: string }>("SELECT id FROM companies WHERE is_demo = 1");
     expect(await redirectOf(openDemoAction(form({ company_id: id })))).toBe("/company/search");
     expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(id);
-    expect(await redirectOf(deleteDemoAction())).toBe("/admin?done=demo_deleted&n=12&c=1#demo");
+    expect(await redirectOf(deleteDemoAction())).toBe("/admin/health?done=demo_deleted&n=12&c=1#demo");
     expect(rows("SELECT COUNT(*) AS n FROM users WHERE is_demo = 1")).toEqual([{ n: 0 }]);
   });
 
   it("will not open a company that is not the admin's demo company", async () => {
     exec("INSERT INTO companies (id, name, terms_version, terms_accepted_at) VALUES ('co_real', 'Acme', 'v1', datetime('now'))");
-    expect(await redirectOf(openDemoAction(form({ company_id: "co_real" })))).toBe("/admin?error=demo_missing#demo");
+    expect(await redirectOf(openDemoAction(form({ company_id: "co_real" })))).toBe("/admin/health?error=demo_missing#demo");
     expect(harness.jar.get(COMPANY_COOKIE)).toBeUndefined();
   });
 
   it("sends the weekly report now by Telegram and email", async () => {
     const url = await redirectOf(sendWeeklyNowAction());
-    expect(url).toBe("/admin?done=weekly&ch=telegram%2Cemail#owner");
+    expect(url).toBe("/admin/health?done=weekly&ch=telegram%2Cemail#owner");
     expect(net.messagesTo("555")).toHaveLength(1);
     expect(net.mail.map((m) => m.to)).toEqual(["boss@example.com"]);
     expect(net.mail[0].subject).toMatch(/^NextCryptoJob weekly report, /);

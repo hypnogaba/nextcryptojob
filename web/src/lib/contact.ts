@@ -104,3 +104,36 @@ export async function setContactAnswered(db: D1Database, id: string, answered: b
     .run();
   return (res.meta.changes ?? 0) > 0 ? { ok: true } : { ok: false, reason: "not_found" };
 }
+
+export type PendingContact = { id: string; email: string; topic: ContactTopic; message: string; createdAt: string };
+export type PendingContacts = { total: number; newest: PendingContact[] };
+
+/**
+ * Листи без відповіді для головної адмінки: скільки всього й кілька найновіших з текстом,
+ * щоб з панелі було видно, від кого й про що, без заходу в Messages. COUNT(*) OVER () дає
+ * загальну кількість тим самим запитом. Таблиці ще немає (міграція 0023): нуль, не помилка.
+ */
+export async function pendingContactMessages(db: D1Database, limit = 4): Promise<PendingContacts> {
+  try {
+    const { results } = await db
+      .prepare(
+        `SELECT id, email, topic, message, created_at, COUNT(*) OVER () AS total FROM contact_messages
+          WHERE answered_at IS NULL ORDER BY created_at DESC LIMIT ?`,
+      )
+      .bind(limit)
+      .all<Row & { total: number }>();
+    return {
+      total: results.length > 0 ? Number(results[0]!.total) || results.length : 0,
+      newest: results.map((r) => ({
+        id: r.id,
+        email: r.email,
+        topic: r.topic as ContactTopic,
+        message: r.message,
+        createdAt: r.created_at,
+      })),
+    };
+  } catch (error) {
+    if (/no such table/i.test(error instanceof Error ? error.message : String(error))) return { total: 0, newest: [] };
+    throw error;
+  }
+}

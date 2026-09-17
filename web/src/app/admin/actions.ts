@@ -10,13 +10,13 @@ import { jobsDb } from "@/lib/jobs-db";
 import { setCurrentCompany } from "../company/(crm)/crm";
 
 /**
- * Дії головної адмінки (/admin): щотижневий звіт зараз, демо-компанія. Server action це
- * публічна кінцева точка, тож кожна дія сама перевіряє адміна. Результат іде в адресу
- * (?done=… або ?error=…), як у /admin/settings.
+ * Дії службової сторінки адмінки (/admin/health): щотижневий звіт зараз, демо-компанія.
+ * Server action це публічна кінцева точка, тож кожна дія сама перевіряє адміна. Результат іде
+ * в адресу (?done=… або ?error=…), як у /admin/settings.
  */
 
 function back(query: string, hash = ""): never {
-  redirect(`/admin?${query}${hash}`);
+  redirect(`/admin/health?${query}${hash}`);
 }
 
 export async function sendWeeklyNowAction(): Promise<void> {

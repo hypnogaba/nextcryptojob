@@ -15,15 +15,17 @@ export const ADMIN_PAGES = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/candidates", label: "Candidates" },
   { href: "/admin/scores", label: "Scores" },
-  { href: "/admin/funnel", label: "Funnel" },
+  { href: "/admin/sources", label: "Job sources" },
+  { href: "/admin/demand", label: "Jobs and demand" },
+  { href: "/admin/messages", label: "Messages" },
   { href: "/admin/companies", label: "Companies" },
   { href: "/admin/agency-applications", label: "Agencies" },
-  { href: "/admin/payments", label: "Payments" },
   { href: "/admin/jobs", label: "Company jobs" },
-  { href: "/admin/sources", label: "Job sources" },
+  { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/funnel", label: "Funnel" },
   { href: "/admin/x-queue", label: "X queue" },
-  { href: "/admin/messages", label: "Messages" },
   { href: "/admin/testimonials", label: "Testimonials" },
+  { href: "/admin/health", label: "Health" },
   { href: "/admin/settings", label: "Settings" },
 ] as const;
 
@@ -32,17 +34,26 @@ export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];
 const PAGE_BY_HREF = new Map<AdminPage, string>(ADMIN_PAGES.map((p) => [p.href, p.label]));
 
 /**
- * Меню (власник 16.09, b4: пункти не вміщаються). Одним рядком лише те, чим користуються щодня;
- * решта під «More». Жодна сторінка не загублена: ADMIN_MAIN і ADMIN_MORE разом дають ADMIN_PAGES
- * (тест admin-nav.test.tsx).
+ * Меню (власник 16.09: пункти не вміщаються; 17.09: «зроби щоб вони були десь в пунктах меню,
+ * тіпа агенції, запити компаній»). Одним рядком те, чим користуються щодня; решта у двох
+ * списках за темою: «Companies» (усе про компанії, заявки й оплати) і «More».
+ *
+ * Жодна сторінка не загублена: ADMIN_MAIN і групи разом дають ADMIN_PAGES (admin-nav.test.tsx).
  */
-export const ADMIN_MAIN: readonly AdminPage[] = [
-  "/admin", "/admin/candidates", "/admin/scores", "/admin/sources", "/admin/messages", "/admin/settings",
+export const ADMIN_MAIN: readonly AdminPage[] = ["/admin", "/admin/candidates", "/admin/sources", "/admin/messages"];
+
+/** Після списків, у кінці рядка. */
+export const ADMIN_TAIL: readonly AdminPage[] = ["/admin/settings"];
+
+export type AdminGroup = { label: string; pages: readonly AdminPage[] };
+
+export const ADMIN_GROUPS: readonly AdminGroup[] = [
+  { label: "Companies", pages: ["/admin/companies", "/admin/agency-applications", "/admin/jobs", "/admin/payments"] },
+  { label: "More", pages: ["/admin/scores", "/admin/demand", "/admin/funnel", "/admin/x-queue", "/admin/testimonials", "/admin/health"] },
 ];
-export const ADMIN_MORE: readonly AdminPage[] = [
-  "/admin/funnel", "/admin/x-queue", "/admin/companies", "/admin/agency-applications", "/admin/payments", "/admin/jobs",
-  "/admin/testimonials",
-];
+
+/** Усе, що не в головному рядку (для тестів і для перевірки, що нічого не загубилось). */
+export const ADMIN_MORE: readonly AdminPage[] = ADMIN_GROUPS.flatMap((g) => [...g.pages]);
 
 const TAB =
   "inline-flex min-h-11 items-center border-b-2 font-semibold whitespace-nowrap transition-colors border-transparent text-ink-muted hover:border-line-strong hover:text-ink";
@@ -72,6 +83,37 @@ function ViewAsCompanyButton({ companyId }: { companyId: string }) {
   );
 }
 
+/** Один список меню: «Companies» чи «More». Відкрита сторінка всередині названа на кнопці. */
+function Dropdown({ group, current }: { group: AdminGroup; current?: AdminPage }) {
+  const inside = current !== undefined && group.pages.includes(current);
+  return (
+    <details className="group relative" data-admin-group={group.label}>
+      <summary className={cn(inside ? TAB_CURRENT : TAB, "cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden")}>
+        {inside ? `${group.label}: ${PAGE_BY_HREF.get(current!)}` : group.label}
+        <span aria-hidden className="inline-block transition-transform group-open:rotate-180">
+          {"\u25BE"}
+        </span>
+      </summary>
+      <ul className="absolute left-0 top-full z-30 mt-1 grid min-w-52 gap-0.5 rounded-[10px] border-[1.5px] border-line bg-surface p-2 shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)]">
+        {group.pages.map((href) => (
+          <li key={href}>
+            <Link
+              href={href}
+              aria-current={href === current ? "page" : undefined}
+              className={cn(
+                "flex min-h-10 items-center rounded-md px-3 font-semibold whitespace-nowrap hover:bg-soft",
+                href === current ? "text-ink" : "text-ink-muted hover:text-ink",
+              )}
+            >
+              {PAGE_BY_HREF.get(href)}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /**
  * Перемикач сторінок адмінки: над заголовком на самих сторінках і в кабінеті. Рядок груп, кожна
  * зі своєю приглушеною міткою; поточна сторінка з рискою 2 px кольору тексту.
@@ -94,7 +136,6 @@ export function AdminNav({
   className?: string;
   viewAsCompanyId?: string | null;
 }) {
-  const moreCurrent = current !== undefined && ADMIN_MORE.includes(current);
   return (
     <nav aria-label="Admin" className={cn("relative z-20 flex flex-wrap items-end gap-x-4 gap-y-1 border-b border-line text-sm", className)}>
       {/* Мітка тієї ж висоти й з тією ж прозорою рискою, що вкладки: усе стоїть одним рядком по центру. */}
@@ -106,30 +147,14 @@ export function AdminNav({
           {PAGE_BY_HREF.get(href)}
         </Link>
       ))}
-      <details className="group relative" data-admin-more="">
-        <summary className={cn(moreCurrent ? TAB_CURRENT : TAB, "cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden")}>
-          {moreCurrent ? `More: ${PAGE_BY_HREF.get(current!)}` : "More"}
-          <span aria-hidden className="inline-block transition-transform group-open:rotate-180">
-            {"\u25BE"}
-          </span>
-        </summary>
-        <ul className="absolute left-0 top-full mt-1 grid min-w-52 gap-0.5 rounded-[10px] border-[1.5px] border-line bg-surface p-2 shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)]">
-          {ADMIN_MORE.map((href) => (
-            <li key={href}>
-              <Link
-                href={href}
-                aria-current={href === current ? "page" : undefined}
-                className={cn(
-                  "flex min-h-10 items-center rounded-md px-3 font-semibold whitespace-nowrap hover:bg-soft",
-                  href === current ? "text-ink" : "text-ink-muted hover:text-ink",
-                )}
-              >
-                {PAGE_BY_HREF.get(href)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </details>
+      {ADMIN_GROUPS.map((group) => (
+        <Dropdown key={group.label} group={group} current={current} />
+      ))}
+      {ADMIN_TAIL.map((href) => (
+        <Link key={href} href={href} aria-current={href === current ? "page" : undefined} className={href === current ? TAB_CURRENT : TAB}>
+          {PAGE_BY_HREF.get(href)}
+        </Link>
+      ))}
       {viewAsCompanyId !== undefined ? (
         viewAsCompanyId ? <ViewAsCompanyButton companyId={viewAsCompanyId} /> : null
       ) : (

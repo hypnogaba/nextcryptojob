@@ -5,7 +5,9 @@ import { AdminNav } from "@/components/admin-nav";
 import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import { FIELD } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
+import { Panel, pct, NUM, Stat, Stats, SubHead } from "@/components/admin-ui";
 import { listCandidates } from "@/lib/admin/scores";
+import { loadOverview, type Overview } from "@/lib/admin/overview";
 import { currentAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { fromSqlTime } from "@/lib/time";
@@ -13,6 +15,65 @@ import { fromSqlTime } from "@/lib/time";
 export const metadata: Metadata = { title: "Candidates", robots: { index: false } };
 
 const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+const TD = TD_TIGHT;
+const TD_NUM = `${TD} text-right tabular-nums`;
+const TH_NUM = `${TH_TIGHT} text-right`;
+
+function Candidates({ o }: { o: Overview }) {
+  const c = o.candidates;
+  const funnel: [string, number][] = [
+    ["Signed up", c.total],
+    ["Brief started", c.briefStarted],
+    ["Brief done, terms accepted", c.briefDone],
+    ["X verified", c.xVerified],
+    ["Wallets added", c.wallets],
+    ["Card created", c.cards],
+    ["Visible to companies", c.visible],
+  ];
+  return (
+    <Panel id="candidates" title="Candidates">
+      <Stats className="sm:grid-cols-4">
+        <Stat label="Total" value={NUM.format(c.total)} />
+        <Stat label="Today" value={NUM.format(c.today)} note="Since 00:00 UTC" />
+        <Stat label="7 days" value={NUM.format(c.d7)} />
+        <Stat label="30 days" value={NUM.format(c.d30)} />
+      </Stats>
+      <div className="grid gap-2">
+        <SubHead>Onboarding funnel</SubHead>
+        <div className={BOARD}>
+          <table className={TABLE} data-table="funnel">
+            <thead>
+              <tr>
+                <th scope="col" className={TH_TIGHT}>Step</th>
+                <th scope="col" className={TH_NUM}>People</th>
+                <th scope="col" className={TH_NUM}>Of all</th>
+              </tr>
+            </thead>
+            <tbody>
+              {funnel.map(([label, n]) => (
+                <tr key={label} className={TR}>
+                  <th scope="row" className={`${TD} font-normal`}>{label}</th>
+                  <td className={TD_NUM}>{NUM.format(n)}</td>
+                  <td className={`${TD_NUM} text-ink-muted`}>{pct(n, c.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <Stats>
+        <Stat label="Email only" value={NUM.format(c.emailOnly)} note="Sign-in method" />
+        <Stat label="Telegram only" value={NUM.format(c.telegramOnly)} note="Sign-in method" />
+        <Stat label="Both" value={NUM.format(c.both)} note="Email and Telegram" />
+        <Stat label="Digest by Telegram" value={NUM.format(c.channelTelegram)} />
+        <Stat label="Digest by email" value={NUM.format(c.channelEmail)} />
+        <Stat label="Digest paused" value={NUM.format(c.paused)} />
+      </Stats>
+    </Panel>
+  );
+}
+
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -31,7 +92,7 @@ export default async function AdminCandidatesPage({
   if (!(await currentAdmin())) notFound();
   const params = await searchParams;
   const q = first(params.q) ?? "";
-  const rows = await listCandidates(db(), { q, limit: 200 });
+  const [rows, overview] = await Promise.all([listCandidates(db(), { q, limit: 200 }), loadOverview(db())]);
 
   return (
     <section className="mx-auto px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12 max-w-5xl">
@@ -50,6 +111,10 @@ export default async function AdminCandidatesPage({
           Search
         </Button>
       </form>
+
+      <div className="mt-8">
+        <Candidates o={overview} />
+      </div>
 
       {rows.length === 0 ? (
         <p className="mt-8 text-sm text-ink-muted">{q ? `No match for "${q}".` : "No candidates yet."}</p>

@@ -4,6 +4,9 @@ import { AdminNav } from "@/components/admin-nav";
 import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import { FIELD } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
+import { LINK, NUM, Panel, Stat, Stats, SubHead } from "@/components/admin-ui";
+import Link from "next/link";
+import { loadOverview, type Overview } from "@/lib/admin/overview";
 import { currentAdmin } from "@/lib/auth/admin";
 import { listCompaniesForAdmin, MAX_NOTE_LENGTH, type AdminCompanyRow } from "@/lib/billing/manual";
 import { stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
@@ -29,6 +32,69 @@ const ERRORS: Record<AdminError, string> = {
 };
 
 const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+const INTRO_LABELS: Record<string, string> = {
+  pending: "Pending",
+  accepted: "Accepted",
+  direct: "Direct",
+  declined: "Declined",
+  expired: "Expired",
+  canceled: "Canceled",
+};
+
+function Companies({ o }: { o: Overview }) {
+  const c = o.companies;
+  const intros = Object.entries(c.intros).sort((a, b) => b[1] - a[1]);
+  return (
+    <Panel
+      id="companies"
+      title="Companies"
+      links={[
+        { href: "/admin/companies", label: "Companies" },
+        { href: "/admin/agency-applications", label: "Agencies" },
+        { href: "/admin/jobs", label: "Jobs" },
+      ]}
+    >
+      <Stats>
+        <Stat label="Trial" value={NUM.format(c.trial)} />
+        <Stat label="Subscribed" value={NUM.format(c.subscribed)} />
+        <Stat label="Pay per request" value={NUM.format(c.payPerRequest)} note="Active, no subscription" />
+        <Stat label="Agencies to review" value={NUM.format(c.agenciesPending)} note={`${NUM.format(c.pendingReview)} in review`} />
+        <Stat label="Suspended" value={NUM.format(c.suspended)} />
+        <Stat label="Closed or rejected" value={NUM.format(c.closed)} />
+        <Stat label="Team members" value={NUM.format(c.members)} note={`${NUM.format(c.invitesOpen)} open invites`} />
+      </Stats>
+      <div className="grid gap-2">
+        <SubHead>Last 7 days</SubHead>
+        <Stats>
+          <Stat label="Searches" value={NUM.format(c.searches7d)} note="Result pages" />
+          <Stat label="Profile views" value={NUM.format(c.views7d)} />
+          <Stat label="Intro requests" value={NUM.format(c.intros7d)} />
+        </Stats>
+      </div>
+      <div className="grid gap-2">
+        <SubHead>Intros by status, all time</SubHead>
+        {intros.length === 0 ? (
+          <p className="text-sm text-ink-muted">No intros yet.</p>
+        ) : (
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-list="intros">
+            {intros.map(([status, n]) => (
+              <span key={status} className="whitespace-nowrap">
+                {INTRO_LABELS[status] ?? status}: <b>{NUM.format(n)}</b>
+              </span>
+            ))}
+          </p>
+        )}
+      </div>
+      <Stats>
+        <Stat label="Open company jobs" value={NUM.format(c.openJobs)} note={`${NUM.format(c.liveJobs)} live in digests`} />
+        <Stat label="Apply clicks" value={NUM.format(c.applyClicksTotal)} note="All time: no daily history is stored" />
+        <Stat label="X queue" value={<Link href="/admin/x-queue" className={LINK}>{NUM.format(c.xQueue)}</Link>} />
+      </Stats>
+    </Panel>
+  );
+}
+
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -96,7 +162,7 @@ export default async function AdminCompaniesPage({
 }) {
   if (!(await currentAdmin())) notFound();
   const params = await searchParams;
-  const rows = await listCompaniesForAdmin(db());
+  const [rows, overview] = await Promise.all([listCompaniesForAdmin(db()), loadOverview(db())]);
   const stripe = stripeSettings(appEnv() as unknown as StripeEnv);
   const now = new Date();
 
@@ -113,6 +179,10 @@ export default async function AdminCompaniesPage({
           ? "Card payments: on."
           : `Card payments: off (${stripe.reason}). Grant access by hand below.`}
       </p>
+
+      <div className="mt-6">
+        <Companies o={overview} />
+      </div>
 
       {error && error in ERRORS ? (
         <p role="alert" className="mt-6 rounded-lg border border-destructive/50 bg-surface px-4 py-3 text-sm text-ink">

@@ -159,5 +159,8 @@ export function failingAdvice(f: Pick<FailingSource, "status" | "failDays" | "la
   return f.failDays >= 3 ? "Failing for several days: open the board link and check the error." : "One or two failed scans: watch it, nothing to do yet.";
 }
 
-/** Порог «малого» джерела на /admin/sources: менше стількох живих вакансій = згорнуто. */
-export const SMALL_SOURCE_JOBS = 20;
+/**
+ * Поріг «малого» джерела на /admin/sources: менше стількох живих вакансій = згорнуто
+ * (власник 17.09: «все, що нижче 50 вакансій, не показуй, десь заховай»).
+ */
+export const SMALL_SOURCE_JOBS = 50;

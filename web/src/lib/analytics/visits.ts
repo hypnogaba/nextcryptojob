@@ -246,3 +246,160 @@ export function conversion(signups: number, uniques: number): string {
   const p = (100 * signups) / uniques;
   return `${p < 10 ? p.toFixed(1) : Math.round(p)}%`;
 }
+
+// ---------------------------------------------------------------------------
+// Графік: та сама таблиця, але зібрана по днях, тижнях або місяцях
+
+export const VISIT_BUCKETS = ["day", "week", "month"] as const;
+export type VisitBucket = (typeof VISIT_BUCKETS)[number];
+
+export function isVisitBucket(raw: unknown): raw is VisitBucket {
+  return typeof raw === "string" && (VISIT_BUCKETS as readonly string[]).includes(raw);
+}
+
+/**
+ * Скільки стовпчиків показуємо: 30 днів, 12 тижнів, 12 місяців. visit_days має ~11 рядків
+ * на добу (група сторінок × звідки прийшли), тож навіть рік це ~4 тис. читань на показ.
+ */
+export const BUCKET_COUNT: Record<VisitBucket, number> = { day: 30, week: 12, month: 12 };
+
+const BUCKET_LABEL: Record<VisitBucket, string> = { day: "day", week: "week", month: "month" };
+export const bucketLabel = (b: VisitBucket): string => BUCKET_LABEL[b];
+
+const MONTH_NAME = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" });
+const DAY_NAME = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** Один стовпчик графіка. `from`/`to` включно, днями UTC. */
+export type VisitPoint = {
+  key: string;
+  /** Підпис під стовпчиком: «Sep 17», «Sep 15» (тиждень з), «Sep». */
+  label: string;
+  /** Повна назва для підказки: «Week of Sep 15 - Sep 21». */
+  title: string;
+  from: string;
+  to: string;
+  views: number;
+  uniques: number;
+  signups: number;
+};
+
+export interface VisitSeries {
+  bucket: VisitBucket;
+  /** Найдавніший стовпчик перший: графік читається зліва направо. */
+  points: VisitPoint[];
+  totals: { views: number; uniques: number; signups: number };
+  available: boolean;
+  error: string | null;
+}
+
+const startOfUtcDay = (at: Date): number => Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate());
+/** Понеділок того тижня, у якому цей день. */
+const startOfUtcWeek = (ms: number): number => {
+  const at = new Date(ms);
+  const shift = (at.getUTCDay() + 6) % 7;
+  return ms - shift * DAY_MS;
+};
+
+/** Межі стовпчиків, від найдавнішого до сьогоднішнього (останній може бути неповним). */
+export function visitRanges(bucket: VisitBucket, now: Date): { from: string; to: string; label: string; title: string; key: string }[] {
+  const today = startOfUtcDay(now);
+  const out: { from: string; to: string; label: string; title: string; key: string }[] = [];
+  const count = BUCKET_COUNT[bucket];
+  if (bucket === "day") {
+    for (let i = count - 1; i >= 0; i--) {
+      const day = utcDay(new Date(today - i * DAY_MS));
+      out.push({ key: day, from: day, to: day, label: DAY_NAME.format(today - i * DAY_MS), title: DAY_NAME.format(today - i * DAY_MS) });
+    }
+    return out;
+  }
+  if (bucket === "week") {
+    const thisWeek = startOfUtcWeek(today);
+    for (let i = count - 1; i >= 0; i--) {
+      const start = thisWeek - i * 7 * DAY_MS;
+      const end = start + 6 * DAY_MS;
+      out.push({
+        key: utcDay(new Date(start)),
+        from: utcDay(new Date(start)),
+        to: utcDay(new Date(end)),
+        label: DAY_NAME.format(start),
+        title: `Week of ${DAY_NAME.format(start)} to ${DAY_NAME.format(end)}`,
+      });
+    }
+    return out;
+  }
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  for (let i = count - 1; i >= 0; i--) {
+    const start = Date.UTC(y, m - i, 1);
+    const end = Date.UTC(y, m - i + 1, 0);
+    const at = new Date(start);
+    out.push({
+      key: `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, "0")}`,
+      from: utcDay(at),
+      to: utcDay(new Date(end)),
+      label: at.getUTCMonth() === 0 ? `${MONTH_NAME.format(start)} ${at.getUTCFullYear()}` : MONTH_NAME.format(start),
+      title: `${MONTH_NAME.format(start)} ${at.getUTCFullYear()}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * Відвідування й реєстрації для графіка. Два запити одним пакетом на весь проміжок, далі
+ * складаємо в стовпчики тут (тижні з понеділка, місяці календарні): у SQL це або strftime
+ * на кожен рядок, або окремий запит на стовпчик.
+ */
+export async function loadVisitSeries(db: D1Database, bucket: VisitBucket, now: Date = new Date()): Promise<VisitSeries> {
+  const ranges = visitRanges(bucket, now);
+  const from = ranges[0]!.from;
+  const to = ranges[ranges.length - 1]!.to;
+  const empty = (available: boolean, error: string | null): VisitSeries => ({
+    bucket,
+    points: ranges.map((r) => ({ ...r, views: 0, uniques: 0, signups: 0 })),
+    totals: { views: 0, uniques: 0, signups: 0 },
+    available,
+    error,
+  });
+  let res: D1Result<Record<string, unknown>>[];
+  try {
+    res = await db.batch<Record<string, unknown>>([
+      db
+        .prepare("SELECT day, SUM(views) AS views, SUM(uniques) AS uniques FROM visit_days WHERE day BETWEEN ? AND ? GROUP BY day")
+        .bind(from, to),
+      db
+        .prepare(
+          `SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n FROM users
+            WHERE created_at >= ? AND created_at < ? AND is_demo = 0 GROUP BY day`,
+        )
+        .bind(sqlTime(new Date(`${from}T00:00:00Z`)), sqlTime(new Date(`${to}T23:59:59Z`))),
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/no such (table|column)/i.test(message)) return empty(false, "Visit counting starts after migration 0021 is applied.");
+    throw error;
+  }
+  const num = (v: unknown) => Number(v) || 0;
+  const visits = new Map(res[0].results.map((r) => [String(r.day), r]));
+  const signups = new Map(res[1].results.map((r) => [String(r.day), num(r.n)]));
+  const points: VisitPoint[] = ranges.map((r) => {
+    const point: VisitPoint = { ...r, views: 0, uniques: 0, signups: 0 };
+    for (let ms = Date.parse(`${r.from}T00:00:00Z`); ms <= Date.parse(`${r.to}T00:00:00Z`); ms += DAY_MS) {
+      const day = utcDay(new Date(ms));
+      const v = visits.get(day);
+      point.views += num(v?.views);
+      point.uniques += num(v?.uniques);
+      point.signups += signups.get(day) ?? 0;
+    }
+    return point;
+  });
+  return {
+    bucket,
+    points,
+    totals: points.reduce(
+      (t, p) => ({ views: t.views + p.views, uniques: t.uniques + p.uniques, signups: t.signups + p.signups }),
+      { views: 0, uniques: 0, signups: 0 },
+    ),
+    available: true,
+    error: null,
+  };
+}

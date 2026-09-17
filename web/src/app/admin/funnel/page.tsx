@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
+import { BucketTabs, VisitsChart } from "@/components/admin-chart";
 import { NUM, pct, Panel } from "@/components/admin-ui";
 import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import { currentAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
-import { FUNNEL_WINDOWS, loadFunnelReport, type FunnelDay, type FunnelWindow } from "@/lib/admin/funnel";
+import { FUNNEL_WINDOWS, loadFunnelReport, type FunnelWindow } from "@/lib/admin/funnel";
+import { isVisitBucket, loadVisitSeries, type VisitBucket } from "@/lib/analytics/visits";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Funnel", robots: { index: false } };
@@ -20,34 +22,6 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** Простий SVG-графік по днях (без бібліотек): ламана лінія відвідувачів. */
-function DayChart({ days }: { days: FunnelDay[] }) {
-  const w = 640;
-  const h = 120;
-  const pad = 8;
-  const max = Math.max(1, ...days.map((d) => d.visitors));
-  const step = days.length > 1 ? (w - pad * 2) / (days.length - 1) : 0;
-  const points = days
-    .map((d, i) => {
-      const x = pad + i * step;
-      const y = h - pad - (d.visitors / max) * (h - pad * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label="Visitors per day" className="max-w-full">
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth={2} className="text-ink" />
-      {days.map((d, i) => (
-        <circle key={d.day} cx={pad + i * step} cy={h - pad - (d.visitors / max) * (h - pad * 2)} r={2.5} className="fill-ink">
-          <title>
-            {d.day}: {d.visitors}
-          </title>
-        </circle>
-      ))}
-    </svg>
-  );
-}
-
 export default async function AdminFunnelPage({
   searchParams,
 }: {
@@ -56,7 +30,9 @@ export default async function AdminFunnelPage({
   if (!(await currentAdmin())) notFound();
   const params = await searchParams;
   const window = parseWindow(first(params.window));
-  const report = await loadFunnelReport(db(), window);
+  const rawStep = first(params.step);
+  const bucket: VisitBucket = isVisitBucket(rawStep) ? rawStep : "day";
+  const [report, series] = await Promise.all([loadFunnelReport(db(), window), loadVisitSeries(db(), bucket)]);
 
   return (
     <section className="mx-auto px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-12 max-w-4xl">
@@ -84,8 +60,9 @@ export default async function AdminFunnelPage({
 
       {!report.visitsAvailable ? <p className="mt-4 text-sm text-ink-muted">{report.visitsError}</p> : null}
 
-      <Panel id="visitors-chart" title="Visitors per day" className="mt-6">
-        <DayChart days={report.days} />
+      <Panel id="visitors-chart" title="Visitors" className="mt-6">
+        <BucketTabs base="/admin/funnel" current={bucket} extra={{ window: String(window) }} />
+        <VisitsChart series={series} />
       </Panel>
 
       <Panel id="steps" title="Steps" className="mt-6">
