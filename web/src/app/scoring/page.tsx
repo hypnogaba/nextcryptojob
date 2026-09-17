@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CardBackFace } from "@/components/card/card-back";
 import { CardFront } from "@/components/card/card-front";
+import { SourceParts, WeightsTable } from "@/components/scoring/weights";
 import { MiniCard } from "@/components/card/mini-card";
 import { SharePreview } from "@/components/landing/share-preview";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ const LINK = "font-semibold text-ink underline decoration-line-strong decoration
 /**
  * Як працює бал, коротко (власник 14.09, A3: без десяти варіантів, просто розповісти, як
  * це працює). Картинка для X і три абзаци, кругла печатка рівня, розклад прикладу, хто бачить.
- * Формули й ваги кожної ролі: /how-scoring-works.
+ * Ваги кожної ролі й кожного джерела: розділ #weights нижче (власник 16.09, c5).
  */
 export default function ScoringPage() {
   const face = exampleFace();
@@ -56,7 +57,7 @@ export default function ScoringPage() {
                 <Link href="/login">Get started</Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/how-scoring-works">Every formula and weight</Link>
+                <Link href="#weights">Every weight</Link>
               </Button>
             </div>
           </div>
@@ -109,6 +110,35 @@ export default function ScoringPage() {
         </div>
       </section>
 
+      <section id="weights" aria-labelledby="weights-h" className={`${WRAP} scroll-mt-24 pb-24`}>
+        <div className="grid gap-8 border-t border-line pt-12">
+          <div className="grid max-w-[64ch] gap-3">
+            <h2 id="weights-h" className="display text-section">
+              Every weight, in the open
+            </h2>
+            <p className="text-lg text-ink-muted">
+              Each role takes a main part out of 100 from one or two sources, and up to 10 bonus points from others.
+              Onchain, your wallets&apos; own history, is the main source for traders and a bonus for every other role.
+            </p>
+          </div>
+          <WeightsTable />
+          <div className="grid gap-3">
+            <h3 className="font-display text-2xl font-semibold">What each source counts</h3>
+            <p className="max-w-[64ch] text-ink-muted">
+              A source scores 0 to 100 from these parts. A part we cannot read is left out, and the rest count in its
+              place. It never counts as zero.
+            </p>
+          </div>
+          <SourceParts />
+          <p className="text-sm text-ink-muted">
+            Formula v6. More on sources, gaps and refresh:{" "}
+            <Link href="/how-scoring-works" className={LINK}>
+              how scoring works
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
     </>
   );
 }
