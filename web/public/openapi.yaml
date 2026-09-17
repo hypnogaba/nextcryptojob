@@ -1107,8 +1107,8 @@ components:
       enum: [pending, accepted, declined, expired, canceled, direct]
     SourceKey:
       type: string
-      description: Score sources of formula v6 (docs/contracts.md section 4). `audits` (Sherlock) and `dune` (Spellbook) came with v5; v6 changed only how `trading` is computed.
-      enum: [gh_eng, gh_builder, x, yt, media, output, onchain, trading, site, audits, dune]
+      description: Score sources of formula v7 (docs/contracts.md section 4). `audits` (Sherlock) and `dune` (Spellbook) came with v5. v7 added `links` (work links the candidate added, not checked), `rep` (reputation) and `best` (the strongest source).
+      enum: [gh_eng, gh_builder, x, yt, media, output, onchain, trading, site, audits, dune, links, rep, best]
 
     SearchFilters:
       type: object

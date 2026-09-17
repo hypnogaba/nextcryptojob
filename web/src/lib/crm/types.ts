@@ -124,6 +124,10 @@ export const SOURCE_KEYS = [
   "site",
   "audits",
   "dune",
+  // v7 (17.09): посилання на роботи, репутація, найсильніше джерело.
+  "links",
+  "rep",
+  "best",
 ] as const;
 export const SourceKey = z.enum(SOURCE_KEYS);
 export type SourceKey = z.infer<typeof SourceKey>;

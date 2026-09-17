@@ -282,6 +282,9 @@ const SOURCE_LABELS: Record<SourceKey, string> = {
   site: "Personal site or blog",
   audits: "Audit contest results (Sherlock)",
   dune: "Dune Spellbook contributions",
+  links: "Links to work, added by the candidate (not checked)",
+  rep: "Reputation (well-known crypto accounts that follow them)",
+  best: "Their strongest source",
 };
 
 /**
@@ -301,6 +304,9 @@ const FACTS_OF_SOURCE: Record<SourceKey, readonly string[]> = {
   site: ["site"],
   audits: ["audits"],
   dune: ["dune"],
+  links: [],
+  rep: ["x", "github"],
+  best: ["x", "github", "youtube", "site", "evm", "solana", "hyperliquid", "audits"],
 };
 
 /** Прогалини: лише ці ключі й лише текст "{Source} data unavailable right now". */

@@ -89,7 +89,8 @@ const FEEDS: Record<string, IdentityKind[]> = {
   site: ["site"],
   output: ["site", "github"],
   audits: ["sherlock"],
-  rep: ["x"],
+  rep: ["x", "github"],
+  best: ["x", "github", "evm", "youtube", "site"],
 };
 
 /** Як назвати підключення в пораді «Connect …». */
@@ -187,6 +188,9 @@ function reasonSentence(role: RoleKey, breakdown: Breakdown, state: SourceState)
   const reason = breakdown.reason;
   if (!reason) return null;
   const name = ROLES[role].name;
+  if (reason === "missing_anchor:best") {
+    return `Connect X, GitHub, a wallet or your website, or add links to your work, to get ${article(name)} ${name} score.`;
+  }
   if (reason === "missing_anchor:links") {
     return `Add links to your work (portfolio, case studies, articles) in your profile to get ${article(name)} ${name} score.`;
   }

@@ -124,6 +124,13 @@ describe("explainRole", () => {
     });
   });
 
+  it("v7: a general role with nothing connected says what to connect", () => {
+    expect(explainRole("finance", row(null, { formula: "v7", reason: "missing_anchor:best" }), kinds())).toMatchObject({
+      state: "missing",
+      reason: "Connect X, GitHub, a wallet or your website, or add links to your work, to get a Finance score.",
+    });
+  });
+
   it("v7: suggests adding work links while there are none", () => {
     const v = explainRole("engineer", row(60, { formula: "v7", core: { gh_eng: { weight: 40, value: 80 } }, bonus: { rep: { max: 25, value: 40 } } }), kinds("github", "x"));
     expect(v.state === "scored" && v.tips).toContain("Add links to your work in your profile: they count for every role.");

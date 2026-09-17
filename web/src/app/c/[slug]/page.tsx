@@ -81,7 +81,7 @@ export default async function CardPage({ params, searchParams }: Props) {
   const cardUrl = new URL(cardPath(slug), origin).toString();
   const meta = `Formula ${view.formulaVersion}, issued ${view.issuedOn}.`;
   const recipe = isScoredRoleKey(view.role)
-    ? `How ${view.roleName} is scored: ${recipeCore(view.role)}. Bonus: ${recipeBonus(view.role)}.`
+    ? `How ${view.roleName} is scored: ${recipeCore(view.role)}. Also: ${recipeBonus(view.role)}.`
     : null;
 
   return (

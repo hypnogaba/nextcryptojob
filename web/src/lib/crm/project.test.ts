@@ -381,6 +381,20 @@ describe("projection rules", () => {
       formula_version: "v5",
       updated_at: "2026-09-12T09:00:00Z",
     });
+    // v7: посилання, репутація й найсильніше джерело доходять до компанії, а не губляться.
+    const v7 = breakdownOf({
+      ...row,
+      role: "finance",
+      breakdown_json: JSON.stringify({
+        formula: "v7",
+        core: { best: { weight: 40, value: 80 }, links: { weight: 20, value: 30 } },
+        bonus: { rep: { max: 25, value: 60 }, x: { max: 5, value: 50 } },
+        gaps: {},
+      }),
+    });
+    expect(v7.core.map((c) => c.source)).toEqual(["best", "links"]);
+    expect(v7.bonus.map((c) => c.source)).toEqual(["rep", "x"]);
+    expect(v7.core[1]!.label).toMatch(/not checked/);
     // Той самий збій EVM видно в ролі, де є onchain.
     const trader = breakdownOf({
       ...row,
