@@ -1,8 +1,8 @@
 /**
  * Ручна жива перевірка одного збирача на справжніх ключах із оточення. У тестах не запускається.
  *
- *   npm run smoke -- x hypnogaba
- *   npm run smoke -- site hypnogaba.com
+ *   npm run smoke -- x <handle>
+ *   npm run smoke -- site example.com
  *   GITHUB_TOKEN=… npm run smoke -- github <login>
  *   GITHUB_TOKEN=… npm run smoke -- dune <login>
  *   npm run smoke -- youtube @handle

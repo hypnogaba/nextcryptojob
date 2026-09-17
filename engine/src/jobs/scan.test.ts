@@ -448,9 +448,9 @@ describe("jobs-prune", () => {
 });
 
 describe("CF_JOBS_D1_DATABASE_ID", () => {
-  it("обов'язкова, не база NextRole і не основна база", () => {
+  it("обов'язкова, не чужа база вакансій і не основна база", () => {
     expect(() => jobsDatabaseId({})).toThrow(/CF_JOBS_D1_DATABASE_ID/);
-    expect(() => jobsDatabaseId({ CF_JOBS_D1_DATABASE_ID: "0bf4b998-cbdc-474b-b739-eb6e6e7d5a9d" })).toThrow(/NextRole/);
+    expect(() => jobsDatabaseId({ CF_JOBS_D1_DATABASE_ID: "0bf4b998-cbdc-474b-b739-eb6e6e7d5a9d" })).toThrow(/an earlier job cache/);
     expect(() => jobsDatabaseId({ CF_JOBS_D1_DATABASE_ID: "abc", CF_D1_DATABASE_ID: "abc" })).toThrow(/окрема/);
     expect(jobsDatabaseId({ CF_JOBS_D1_DATABASE_ID: " new-id " })).toBe("new-id");
   });

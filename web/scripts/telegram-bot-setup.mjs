@@ -5,7 +5,7 @@
 // Аватар бота власник ставить сам у @BotFather: скрипт його не чіпає.
 //
 //   TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... \
-//     node scripts/telegram-bot-setup.mjs https://nextcryptojob.hypnogaba.workers.dev
+//     node scripts/telegram-bot-setup.mjs https://nextcryptojob.xyz
 //
 // Обидва значення беруться з оточення й нікуди не друкуються. Секрет вебхука
 // мусить збігатися з Worker secret TELEGRAM_WEBHOOK_SECRET, інакше маршрут

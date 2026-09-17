@@ -24,7 +24,7 @@
     {
       // База вакансій NextCryptoJob (db/jobs): пише лише сканер engine (jobs-scan), сайт лише
       // читає через src/lib/jobs-db.ts (docs/contracts.md, розділ 6). До 14.09.2026 тут була база
-      // NextRole; тепер власна. id вписує controller після `wrangler d1 create nextcryptojob-jobs`
+      // попереднього проєкту; тепер власна. id вписує controller після `wrangler d1 create nextcryptojob-jobs`
       // (engine/deploy/README.md §8, крок 8); з заглушкою деплоїти не можна.
       "binding": "JOBS_DB",
       "database_name": "nextcryptojob-jobs",
@@ -53,8 +53,8 @@
   ],
   // Власний домен: зона nextcryptojob.xyz active на Cloudflare з 12.09.
   // workers_dev поки лишаємо: на ньому вебхук бота й адреси входу Telegram.
-  // Коли вони переїдуть на nextcryptojob.xyz, workers_dev варто вимкнути (як у
-  // NextRole), щоб правила WAF зони не можна було обійти другою адресою.
+  // Коли вони переїдуть на nextcryptojob.xyz, workers_dev треба вимкнути: інакше
+  // правила WAF зони обходяться другою адресою, і в тій адресі стоїть нік акаунта.
   "routes": [{ "pattern": "nextcryptojob.xyz", "custom_domain": true }],
   "workers_dev": true,
   // Пошта для кодів входу: Cloudflare Email Service (бета, тариф Workers Paid).

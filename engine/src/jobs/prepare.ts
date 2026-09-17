@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.ts (prepare, officeOnly, richness),
+// Перенесено з попереднього проєкту (сканер): src/normalize.ts (prepare, officeOnly, richness),
 // з поправками під крипто-базу: лише крипто, список не-крипто компаній, вікно віку за родом джерела, id з адреси.
 import { brandKey, companyKey, isNonCryptoCompany } from "../digest/clean.js";
 import { ATS_WINDOW_DAYS, isEmployerFeed, POSTED_WINDOW_DAYS } from "../digest/jobs.js";

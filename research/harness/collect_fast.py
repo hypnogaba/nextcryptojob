@@ -112,7 +112,7 @@ def evm_summary(per_chain):
 # ---------- Solana: Helius ----------
 def sol(addr):
     """Підписи через публічний вузол Solana. Обміни лише з окремим ключем Helius для NextCryptoJob
-    (ключ tradebot не чіпаємо: він потрібен живому боту)."""
+    (ключ іншої служби не чіпаємо: він потрібен живій службі)."""
     key = os.environ.get("NCJ_HELIUS_KEY", "")
     rpc = "https://api.mainnet-beta.solana.com"
     before, n, oldest, capped, err = None, 0, None, True, None

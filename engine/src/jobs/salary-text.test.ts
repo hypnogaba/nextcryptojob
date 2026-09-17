@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/salary.test.ts.
+// Перенесено з попереднього проєкту (сканер): src/salary.test.ts.
 import { describe, expect, it } from "vitest";
 import { extractSalary } from "./salary-text.js";
 

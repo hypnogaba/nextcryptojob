@@ -38,7 +38,7 @@ describe("normalizeDisplayName", () => {
 
 describe("suggestDisplayName", () => {
   it("prefers the verified X handle", () => {
-    expect(suggestDisplayName("hypnogaba", "someone@example.com")).toBe("@hypnogaba");
+    expect(suggestDisplayName("zerocool", "someone@example.com")).toBe("@zerocool");
   });
 
   it("falls back to the first part of the email, without dots or tags", () => {

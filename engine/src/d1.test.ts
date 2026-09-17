@@ -1,4 +1,4 @@
-// Перенесено з NextRole.
+// Перенесено з попереднього проєкту.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { D1Client, D1HttpError, D1ThrottledError } from "./d1.js";
 import { __resetLimiters } from "./limits.js";
@@ -56,7 +56,7 @@ describe("D1Client: повтори", () => {
   });
 
   /**
-   * 429 той самий випадок, що звалив розсилку NextRole 03.09.
+   * 429 той самий випадок, що звалив розсилку попередньому проєкті 03.09.
    * Він 4xx за формою, але за змістом це прохання зачекати.
    */
   it("429: повтор, і друга спроба рятує", async () => {

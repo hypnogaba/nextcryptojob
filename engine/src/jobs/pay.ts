@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/pay.ts і plausibleSalary з src/money.ts.
+// Перенесено з попереднього проєкту (сканер): src/pay.ts і plausibleSalary з src/money.ts.
 /**
  * Вилка з полів ATS: період і переведення в річну суму.
  *

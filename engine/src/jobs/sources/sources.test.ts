@@ -1,6 +1,6 @@
-// Парсери джерел проти СПРАВЖНІХ відповідей (fixtures/). Частина знята NextRole 13.09.2026
+// Парсери джерел проти СПРАВЖНІХ відповідей (fixtures/). Частина знята попереднім проєктом 13.09.2026
 // (greenhouse-coinbase-pay, ashby-kraken-comp, lever-crypto-salary, speedrun-company-anchorage,
-// getro-1625-page; перенесено з crypto-jobs-agent, scanner), решта знята 14.09.2026 з тих самих
+// getro-1625-page; перенесено з попереднього проєкту, сканер), решта знята 14.09.2026 з тих самих
 // публічних адрес, що читає сканер, і обрізана до кількох вакансій (тексти скорочено).
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -32,7 +32,7 @@ const pay = (js: Array<{ salaryMin?: number | null; salaryMax?: number | null; s
 beforeEach(() => __resetLimiters());
 afterEach(() => __resetLimiters());
 
-describe("ATS: вилка з полів (NextRole 13.09)", () => {
+describe("ATS: вилка з полів (попередній проєкт 13.09)", () => {
   it("Greenhouse з pay_transparency (Coinbase): річна, погодинна в річну, рупії", async () => {
     const { urls, o } = serve("greenhouse-coinbase-pay.json");
     const jobs = await ats.fetchGreenhouse("coinbase", "Coinbase", o);
@@ -221,7 +221,7 @@ describe("speedrun", () => {
       .toEqual(["Member of Legal, Brokerage and Trading Solutions"]);
   });
 
-  it("період і місце роботи (перенесено з NextRole)", () => {
+  it("період і місце роботи (перенесено з попереднього проєкту)", () => {
     expect(yearlyComp(165_000, null)).toBe(165_000);
     expect(yearlyComp(24, "hour")).toBe(49_920);
     expect(yearlyComp(10, null)).toBeNull();
@@ -250,7 +250,7 @@ describe("Superteam Earn", () => {
   });
 });
 
-describe("Getro: лише посилання для розвідки (колекція Coinbase Ventures, NextRole 13.09)", () => {
+describe("Getro: лише посилання для розвідки (колекція Coinbase Ventures, попередній проєкт 13.09)", () => {
   it("галузь організації за словами Getro і ATS з посилання", async () => {
     const links = await fetchGetroLinks(1625, serve("getro-1625-page.json").o, 1, 0);
     expect(links.map((l) => [l.company, l.industry, extractAts(l.url)])).toEqual([

@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/sources/boards.ts, лише три формати, якими
+// Перенесено з попереднього проєкту (сканер): src/sources/boards.ts, лише три формати, якими
 // читаються крипто-дошки: розмітка JobPosting, потік Next.js (JobStash), RSS (remote3).
 // Національних дошок і розбору їхніх заголовків тут немає.
 //

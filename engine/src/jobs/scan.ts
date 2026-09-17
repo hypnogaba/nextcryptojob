@@ -2,7 +2,7 @@
 // публічні API їхніх ATS, крипто-дошки (web3.career через їхній офіційний API, remote3), крипто-компанії speedrun,
 // за бажанням Superteam Earn. Пише лише в базу вакансій NextCryptoJob (db/jobs); насухо не пише нічого.
 //
-// Ідея прогону перенесена з NextRole (crypto-jobs-agent, scanner: scan-core.ts, dry-scan.ts), але
+// Ідея прогону перенесена з попереднього проєкту (сканер: scan-core.ts, dry-scan.ts), але
 // без драбини й зростання: реєстр крипто-компаній відомий, і читається він увесь, щодня, без вихідних.
 import { randomUUID } from "node:crypto";
 import type { FetchOptions } from "../http.js";

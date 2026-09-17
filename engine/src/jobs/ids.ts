@@ -1,5 +1,5 @@
 // Ключі рядка jobs_cache: id з адреси і ключ змісту (компанія + назва).
-// titleKey перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.ts.
+// titleKey перенесено з попереднього проєкту (сканер): src/normalize.ts.
 import { createHash } from "node:crypto";
 import { brandKey } from "../digest/clean.js";
 

@@ -87,7 +87,7 @@ export interface PublicSalary {
 
 /** Вакансія в пулі пошуку, з будь-якого джерела. */
 export interface PoolJob {
-  /** job_… для вакансій компаній, nr_<id> для вакансій зі сканування (префікс лишився з часів NextRole). */
+  /** job_… для вакансій компаній, nr_<id> для вакансій зі сканування (префікс лишився з часів попереднього проєкту). */
   jobId: string;
   source: "company" | "crawl";
   title: string;

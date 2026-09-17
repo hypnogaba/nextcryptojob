@@ -4,7 +4,7 @@
 //
 // Мітки 'nextrole' (DigestJob.source, sent.source) і 'nr:' (sent.job_ref) означають «вакансія
 // зі сканування», а не компанії: це збережені значення (CHECK у db/migrations/0006_digest.sql і
-// контракт листа), тож лишаються з часів, коли вакансії читались з бази NextRole (до 14.09.2026).
+// контракт листа), тож лишаються з часів, коли вакансії читались з бази попереднього проєкту (до 14.09.2026).
 import type { Db } from "../pipeline/db.js";
 import { ATS_PROVIDERS } from "../jobs/types.js";
 import { brandKey, isNonCryptoCompany } from "./clean.js";

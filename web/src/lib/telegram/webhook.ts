@@ -6,7 +6,7 @@ import type { TelegramEnv } from "./env";
 import type { SendDeps } from "./send";
 
 /**
- * Вебхук Telegram (за мотивами NextRole, web/src/app/api/telegram/webhook/route.ts).
+ * Вебхук Telegram (за мотивами попереднього проєкту, web/src/app/api/telegram/webhook/route.ts).
  *
  * - Закритий за замовчуванням: без TELEGRAM_WEBHOOK_SECRET або без точного
  *   заголовка x-telegram-bot-api-secret-token відповідь 401 і жодного запиту

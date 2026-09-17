@@ -1,14 +1,14 @@
 /**
  * Засів бази вакансій NextCryptoJob. Разовий інструмент, у роботі сканера не бере участі.
  *
- *   npx tsx scripts/jobs-seed.ts export --wrangler crypto-jobs-agent [--out <file>]   # через wrangler, де вже є вхід
+ *   npx tsx scripts/jobs-seed.ts export --wrangler <database> [--out <file>]   # через wrangler, де вже є вхід
  *   CF_ACCOUNT_ID=… CF_API_TOKEN=… npx tsx scripts/jobs-seed.ts export --database <id> [--out <file>]
  *   npx tsx scripts/jobs-seed.ts build [--export <file>]      # → db/jobs/seed/registry.json
  *   npx tsx scripts/jobs-seed.ts sql                          # → db/jobs/seed/seed.sql
  *   npx tsx scripts/jobs-seed.ts update                       # → db/jobs/seed/update-2026-09-14-web3career.sql
  *   npx tsx scripts/jobs-seed.ts boards                       # → db/jobs/seed/update-2026-09-14-boards.sql
  *
- * `export` один раз (14.09.2026) прочитав з бази NextRole (D1 `crypto-jobs-agent`, той самий власник)
+ * `export` один раз (14.09.2026) прочитав з бази попереднього проєкту (та сама власність)
  * лише публічні дані: роботодавців з тегом web3 (назва, ATS, слаг), глобальні дошки (назва, адреса
  * стрічки) і крипто-колекції Getro (номер, назва, адреса). Лише SELECT: клієнт загорнуто в
  * readOnlyJobsDb, який відкидає будь-що, крім однієї інструкції SELECT/WITH. Нічого про людей,
@@ -30,7 +30,7 @@ import { registryUpdateSql, type SeedCompany, type SeedGetro, type SeedRegistry,
 import { isAtsProvider } from "../src/jobs/types.js";
 
 const SEED_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../db/jobs/seed");
-export const EXPORT_FILE = resolve(SEED_DIR, "nextrole-export-2026-09-14.json");
+export const EXPORT_FILE = resolve(SEED_DIR, "jobs-export-2026-09-14.json");
 export const REGISTRY_FILE = resolve(SEED_DIR, "registry.json");
 export const SQL_FILE = resolve(SEED_DIR, "seed.sql");
 
@@ -153,7 +153,7 @@ export const DEAD_AT_SEED: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Руками перевірені роботодавці, яких у експорті немає (ATS, що NextRole не читає).
+ * Руками перевірені роботодавці, яких у експорті немає (ATS, що попередній проєкт не читає).
  * Crossmint: crossmint.com/careers веде на crossmint.na.teamtailor.com, 14.09 5 вакансій.
  *
  * 14.09.2026, після переходу web3.career на офіційний API: роботодавці, чиї вакансії web3.career
@@ -178,7 +178,7 @@ export const CURATED: readonly SeedCompany[] = [
 
 /**
  * Дошки. Беремо лише крипто-дошки, і кожну з рішенням про умови (перевірено 13.09, каталог джерел
- * NextRole §11 і звіт 13.09). Ключ = назва дошки в експорті.
+ * попередній проєкт §11 і звіт 13.09). Ключ = назва дошки в експорті.
  */
 const BOARD_DECISIONS: Record<string, Omit<SeedSource, "feed_url"> & { feed?: string } | { skip: string }> = {
   // kind лишився 'jsonld' (CHECK у db/jobs/0001_schema.sql); скан читає цю дошку лише через API за назвою.
@@ -259,7 +259,7 @@ export function buildRegistry(ex: ExportFile, boardCompanies: readonly SeedCompa
   return {
     registry: {
       version: 1,
-      source: `public registry fields exported once from the NextRole job database on ${ex.exported_at.slice(0, 10)} ` +
+      source: `public registry fields exported once from an earlier job database of the same owner on ${ex.exported_at.slice(0, 10)} ` +
         "(companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions and companies found through ecosystem and fund job boards on 2026-09-14; see engine/scripts/jobs-seed.ts",
       companies, sources, getro_collections: getro,
     },
@@ -312,7 +312,7 @@ async function main(argv: string[]): Promise<void> {
       db.select<ExportFile["getro_collections"][number]>(EXPORT_QUERIES.getro_collections),
     ]);
     const file: ExportFile = {
-      exported_at: new Date().toISOString(), database: "crypto-jobs-agent (NextRole), read once with SELECT only",
+      exported_at: new Date().toISOString(), database: "an earlier job database of the same owner, read once with SELECT only",
       queries: EXPORT_QUERIES, companies: companies.rows, boards: boards.rows, getro_collections: getro.rows,
     };
     writeFileSync(out, `${JSON.stringify(file, null, 1)}\n`);

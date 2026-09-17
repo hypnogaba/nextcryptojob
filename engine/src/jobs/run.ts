@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): runSource і mapLimit з src/http.ts.
+// Перенесено з попереднього проєкту (сканер): runSource і mapLimit з src/http.ts.
 import { SourceUnavailableError } from "../http.js";
 import type { RawJob, SourceResult } from "./types.js";
 

@@ -1,4 +1,4 @@
-// Перенесено з NextRole.
+// Перенесено з попереднього проєкту.
 import type { LookupAddress } from "node:dns";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP, type LookupFunction } from "node:net";

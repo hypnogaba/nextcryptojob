@@ -51,7 +51,7 @@ describe("titleRoles: назва вакансії → наші ролі", () => 
     expect(titleRoles("Associate", ["web3", "engineering"])).toEqual([]);
   });
 
-  it("не-крипто назви з тегом web3 відкидаються (живий кеш NextRole 12.09)", () => {
+  it("не-крипто назви з тегом web3 відкидаються (живий кеш попереднього проєкту 12.09)", () => {
     for (const t of [
       "Expert Audio Transcriber, Afrikaans", "Freelance Transcriptionist - Welsh", "Robata Chef",
       "001-09-2026/GD-RDC/CUISINIER -GOMA", "Mechanical Engineer - HVAC & Plumbing", "Electrical Engineer",

@@ -80,9 +80,9 @@ speedrun network. It keeps jobs posted in the last 30 days, turns every salary i
 drops duplicates. The site and the daily digest only read that database. Sources and their terms:
 `engine/deploy/README.md` §8.
 
-Until 14 September 2026 the job listings came from NextRole, an earlier project by the same author. The
-employer registry was seeded once from its public data, and some modules (the scanner parts, the D1 and
-HTTP clients) were carried over from it and are marked in their headers. Nothing depends on NextRole at
+Until 14 September 2026 the job listings came from an earlier project of the same owner. The employer
+registry was seeded once from its public data, and some modules (the scanner parts, the D1 and HTTP
+clients) were carried over from it and are marked in their headers. Nothing depends on that project at
 runtime.
 
 ## Docs

@@ -1,4 +1,4 @@
-// Перенесено з NextRole.
+// Перенесено з попереднього проєкту.
 import type { LookupAddress } from "node:dns";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";

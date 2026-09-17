@@ -29,7 +29,7 @@ export function appEnv(): AppEnv {
 
 /**
  * Основна база продукту (binding DB = D1 `nextcryptojob`). Без ORM: схема
- * наша, запити прості, як у NextRole. Базу вакансій бери через jobsDb().
+ * наша, запити прості, як у попередньому проєкті. Базу вакансій бери через jobsDb().
  */
 export function db(): D1Database {
   return appEnv().DB;

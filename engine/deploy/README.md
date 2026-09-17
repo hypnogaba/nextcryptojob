@@ -2,10 +2,11 @@
 
 Worker черги `score_jobs` (systemd, `Restart=always`), щогодинний таймер `enqueue-refresh`, щогодинний
 таймер добірки `digest-due` (§6) і сканер вакансій з власною базою `nextcryptojob-jobs` (§8).
-Перше встановлення: 12.09.2026 на VPS tradebot (`ssh tradebot-vps`, Ubuntu 22.04, root). На тій самій
-машині живуть бойовий торговий бот, сканер NextRole та інші служби: їхніх юнітів, користувачів,
-файлів і env не чіпаємо. 12.09 з `/etc/nextrole-scanner.env` один раз прочитано три значення (§3); з
-14.09 NextCryptoJob не залежить від NextRole ні кодом, ні базою, ні службою (§8).
+Перше встановлення: 12.09.2026, Ubuntu 22.04, root.
+
+Нижче `$VPS` це локальний ssh-alias сервера. Він живе у вашому `~/.ssh/config`, а не в репозиторії:
+`export VPS=…` перед командами. Якщо на машині є інші служби, їхніх юнітів, користувачів, файлів
+і env не чіпаємо.
 
 ## 1. Користувач і каталоги (один раз)
 
@@ -19,7 +20,7 @@ install -d -o nextcryptojob -g nextcryptojob -m 750 /var/lib/nextcryptojob-engin
 Код належить root і для служби лише читається; писати служба може тільки в `/var/lib/nextcryptojob-engine`
 (`StateDirectory=`, `StateDirectoryMode=0750`, `ProtectSystem=strict`).
 
-Node 24: на цьому VPS `/usr/bin/node` це Node 22, а Node 24 (v24.15) стоїть у `/usr/local/bin/node`.
+Node 24: на сервері `/usr/bin/node` це Node 22, а Node 24 (v24.15) стоїть у `/usr/local/bin/node`.
 Юніти кличуть `/usr/local/bin/node`; на іншій машині перевірте `node -v` і за потреби виправте `ExecStart`.
 
 ## 2. Код
@@ -29,7 +30,7 @@ Node 24: на цьому VPS `/usr/bin/node` це Node 22, а Node 24 (v24.15) �
 ```sh
 npm ci && npm test && npm run typecheck
 rm -rf dist && npm run build
-rsync -rlt --delete dist package.json package-lock.json tradebot-vps:/opt/nextcryptojob-engine/
+rsync -rlt --delete dist package.json package-lock.json "$VPS":/opt/nextcryptojob-engine/
 ```
 
 (`rsync` на macOS не знає `--chown`; власника ставимо на сервері.) На VPS:
@@ -47,9 +48,9 @@ PATH=/usr/local/bin:$PATH npm ci --omit=dev --no-audit --no-fund    # лише u
 `docs/contracts.md` §6; значення лише на сервері, ніколи в git.
 
 Як створено 12.09 (жодне значення не друкувалось і не йшло через переписку):
-- `CF_ACCOUNT_ID`, `CF_API_TOKEN`, `TWITTER_TOKEN`: скрипт на VPS узяв їх з `/etc/nextrole-scanner.env`
-  (`grep '^KEY=' | cut -d= -f2-`) і дописав у тимчасовий файл `umask 077`, потім `mv`;
-- `ETHERSCAN_KEY`: `security find-generic-password -s nextcryptojob-etherscan -a etherscan -w | ssh tradebot-vps …`
+- `CF_ACCOUNT_ID`, `CF_API_TOKEN`, `TWITTER_TOKEN`: скрипт на сервері дописав їх у тимчасовий файл під
+  `umask 077`, потім `mv`. Значення не друкувались і не йшли через переписку;
+- `ETHERSCAN_KEY`: `security find-generic-password -s nextcryptojob-etherscan -a etherscan -w | ssh "$VPS" …`
   (ключ приходить у stdin скрипту);
 - `CF_D1_DATABASE_ID='c66a99cf-230b-4b8b-9cff-862d4b18a4ae'`,
   `SELECTOR_CACHE='/var/lib/nextcryptojob-engine/selectors.json'`, `ENGINE_CONCURRENCY='3'`.
@@ -82,7 +83,7 @@ bash -c 'set -a; . /etc/nextcryptojob-engine.env; set +a; for k in CF_ACCOUNT_ID
 ## 4. Юніти
 
 ```sh
-scp deploy/nextcryptojob-engine.service deploy/nextcryptojob-refresh.service deploy/nextcryptojob-refresh.timer tradebot-vps:/etc/systemd/system/
+scp deploy/nextcryptojob-engine.service deploy/nextcryptojob-refresh.service deploy/nextcryptojob-refresh.timer "$VPS":/etc/systemd/system/
 systemd-analyze verify nextcryptojob-engine.service nextcryptojob-refresh.service nextcryptojob-refresh.timer
 systemctl daemon-reload
 systemctl enable --now nextcryptojob-engine.service nextcryptojob-refresh.timer
@@ -139,7 +140,7 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js score-facts --x <н�
 дослідження (другу умову воріт, «жодного промаху на 2 рівні без прогалини», v5 не проходить і там).
 
 Тимчасовий `GITHUB_TOKEN` для ручного прогону (поки його немає в env): лише в оточення одного процесу
-через stdin, не на диск: `gh auth token | ssh tradebot-vps 'IFS= read -r GH; …; export GITHUB_TOKEN="$GH"; runuser …'`.
+через stdin, не на диск: `gh auth token | ssh "$VPS" 'IFS= read -r GH; …; export GITHUB_TOKEN="$GH"; runuser …'`.
 
 ## 6. Добірка вакансій (`digest-due`, задача E7)
 
@@ -158,7 +159,7 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js score-facts --x <н�
      ендпойнта немає (W7) або пошта на сайті не налаштована, добірки поштою стають `failed`
      з `email not configured`.
    `CF_JOBS_D1_DATABASE_ID`: база вакансій `nextcryptojob-jobs` (§8). До 14.09 добірка читала базу
-   NextRole; тепер лише власну, і id бази NextRole engine відкидає з поясненням.
+   попереднього проєкту; тепер лише власну, і id бази попереднього проєкту engine відкидає з поясненням.
 3. Сухий прогін з VPS, нічого не пише й не шле:
 
 ```sh
@@ -170,7 +171,7 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js digest-due --dry-run
 Встановлення:
 
 ```sh
-scp deploy/nextcryptojob-digest.service deploy/nextcryptojob-digest.timer tradebot-vps:/etc/systemd/system/
+scp deploy/nextcryptojob-digest.service deploy/nextcryptojob-digest.timer "$VPS":/etc/systemd/system/
 systemd-analyze verify nextcryptojob-digest.service nextcryptojob-digest.timer
 systemctl daemon-reload
 systemctl enable --now nextcryptojob-digest.timer
@@ -210,7 +211,7 @@ journalctl -u nextcryptojob-digest -n 20   # рядок digest-due: eligible, du
 ```sh
 npm ci && npm test && npm run typecheck && npm run parity   # parity: 0.000 проти score_v6.py
 rm -rf dist && npm run build
-rsync -rlt --delete dist package.json package-lock.json tradebot-vps:/opt/nextcryptojob-engine/
+rsync -rlt --delete dist package.json package-lock.json "$VPS":/opt/nextcryptojob-engine/
 ```
 
 2. На VPS: власник, залежності, перезапуск (поточні люди дораховуються за старою формулою):
@@ -229,7 +230,7 @@ systemctl restart nextcryptojob-engine && journalctl -u nextcryptojob-engine -n 
 ```sh
 # локально, у research/data (у git не йде)
 umask 077; python3 -c 'import json; p=json.load(open("people_all.json")); e=json.load(open("extra_handles.json")); [x.update(sherlock=e[x["id"]]["sherlock"]) for x in p if e.get(x["id"], {}).get("sherlock")]; json.dump(p, open("/tmp/ncj-people.json", "w"))'
-scp /tmp/ncj-people.json tradebot-vps:/var/lib/nextcryptojob-engine/people.json && rm /tmp/ncj-people.json
+scp /tmp/ncj-people.json "$VPS":/var/lib/nextcryptojob-engine/people.json && rm /tmp/ncj-people.json
 # на VPS
 cd /opt/nextcryptojob-engine && set -a; . /etc/nextcryptojob-engine.env; set +a
 chown nextcryptojob:nextcryptojob /var/lib/nextcryptojob-engine/people.json && chmod 600 /var/lib/nextcryptojob-engine/people.json
@@ -280,7 +281,7 @@ OUT=$(mktemp -d /tmp/ncj-gate.XXXXXX)
 (umask 077; node dist-scripts/scripts/research-cache.js ../research/data "$OUT")
 #   очікуємо: 50 people, 184 source answers, 0 planned sources not in the research data;
 #   max diff 0.000; exact 21 (42.9%), within one 42 (85.7%), unscored 1; 2-band misses 6 (1 / 5); PASSED
-scp -rq "$OUT" tradebot-vps:/var/lib/nextcryptojob-engine/gate-v6 && rm -rf "$OUT"
+scp -rq "$OUT" "$VPS":/var/lib/nextcryptojob-engine/gate-v6 && rm -rf "$OUT"
 ```
 
 На VPS:
@@ -313,10 +314,10 @@ quality gate: PASSED (within-one >= 85%)
 
 ## 8. База вакансій і сканер (`jobs-scan`, 14.09.2026)
 
-Рішення власника 14.09: NextCryptoJob і NextRole розділено повністю. У NextCryptoJob свій сканер
+Рішення власника 14.09: NextCryptoJob і попередній проєкт розділено повністю. У NextCryptoJob свій сканер
 (`src/jobs`, лише крипто) і своя база вакансій D1 `nextcryptojob-jobs` (`db/jobs`). Сайт (binding
-`JOBS_DB`) і добірка (`CF_JOBS_D1_DATABASE_ID`) читають лише її. Жодного коду, бази чи служби NextRole
-у роботі не лишається. Засів реєстру (`db/jobs/seed`) один раз зроблено з публічних даних бази NextRole
+`JOBS_DB`) і добірка (`CF_JOBS_D1_DATABASE_ID`) читають лише її. Жодного коду, бази чи служби попереднього проєкту
+у роботі не лишається. Засів реєстру (`db/jobs/seed`) один раз зроблено з публічних даних бази попереднього проєкту
 (`scripts/jobs-seed.ts`, лише SELECT); далі реєстр живе сам.
 
 ### Що читає сканер
@@ -480,7 +481,7 @@ Getro ніде немає. Ризик умов Getro (заборона crawl/scr
 Вимкнути все: `JOBS_GETRO_DISCOVERY=0`; одну дошку: `UPDATE job_boards SET decision = 'skip' WHERE slug = …`.
 
 Сухий прогін розвідки 14.09 (реєстр засіву, `JOBS_SPEEDRUN=0`, у базу нічого): 26 дошок, 1 741 компанія,
-693 з вакансіями, 636 крипто. За назвою вже в реєстрі 338 (засів NextRole колись читав ті самі колекції); з
+693 з вакансіями, 636 крипто. За назвою вже в реєстрі 338 (засів колись читав ті самі колекції); з
 решти ATS видно у 58 (55 з посилання, 3 зі сторінки кар'єри), з них 45 дошок уже в реєстрі під іншою назвою,
 нових 11 (Solana Foundation, cyber•Fund, Neutron, Rated Labs, Sweatcoin, Pixion Games, Kiln, Citrea, Fence,
 Inca Digital, Pocket Worlds; останню вакансії без слова про крипту, тож вона в списку не-крипто компаній).
@@ -630,8 +631,8 @@ npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
 ```
 
 2. Токен. `CF_API_TOKEN` у `/etc/nextcryptojob-engine.env` має право D1 Edit на `nextcryptojob-jobs`.
-   Нинішній токен 12.09 узято з env сканера NextRole (§3): це спільний обліковий запис акаунта, не
-   залежність від служби, але ротація токена NextRole зупинила б і NextCryptoJob. Краще окремий токен
+   Токен має бути окремий для цього проєкту, з мінімальними правами (D1 і Workers цього проєкту).
+   Спільний з іншою службою токен зупиняє обидві при ротації. Окремий токен
    NextCryptoJob (dash.cloudflare.com, My Profile, API Tokens, Custom Token: D1 Edit на обидві бази
    `nextcryptojob` і `nextcryptojob-jobs`), покладений так само, як у §3 (без друку значення).
 
@@ -642,7 +643,7 @@ npx wrangler d1 execute nextcryptojob-jobs --remote --command "SELECT
 
 | Змінна | Потрібна | Що робить |
 |---|---|---|
-| `CF_JOBS_D1_DATABASE_ID` | так | id бази `nextcryptojob-jobs` з кроку 1. Той самий `CF_ACCOUNT_ID` і `CF_API_TOKEN`. Id бази NextRole і id основної бази engine відкидає |
+| `CF_JOBS_D1_DATABASE_ID` | так | id бази `nextcryptojob-jobs` з кроку 1. Той самий `CF_ACCOUNT_ID` і `CF_API_TOKEN`. Id бази попереднього проєкту і id основної бази engine відкидає |
 | `JOBS_WINDOW_DAYS` | ні (30) | вікно від публікації для дошок і агрегаторів |
 | `JOBS_ATS_WINDOW_DAYS` | ні (90) | вікно від публікації для власних дошок роботодавців на ATS |
 | `JOBS_PRUNE_DAYS` | ні (30) | `jobs-prune`: скільки днів скан мав не бачити вакансію |
@@ -680,7 +681,7 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js digest-due --dry-run
 7. Юніти й таймери, потім знову таймер добірки:
 
 ```sh
-scp deploy/nextcryptojob-jobs-*.service deploy/nextcryptojob-jobs-*.timer tradebot-vps:/etc/systemd/system/
+scp deploy/nextcryptojob-jobs-*.service deploy/nextcryptojob-jobs-*.timer "$VPS":/etc/systemd/system/
 systemd-analyze verify nextcryptojob-jobs-scan.service nextcryptojob-jobs-scan.timer \
   nextcryptojob-jobs-discover.service nextcryptojob-jobs-discover.timer nextcryptojob-jobs-prune.service nextcryptojob-jobs-prune.timer
 systemctl daemon-reload
@@ -721,8 +722,8 @@ journalctl -u nextcryptojob-jobs-scan -n 20
 | З `JOBS_SUPERTEAM=1` | +22 рядки, пул 1 446 (Creator/KOL 13) |
 
 JobStash того дня віддавав 0 (їхній бекенд відповідав 503, головна лише каркас). Коли він оживе, пул
-зросте (у кеші NextRole 13.09 JobStash давав 383 до 601 вакансії пулу, але без жодної зарплати).
-Для порівняння: пул з бази NextRole 13.09 був 1 588 (неділя) до 2 089 (п'ятниця) з 22% вилок, і
+зросте (у кеші попереднього проєкту 13.09 JobStash давав 383 до 601 вакансії пулу, але без жодної зарплати).
+Для порівняння: пул з бази попереднього проєкту 13.09 був 1 588 (неділя) до 2 089 (п'ятниця) з 22% вилок, і
 чверть його давали колекції Getro, умови яких забороняють збір.
 
 ## Оновлення

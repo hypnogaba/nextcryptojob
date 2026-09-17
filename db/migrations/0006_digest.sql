@@ -3,7 +3,7 @@
 -- Час: TEXT у форматі datetime('now'), UTC (договір §9).
 
 -- Що кому показано. Один рядок на пару (людина, вакансія): UNIQUE не дає надіслати ту саму
--- вакансію двічі, навіть якщо рядок 'failed'. job_ref: 'nr:<jobs_cache.id>' (кеш NextRole,
+-- вакансію двічі, навіть якщо рядок 'failed'. job_ref: 'nr:<jobs_cache.id>' (кеш попереднього проєкту,
 -- інша база D1, тому без FK) або 'co:<company_jobs.id>' (вакансія компанії, 0003).
 CREATE TABLE IF NOT EXISTS sent (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

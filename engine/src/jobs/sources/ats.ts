@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/sources/ats.ts. Teamtailor додано тут.
+// Перенесено з попереднього проєкту (сканер): src/sources/ats.ts. Teamtailor додано тут.
 //
 // Публічні API дошок вакансій (Greenhouse Job Board API, Lever Postings API, Ashby Posting API тощо):
 // вони існують саме для того, щоб вакансії читали й показували. Кожна вакансія роботодавця з

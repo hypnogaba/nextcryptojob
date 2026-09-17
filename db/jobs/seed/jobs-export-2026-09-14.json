@@ -1,6 +1,6 @@
 {
  "exported_at": "2026-09-14T06:38:27.489Z",
- "database": "crypto-jobs-agent (NextRole), read once with SELECT only",
+ "database": "an earlier job database of the same owner, read once with SELECT only",
  "queries": {
   "companies": "SELECT slug, name, ats_provider, ats_slug, discovered_via FROM companies\n WHERE tags LIKE '%\"web3\"%' ORDER BY slug",
   "boards": "SELECT name, label, feed_url, kind, enabled FROM country_boards WHERE country = '*' ORDER BY name",

@@ -6,7 +6,7 @@ import { WANTED_JOB_COOKIE, takeWantedJob } from "@/lib/jobs/wanted";
 import { randomToken, sha256Hex } from "./hash";
 
 /**
- * Сесії входу (як у NextRole, src/lib/auth.ts), з двома відмінностями:
+ * Сесії входу (як у попередньому проєкті, src/lib/auth.ts), з двома відмінностями:
  * - у куці лежить випадковий токен, а в базі лише його SHA-256
  *   (docs/contracts.md, §9): витік бази не дає чужих сесій;
  * - час рахує сам SQL (datetime('now', ...)), у форматі SQLite, а не ISO.

@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/pay.test.ts (без Getro: вакансій з Getro тут немає).
+// Перенесено з попереднього проєкту (сканер): src/pay.test.ts (без Getro: вакансій з Getro тут немає).
 import { describe, expect, it } from "vitest";
 import { ashbyPay, currencyCode, greenhousePay, leverPay, payFor, payPeriod, plausibleSalary, yearly } from "./pay.js";
 

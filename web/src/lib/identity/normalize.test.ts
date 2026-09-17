@@ -5,12 +5,12 @@ const value = (r: ReturnType<typeof normalizeX>) => (r.ok ? r.value : `ERR ${r.e
 
 describe("normalizeX", () => {
   it.each([
-    ["hypnogaba", "hypnogaba"],
-    ["@HypnoGaba", "hypnogaba"],
+    ["zerocool", "zerocool"],
+    ["@ZeroCool", "zerocool"],
     ["  @ada_lovelace ", "ada_lovelace"],
-    ["https://x.com/HypnoGaba", "hypnogaba"],
-    ["x.com/hypnogaba?s=20", "hypnogaba"],
-    ["https://twitter.com/hypnogaba/status/1", "hypnogaba"],
+    ["https://x.com/ZeroCool", "zerocool"],
+    ["x.com/zerocool?s=20", "zerocool"],
+    ["https://twitter.com/zerocool/status/1", "zerocool"],
     ["www.twitter.com/Ada", "ada"],
   ])("%j → %j", (input, expected) => {
     expect(value(normalizeX(input))).toBe(expected);
@@ -26,11 +26,11 @@ describe("normalizeX", () => {
 
 describe("normalizeGithub", () => {
   it.each([
-    ["hypnogaba", "hypnogaba"],
-    ["HypnoGaba", "hypnogaba"],
+    ["zerocool", "zerocool"],
+    ["ZeroCool", "zerocool"],
     ["@ada-l", "ada-l"],
-    ["https://github.com/Hypnogaba", "hypnogaba"],
-    ["github.com/hypnogaba/some-repo", "hypnogaba"],
+    ["https://github.com/Zerocool", "zerocool"],
+    ["github.com/zerocool/some-repo", "zerocool"],
   ])("%j → %j", (input, expected) => {
     expect(value(normalizeGithub(input))).toBe(expected);
   });
@@ -62,9 +62,9 @@ describe("normalizeYoutube", () => {
 
 describe("normalizeSite", () => {
   it.each([
-    ["https://hypnogaba.com", "https://hypnogaba.com"],
-    ["https://HypnoGaba.com/", "https://hypnogaba.com"],
-    ["hypnogaba.com", "https://hypnogaba.com"],
+    ["https://zerocool.com", "https://zerocool.com"],
+    ["https://ZeroCool.com/", "https://zerocool.com"],
+    ["zerocool.com", "https://zerocool.com"],
     ["https://blog.example.org/Posts/", "https://blog.example.org/Posts"],
     ["https://example.org/a?utm=1#top", "https://example.org/a"],
   ])("%j → %j", (input, expected) => {
@@ -73,7 +73,7 @@ describe("normalizeSite", () => {
 
   it.each([
     "",
-    "http://hypnogaba.com",
+    "http://zerocool.com",
     "ftp://example.org",
     "javascript:alert(1)",
     "https://localhost",

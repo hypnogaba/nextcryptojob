@@ -2,7 +2,7 @@
 -- Спирається на users з 0001_core. Накочує controller, не доріжка.
 -- Час у всіх стовпцях: формат SQLite 'YYYY-MM-DD HH:MM:SS', UTC (contracts §9).
 
--- Сесії входу (як у NextRole).
+-- Сесії входу (як у попередньому проєкті).
 CREATE TABLE IF NOT EXISTS sessions (
     id          TEXT PRIMARY KEY,                    -- SHA-256 токена сесії (hex), сам токен у базу не пишемо
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS login_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email);
 
--- Обмеження спроб входу (як у NextRole 0002).
+-- Обмеження спроб входу (як у попередньому проєкті 0002).
 CREATE TABLE IF NOT EXISTS auth_attempts (
     key           TEXT PRIMARY KEY,                  -- напр. 'login:<email>' або 'login-ip:<ip>'
     attempts      INTEGER NOT NULL DEFAULT 0,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS consent_events (
 );
 CREATE INDEX IF NOT EXISTS idx_consent_events_user ON consent_events(user_id, at);
 
--- Побачені update_id вебхука Telegram: кожне оновлення обробляється один раз (як у NextRole).
+-- Побачені update_id вебхука Telegram: кожне оновлення обробляється один раз (як у попередньому проєкті).
 CREATE TABLE IF NOT EXISTS webhook_updates (
     update_id INTEGER PRIMARY KEY,
     seen_at   TEXT NOT NULL DEFAULT (datetime('now'))

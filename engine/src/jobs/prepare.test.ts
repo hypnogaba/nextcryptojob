@@ -1,4 +1,4 @@
-// Частину випадків перенесено з NextRole (crypto-jobs-agent, scanner): src/normalize.test.ts.
+// Частину випадків перенесено з попереднього проєкту (сканер): src/normalize.test.ts.
 import { describe, expect, it } from "vitest";
 import { dedupeKey, jobId, titleKey } from "./ids.js";
 import { officeOnly, prepare, WINDOWS } from "./prepare.js";

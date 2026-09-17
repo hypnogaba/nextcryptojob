@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/sources/speedrun.ts, лише крипто-частина.
+// Перенесено з попереднього проєкту (сканер): src/sources/speedrun.ts, лише крипто-частина.
 /**
  * Мережа талантів a16z speedrun, `speedrun-talent-network.com`. Джерело саме пропонує себе
  * машині: сторінка `/developers` («Reads are open and unauthenticated»), версійований REST

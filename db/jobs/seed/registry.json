@@ -1,6 +1,6 @@
 {
  "version": 1,
- "source": "public registry fields exported once from the NextRole job database on 2026-09-14 (companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions and companies found through ecosystem and fund job boards on 2026-09-14; see engine/scripts/jobs-seed.ts",
+ "source": "public registry fields exported once from an earlier job database of the same owner on 2026-09-14 (companies tagged web3, global boards, crypto Getro collections) plus hand-checked additions and companies found through ecosystem and fund job boards on 2026-09-14; see engine/scripts/jobs-seed.ts",
  "companies": [
   {
    "slug": "0g",

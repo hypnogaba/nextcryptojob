@@ -6,7 +6,7 @@
 Договір із web (типи, формула, черга, змінні оточення): `../docs/contracts.md`.
 
 `src/http.ts` (безпечний fetch) і `src/d1.ts` (D1 через REST API)
-перенесено з NextRole. `src/limits.ts` дає бюджет
+перенесено з попереднього проєкту. `src/limits.ts` дає бюджет
 запитів на провайдера (єдиний дросель для http і d1), `src/types.ts` типи фактів.
 `src/formula/` формула v6 чистими функціями: `scorePerson(facts)` дає бали джерел і ролей
 з `breakdown_json`. `npm run parity` звіряє її з Python-еталоном `research/harness/score_v6.py`
@@ -44,7 +44,7 @@ Workable, SmartRecruiters, Recruitee, Teamtailor, Breezy, BambooHR, Rippling, Pe
 remote3), крипто-компанії a16z speedrun, за бажанням
 Superteam Earn; вилка в річну (`pay.ts`, `salary-text.ts`), вікно 30 днів і дедуп (`prepare.ts`).
 `--dry` не пише нічого й друкує, скільки рядків D1 записав би прогін. Частину коду перенесено зі сканера
-NextRole (позначено в заголовках файлів); у роботі від NextRole нічого не залежить. Засів реєстру:
+попереднього проєкту (позначено в заголовках файлів); у роботі від попереднього проєкту нічого не залежить. Засів реєстру:
 `scripts/jobs-seed.ts`. Встановлення й умови джерел: `deploy/README.md` §8.
 
 Живий прогін без D1 (лише для людей, що погодились; X і GitHub тут вважаються підтвердженими):

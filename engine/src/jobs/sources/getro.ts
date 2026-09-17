@@ -1,4 +1,4 @@
-// Перенесено з NextRole (crypto-jobs-agent, scanner): src/sources/getro.ts (fetchGetro, mapIndustries,
+// Перенесено з попереднього проєкту (сканер): src/sources/getro.ts (fetchGetro, mapIndustries,
 // extractAts). Тут лише для щотижневої розвідки посилань на ATS; вакансій з Getro в базі немає.
 /**
  * Умови Getro (https://www.getro.com/terms, версія 3.1, червень 2025) забороняють те, що «crawls,

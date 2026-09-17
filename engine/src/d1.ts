@@ -1,4 +1,4 @@
-// Перенесено з NextRole.
+// Перенесено з попереднього проєкту.
 import { limiterFor, MAX_BACKOFF_MS } from "./limits.js";
 
 export interface D1Credentials { accountId: string; databaseId: string; token: string }
@@ -48,7 +48,7 @@ export interface D1Options {
  *
  * 429 до 03.09 падав у гілку «винні ми» разом з рештою 4xx. Того дня
  * Cloudflare дві з половиною хвилини віддавав 429 з кодом 7429 при майже
- * порожній базі NextRole, і частина профілів вилетіла з прогону.
+ * порожній базі попереднього проєкту, і частина профілів вилетіла з прогону.
  */
 const TRANSIENT = new Set([500, 502, 503, 504, 520, 521, 522, 523, 524]);
 

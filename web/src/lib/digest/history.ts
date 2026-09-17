@@ -347,7 +347,7 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
 
   const refs = (prefix: string) =>
     [...new Set(sent.filter((s) => s.job_ref.startsWith(prefix)).map((s) => s.job_ref.slice(prefix.length)))];
-  // 'nr:' це вакансія зі сканування (мітка з часів NextRole, sent.job_ref). Посилання, надіслані до
+  // 'nr:' це вакансія зі сканування (мітка з часів попереднього проєкту, sent.job_ref). Посилання, надіслані до
   // 14.09.2026, вказують на id старої бази: у новій їх немає, тож вони показуються як «gone».
   const [nr, co] = await Promise.all([crawlDetails(jobs, refs("nr:"), profiles), companyDetails(d, refs("co:"))]);
 

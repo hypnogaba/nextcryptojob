@@ -7,12 +7,12 @@ export const JOBS_DB_ENV = "CF_JOBS_D1_DATABASE_ID";
 
 /**
  * Бази, куди сканер писати не має права ніколи. До 14.09.2026 сайт і добірка читали вакансії з
- * бази NextRole (D1 `crypto-jobs-agent`); тепер у NextCryptoJob своя база, а стара змінна
+ * бази попереднього проєкту; тепер у NextCryptoJob своя база, а стара змінна
  * JOBS_D1_DATABASE_ID могла лишитися в /etc/nextcryptojob-engine.env. Сканер пише, тож помилка
  * в id зіпсувала б чужий продукт: такий id відкидаємо з поясненням, а не пробуємо.
  */
 const FOREIGN_DATABASES: Record<string, string> = {
-  "0bf4b998-cbdc-474b-b739-eb6e6e7d5a9d": "the NextRole job cache (crypto-jobs-agent)",
+  "0bf4b998-cbdc-474b-b739-eb6e6e7d5a9d": "an earlier job cache of the same owner",
 };
 
 /** id бази вакансій або ясна помилка з назвою змінної. */
