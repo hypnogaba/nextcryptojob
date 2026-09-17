@@ -7,7 +7,8 @@ import type { FitContext } from "@/lib/jobs/fit";
 import type { BriefRow } from "@/lib/jobs/instant";
 import { normalizeSavedStep, parseSavedStep, type SavedStep } from "@/lib/onboarding/steps";
 import type { Channel } from "@/lib/telegram/channel";
-import { salaryEstimateOf } from "@/lib/jobs/pool";
+import { freshnessLine } from "@/lib/jobs/freshness";
+import { parseDbTime, salaryEstimateOf } from "@/lib/jobs/pool";
 import { type TokenChip, tokenChip } from "@/lib/jobs/token";
 import { cleanText, companyJobLocation, estimateText, formatSalary, safeUrl } from "./format";
 
@@ -58,6 +59,8 @@ export type JobDetails = {
   domain?: string | null;
   /** Чип токена компанії (db/jobs 0004), лише свіжі ціни; лише для вакансій зі сканування. */
   token?: TokenChip | null;
+  /** «Posted Sep 3. Still open on Sep 17.» (lib/jobs/freshness.ts). */
+  freshness?: string | null;
 };
 
 export type SentJob = {
@@ -141,6 +144,9 @@ type NrRow = {
   salary_est_max: number | null;
   salary_est_currency: string | null;
   source: string | null;
+  posted_at: string | null;
+  first_seen_at: string | null;
+  fetched_at: string | null;
 };
 
 type CoRow = {
@@ -152,6 +158,8 @@ type CoRow = {
   salary_max: number | null;
   salary_currency: string | null;
   salary_period: string | null;
+  status: string;
+  published_at: string | null;
   company_name: string;
 };
 
@@ -216,7 +224,7 @@ async function crawlDetails(
   try {
     rows = await jobs.all<NrRow>(
       `SELECT id, url, company, title, location, remote, salary_min, salary_max, salary_currency,
-              salary_est_min, salary_est_max, salary_est_currency, source
+              salary_est_min, salary_est_max, salary_est_currency, source, posted_at, first_seen_at, fetched_at
          FROM jobs_cache WHERE id IN (${placeholders(ids.length)})`,
       ...ids,
     );
@@ -240,13 +248,17 @@ async function crawlDetails(
         postedBy: null,
         ...(estimate ? { salaryEstimate: estimate } : {}),
         ...(known ? { about: known.about, domain: known.domain, token: tokenChip(known.token, now) } : {}),
+        freshness: freshnessLine(
+          { postedMs: parseDbTime(r.posted_at), firstSeenMs: parseDbTime(r.first_seen_at), checkedMs: parseDbTime(r.fetched_at) },
+          now,
+        ),
       },
       ];
     }),
   );
 }
 
-async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string, JobDetails> | null> {
+async function companyDetails(d: D1Database, ids: string[], now: Date = new Date()): Promise<Map<string, JobDetails> | null> {
   if (ids.length === 0) return new Map();
   // Закриту вакансію показуємо, приховану адміном ні.
   let results: CoRow[];
@@ -254,7 +266,7 @@ async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string,
     ({ results } = await d
       .prepare(
         `SELECT j.id, j.title, j.remote_mode, j.city, j.salary_min, j.salary_max, j.salary_currency,
-                j.salary_period, c.name AS company_name
+                j.salary_period, j.status, j.published_at, c.name AS company_name
            FROM company_jobs j JOIN companies c ON c.id = j.company_id
           WHERE j.id IN (${placeholders(ids.length)}) AND j.hidden_by_admin_at IS NULL`,
       )
@@ -282,6 +294,10 @@ async function companyDetails(d: D1Database, ids: string[]): Promise<Map<string,
           // Сторінка вакансії: жива показує "Apply", закрита каже "This job is closed."
           url: `/jobs/${encodeURIComponent(r.id)}`,
           postedBy: company,
+          freshness: freshnessLine(
+            { postedMs: parseDbTime(r.published_at), firstSeenMs: null, checkedMs: r.status === "open" ? now.getTime() : null },
+            now,
+          ),
         },
       ];
     }),
@@ -358,6 +374,53 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
   const step = normalizeSavedStep(parseSavedStep(user.onboarding_step), user.scoring === 1);
   const fit: FitContext = { words: user.target_text?.trim() || null, scores };
   return { setup, brief, fit, step, sentRefs: history?.refs ?? new Set(), digests, historyError: history === null };
+}
+
+// ---------------------------------------------------------------------------
+// Збережені (власник 16.09, j1: окремим списком)
+
+/** Скільки збережених вакансій показуємо з подробицями (межа 100 параметрів D1 на запит). */
+export const SAVED_LIMIT = 90;
+
+export type SavedJob = {
+  ref: string;
+  state: SentJob["state"];
+  details: JobDetails | null;
+};
+
+export type SavedList = {
+  /** Усі збережені job_ref людини: стан кнопки Save на будь-якій картці. */
+  refs: Set<string>;
+  /** Найновіші SAVED_LIMIT з подробицями, новіші зверху; null, якщо наша база не відповіла. */
+  jobs: SavedJob[] | null;
+};
+
+/**
+ * Збережене людиною, незалежно від того, звідки (добірка, вибір «зараз», /jobs/<id>). Лише user_id
+ * людини з сесії. Індекс idx_saved_jobs_user: читання = її рядки.
+ */
+export async function loadSavedJobs(d: D1Database, jobs: JobsDb, userId: string, profiles: CompanyProfiles = EMPTY_PROFILES): Promise<SavedList> {
+  let rows: { job_ref: string }[];
+  try {
+    ({ results: rows } = await d
+      .prepare("SELECT job_ref FROM saved_jobs WHERE user_id = ? ORDER BY created_at DESC, job_ref")
+      .bind(userId)
+      .all<{ job_ref: string }>());
+  } catch (e) {
+    console.warn(`jobs page: saved read failed (${errorName(e)})`);
+    return { refs: new Set(), jobs: null };
+  }
+  const shown = rows.slice(0, SAVED_LIMIT);
+  const ids = (prefix: string) => shown.filter((r) => r.job_ref.startsWith(prefix)).map((r) => r.job_ref.slice(prefix.length));
+  const [nr, co] = await Promise.all([crawlDetails(jobs, ids("nr:"), profiles), companyDetails(d, ids("co:"))]);
+  return {
+    refs: new Set(rows.map((r) => r.job_ref)),
+    jobs: shown.map((r) => {
+      const source = r.job_ref.startsWith("nr:") ? nr : co;
+      const details = source?.get(r.job_ref) ?? null;
+      return { ref: r.job_ref, state: details ? "ok" : source === null ? "unavailable" : "gone", details };
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------

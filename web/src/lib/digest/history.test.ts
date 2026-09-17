@@ -185,7 +185,15 @@ describe("loadJobsPage: what it shows", () => {
     digest("ada", "dg_a", "2026-09-12", ["nr:1", "nr:2", "co:job_live", "co:job_hidden", "nr:gone"]);
 
     const [d] = (await loadJobsPage(t.d1, jobs, "ada"))!.digests;
-    expect(d.jobs.map((j) => [j.ref, j.state, j.details])).toEqual([
+    // Рядок актуальності перевіряємо окремо: у ньому сьогоднішня дата.
+    const freshness = d.jobs.map((j) => j.details?.freshness);
+    const details = (j: (typeof d.jobs)[number]) => {
+      if (!j.details) return null;
+      const { freshness: _f, ...rest } = j.details;
+      return rest;
+    };
+    expect(freshness[2]).toMatch(/^Still open on [A-Z][a-z]{2} \d{1,2}\.$/);
+    expect(d.jobs.map((j) => [j.ref, j.state, details(j)])).toEqual([
       ["nr:1", "ok", { title: "Protocol Engineer", company: "Paying Labs", location: "Remote", salary: "$120k to $150k", url: "https://jobs.example.com/1", postedBy: null }],
       ["nr:2", "ok", { title: "Job 2", company: "Company 2", location: "Remote", salary: null, url: null, postedBy: null }],
       // Вакансія компанії веде на свою сторінку на сайті, не прямо на apply_url.

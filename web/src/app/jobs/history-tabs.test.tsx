@@ -32,16 +32,15 @@ describe("HistoryTabs (item 16)", () => {
     expect(html).toContain("BD Lead");
   });
 
-  it("counts saved jobs on the Saved tab label", () => {
+  it("marks a saved job's button as saved, with no Saved tab (saved jobs have their own list)", () => {
     const digests = [digest("dg1", "2026-09-15", [job("nr:a", "Solidity Engineer"), job("nr:b", "BD Lead")])];
     const html = renderToStaticMarkup(<HistoryTabs digests={digests} savedRefs={["nr:a"]} todayLocalDate="2026-09-15" />);
-    expect(html).toContain("Saved (1)");
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(html.match(/role="tab"/g)).toHaveLength(2);
   });
 
   it("says so when there is nothing sent at all", () => {
     const html = renderToStaticMarkup(<HistoryTabs digests={[]} savedRefs={[]} todayLocalDate="2026-09-15" />);
     expect(html).toContain("Nothing sent today yet.");
-    expect(html).toContain("Saved");
-    expect(html).not.toContain("Saved (");
   });
 });

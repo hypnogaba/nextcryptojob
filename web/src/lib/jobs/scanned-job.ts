@@ -8,10 +8,11 @@ import { type CompanyProfiles, profileFor } from "./companies";
 import { brandKey } from "./clean";
 import type { JobsDb } from "@/lib/jobs-db";
 import { jobVia } from "./link";
-import { ATS_WINDOW_DAYS, isEmployerFeed, POSTED_WINDOW_DAYS } from "./pool";
+import { ATS_WINDOW_DAYS, isEmployerFeed, parseDbTime, POSTED_WINDOW_DAYS } from "./pool";
 import { ROLE_NAMES, titleRoles } from "./roles";
 import type { RoleKey } from "@/lib/card/roles";
 import { companySiteUrl, tokenChip, type TokenChip } from "./token";
+import { freshnessLine } from "./freshness";
 
 /** id вакансій зі сканування: 'j' + 24 hex від sha256(url) (db/jobs/0001_schema.sql). */
 const SCANNED_ID = /^j[0-9a-f]{24}$/i;
@@ -54,6 +55,8 @@ export type ScannedJobPage = {
   about: string | null;
   token: TokenChip | null;
   via: string | null;
+  /** «Posted Sep 3. Still open on Sep 17.» (freshness.ts). */
+  freshness: string | null;
 };
 
 function tagsOf(json: string): string[] {
@@ -105,5 +108,9 @@ export async function loadScannedJob(jobs: JobsDb, id: string, profiles: Company
     about: known?.about ?? null,
     token: tokenChip(known?.token, now),
     via: jobVia(url),
+    freshness: freshnessLine(
+      { postedMs: parseDbTime(row.posted_at), firstSeenMs: parseDbTime(row.first_seen_at), checkedMs: parseDbTime(row.fetched_at) },
+      now,
+    ),
   };
 }

@@ -7,13 +7,14 @@ import { HINT } from "@/components/form/styles";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth/session";
 import { appEnv, db } from "@/lib/db";
-import { loadJobsPage, type DigestSetup } from "@/lib/digest/history";
+import { loadJobsPage, loadSavedJobs, type DigestSetup } from "@/lib/digest/history";
+import { companyProfiles } from "@/lib/jobs/companies";
 import { instantMatches, type InstantMatches } from "@/lib/jobs/instant";
 import { jobsDb } from "@/lib/jobs-db";
-import { listSavedRefs } from "@/lib/jobs/saved";
 import { briefDone, type SavedStep } from "@/lib/onboarding/steps";
 import { checkedLine, emptyState, noMatch, scheduleLine, whenLabel } from "./empty-state";
 import { HistoryTabs } from "./history-tabs";
+import { SavedList } from "./saved-list";
 
 export const metadata: Metadata = { title: "Your jobs", robots: { index: false } };
 
@@ -166,10 +167,12 @@ export default async function JobsPage() {
   if (!page) redirect("/login");
   const { setup, digests, historyError } = page;
   // Лише анкета людини з сесії й лише її надіслане: чужого вибір не бачить.
-  const [now, savedRefs] = await Promise.all([
+  const [now, saved] = await Promise.all([
     instantMatches({ db: d, env: appEnv(), jobs: jobsDb, now: new Date() }, page.brief, page.sentRefs, page.fit),
-    listSavedRefs(d, user.id),
+    companyProfiles(jobsDb).then((profiles) => loadSavedJobs(d, jobsDb(), user.id, profiles)),
   ]);
+  const savedRefs = saved.refs;
+  const hasSaved = saved.jobs === null || saved.jobs.length > 0;
   const noHistory = digests.length === 0 && !historyError;
   const empty = noHistory ? emptyState(setup) : null;
   const checked = now.state === "ok" ? checkedLine(now.checked, now.jobs.length) : null;
@@ -198,13 +201,25 @@ export default async function JobsPage() {
           <JobsNow now={now} savedRefs={savedRefs} />
         </section>
 
-        <aside className="grid gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <aside className="grid gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-3 lg:row-start-1">
           <Improve step={page.step} />
           <DailyJobs setup={setup} />
         </aside>
 
+        {hasSaved ? (
+          <section aria-labelledby="saved-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-2">
+            <div className="grid gap-1">
+              <h2 id="saved-h" className={H2}>
+                Saved{saved.refs.size > 0 ? ` (${saved.refs.size})` : ""}
+              </h2>
+              <p className={HINT}>Jobs you saved, newest first. Save or unsave from any job card.</p>
+            </div>
+            <SavedList jobs={saved.jobs} />
+          </section>
+        ) : null}
+
         {setup.hasRoles || !noHistory ? (
-          <section aria-labelledby="sent-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-2">
+          <section aria-labelledby="sent-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-3">
             <div className="grid gap-1">
               <h2 id="sent-h" className={H2}>
                 Sent to you

@@ -31,7 +31,7 @@ beforeEach(() => {
   harness.raw = raw;
   harness.env.DB = d1;
   const nr = migratedD1([]);
-  nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT)");
+  nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT, posted_at TEXT, first_seen_at TEXT, fetched_at TEXT)");
   nr.raw.exec(`INSERT INTO jobs_cache (id, url, company, title, location, remote, salary_min, salary_max, salary_currency) VALUES
     ('mine', 'https://jobs.example.com/mine', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, NULL, NULL, NULL),
     ('theirs', 'https://jobs.example.com/theirs', 'Other Labs', 'Secret Role', 'Remote', 1, NULL, NULL, NULL)`);
@@ -73,7 +73,7 @@ describe("/jobs", () => {
   it("a web3.career job links to their apply_url as is, followed, with the referrer, and names web3.career", async () => {
     const apply = "https://web3.career/r/wczNxUTM__U4HFyv?ref=U4HFyv&utm_source=w3c";
     const nr = migratedD1([]);
-    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT)");
+    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT, posted_at TEXT, first_seen_at TEXT, fetched_at TEXT)");
     nr.raw.prepare("INSERT INTO jobs_cache (id, url, company, title, location, remote, salary_min, salary_max, salary_currency) VALUES ('w3', ?, 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL), ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, NULL, NULL, NULL)").run(apply);
     jobsHolder.db = readOnlyJobsDb(nr.d1);
     run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_a', 'ada', '2026-09-12', 'sent', 2, 'email')");
@@ -103,10 +103,10 @@ describe("/jobs", () => {
 
   it("a board estimate shows as a muted estimate line, never as the salary", async () => {
     const nr = migratedD1([]);
-    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT)");
+    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT, posted_at TEXT, first_seen_at TEXT, fetched_at TEXT)");
     nr.raw.exec(`INSERT INTO jobs_cache VALUES
-      ('w3', 'https://web3.career/r/wczNxUTM__U4HFyv', 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL, 180000, 225000, 'USD', 'board:web3career'),
-      ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, 120000, 150000, 'USD', 300000, 400000, 'USD', 'greenhouse:x')`);
+      ('w3', 'https://web3.career/r/wczNxUTM__U4HFyv', 'Koinly', 'Community Manager', 'Remote', 1, NULL, NULL, NULL, 180000, 225000, 'USD', 'board:web3career', NULL, NULL, NULL),
+      ('gh', 'https://jobs.example.com/gh', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, 120000, 150000, 'USD', 300000, 400000, 'USD', 'greenhouse:x', NULL, NULL, NULL)`);
     jobsHolder.db = readOnlyJobsDb(nr.d1);
     run(harness.raw, "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_a', 'ada', '2026-09-12', 'sent', 2, 'email')");
     run(harness.raw, `INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES
@@ -170,6 +170,31 @@ describe("/jobs: Jobs for you now", () => {
     jobsHolder.db = readOnlyJobsDb(nr.d1);
     exec("UPDATE users SET roles = '[\"trader\"]', remote_mode = 'remote' WHERE id = 'bob'");
     exec("UPDATE users SET remote_mode = 'remote' WHERE id = 'ada'");
+  });
+
+  it("lists saved jobs on their own, even one that never came in a digest, with the day it was still open", async () => {
+    harness.raw.exec(`INSERT INTO saved_jobs (user_id, job_ref, created_at) VALUES
+      ('ada', 'nr:mine', '2026-09-16 10:00:00'), ('ada', 'nr:gone', '2026-09-15 10:00:00'), ('bob', 'nr:theirs', '2026-09-16 10:00:00')`);
+    const nr = migratedD1([]);
+    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT, posted_at TEXT, first_seen_at TEXT, fetched_at TEXT)");
+    nr.raw.exec(`INSERT INTO jobs_cache (id, url, company, title, location, remote, posted_at, first_seen_at, fetched_at) VALUES
+      ('mine', 'https://jobs.example.com/mine', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, '2026-09-03T10:00:00.000Z', '2026-09-04T04:30:00.000Z', '2026-09-16T04:40:00.000Z'),
+      ('theirs', 'https://jobs.example.com/theirs', 'Other Labs', 'Secret Role', 'Remote', 1, NULL, NULL, NULL)`);
+    jobsHolder.db = readOnlyJobsDb(nr.d1);
+    await signIn("ada");
+    const html = await render();
+    const saved = html.slice(html.indexOf('id="saved-h"'), html.indexOf('id="sent-h"'));
+    expect(saved).toContain("Saved (2)");
+    expect(saved).toContain("Protocol Engineer");
+    expect(saved).toContain("Posted Sep 3. Still open on Sep 16.");
+    expect(saved).toContain("This job is no longer listed.");
+    expect(saved.match(/aria-pressed="true"/g)).toHaveLength(2);
+    expect(html).not.toContain("Secret Role");
+  });
+
+  it("shows no Saved block when nothing is saved", async () => {
+    await signIn("ada");
+    expect(await render()).not.toContain('id="saved-h"');
   });
 
   it("shows live matches for the signed-in person's brief only, right away", async () => {

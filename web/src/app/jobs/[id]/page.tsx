@@ -14,7 +14,8 @@ import { formatSalary } from "@/lib/digest/format";
 import { isId } from "@/lib/ids";
 import { currentUser } from "@/lib/auth/session";
 import { brandKey } from "@/lib/jobs/clean";
-import { applyLink, jobVia } from "@/lib/jobs/link";
+import { freshnessLine } from "@/lib/jobs/freshness";
+import { applyLink } from "@/lib/jobs/link";
 import { companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { NO_FIT, reasonsForRef } from "@/lib/jobs/instant";
 import { jobPostingJsonLd, jsonLdScript } from "@/lib/jobs/job-posting";
@@ -54,7 +55,6 @@ const loadScanned = cache(async (id: string): Promise<ScannedJobPage | null> => 
   }
 });
 
-const POSTED = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 function summary(job: PublicJobPage): string {
   const place = placeText(job.workMode, job.city);
@@ -194,7 +194,7 @@ function ScannedJobView({ job, reasons, signedIn }: { job: ScannedJobPage; reaso
             ))}
           </ul>
         ) : null}
-        {job.postedAt ? <p className="font-mono text-xs text-ink-muted">Posted {POSTED.format(new Date(job.postedAt))}</p> : null}
+        {job.freshness ? <p className="font-mono text-xs text-ink-muted">{job.freshness}</p> : null}
       </header>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -245,6 +245,9 @@ export default async function PublicJobPageView({ params }: Props) {
     const country = job.country ? countryName(job.country) : "";
     const salary = job.salary ? formatSalary(job.salary) : null;
     const facts = [place, country && !place.includes(country) ? country : null, salary].filter(Boolean) as string[];
+    // Жива вакансія компанії (company_jobs_live): відкрита сьогодні.
+    const now = new Date();
+    const freshness = freshnessLine({ postedMs: job.postedAt ? Date.parse(job.postedAt) : null, firstSeenMs: null, checkedMs: now.getTime() }, now);
     const ld = jobPostingJsonLd(job, siteOrigin(appEnv()));
     const { token, site } = await companyToken(job.company, job.companyDomainVerified ? job.companyDomain : null);
 
@@ -270,7 +273,7 @@ export default async function PublicJobPageView({ params }: Props) {
               </li>
             ))}
           </ul>
-          {job.postedAt ? <p className="font-mono text-xs text-ink-muted">Posted {POSTED.format(new Date(job.postedAt))}</p> : null}
+          {freshness ? <p className="font-mono text-xs text-ink-muted">{freshness}</p> : null}
         </header>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

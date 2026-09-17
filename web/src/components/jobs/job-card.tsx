@@ -32,6 +32,8 @@ export type CardJob = {
   domain?: string | null;
   /** Чип токена компанії (символ, ціна, MC, зміна за добу); null, якщо токена немає чи ціна не свіжа. */
   token?: TokenChip | null;
+  /** «Posted Sep 3. Still open on Sep 17.» (lib/jobs/freshness.ts); null, якщо дат немає. */
+  freshness?: string | null;
 };
 
 // Текст із чужих дощок буває одним довгим словом: переносимо будь-де, щоб 390 px не роз'їхались.
@@ -241,6 +243,7 @@ export function JobCard({
               {domain ? <CompanySite domain={domain} /> : null}
               {job.location ? <span>{job.location}</span> : null}
             </p>
+            {job.freshness ? <p className="mt-1 text-[0.8125rem] text-ink-muted tabular-nums">{job.freshness}</p> : null}
             {job.token ? (
               <div className="mt-2">
                 <TokenBadge token={job.token} />

@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 const WRAP = "min-w-0 wrap-anywhere";
 
 /**
- * «Sent to you» у трьох вкладках (раунд 5, п.16): Today, Earlier (усе за 30 днів, з пошуком по
- * назві) і Saved (Save на картці, збережене з обох вкладок незалежно від дати). Власник ще не
- * підтвердив цю форму, зроблено як запропоновано (фідбек власника, п.16).
+ * «Sent to you» у двох вкладках (раунд 5, п.16): Today і Earlier (усе за 30 днів, з пошуком по
+ * назві). Збережене тепер окремим списком над цим блоком (власник 16.09, j1: saved-list.tsx),
+ * бо вкладка бачила лише збережене з добірок.
  */
 
 const TAB = "inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition-colors";
@@ -75,7 +75,7 @@ export function HistoryTabs({
   todayLocalDate,
 }: {
   digests: SentDigest[];
-  /** job_ref збережених вакансій (раунд 5, п.16). */
+  /** job_ref збережених вакансій (раунд 5, п.16): стан кнопки Save. */
   savedRefs: string[];
   /** YYYY-MM-DD у поясі людини: межа між Today і Earlier. */
   todayLocalDate: string;
@@ -83,17 +83,13 @@ export function HistoryTabs({
   const saved = useMemo(() => new Set(savedRefs), [savedRefs]);
   const today = useMemo(() => digests.filter((d) => d.localDate === todayLocalDate), [digests, todayLocalDate]);
   const earlier = useMemo(() => digests.filter((d) => d.localDate !== todayLocalDate), [digests, todayLocalDate]);
-  const savedDigests = useMemo(
-    () => digests.map((d) => ({ ...d, jobs: d.jobs.filter((j) => saved.has(j.ref)) })).filter((d) => d.jobs.length > 0),
-    [digests, saved],
-  );
   // Today з нічого: одразу відкриваємо Earlier, щоб вкладка не здавалась порожньою даремно
   // («Nothing sent today yet.» лишається доступним, натиснувши Today).
-  const [tab, setTab] = useState<"today" | "earlier" | "saved">(() => (today.length > 0 || earlier.length === 0 ? "today" : "earlier"));
+  const [tab, setTab] = useState<"today" | "earlier">(() => (today.length > 0 || earlier.length === 0 ? "today" : "earlier"));
   const [q, setQ] = useState("");
 
-  const shown = tab === "today" ? today : tab === "earlier" ? earlier : savedDigests;
-  const filtered = tab === "saved" ? shown : filterDigests(shown, q.trim().toLowerCase());
+  const shown = tab === "today" ? today : earlier;
+  const filtered = filterDigests(shown, q.trim().toLowerCase());
 
   return (
     <div className="grid gap-5">
@@ -105,12 +101,8 @@ export function HistoryTabs({
           <button type="button" role="tab" aria-selected={tab === "earlier"} onClick={() => setTab("earlier")} className={cn(TAB, tab === "earlier" ? TAB_ON : TAB_OFF)}>
             Earlier
           </button>
-          <button type="button" role="tab" aria-selected={tab === "saved"} onClick={() => setTab("saved")} className={cn(TAB, tab === "saved" ? TAB_ON : TAB_OFF)}>
-            Saved{savedDigests.length > 0 ? ` (${saved.size})` : ""}
-          </button>
         </div>
-        {tab !== "saved" ? (
-          <label className="min-w-0 flex-1 sm:max-w-[260px]">
+        <label className="min-w-0 flex-1 sm:max-w-[260px]">
             <span className="sr-only">Search by job title</span>
             <input
               type="search"
@@ -120,18 +112,11 @@ export function HistoryTabs({
               className="h-10 w-full rounded-full border border-line-strong bg-surface px-4 text-sm text-ink placeholder:text-ink-muted focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand"
             />
           </label>
-        ) : null}
       </div>
 
       {filtered.length === 0 ? (
         <p className={HINT}>
-          {tab === "saved"
-            ? "Nothing saved yet. Save a job from its card to find it here later."
-            : q
-              ? "No saved job title matches that search."
-              : tab === "today"
-                ? "Nothing sent today yet."
-                : "Nothing here yet."}
+          {q ? "No job title matches that search." : tab === "today" ? "Nothing sent today yet." : "Nothing here yet."}
         </p>
       ) : (
         <div className="grid gap-8">
