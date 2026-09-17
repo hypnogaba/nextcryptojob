@@ -130,6 +130,8 @@ export type CandidateRow = {
   createdAt: string | null;
   bestScore: number | null;
   bestLevel: number | null;
+  /** users.onboarding_step як є: де людина зупинилась в анкеті. */
+  step: string | null;
 };
 
 /**
@@ -145,7 +147,7 @@ export async function listCandidates(db: D1Database, o: { q?: string; limit?: nu
         OR EXISTS (SELECT 1 FROM identities i WHERE i.user_id = u.id AND i.kind = 'x' AND lower(i.value) LIKE '%' || ?1 || '%')`
     : "";
   const stmt = db.prepare(
-    `SELECT u.id AS user_id, u.email, u.telegram_username, u.created_at,
+    `SELECT u.id AS user_id, u.email, u.telegram_username, u.created_at, u.onboarding_step,
             (SELECT i.value FROM identities i WHERE i.user_id = u.id AND i.kind = 'x' LIMIT 1) AS x_handle,
             (SELECT MAX(s.score) FROM scores s WHERE s.user_id = u.id) AS best_score
        FROM users u
@@ -155,11 +157,12 @@ export async function listCandidates(db: D1Database, o: { q?: string; limit?: nu
   );
   const { results } = await (q ? stmt.bind(q) : stmt).all<{
     user_id: string; email: string | null; telegram_username: string | null; created_at: string | null;
-    x_handle: string | null; best_score: number | null;
+    x_handle: string | null; best_score: number | null; onboarding_step: string | null;
   }>();
   return results.map((r) => ({
     userId: r.user_id, email: r.email, telegramUsername: r.telegram_username, xHandle: r.x_handle, createdAt: r.created_at,
     bestScore: r.best_score, bestLevel: typeof r.best_score === "number" ? levelFor(r.best_score) : null,
+    step: r.onboarding_step,
   }));
 }
 

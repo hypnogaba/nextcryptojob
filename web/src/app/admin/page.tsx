@@ -14,6 +14,7 @@ import {
   type JobSourcesReport,
 } from "@/lib/admin/job-sources";
 import { recentAlerts, type RecentAlert } from "@/lib/admin/alerts";
+import { listCandidates, type CandidateRow } from "@/lib/admin/scores";
 import { DEMO_CANDIDATES, DEMO_COMPANY_NAME, demoState, type DemoState } from "@/lib/admin/demo";
 import { loadOverview, overviewFlags, type Flag, type Overview } from "@/lib/admin/overview";
 import { getSettings, type AppSettings } from "@/lib/admin/settings";
@@ -22,6 +23,8 @@ import { conversion, GROUP_LABELS, loadVisits, type VisitReport } from "@/lib/an
 import { currentAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { jobsDb } from "@/lib/jobs-db";
+import { parseSavedStep, STANDOUT_STEPS } from "@/lib/onboarding/steps";
+import { fromSqlTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { SubmitButton } from "@/components/form/submit-button";
 import { createDemoAction, deleteDemoAction, openDemoAction, sendWeeklyNowAction } from "./actions";
@@ -129,10 +132,87 @@ function KeyNumbers({ o, report, flags }: { o: Overview; report: JobSourcesRepor
   );
 }
 
+/** Скільки найновіших людей видно одразу (власник 16.09, b4: насамперед нові користувачі). */
+export const NEW_USERS_SHOWN = 8;
+
+const STEP_LABEL: Record<string, string> = {
+  target: "Brief: own words",
+  roles: "Brief: roles",
+  place: "Brief: place and pay",
+  delivery: "Brief: delivery",
+  x: "Sources: X",
+  wallets: "Sources: wallets",
+  sources: "Sources: other",
+  done: "Done",
+};
+
+/** Де людина зупинилась: крок анкети, на якому її збережено. */
+function stepLabel(raw: string | null): string {
+  const step = parseSavedStep(raw);
+  if (step === "done") return STEP_LABEL.done!;
+  const label = STEP_LABEL[step] ?? step;
+  return (STANDOUT_STEPS as readonly string[]).includes(step) ? `Brief done. ${label}` : label;
+}
+
+/** Нові люди зверху головної: хто, коли, де зупинився в анкеті, бал. Рядок веде на розбір балу. */
+function NewUsers({ rows, now }: { rows: CandidateRow[]; now: number }) {
+  return (
+    <Panel id="new-users" title="New users" links={[{ href: "/admin/candidates", label: "All candidates" }]} className="mt-6">
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink-muted">No sign-ups yet.</p>
+      ) : (
+        <div className={BOARD}>
+          <table className={TABLE} data-table="new-users">
+            <thead>
+              <tr>
+                <th scope="col" className={TH_TIGHT}>Person</th>
+                <th scope="col" className={TH_TIGHT}>Signed up</th>
+                <th scope="col" className={TH_TIGHT}>Where they are</th>
+                <th scope="col" className={TH_NUM}>Best score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.userId} className={TR}>
+                  <td className={TD}>
+                    <Link href={`/admin/scores/${r.userId}`} className={LINK}>
+                      {r.email ?? (r.xHandle ? `@${r.xHandle}` : r.telegramUsername ? `@${r.telegramUsername}` : r.userId)}
+                    </Link>
+                    {r.xHandle && r.email ? <span className="text-ink-muted"> @{r.xHandle}</span> : null}
+                  </td>
+                  <td className={TD}>
+                    <Ago at={r.createdAt ? fromSqlTime(r.createdAt).getTime() : null} now={now} never="-" />
+                  </td>
+                  <td className={TD}>{stepLabel(r.step)}</td>
+                  <td className={TD_NUM}>{r.bestScore ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/** Блок компаній має сенс, лише коли є хоч одна компанія, агенція чи вакансія компанії. */
+export function companiesEmpty(o: Overview): boolean {
+  const c = o.companies;
+  const people = c.trial + c.subscribed + c.payPerRequest + c.agenciesPending + c.pendingReview + c.suspended + c.closed + c.members;
+  return people === 0 && Object.keys(c.intros).length === 0 && c.openJobs === 0 && c.searches7d === 0 && c.views7d === 0;
+}
+
+/** Блок оплат має сенс, лише коли був хоч один платіж чи підписка. */
+export function paymentsEmpty(o: Overview): boolean {
+  const p = o.payments;
+  const x402 = Object.values(p.x402).reduce((s, n) => s + n, 0);
+  return p.settledCents === 0 && x402 === 0 && p.subscriptions.length === 0 && p.noResultWaiting === 0 && p.stale === 0;
+}
+
 /** Решта панелей: закрито за замовчуванням, розгортає одним кліком. */
 function MoreStats({ children }: { children: ReactNode }) {
   return (
-    <details className="mt-8 group">
+    <details className="mt-8 group" data-more-stats="">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-brand [&::-webkit-details-marker]:hidden">
         <span aria-hidden className="inline-block transition-transform group-open:rotate-90">
           {"›"}
@@ -770,7 +850,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const query = await searchParams;
 
   const main = db();
-  const [overview, settings, jobs, visits, alerts, demo] = await Promise.all([
+  const [overview, settings, jobs, visits, alerts, demo, newUsers] = await Promise.all([
     loadOverview(main),
     getSettings(main),
     cachedJobSourcesReport((now) => loadJobSourcesReport(jobsDb(), main, now)).then(
@@ -780,6 +860,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     loadVisits(main),
     recentAlerts(main),
     demoState(main, admin.id),
+    listCandidates(main, { limit: NEW_USERS_SHOWN }),
   ]);
   const { report, error: jobsError } = jobs;
   const flags = overviewFlags(overview, jobs);
@@ -797,6 +878,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         <KeyNumbers o={overview} report={report} flags={flags} />
       </div>
       <Flags flags={flags} />
+      <NewUsers rows={newUsers} now={now} />
 
       <MoreStats>
         <Visitors v={visits} />
@@ -806,8 +888,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           <Jobs report={report} error={jobsError} now={now} />
         </div>
         <Digests o={overview} />
-        <Companies o={overview} />
-        <Payments o={overview} />
+        {companiesEmpty(overview) ? null : <Companies o={overview} />}
+        {paymentsEmpty(overview) ? null : <Payments o={overview} />}
         <Health o={overview} report={report} />
         <Owner alerts={alerts} now={now} status={statusFor(query, "owner")} />
         <Demo demo={demo} status={statusFor(query, "demo")} />

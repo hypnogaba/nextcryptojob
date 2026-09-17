@@ -120,6 +120,6 @@ describe("listCandidates", () => {
     const { raw, d1 } = crmDb();
     const id = addUser(raw, { id: "fresh", email: "fresh@example.com" });
     const rows = await listCandidates(d1);
-    expect(rows).toEqual([{ userId: id, email: "fresh@example.com", telegramUsername: null, xHandle: null, createdAt: rows[0]!.createdAt, bestScore: null, bestLevel: null }]);
+    expect(rows).toEqual([{ userId: id, email: "fresh@example.com", telegramUsername: null, xHandle: null, createdAt: rows[0]!.createdAt, bestScore: null, bestLevel: null, step: rows[0]!.step }]);
   });
 });

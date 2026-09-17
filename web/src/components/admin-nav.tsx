@@ -32,18 +32,16 @@ export type AdminPage = (typeof ADMIN_PAGES)[number]["href"];
 const PAGE_BY_HREF = new Map<AdminPage, string>(ADMIN_PAGES.map((p) => [p.href, p.label]));
 
 /**
- * Групи меню (п.18, 15.09: забагато пунктів меню): Overview; People (кандидати, бали, лійка);
- * Companies (компанії, агенції, платежі); Jobs (вакансії компаній, джерела, черга X); Inbox
- * (повідомлення, відгуки); Settings. Жодна стара сторінка не загублена: усі 12 адрес, що були в
- * плоскому списку до цієї правки, тут є, плюс нова /admin/candidates.
+ * Меню (власник 16.09, b4: пункти не вміщаються). Одним рядком лише те, чим користуються щодня;
+ * решта під «More». Жодна сторінка не загублена: ADMIN_MAIN і ADMIN_MORE разом дають ADMIN_PAGES
+ * (тест admin-nav.test.tsx).
  */
-const ADMIN_GROUPS: { label: string | null; hrefs: readonly AdminPage[] }[] = [
-  { label: null, hrefs: ["/admin"] },
-  { label: "People", hrefs: ["/admin/candidates", "/admin/scores", "/admin/funnel"] },
-  { label: "Companies", hrefs: ["/admin/companies", "/admin/agency-applications", "/admin/payments"] },
-  { label: "Jobs", hrefs: ["/admin/jobs", "/admin/sources", "/admin/x-queue"] },
-  { label: "Inbox", hrefs: ["/admin/messages", "/admin/testimonials"] },
-  { label: null, hrefs: ["/admin/settings"] },
+export const ADMIN_MAIN: readonly AdminPage[] = [
+  "/admin", "/admin/candidates", "/admin/scores", "/admin/sources", "/admin/messages", "/admin/settings",
+];
+export const ADMIN_MORE: readonly AdminPage[] = [
+  "/admin/funnel", "/admin/x-queue", "/admin/companies", "/admin/agency-applications", "/admin/payments", "/admin/jobs",
+  "/admin/testimonials",
 ];
 
 const TAB =
@@ -96,19 +94,39 @@ export function AdminNav({
   className?: string;
   viewAsCompanyId?: string | null;
 }) {
+  const moreCurrent = current !== undefined && ADMIN_MORE.includes(current);
   return (
-    <nav aria-label="Admin" className={cn("flex flex-wrap items-end gap-x-5 gap-y-2 border-b border-line text-sm", className)}>
+    <nav aria-label="Admin" className={cn("relative z-20 flex flex-wrap items-end gap-x-4 gap-y-1 border-b border-line text-sm", className)}>
       <span className="font-display text-base font-extrabold tracking-[0.04em] text-ink-muted uppercase">Admin</span>
-      {ADMIN_GROUPS.map((g, i) => (
-        <div key={g.label ?? `g${i}`} className="flex flex-wrap items-center gap-x-3">
-          {g.label ? <span className="text-xs font-bold tracking-[0.06em] text-ink-muted/70 uppercase">{g.label}</span> : null}
-          {g.hrefs.map((href) => (
-            <Link key={href} href={href} aria-current={href === current ? "page" : undefined} className={href === current ? TAB_CURRENT : TAB}>
-              {PAGE_BY_HREF.get(href)}
-            </Link>
-          ))}
-        </div>
+      {ADMIN_MAIN.map((href) => (
+        <Link key={href} href={href} aria-current={href === current ? "page" : undefined} className={href === current ? TAB_CURRENT : TAB}>
+          {PAGE_BY_HREF.get(href)}
+        </Link>
       ))}
+      <details className="group relative" data-admin-more="">
+        <summary className={cn(moreCurrent ? TAB_CURRENT : TAB, "cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden")}>
+          {moreCurrent ? `More: ${PAGE_BY_HREF.get(current!)}` : "More"}
+          <span aria-hidden className="inline-block transition-transform group-open:rotate-180">
+            {"\u25BE"}
+          </span>
+        </summary>
+        <ul className="absolute left-0 top-full mt-1 grid min-w-52 gap-0.5 rounded-[10px] border-[1.5px] border-line bg-surface p-2 shadow-[0_18px_36px_-24px_rgb(17_19_24/30%)]">
+          {ADMIN_MORE.map((href) => (
+            <li key={href}>
+              <Link
+                href={href}
+                aria-current={href === current ? "page" : undefined}
+                className={cn(
+                  "flex min-h-10 items-center rounded-md px-3 font-semibold whitespace-nowrap hover:bg-soft",
+                  href === current ? "text-ink" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {PAGE_BY_HREF.get(href)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </details>
       {viewAsCompanyId !== undefined ? (
         viewAsCompanyId ? <ViewAsCompanyButton companyId={viewAsCompanyId} /> : null
       ) : (

@@ -76,6 +76,8 @@ async function render(query: Record<string, string> = {}): Promise<string> {
  */
 const OWNER_BATCHES = [4, 2];
 const OWNER_STATEMENTS = 4 + 2 + 1 + 1;
+/** Нові люди зверху головної: один запит поза пакетом. */
+const NEW_USERS_STATEMENTS = 1;
 
 describe("/admin access", () => {
   it("is not found for someone who is not an admin, and reads no numbers", async () => {
@@ -150,7 +152,7 @@ describe("/admin for an admin", () => {
     await render();
     expect([...calls.batches].sort()).toEqual([OVERVIEW_STATEMENTS, ...OWNER_BATCHES].sort());
     // Поза пакетом: сесія, налаштування (кеш холодний) і підсумок вакансій компаній звіту джерел.
-    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + OWNER_STATEMENTS + 3);
+    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + OWNER_STATEMENTS + NEW_USERS_STATEMENTS + 3);
     expect(calls.prepared.some((sql) => sql.includes("FROM sessions"))).toBe(true);
     expect(calls.prepared.some((sql) => sql.includes("FROM app_settings"))).toBe(true);
 
@@ -158,7 +160,7 @@ describe("/admin for an admin", () => {
     calls = { prepared: [], batches: [] };
     await render();
     expect([...calls.batches].sort()).toEqual([OVERVIEW_STATEMENTS, ...OWNER_BATCHES].sort());
-    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + OWNER_STATEMENTS + 1);
+    expect(calls.prepared.length).toBe(OVERVIEW_STATEMENTS + OWNER_STATEMENTS + NEW_USERS_STATEMENTS + 1);
     expect(jobs.reads).toBe(1);
   });
 
@@ -189,7 +191,7 @@ describe("/admin for an admin", () => {
   it("shows a handful of key numbers up front, and tucks the rest behind More stats", async () => {
     const html = await render();
     // П'ять головних чисел одразу видно, перед закритою розкривкою.
-    const keyNumbersEnd = html.indexOf("<details");
+    const keyNumbersEnd = html.lastIndexOf("<details", html.indexOf("data-more-stats"));
     expect(keyNumbersEnd).toBeGreaterThan(0);
     const upFront = html.slice(0, keyNumbersEnd);
     expect(upFront).toMatch(/Users<\/dt><dd[^>]*>5<\/dd>/);
@@ -199,11 +201,35 @@ describe("/admin for an admin", () => {
     expect(upFront).toContain(">Alerts</dt>");
     // Розкривка не відкрита за замовчуванням, і містить решту панелей.
     expect(html).not.toMatch(/<details[^>]* open/);
+    // Нові люди видно одразу, до розкривки.
+    expect(upFront).toContain(">New users</h2>");
     expect(html).toContain("More stats");
     const rest = html.slice(keyNumbersEnd);
     for (const title of ["Candidates", "Scores", "Daily digests", "Companies", "Payments", "Jobs", "Health"]) {
       expect(rest).toContain(`>${title}</h2>`);
     }
+  });
+
+  it("lists the newest people first with where they stopped in the brief", async () => {
+    exec(`INSERT INTO users (id, email, telegram_username, onboarding_step, created_at) VALUES
+      ('n1', NULL, 'newbie', 'roles', '2026-09-13 11:00:00'),
+      ('n2', 'done@example.com', NULL, 'done', '2026-09-13 11:30:00')`);
+    const html = await render();
+    const table = html.slice(html.indexOf('data-table="new-users"'));
+    expect(table.indexOf("done@example.com")).toBeLessThan(table.indexOf("@newbie"));
+    expect(table).toContain("Brief: roles");
+    expect(table).toContain(">Done<");
+    expect(table).toContain('href="/admin/scores/n1"');
+  });
+
+  it("hides the company and payment blocks while there is nothing in them", async () => {
+    resetHarness({ ADMIN_EMAILS: "boss@example.com" } as never);
+    exec("INSERT INTO users (id, email, telegram_id, created_at) VALUES ('boss', 'boss@example.com', '555', '2026-06-01 00:00:00')");
+    await createSession("boss", "email");
+    const html = await render();
+    expect(html).not.toContain(">Companies</h2>");
+    expect(html).not.toContain(">Payments</h2>");
+    expect(html).toContain(">Candidates</h2>");
   });
 
   it("has the weekly report button, the alerts list and the demo company block", async () => {
