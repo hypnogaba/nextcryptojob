@@ -142,7 +142,7 @@ export function LeaderboardSwitch({ cardPublic }: { cardPublic: boolean }) {
           Leaderboard
         </h2>
         <p className="text-sm text-ink-muted">
-          A page listing everyone's public card, ranked by score: the image, the score and the nick, nothing else.
+          A page listing everyone&apos;s public card, ranked by score: the image, the score and the nick, nothing else.
         </p>
       </div>
       <form action={action} className={ROW}>
