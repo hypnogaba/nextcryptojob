@@ -3,3 +3,6 @@
 -- wrangler d1 execute nextcryptojob-jobs --remote --file db/jobs/seed/update-2026-09-17-ats.sql
 INSERT OR IGNORE INTO companies (slug, name, ats_provider, ats_slug, enabled, discovered_via, note) VALUES
   ('kast', 'KAST', 'pinpoint', 'kastcard', 1, 'curated', 'careers.kast.xyz is backed by Pinpoint (kastcard.pinpointhq.com, 17 open on 2026-09-17); found while resolving Getro ''careers page without an ATS link'' companies');
+-- Comeet розвідка сама не додає (потрібен токен зі сторінки компанії): Blockaid руками.
+INSERT OR IGNORE INTO companies (slug, name, ats_provider, ats_slug, enabled, discovered_via, note) VALUES
+  ('blockaid', 'Blockaid', 'comeet', '69.00B.96B41ED041ED12D654C3388241ED12D654C3', 1, 'curated', 'blockaid.io/careers embeds Comeet (company 69.00B, public careers token from the page; 13 open on 2026-09-17); listed on Getro boards of Blockchain Capital and others');
