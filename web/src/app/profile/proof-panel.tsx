@@ -67,17 +67,12 @@ export function ProofPanel({
           <>
             <p className="break-all rounded-md border border-line bg-soft px-3 py-2 font-mono text-sm text-ink">{applyUrl}</p>
             <div className="flex flex-wrap gap-3">
-              <CopyButton text={applyUrl} />
-              <Button asChild variant="outline" className="h-11 px-3">
+              <Button asChild className="h-11 px-4">
                 <a href={pdfUrl} download>
                   Download PDF
                 </a>
               </Button>
-              <Button asChild variant="ghost" className="h-11 px-3">
-                <a href={publicUrl} target="_blank" rel="noopener">
-                  See public view
-                </a>
-              </Button>
+              <CopyButton text={applyUrl} />
             </div>
             <form action={resetApplyLinkAction} className="flex flex-wrap items-center gap-3">
               <Button type="submit" variant="ghost" className={SMALL}>
@@ -93,13 +88,20 @@ export function ProofPanel({
                 Get my apply link
               </Button>
             </form>
-            <Button asChild variant="outline" className="h-11 px-3">
+            <Button asChild className="h-11 px-4">
               <a href={pdfUrl} download>
                 Download PDF
               </a>
             </Button>
           </div>
         )}
+        {/* Власник 16.09, p1: «не можу перевірити, як це бачать інші». Та сама сторінка картки без
+            дій власника (?as=public), як її бачить будь-хто з посиланням. */}
+        <Button asChild variant="outline" className="h-11 w-fit px-4">
+          <a href={`${publicUrl}?as=public`} target="_blank" rel="noopener">
+            See what others see
+          </a>
+        </Button>
       </div>
 
       {view.groups.map((g) => (

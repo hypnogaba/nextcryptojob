@@ -18,7 +18,7 @@ import { ReportForm } from "./report-form";
 // для показу і розклад балу на звороті; ні гаманців, ні посилань, ні того, чий це акаунт.
 // Під ними Proof: факти без імен; з особистим ключем ?k= (профіль-доказ) ще посилання, слова й контакт.
 
-type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ k?: string | string[] }> };
+type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ k?: string | string[]; as?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
@@ -59,7 +59,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CardPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const k = (await searchParams)?.k;
+  const query = await searchParams;
+  const k = query?.k;
+  // ?as=public: власник дивиться на свою картку очима стороннього (власник 16.09, p1).
+  const asPublic = query?.as === "public";
   const view = await loadCardView(slug);
   if (!view) {
     // Раунд 5, п.7: стара адреса прибраної картки (консолідація на одну картку на людину) веде
@@ -69,7 +72,8 @@ export default async function CardPage({ params, searchParams }: Props) {
     notFound();
   }
   // Власник бачить «Share on X» і картинки; хто він, у HTML не потрапляє.
-  const [owner, profile] = await Promise.all([loadIsOwner(slug), loadProfileView(slug, typeof k === "string" ? k : null)]);
+  const [isOwner, profile] = await Promise.all([loadIsOwner(slug), loadProfileView(slug, !asPublic && typeof k === "string" ? k : null)]);
+  const owner = isOwner && !asPublic;
   const origin = await requestOrigin();
   // Клік іде через /go/share-x, який рахує funnel_days ('share_click', /admin/funnel) і
   // веде далі на x.com з тими самими параметрами (без відкритого редіректу: хост фіксований).
@@ -92,6 +96,16 @@ export default async function CardPage({ params, searchParams }: Props) {
       </div>
 
       <div className="grid max-w-[60ch] gap-6 lg:pt-4">
+        {isOwner && asPublic ? (
+          <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-soft px-4 py-3 text-sm text-ink">
+            <span>
+              <b className="font-semibold">This is what others see.</b> No names, links or contacts, only the facts.
+            </span>
+            <Link href="/profile#proof" className="font-semibold underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+              Back to your profile
+            </Link>
+          </p>
+        ) : null}
         <div className="grid gap-4">
           <h1 className="display text-title">
             {view.roleName}, rated {view.score}

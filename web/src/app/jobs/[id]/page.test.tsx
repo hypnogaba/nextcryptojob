@@ -297,6 +297,19 @@ describe("/jobs/<id>: a job from scanning (item 20)", () => {
     expect(html).not.toContain(`href="/jobs/${scannedId}/apply"`);
   });
 
+  it("offers a signed-in person with a card to apply with their PDF; not to a visitor", async () => {
+    addScanned();
+    expect(await render(scannedId)).not.toContain("Apply with your proof");
+    run(harness.raw, "INSERT INTO users (id, email) VALUES ('ada', 'ada@example.com')");
+    const { createCard } = await import("@/lib/card/store");
+    const slug = await createCard(harness.env.DB, { userId: "ada", role: "engineer", score: 70, displayName: "@ada", formulaVersion: "v6" });
+    const { createSession } = await import("@/lib/auth/session");
+    await createSession("ada", "email");
+    const html = await render(scannedId);
+    expect(html).toContain("Apply with your proof, not a CV");
+    expect(html).toContain(`href="/c/${slug}/profile.pdf"`);
+  });
+
   it("is not found once it falls outside the live window (closed by age)", async () => {
     addScanned({ postedAt: new Date(Date.now() - 40 * 86_400_000).toISOString() });
     await expect(render(scannedId)).rejects.toBeInstanceOf(NotFoundCalled);

@@ -47,6 +47,20 @@ describe("public card page (trust model of 13.09)", () => {
     expect(html).not.toContain(`/c/${slug}/share/tall`);
     expect(html).not.toContain("Report this card");
   });
+
+  it("?as=public shows the owner what others see: no owner actions, a note and a way back", async () => {
+    await createSession("u", null);
+    const html = renderToStaticMarkup(await CardPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ as: "public" }) }));
+    expect(html).toContain("This is what others see.");
+    expect(html).toContain('href="/profile#proof"');
+    expect(html).not.toContain("Share on X");
+  });
+
+  it("?as=public means nothing to a visitor", async () => {
+    const html = renderToStaticMarkup(await CardPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ as: "public" }) }));
+    expect(html).not.toContain("This is what others see.");
+    expect(html).toContain("Report this card");
+  });
 });
 
 describe("proof profile under the card", () => {

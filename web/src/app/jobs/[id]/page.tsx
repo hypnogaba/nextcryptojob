@@ -11,6 +11,7 @@ import { placeText } from "@/lib/crm/jobs";
 import { loadPublicJob, type PublicJobPage } from "@/lib/crm/public-jobs";
 import { appEnv, db } from "@/lib/db";
 import { formatSalary } from "@/lib/digest/format";
+import { listActiveCards } from "@/lib/card/store";
 import { isId } from "@/lib/ids";
 import { currentUser } from "@/lib/auth/session";
 import { brandKey } from "@/lib/jobs/clean";
@@ -171,7 +172,44 @@ function Reasons({ reasons }: { reasons: string[] | null }) {
   );
 }
 
-function ScannedJobView({ job, reasons, signedIn }: { job: ScannedJobPage; reasons: string[] | null; signedIn: boolean }) {
+/**
+ * Подача з профілем-доказом (власник 16.09, j3): людина з карткою бере свій PDF на подачу замість CV
+ * або вставляє посилання для подачі. PDF власнику віддається за сесією (/c/<код>/profile.pdf).
+ */
+function ApplyWithProof({ slug }: { slug: string }) {
+  return (
+    <section aria-labelledby="apply-proof" className="grid gap-3 rounded-3xl bg-soft p-5 sm:p-6">
+      <h2 id="apply-proof" className="text-lg font-semibold tracking-tight">
+        Apply with your proof, not a CV
+      </h2>
+      <p className="text-sm text-ink-muted">
+        Download your one-page PDF and attach it where the form asks for a CV, or paste your apply link in the form.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button asChild size="lg" className="h-11 px-5">
+          <a href={`/c/${slug}/profile.pdf`} download>
+            Download my PDF
+          </a>
+        </Button>
+        <Link href="/profile#proof" className="text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+          Get my apply link
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function ScannedJobView({
+  job,
+  reasons,
+  signedIn,
+  proofSlug,
+}: {
+  job: ScannedJobPage;
+  reasons: string[] | null;
+  signedIn: boolean;
+  proofSlug: string | null;
+}) {
   const apply = applyLink(job.url);
   return (
     <article className="mx-auto grid max-w-3xl gap-8 px-4 pt-10 pb-20 sm:px-6 sm:pt-16">
@@ -219,6 +257,8 @@ function ScannedJobView({ job, reasons, signedIn }: { job: ScannedJobPage; reaso
         </section>
       ) : null}
 
+      {proofSlug ? <ApplyWithProof slug={proofSlug} /> : null}
+
       <Reasons reasons={reasons} />
 
       {signedIn ? null : <CreateProfile jobRef={`nr:${job.id}`} />}
@@ -238,7 +278,10 @@ function ScannedJobView({ job, reasons, signedIn }: { job: ScannedJobPage; reaso
 
 export default async function PublicJobPageView({ params }: Props) {
   const { id } = await params;
-  const signedIn = (await currentUser()) !== null;
+  const user = await currentUser();
+  const signedIn = user !== null;
+  // Картка одна на людину (раунд 5, п.7): її PDF іде на подачу.
+  const proofSlug = user ? ((await listActiveCards(db(), user.id))[0]?.slug ?? null) : null;
   const job = await loadJob(id);
   if (job) {
     const place = placeText(job.workMode, job.city);
@@ -285,6 +328,8 @@ export default async function PublicJobPageView({ params }: Props) {
           <p className="text-sm text-ink-muted">You apply directly with {job.company}.</p>
         </div>
 
+        {proofSlug ? <ApplyWithProof slug={proofSlug} /> : null}
+
         {signedIn ? null : <CreateProfile jobRef={`co:${job.id}`} />}
 
         {job.description.trim() ? (
@@ -324,5 +369,5 @@ export default async function PublicJobPageView({ params }: Props) {
   const scanned = await loadScanned(id);
   if (!scanned) notFound();
   const reasons = await reasonsFor(`nr:${scanned.id}`);
-  return <ScannedJobView job={scanned} reasons={reasons} signedIn={signedIn} />;
+  return <ScannedJobView job={scanned} reasons={reasons} signedIn={signedIn} proofSlug={proofSlug} />;
 }
