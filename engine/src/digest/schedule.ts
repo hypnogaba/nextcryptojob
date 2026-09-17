@@ -96,12 +96,16 @@ export interface DigestUserRow {
   target_text?: string | null;
   /** Своя роль словами (0020); undefined, якщо міграції ще немає. */
   role_text?: string | null;
+  /** Коли Telegram сказав «недосяжний» (0027); undefined, якщо міграції ще немає. */
+  telegram_unreachable_at?: string | null;
 }
 
 const USER_COLUMNS = "u.id, u.roles, u.remote_mode, u.city, u.salary_min, u.salary_currency, u.digest_hour, " +
   "u.timezone, u.channel, u.email, u.telegram_id, u.target_text";
 /** Своя роль словами (0020_role_text). Без міграції запит іде без неї, і збіг за словами поки не діє. */
 const ROLE_TEXT_COLUMN = ", u.role_text";
+/** Позначка «Telegram недосяжний» (0027_telegram_unreachable). */
+const UNREACHABLE_COLUMN = ", u.telegram_unreachable_at";
 
 /**
  * Люди, яким добірка може піти. Колонки digest_paused (0011), role_text (0020) і is_demo (0021)
@@ -117,16 +121,20 @@ export async function loadDigestUsers(db: Db, log: (l: string) => void, onlyUser
   const missing = (e: unknown, column: string) =>
     e instanceof Error && new RegExp(`no such column:?\\s*(u\\.)?${column}`, "i").test(e.message);
   let extra = ROLE_TEXT_COLUMN;
+  let unreachable = UNREACHABLE_COLUMN;
   let paused = " AND COALESCE(u.digest_paused, 0) = 0";
   let demo = " AND u.is_demo = 0";
-  // Кожна відсутня колонка знімається раз: не більше чотирьох спроб.
+  // Кожна відсутня колонка знімається раз: не більше п'яти спроб.
   for (;;) {
     try {
-      return await db.query<DigestUserRow>(`${base(extra)}${paused}${demo}${byId}`, params);
+      return await db.query<DigestUserRow>(`${base(extra + unreachable)}${paused}${demo}${byId}`, params);
     } catch (e) {
       if (extra && missing(e, "role_text")) {
         log("digest: users.role_text missing (migration 0020 not applied), own-words matching is off");
         extra = "";
+      } else if (unreachable && missing(e, "telegram_unreachable_at")) {
+        log("digest: users.telegram_unreachable_at missing (migration 0027 not applied), unreachable Telegram is not remembered");
+        unreachable = "";
       } else if (paused && missing(e, "digest_paused")) {
         log("digest: users.digest_paused missing (migration 0011 not applied), pause is not honoured yet");
         paused = "";
@@ -226,6 +234,8 @@ export interface DigestSummary {
   empty: number;
   sent: number;
   failed: number;
+  /** Telegram сказав «недосяжний», а пошти немає: позначено, не рахується збоєм. */
+  unreachable: number;
   pool: PoolStats | null;
   companyJobs: number;
   dry: DryRunEntry[];
@@ -275,7 +285,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   const { db } = deps;
   if (!db && !opts.profile) throw new Error("digest: database is required");
   const summary: DigestSummary = {
-    eligible: 0, due: 0, already: 0, skipped: 0, empty: 0, sent: 0, failed: 0, pool: null, companyJobs: 0, dry: [],
+    eligible: 0, due: 0, already: 0, skipped: 0, empty: 0, sent: 0, failed: 0, unreachable: 0, pool: null, companyJobs: 0, dry: [],
   };
 
   if (db && !dry) await sweepStale(db);
@@ -347,6 +357,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       if (outcome === "empty") summary.empty++;
       else if (outcome === "already") summary.already++;
       else if (outcome.status === "sent") summary.sent++;
+      else if (outcome.unreachable && outcome.channel === "telegram") summary.unreachable++;
       else summary.failed++;
     } catch (e) {
       summary.failed++;
@@ -354,12 +365,13 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
     }
   }
   log(`digest-due: eligible ${summary.eligible}, due ${summary.due}, sent ${summary.sent}, failed ${summary.failed}, ` +
+    `unreachable ${summary.unreachable}, ` +
     `empty ${summary.empty}, skipped ${summary.skipped}, already ${summary.already}${dry ? " (dry run)" : ""}`);
   return summary;
 }
 
 function deliveryUser(row: DigestUserRow): DeliveryUser {
-  return { id: row.id, channel: row.channel, email: row.email, telegramId: row.telegram_id };
+  return { id: row.id, channel: row.channel, email: row.email, telegramId: row.telegram_id, telegramUnreachable: !!row.telegram_unreachable_at };
 }
 
 async function buildAndDeliver(
@@ -409,6 +421,11 @@ async function buildAndDeliver(
     { sql: "UPDATE digest_runs SET status = ?, channel = ?, error = ?, finished_at = datetime('now') WHERE id = ?",
       params: [status, channel, detail, digestId] },
   ], { idempotent: true });
+  if (outcome.unreachable) {
+    // Наступні дні: лист одразу або пропуск (planChannel). Знімає позначку повідомлення людини боту.
+    await db.run("UPDATE users SET telegram_unreachable_at = datetime('now') WHERE id = ?", [row.id], { idempotent: true })
+      .catch((e: unknown) => log(`digest: telegram_unreachable_at not set: ${shortError(e, 120)}`));
+  }
   if (status === "sent") {
     const shown = picks.filter((p) => p.job.source === "company");
     // Лічильник для компанії (специфікація CRM 5.6). Приріст не ідемпотентний: окремо й без повтору.

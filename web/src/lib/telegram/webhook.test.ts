@@ -90,6 +90,24 @@ describe("webhook secret", () => {
   });
 });
 
+describe("reachable again", () => {
+  it("a private message clears the digest's unreachable mark", async () => {
+    exec(
+      "INSERT INTO users (id, email, telegram_id, channel, telegram_unreachable_at) VALUES ('u_tg', NULL, '555', 'telegram', datetime('now'))",
+    );
+    await post(message("/help"));
+    expect(rows("SELECT telegram_unreachable_at AS at FROM users WHERE id = 'u_tg'")).toEqual([{ at: null }]);
+  });
+
+  it("a group message leaves the mark", async () => {
+    exec(
+      "INSERT INTO users (id, email, telegram_id, channel, telegram_unreachable_at) VALUES ('u_tg', NULL, '555', 'telegram', '2026-09-16 09:05:00')",
+    );
+    await post(message("hi", { chatType: "supergroup" }));
+    expect(rows("SELECT telegram_unreachable_at AS at FROM users WHERE id = 'u_tg'")).toEqual([{ at: "2026-09-16 09:05:00" }]);
+  });
+});
+
 describe("dedupe", () => {
   it("handles each update_id once", async () => {
     const update = message("/start", { updateId: 7 });

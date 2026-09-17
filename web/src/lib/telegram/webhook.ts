@@ -60,6 +60,21 @@ function chatOf(update: TgUpdate): number | null {
   return update.message?.chat?.id ?? update.callback_query?.message?.chat?.id ?? update.callback_query?.from?.id ?? null;
 }
 
+/**
+ * Людина написала боту: Telegram знову її досягає, тож позначку добірки «недосяжний» (0027) знімаємо.
+ * Запис лише коли позначка стоїть; збій не заважає відповіді бота.
+ */
+export async function markTelegramReachable(d: D1Database, telegramId: number): Promise<void> {
+  try {
+    await d
+      .prepare("UPDATE users SET telegram_unreachable_at = NULL WHERE telegram_id = ? AND telegram_unreachable_at IS NOT NULL")
+      .bind(String(telegramId))
+      .run();
+  } catch (err) {
+    console.warn(`telegram webhook: reachable mark failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 export async function handleWebhookRequest(request: Request, env: TelegramEnv, deps: SendDeps = {}): Promise<Response> {
   const expected = env.TELEGRAM_WEBHOOK_SECRET;
   const got = request.headers.get("x-telegram-bot-api-secret-token");
@@ -90,6 +105,9 @@ export async function handleWebhookRequest(request: Request, env: TelegramEnv, d
   try {
     const chatId = chatOf(update);
     if (chatId !== null && !(await consume(`tg-chat:${chatId}`, BOT_CHAT_LIMITS)).allowed) return ok();
+    // Лише особистий чат: повідомлення в групі не значить, що бот може написати людині.
+    const from = update.message?.chat?.type === "private" ? update.message.from?.id : update.callback_query?.from?.id;
+    if (typeof from === "number") await markTelegramReachable(db(), from);
     await handleUpdate(update, { token: env.TELEGRAM_BOT_TOKEN, origin: new URL(request.url).origin, deps });
   } catch (err) {
     console.error(`telegram webhook failed: ${err instanceof Error ? err.message : String(err)}`);

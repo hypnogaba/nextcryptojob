@@ -337,6 +337,40 @@ describe("runDigestDue", () => {
     expect(sent().every((r) => r.status === "sent" && r.channel === "email")).toBe(true);
   });
 
+  it("chat not found без пошти: позначка, не збій; наступного дня пропуск без виклику Telegram", async () => {
+    addUser("u1", { email: null });
+    addJobs(5);
+    const calls: string[] = [];
+    const notFound = (async (url: string) => {
+      calls.push(url);
+      return new Response(JSON.stringify({ ok: false, description: "Bad Request: chat not found" }), { status: 400 });
+    }) as unknown as typeof fetch;
+    const s = await runDigestDue(deps({ fetchImpl: notFound }));
+    expect(s).toMatchObject({ sent: 0, failed: 0, unreachable: 1 });
+    const mark = db.sqlite.prepare("SELECT telegram_unreachable_at FROM users WHERE id = 'u1'").get() as { telegram_unreachable_at: string | null };
+    expect(mark.telegram_unreachable_at).not.toBeNull();
+    calls.length = 0;
+    const next = await runDigestDue(deps({ fetchImpl: notFound }, new Date(NOW.getTime() + 86_400_000)));
+    expect(next).toMatchObject({ skipped: 1, failed: 0, unreachable: 0 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("позначений недосяжним з поштою: лист одразу, Telegram не питаємо", async () => {
+    addUser("u1");
+    db.exec("UPDATE users SET telegram_unreachable_at = datetime('now') WHERE id = 'u1'");
+    addJobs(5);
+    const tg: string[] = [];
+    const f = (async (url: string, init: RequestInit) => {
+      if (url.includes("api.telegram.org")) tg.push(url);
+      else emailCalls.push(String(init.body));
+      return new Response(null, { status: 202 });
+    }) as unknown as typeof fetch;
+    const s = await runDigestDue(deps({ fetchImpl: f }));
+    expect(s.sent).toBe(1);
+    expect(tg).toHaveLength(0);
+    expect(emailCalls).toHaveLength(1);
+  });
+
   it("нічого не підійшло: digest_runs 'empty', наступна година не шукає вдруге", async () => {
     addUser("u1", { roles: ["trader"] });
     addJobs(3);

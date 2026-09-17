@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { __resetLimiters } from "../limits.js";
 import {
   deliverDigest, type DigestMessage, EMAIL_NOT_CONFIGURED, emailPayload, planChannel, SIGNATURE_HEADER, sendTelegram, telegramText,
-  TELEGRAM_NOT_CONFIGURED,
+  TELEGRAM_NOT_CONFIGURED, TELEGRAM_UNREACHABLE,
 } from "./deliver.js";
 
 type Call = { url: string; init: RequestInit };
@@ -51,6 +51,13 @@ describe("planChannel", () => {
   it("канал telegram без прив'язки: пошта", () => {
     expect(planChannel({ ...TG_USER, telegramId: null }, ENV)).toEqual({ primary: "email", emailFallback: false });
   });
+  it("Telegram позначено недосяжним, пошта є: одразу лист", () => {
+    expect(planChannel({ ...TG_USER, telegramUnreachable: true }, ENV)).toEqual({ primary: "email", emailFallback: false });
+  });
+  it("Telegram позначено недосяжним, пошти немає: пропуск, а не збій", () => {
+    expect(planChannel({ ...TG_USER, email: null, telegramUnreachable: true }, ENV)).toEqual({ skip: TELEGRAM_UNREACHABLE });
+    expect(planChannel({ ...TG_USER, channel: "email", email: null, telegramUnreachable: true }, ENV)).toEqual({ skip: TELEGRAM_UNREACHABLE });
+  });
   it("ні пошти, ні Telegram: пропуск з причиною", () => {
     expect(planChannel({ ...TG_USER, telegramId: null, email: null }, ENV)).toHaveProperty("skip");
   });
@@ -93,7 +100,7 @@ describe("Telegram", () => {
   it("бот заблокований і пошти немає: failed з причиною", async () => {
     const f = fakeFetch([json(403, { ok: false, description: "Forbidden: bot was blocked by the user" })]);
     const r = await deliverDigest({ ...TG_USER, email: null }, MESSAGE, { primary: "telegram", emailFallback: false }, { env: ENV, fetchImpl: f.impl, sleep });
-    expect(r).toMatchObject({ status: "failed", channel: "telegram" });
+    expect(r).toMatchObject({ status: "failed", channel: "telegram", unreachable: true });
     expect(f.calls).toHaveLength(1);
   });
 

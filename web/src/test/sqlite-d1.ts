@@ -53,6 +53,8 @@ export const APPLIED_AFTER_CRM = [
   "0024_one_card_per_person.sql",
   // Профіль-доказ (16.09): profile_prefs. Ще НЕ накочено.
   "0026_profile_prefs.sql",
+  // Добірки 17.09: users.telegram_unreachable_at. Ще НЕ накочено.
+  "0027_telegram_unreachable.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

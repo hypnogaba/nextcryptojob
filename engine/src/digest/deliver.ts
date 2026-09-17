@@ -61,13 +61,15 @@ export interface DeliveryUser {
   channel: string;
   email: string | null;
   telegramId: string | null;
+  /** Telegram раніше сказав, що людини не досягти (users.telegram_unreachable_at). */
+  telegramUnreachable?: boolean;
 }
 
 export type Channel = "telegram" | "email";
 
 export type DeliveryOutcome =
-  | { status: "sent"; channel: Channel; note: string | null }
-  | { status: "failed"; channel: Channel | null; error: string };
+  | { status: "sent"; channel: Channel; note: string | null; unreachable?: boolean }
+  | { status: "failed"; channel: Channel | null; error: string; unreachable?: boolean };
 
 export interface DeliverDeps {
   env: EngineEnv;
@@ -96,13 +98,17 @@ export type ChannelPlan =
   | { primary: Channel; emailFallback: boolean }
   | { skip: string };
 
+export const TELEGRAM_UNREACHABLE = "telegram unreachable (bot not started or blocked), no email";
+
 /**
  * Куди слати, ще до підбору. Канал людини, а якщо його нема чим обслужити, другий,
  * що в неї є. Telegram без токена бота: людину пропускаємо (нічого не пишемо в базу,
  * вакансії не згорають), доки токен не з'явиться; так само робить NextRole.
+ * Telegram позначено недосяжним: одразу лист, а без пошти пропуск (прогін через це не падає).
  */
 export function planChannel(user: DeliveryUser, env: EngineEnv): ChannelPlan {
-  const hasTg = !!user.telegramId;
+  const hasTg = !!user.telegramId && !user.telegramUnreachable;
+  if (user.telegramId && user.telegramUnreachable && !user.email) return { skip: TELEGRAM_UNREACHABLE };
   const hasEmail = !!user.email;
   const token = !!env.TELEGRAM_BOT_TOKEN;
   if (user.channel === "telegram" && hasTg) {
@@ -359,9 +365,10 @@ export async function deliverDigest(user: DeliveryUser, m: DigestMessage, plan: 
   const tg = await sendTelegram(token, user.telegramId, telegramText(m, site), deps);
   if (tg.ok) return { status: "sent", channel: "telegram", note: null };
   const tgError = `telegram ${tg.status ?? "error"}: ${tg.description}`;
-  if (!tg.unreachable || !plan.emailFallback) return { status: "failed", channel: "telegram", error: tgError };
+  if (!tg.unreachable) return { status: "failed", channel: "telegram", error: tgError };
+  if (!plan.emailFallback) return { status: "failed", channel: "telegram", error: tgError, unreachable: true };
   const r = await sendEmail(m, deps);
   return r.ok
-    ? { status: "sent", channel: "email", note: `${tgError}; sent by email instead` }
-    : { status: "failed", channel: "email", error: `${tgError}; email fallback: ${r.error}` };
+    ? { status: "sent", channel: "email", note: `${tgError}; sent by email instead`, unreachable: true }
+    : { status: "failed", channel: "email", error: `${tgError}; email fallback: ${r.error}`, unreachable: true };
 }
