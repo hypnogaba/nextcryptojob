@@ -41,20 +41,23 @@ describe("digestEmail", () => {
       ].join("\n\n") + "\n",
     );
     // Раунд 6: плитка веде на нашу сторінку вакансії, а пряме посилання на джерело лишається окремо.
-    expect(mail.html).toMatch(/<a href="https:\/\/jobs\.example\.com\/1"[^>]*>1\. Protocol Engineer<\/a>/);
+    expect(mail.html).toMatch(/<a href="https:\/\/jobs\.example\.com\/1"[^>]*>Protocol Engineer<\/a>/);
     const withOurs = digestEmail({
       localDate: "2026-09-12",
       jobs: [job({ job_id: "j0123456789abcdef01234567" })],
       site: ORIGIN, unsubscribeUrl: UNSUB,
     });
     expect(withOurs.html).toContain(`href="${ORIGIN}/jobs/j0123456789abcdef01234567"`);
-    expect(withOurs.html).toContain("Open in your jobs");
+    // Назва вакансії веде на нашу сторінку, окремої кнопки «Open in your jobs» у HTML немає (17.09).
+    expect(withOurs.html).toMatch(new RegExp(`<a href="${ORIGIN}/jobs/j0123456789abcdef01234567"[^>]*>Protocol Engineer</a>`));
+    expect(withOurs.html).toContain("Apply directly");
     // Пряме посилання на джерело лишається follow: цього вимагають умови web3.career.
     expect(withOurs.html).toContain('href="https://jobs.example.com/1"');
     expect(withOurs.html).not.toMatch(/rel="[^"]*nofollow/);
     expect(withOurs.text).toContain(`Open in your jobs: ${ORIGIN}/jobs/j0123456789abcdef01234567`);
     expect(withOurs.text).toContain("Apply directly: https://jobs.example.com/1");
-    expect(mail.html).toContain("Paying Labs · Remote");
+    expect(mail.html).toContain(">Paying Labs</div>");
+    expect(mail.html).toContain(">Remote</div>");
     expect(mail.html).toContain("$120k to $150k");
     expect(mail.html).toContain("Posted by Acme on NextCryptoJob");
     expect(mail.html).toContain(DIGEST_FOOTER_REASON);
@@ -77,7 +80,7 @@ describe("digestEmail", () => {
       ],
       site: ORIGIN, unsubscribeUrl: UNSUB,
     });
-    for (const raw of ["<img", "<b>", "<i>", "<script>", "evil.example\">", 'q="><']) expect(mail.html).not.toContain(raw);
+    for (const raw of ["<img src=x", "<b>", "<i>", "<script>", "evil.example\">", 'q="><']) expect(mail.html).not.toContain(raw);
     expect(mail.html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(mail.html).toContain("Tom &amp; Jerry&#39;s");
     expect(mail.html).toContain("&lt;/p&gt;&lt;script&gt;x()&lt;/script&gt;");
@@ -87,7 +90,9 @@ describe("digestEmail", () => {
     const apply = "https://web3.career/r/=cTMxEDN__U4HFyv?ref=U4HFyv&utm_source=w3c";
     const mail = digestEmail({ localDate: "2026-09-12", jobs: [job({ url: apply }), job({ position: 2 })], site: ORIGIN, unsubscribeUrl: UNSUB });
     const hrefs = [...mail.html.matchAll(/<a href="([^"]*)"([^>]*)>/g)];
-    expect(hrefs[0]![1]!.replace(/&amp;/g, "&")).toBe(apply);
+    // Перше посилання поза нашим сайтом (шапка веде на головну) це назва вакансії.
+    const external = hrefs.filter((m) => !m[1]!.startsWith(ORIGIN) && !m[1]!.startsWith("mailto:"));
+    expect(external[0]![1]!.replace(/&amp;/g, "&")).toBe(apply);
     expect(hrefs.every((m) => !/rel=/.test(m[2]!))).toBe(true);
     expect(mail.text).toContain(`via web3.career\n${apply}`);
     expect(mail.html.match(/via web3\.career/g)).toHaveLength(1);
@@ -101,7 +106,7 @@ describe("digestEmail", () => {
       jobs: [job({ salary: null, salary_estimate: estimate }), job({ position: 2, salary_estimate: "est. $300k (web3.career estimate)" })],
       site: ORIGIN, unsubscribeUrl: UNSUB,
     });
-    expect(mail.html).toContain(`<p style="margin:0 0 8px;color:#58646a;font-size:13px">${estimate.replace(/\$/g, "$")}</p>`);
+    expect(mail.html).toMatch(new RegExp(`<div style="[^"]*">${estimate.replace(/[$().]/g, "\\$&")}</div>`));
     expect(mail.text).toContain(`Paying Labs · Remote\n${estimate}\n`);
     expect(mail.html).not.toContain("$300k");
     expect(mail.text).not.toContain("$300k");
@@ -124,7 +129,7 @@ describe("digestEmail", () => {
   it("shows a job with a non-http address without a link", () => {
     const mail = digestEmail({ localDate: "2026-09-12", jobs: [job({ url: "javascript:alert(1)" })], site: ORIGIN, unsubscribeUrl: UNSUB });
     expect(mail.html).not.toContain("javascript:");
-    expect(mail.html).toContain("1. Protocol Engineer");
+    expect(mail.html).toContain(">Protocol Engineer</div>");
     expect(mail.text).not.toContain("javascript:");
   });
 

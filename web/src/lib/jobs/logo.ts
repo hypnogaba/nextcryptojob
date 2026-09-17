@@ -28,7 +28,9 @@ const CACHE_MISS = "public, max-age=86400";
 const SAFE = {
   "X-Content-Type-Options": "nosniff",
   "Content-Security-Policy": "default-src 'none'; sandbox",
-  "Cross-Origin-Resource-Policy": "same-origin",
+  // cross-origin: значок публічний, і його показує лист добірки в поштовому клієнті (17.09).
+  // same-origin ховав його скрізь, де клієнт тягне картинку напряму, а не через свій проксі.
+  "Cross-Origin-Resource-Policy": "cross-origin",
 };
 
 const notFound = (cache: string | null = CACHE_MISS) =>

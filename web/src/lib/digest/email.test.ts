@@ -416,7 +416,8 @@ describe("email content", () => {
     expect(text).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
     expect(text).toContain("Paying Labs builds <payment> rails.");
     expect(html).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
-    expect(html).toContain("Paying Labs builds &lt;payment&gt; rails.");
+    // Лист у стилі Getro (17.09): речення про компанію лише в текстовій версії, рядок вакансії короткий.
+    expect(html).not.toContain("builds &lt;payment&gt;");
   });
 
   it("an old engine without the new fields still gets the same email, without those lines", async () => {
@@ -434,7 +435,8 @@ describe("email content", () => {
     expect(text).toContain("https://arbitrum.io");
     expect(text).toContain("$ARB $0.42 · MC $1.9B · +3.1%");
     expect(html).toContain('href="https://arbitrum.io"');
-    expect(html).toContain(">arbitrum.io<");
+    // Назва компанії веде на її сайт, значок з /api/logo.
+    expect(html).toContain('src="https://nextcryptojob.xyz/api/logo/arbitrum.io"');
     expect(html).toContain("$ARB $0.42");
   });
 
