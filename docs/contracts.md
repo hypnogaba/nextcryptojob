@@ -43,10 +43,14 @@ hyperliquid, solana: частина адрес не відповіла або м
 
 ```ts
 type XFacts = { followers: number|null; kol: number|null; kolSourceGap: boolean;
-  fetched: number; own: number; repliesMade: number; own30d: number;
+  fetched: number; own: number; repliesMade: number|null; own30d: number;
   ownAvgLikesRt: number|null; ownAvgViews: number|null; ownAvgReplies: number|null;
   daysCovered: number|null };
-// own = власні пости: conversationId == id і текст не починається з "RT @"
+// own = власні пости: НЕ ретвіт (немає retweetedStatus, текст не з "RT @") і не відповідь.
+// 17.09, вимір живої відповіді 6551: twitter_user_tweets не віддає conversationId, тож старе
+// правило (conversationId == id) не рахувало власним ні один пост, і бал X падав у всіх.
+// repliesMade = null, коли conversationId немає: виклик іде без відповідей (includeReplies
+// false), і відрізнити їх нічим. Нуль тут був би вигаданим числом.
 
 type GithubFacts = { createdAt: string; followers: number; stars: number;   // зірки власних не-форків
   commits12m: number; reviews12m: number; mergedPrsElsewhere: number;       // злиті PR у репо чужих власників

@@ -15,6 +15,7 @@ export function StepShell({
   lead,
   notice,
   banner,
+  compact,
   children,
 }: {
   step: Step;
@@ -25,6 +26,11 @@ export function StepShell({
   notice?: string | null;
   /** Панель над кроком (адмін: анкета необов'язкова). */
   banner?: ReactNode;
+  /**
+   * Крок усередині кабінету (правка відповідей): шапку показує AccountShell, тож тут не треба
+   * ні власних верхніх відступів, ні другого h1 на всю висоту заголовка.
+   */
+  compact?: boolean;
   children: ReactNode;
 }) {
   const { part, n, of } = stepPosition(step);
@@ -33,7 +39,7 @@ export function StepShell({
   // Правка анкети веде до вакансій, правка джерел до профілю з балом і карткою.
   const home = brief ? { href: "/jobs", label: "Back to your jobs" } : { href: "/profile", label: "Back to profile" };
   return (
-    <section className="mx-auto max-w-xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14">
+    <section className={compact ? "max-w-xl" : "mx-auto max-w-xl px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14"}>
       <div className="flex items-center justify-between gap-4">
         <p className="font-display text-lg font-extrabold tracking-[0.04em] text-ink uppercase">
           {brief ? "Step" : "Your score, step"} {n} <span className="text-ink-muted">of {of}</span>
@@ -64,7 +70,11 @@ export function StepShell({
           {notice}
         </p>
       ) : null}
-      <h1 className="display mt-8 text-title">{STEP_TITLES[step]}</h1>
+      {compact ? (
+        <h2 className="display mt-6 text-[1.75rem] leading-tight">{STEP_TITLES[step]}</h2>
+      ) : (
+        <h1 className="display mt-8 text-title">{STEP_TITLES[step]}</h1>
+      )}
       {lead ? <div className="mt-3 text-ink-muted">{lead}</div> : null}
       <div className="mt-8">{children}</div>
 

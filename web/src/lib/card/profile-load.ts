@@ -14,6 +14,8 @@ type UserRow = {
   target_text: string | null;
   telegram_username: string | null;
   email: string | null;
+  salary_min: number | null;
+  salary_currency: string | null;
 };
 
 
@@ -26,7 +28,8 @@ export async function loadProfileInput(db: D1Database, slug: string, now: Date):
   const [users, identities, facts] = await db.batch([
     db
       .prepare(
-        `SELECT id, roles, remote_mode, city, role_text, target_text, telegram_username, email
+        `SELECT id, roles, remote_mode, city, role_text, target_text, telegram_username, email,
+                salary_min, salary_currency
            FROM users WHERE id = ${OWNER}`,
       )
       .bind(slug),
@@ -42,6 +45,9 @@ export async function loadProfileInput(db: D1Database, slug: string, now: Date):
       roles: chosenRoles(user.roles),
       remoteMode: user.remote_mode,
       city: user.city,
+      // Нижня межа плати йде в рядок «що людина шукає» в PDF (profile.ts, WantLine).
+      salaryMin: user.salary_min,
+      salaryCurrency: user.salary_currency,
       roleText: user.role_text,
       targetText: user.target_text,
       telegramUsername: user.telegram_username,

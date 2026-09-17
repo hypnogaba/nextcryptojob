@@ -172,23 +172,17 @@ describe("/jobs: Jobs for you now", () => {
     exec("UPDATE users SET remote_mode = 'remote' WHERE id = 'ada'");
   });
 
-  it("lists saved jobs on their own, even one that never came in a digest, with the day it was still open", async () => {
+  // Власник 17.09: сам список збережених переїхав на /jobs/saved (див. саме її тест). Тут
+  // лишається короткий блок: скільки їх і посилання. Чужих збережень не видно й тут.
+  it("shows how many jobs are saved and links to their own page, without the list", async () => {
     harness.raw.exec(`INSERT INTO saved_jobs (user_id, job_ref, created_at) VALUES
       ('ada', 'nr:mine', '2026-09-16 10:00:00'), ('ada', 'nr:gone', '2026-09-15 10:00:00'), ('bob', 'nr:theirs', '2026-09-16 10:00:00')`);
-    const nr = migratedD1([]);
-    nr.raw.exec("CREATE TABLE jobs_cache (id TEXT PRIMARY KEY, url TEXT, company TEXT, title TEXT, location TEXT, remote INTEGER, salary_min INTEGER, salary_max INTEGER, salary_currency TEXT, salary_est_min INTEGER, salary_est_max INTEGER, salary_est_currency TEXT, source TEXT, posted_at TEXT, first_seen_at TEXT, fetched_at TEXT)");
-    nr.raw.exec(`INSERT INTO jobs_cache (id, url, company, title, location, remote, posted_at, first_seen_at, fetched_at) VALUES
-      ('mine', 'https://jobs.example.com/mine', 'Paying Labs', 'Protocol Engineer', 'Remote', 1, '2026-09-03T10:00:00.000Z', '2026-09-04T04:30:00.000Z', '2026-09-16T04:40:00.000Z'),
-      ('theirs', 'https://jobs.example.com/theirs', 'Other Labs', 'Secret Role', 'Remote', 1, NULL, NULL, NULL)`);
-    jobsHolder.db = readOnlyJobsDb(nr.d1);
     await signIn("ada");
     const html = await render();
     const saved = html.slice(html.indexOf('id="saved-h"'), html.indexOf('id="sent-h"'));
     expect(saved).toContain("Saved (2)");
-    expect(saved).toContain("Protocol Engineer");
-    expect(saved).toContain("Posted Sep 3. Still open on Sep 16.");
-    expect(saved).toContain("This job is no longer listed.");
-    expect(saved.match(/aria-pressed="true"/g)).toHaveLength(2);
+    expect(saved).toContain('href="/jobs/saved"');
+    expect(saved).not.toContain("Protocol Engineer");
     expect(html).not.toContain("Secret Role");
   });
 

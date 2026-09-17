@@ -7,17 +7,22 @@ import type { ReactNode } from "react";
  * бічне меню стає горизонтальним рядком, що гортається (globals.css, .acct-side).
  * Той самий компонент для /account і /settings: активний пункт визначає сторінка.
  */
-export type AccountKey = "overview" | "card" | "jobs" | "answers" | "settings";
+export type AccountKey = "overview" | "card" | "jobs" | "saved" | "answers" | "settings";
 
 /**
  * Без "Company account" (власник 16.09, п.1): створення компанії лишається на /company, зі
  * своїми кнопками; кабінет кандидата про це не питає. Маршрут /company/start і далі працює для
  * тих, хто прийшов з /company.
+ *
+ * Порядок (власник 17.09): «Your jobs» ПЕРШИМ пунктом, вище за все інше. Людина приходить по
+ * вакансії, а не по картку. «Saved» це підпункт вакансій: збережені більше не тягнуться довгим
+ * хвостом на /jobs, вони мають власну сторінку.
  */
-const ITEMS: readonly { key: AccountKey; href: string; label: string }[] = [
+const ITEMS: readonly { key: AccountKey; href: string; label: string; sub?: boolean }[] = [
+  { key: "jobs", href: "/jobs", label: "Your jobs" },
+  { key: "saved", href: "/jobs/saved", label: "Saved jobs", sub: true },
   { key: "overview", href: "/account", label: "Overview" },
   { key: "card", href: "/profile", label: "Card and score" },
-  { key: "jobs", href: "/jobs", label: "Your jobs" },
   { key: "answers", href: "/welcome", label: "Your answers" },
   { key: "settings", href: "/settings", label: "Settings" },
 ];
@@ -29,13 +34,17 @@ const ITEMS: readonly { key: AccountKey; href: string; label: string }[] = [
  * Одна ширина контейнера для всіх сторінок кабінету (власник 16.09, п.3): раніше /jobs брала
  * max-w-[1360px], а решта max-w-5xl, тож і бічне меню, і вміст стрибали ліворуч-праворуч між
  * сторінками кабінету. /jobs і далі має місце для двоколонкового вмісту в тій самій ширині.
- *
- * `sub`, коли `title` є, теж варто передавати на кожній сторінці кабінету (власник 16.09, п.1):
- * якщо на одній сторінці є підзаголовок, а на іншій нема, висота шапки різна, і бічне меню
- * стрибає вгору-вниз між сторінками, хоча кожен пункт меню й так має однакову висоту (.acct-item,
- * globals.css). /account, /profile, /jobs і /settings передають `sub` саме тому.
  */
 const SHELL_WIDTH = "max-w-[1360px]";
+
+/**
+ * Одна висота шапки на всіх сторінках кабінету (власник 17.09: «зроби щоб все було однаково, не
+ * рухалося вгору-вниз»). Раніше висота шапки залежала від довжини заголовка й наявності
+ * підзаголовка, тож бічне меню ставало на різній висоті на кожній сторінці. Тепер заголовок і
+ * підзаголовок живуть у блоці незмінної висоти: один рядок заголовка плюс рядок підзаголовка.
+ * Той самий блок тримає місце й там, де заголовка немає.
+ */
+const HEAD_HEIGHT = "min-h-[78px] sm:min-h-[92px] lg:min-h-[104px]";
 
 export function AccountShell({
   active,
@@ -50,12 +59,19 @@ export function AccountShell({
 }) {
   return (
     <section className={`mx-auto ${SHELL_WIDTH} px-[clamp(16px,4vw,56px)] pt-8 pb-20 sm:pt-14`}>
-      {title ? <h1 className="display text-title">{title}</h1> : null}
-      {sub ? <p className="mt-2 text-ink-muted">{sub}</p> : null}
-      <div className={`acct ${title ? "mt-8" : ""}`}>
+      <div className={`grid content-start ${HEAD_HEIGHT}`}>
+        {title ? <h1 className="display text-title text-balance">{title}</h1> : null}
+        {sub ? <p className="mt-2 text-ink-muted">{sub}</p> : null}
+      </div>
+      <div className="acct mt-8">
         <nav aria-label="Your account" className="acct-side">
           {ITEMS.map((item) => (
-            <Link key={item.key} href={item.href} aria-current={item.key === active ? "page" : undefined} className="acct-item">
+            <Link
+              key={item.key}
+              href={item.href}
+              aria-current={item.key === active ? "page" : undefined}
+              className={item.sub ? "acct-item acct-sub" : "acct-item"}
+            >
               {item.label}
             </Link>
           ))}

@@ -114,17 +114,29 @@ describe("profileView full", () => {
     ]);
   });
 
-  it("drops hidden items in full and public but keeps them flagged for the owner", () => {
+  /**
+   * Власник 17.09: «нам потрібно заховати всі пункти PDF-меню там, де людина це все бачить;
+   * людина не мала би це все редагувати». Перемикачів більше немає, і збережене раніше
+   * prefs.hidden ні на що не впливає: показуємо всі факти в кожному вигляді.
+   */
+  it("shows every line in every mode, even the ones hidden before", () => {
     const prefs = { ...DEFAULT_PREFS, hidden: ["github.followers", "words.role"] };
     const input = { ...INPUT, prefs };
-    for (const mode of ["public", "full"] as const) {
-      const json = JSON.stringify(profileView(input, mode));
-      expect(json).not.toContain("github.followers");
-      expect(json).not.toContain("words.role");
+    for (const mode of ["public", "full", "owner"] as const) {
+      const view = profileView(input, mode);
+      expect(view.groups.find((g) => g.key === "github")?.lines.some((l) => l.id === "github.followers")).toBe(true);
+      expect(view.groups.flatMap((g) => g.lines).every((l) => l.hidden === false)).toBe(true);
     }
-    const owner = profileView(input, "owner");
-    expect(owner.groups[0].lines.find((l) => l.id === "github.followers")?.hidden).toBe(true);
-    expect(owner.words.find((w) => w.id === "words.role")?.hidden).toBe(true);
+    const full = profileView(input, "full");
+    expect(full.words.find((w) => w.id === "words.role")?.hidden).toBe(false);
+  });
+
+  /** Рядок «що людина шукає» складаємо ми, третьою особою, з анкети (власник 17.09). */
+  it("builds the 'looking for' line from the brief, not from the person's own words", () => {
+    const view = profileView({ ...INPUT, salaryMin: 5400, salaryCurrency: "USD" }, "full");
+    expect(view.want).toEqual({ roles: "Engineer or DevRel", place: "Remote or Lisbon", pay: "from $5k" });
+    const noPay = profileView({ ...INPUT, salaryMin: null }, "full");
+    expect(noPay.want.pay).toBeNull();
   });
 
   it("refuses a malformed Telegram name", () => {

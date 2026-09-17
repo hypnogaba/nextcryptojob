@@ -957,6 +957,12 @@
     position: relative;
     transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
   }
+  /* Підпункт (Saved jobs під Your jobs, власник 17.09): той самий рядок, лише тихіший і зі
+     зсувом. На мобільному меню це горизонтальний рядок, тож зсув там зайвий. */
+  .acct-sub { font-size: 0.875rem; color: var(--ink-3); }
+  @media (min-width: 1024px) {
+    .acct-sub { padding-left: 26px; }
+  }
   .acct-item:hover { background: var(--soft); color: var(--ink); }
   .acct-item[aria-current="page"] { background: var(--soft-2); color: var(--ink); }
   @media (min-width: 1024px) {

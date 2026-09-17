@@ -64,11 +64,44 @@ describe("collectX: розбір", () => {
       .toEqual({ username: "test_builder", maxResults: 100, product: "Latest" });
   });
 
-  it("власний пост: conversationId == id і не ретвіт", () => {
+  it("власний пост: не ретвіт і не відповідь", () => {
     expect(isOwnPost({ id: "5", conversationId: "5", text: "hello" })).toBe(true);
     expect(isOwnPost({ id: "5", conversationId: "4", text: "hello" })).toBe(false);
     expect(isOwnPost({ id: "5", conversationId: "5", text: "RT @a: hi" })).toBe(false);
-    expect(isOwnPost({ id: "5", text: "no conversation id" })).toBe(false);
+    // 17.09: жива відповідь 6551 не має conversationId. Раніше такий пост власним не рахувався,
+    // і бал X падав у всіх. Ретвіт видно по retweetedStatus, решта це власні пости.
+    expect(isOwnPost({ id: "5", text: "no conversation id" })).toBe(true);
+    expect(isOwnPost({ id: "5", text: "quoted", retweetedStatus: { id: "4" } })).toBe(false);
+    expect(isOwnPost({ text: "no id at all" })).toBe(false);
+  });
+
+  // Форма з живого виміру 17.09 (twitter_user_tweets для @toly): id, text, createdAt, лічильники,
+  // retweetedStatus у ретвітів і ЖОДНОГО conversationId.
+  it("рахує власні пости з живої форми 6551, де conversationId немає", async () => {
+    const live = {
+      data: [
+        { id: "2100640602111283348", text: "🧵 our team filed four findings", createdAt: "Thu Sep 17 17:38:42 +0000 2026",
+          favoriteCount: 0, replyCount: 0, retweetCount: 19, viewCount: 9746,
+          retweetedStatus: { id: "2100000000000000001", userScreenName: "PercolatorTrade", text: "🧵 our team filed four findings" } },
+        { id: "2100640602111283347", text: "What is dead cannot die", createdAt: "Tue Sep 15 19:37:00 +0000 2026",
+          favoriteCount: 300, replyCount: 20, retweetCount: 30, viewCount: 90_000 },
+        { id: "2100640602111283346", text: "Fable got better post astra release", createdAt: "Sun Sep 13 13:22:00 +0000 2026",
+          favoriteCount: 100, replyCount: 10, retweetCount: 10, viewCount: 30_000 },
+      ],
+      success: true,
+    };
+    const { fetchImpl } = api({ tweets: () => json(live) });
+    const r = await collectX("test_builder", ctxWith(fetchImpl, env));
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.facts).toMatchObject({
+      fetched: 3,
+      own: 2,
+      // Відповідей цей виклик не віддає, а без conversationId їх не відрізнити: не знаємо.
+      repliesMade: null,
+      ownAvgViews: 60_000,
+      ownAvgReplies: 15,
+      ownAvgLikesRt: 220,
+    });
   });
 
   it("дата X зі зсувом часового поясу", () => {

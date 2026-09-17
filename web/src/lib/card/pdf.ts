@@ -320,8 +320,11 @@ export async function renderProfilePdf(card: PdfCard, view: ProfileView, verifyU
   w.width = headRight - M;
   w.text(card.displayName, { size: 30, font: display, lh: 36 });
   w.text(`${card.roleName}, score ${card.score} of 100`, { size: 13, lh: 20 });
-  const meta = [view.roles.join(", "), view.place].filter(Boolean).join(" · ");
-  if (meta) w.text(meta, { size: 10, color: MUTED, lh: 16 });
+  // Власник 17.09: «ми просто маємо написати, яку роль вона шукає». Рядок складаємо ми, третьою
+  // особою й з анкети (роль, формат роботи, нижня межа плати). Слова самої людини йдуть нижче,
+  // підписані як її слова.
+  const want = [view.want.roles, view.want.place, view.want.pay].filter(Boolean).join(" · ");
+  if (want) w.text(`Looking for: ${want}`, { size: 10.5, lh: 16 });
   const contacts: { text: string; url: string }[] = [];
   if (view.contact.telegram) contacts.push({ text: `Telegram ${view.contact.telegram.label}`, url: view.contact.telegram.url });
   if (view.contact.email) contacts.push({ text: view.contact.email, url: `mailto:${view.contact.email}` });
@@ -365,6 +368,11 @@ export async function renderProfilePdf(card: PdfCard, view: ProfileView, verifyU
     const vy = qrTop - QR - 12;
     w.drawAt("Scan for the live score", w.x, vy, 8, sans, MUTED);
     w.drawAt(`and the data behind it.`, w.x, vy - 10, 8, sans, MUTED);
+    // Власник 17.09: посилання тут має ще одну роботу. Роботодавець, який перевіряє ці дані,
+    // бачить, де завести акаунт і знайти інших таких людей.
+    const hire = "Hiring? nextcryptojob.xyz/company";
+    const hw = w.drawAt(hire, w.x, vy - 24, 8, display);
+    w.link(w.x, vy - 26, hw, 11, `${new URL(verifyUrl).origin}/company`);
   }
 
   // Ліва колонка: слова людини, далі докази. Перелилось: нова сторінка на всю ширину.

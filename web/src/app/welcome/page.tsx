@@ -66,6 +66,7 @@ export default async function WelcomePage({ searchParams }: Props) {
       <StepShell
         step={s}
         editing={editing}
+        compact={editing}
         lead={lead}
         notice={notice}
         banner={
@@ -83,9 +84,13 @@ export default async function WelcomePage({ searchParams }: Props) {
       </StepShell>
     );
     // Раунд 5, п.10: правка відповідей (editing) лишається в кабінеті, з бічним меню на місці.
-    // Заголовок тут не задаємо: StepShell уже показує свій («Step N of M», назва кроку).
+    // Власник 17.09: шапка така сама, як на інших сторінках кабінету. Без неї меню стояло тут
+    // вище, ніж будь-де, і сторінки кабінету «стрибали» одна проти одної. Назву кроку StepShell
+    // показує далі сам, лише тихішим рядком (compact).
     return editing ? (
-      <AccountShell active="answers">{stepShell}</AccountShell>
+      <AccountShell active="answers" title="Your answers" sub="Change what we know about you. Your jobs update as soon as you save.">
+        {stepShell}
+      </AccountShell>
     ) : (
       stepShell
     );

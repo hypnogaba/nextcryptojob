@@ -14,7 +14,6 @@ import { jobsDb } from "@/lib/jobs-db";
 import { briefDone, type SavedStep } from "@/lib/onboarding/steps";
 import { checkedLine, emptyState, noMatch, scheduleLine, whenLabel } from "./empty-state";
 import { HistoryTabs } from "./history-tabs";
-import { SavedList } from "./saved-list";
 
 export const metadata: Metadata = { title: "Your jobs", robots: { index: false } };
 
@@ -215,15 +214,17 @@ export default async function JobsPage() {
           <DailyJobs setup={setup} />
         </aside>
 
+        {/* Власник 17.09: збережені більше не тягнуться довгим хвостом тут, вони на /jobs/saved
+            (підпункт меню). Лишається рядок з лічильником, щоб людина знала, що вони є. */}
         {hasSaved ? (
-          <section aria-labelledby="saved-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-2">
-            <div className="grid gap-1">
-              <h2 id="saved-h" className={H2}>
-                Saved{saved.refs.size > 0 ? ` (${saved.refs.size})` : ""}
-              </h2>
-              <p className={HINT}>Jobs you saved, newest first. Save or unsave from any job card.</p>
-            </div>
-            <SavedList jobs={saved.jobs} />
+          <section aria-labelledby="saved-h" className="grid max-w-[820px] gap-2 rounded-3xl bg-soft p-5 sm:p-6 lg:col-start-1 lg:row-start-2">
+            <h2 id="saved-h" className="font-sans text-base font-semibold text-ink">
+              Saved{saved.refs.size > 0 ? ` (${saved.refs.size})` : ""}
+            </h2>
+            <p className={HINT}>Jobs you saved, newest first, on their own page.</p>
+            <Link href="/jobs/saved" className={`${TEXT_LINK} w-fit`}>
+              See your saved jobs
+            </Link>
           </section>
         ) : null}
 

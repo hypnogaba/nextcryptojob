@@ -13,6 +13,11 @@ import { enqueueScoreJob } from "@/lib/score/queue";
 
 const BACK = "/profile#proof";
 
+/**
+ * Перемикач «сховати рядок». З 17.09 у кабінеті його немає (власник: людина не мусить редагувати
+ * пункти PDF), і всі рядки показуються. Дія лишається, щоб рішення можна було відкотити однією
+ * правкою UI, а збережені в базі значення не загубились.
+ */
 export async function toggleProofItemAction(form: FormData): Promise<void> {
   const user = await requireUser();
   const item = String(form.get("item") ?? "");
@@ -28,7 +33,9 @@ export async function setProofWalletAction(form: FormData): Promise<void> {
   const on = form.get("on") === "1";
   await setShowWallet(db(), user.id, on);
   await audit(user.id, "profile.wallets", null, { on });
-  redirect(BACK);
+  // Власник 17.09: цей вибір переїхав у Settings (privacy). Форма каже, куди вертатись, тож
+  // старе посилання з /profile теж працює.
+  redirect(String(form.get("back") ?? "") === "settings" ? "/settings#wallets" : BACK);
 }
 
 export type LinkState = { message?: FormMessage; label?: string; url?: string };

@@ -29,7 +29,7 @@ export type Collected<T> = Fetched<T> & { partial?: Record<string, string> };
 // §3. Факти джерел (`source_facts.facts_json`).
 
 export type XFacts = { followers: number|null; kol: number|null; kolSourceGap: boolean;
-  fetched: number; own: number; repliesMade: number; own30d: number;
+  fetched: number; own: number; repliesMade: number|null; own30d: number;
   ownAvgLikesRt: number|null; ownAvgViews: number|null; ownAvgReplies: number|null;
   daysCovered: number|null };
 // own = власні пости: conversationId == id і текст не починається з "RT @"

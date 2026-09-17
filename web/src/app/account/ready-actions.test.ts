@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSession } from "@/lib/auth/session";
 import { exec, harness, resetHarness, rows } from "@/test/harness";
+import { CARD_WAIT_MS } from "@/lib/score/result";
 import { checkScoreReadyAction } from "./ready-actions";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
@@ -59,6 +60,42 @@ describe("checkScoreReadyAction", () => {
     const second = await checkScoreReadyAction();
     expect(second).toEqual(first);
     expect(rows("SELECT COUNT(*) AS n FROM cards")).toEqual([{ n: 1 }]);
+  });
+
+  // 17.09, власник: «картка сама не створилась». Джерела людина додає по одному вже після
+  // анкети, тож sourcesChanged лишається true, а правило 60 секунд відкидає нове завдання:
+  // крок черги назавжди «enqueue». Стара умова («лише коли done») не видавала картку ніколи.
+  it("issues the card from the score it already has when sources changed after the last job", async () => {
+    await finished();
+    job("done", 10);
+    score("bd", 52);
+    exec("INSERT INTO audit_log (actor, action) VALUES ('u', 'sources.change')");
+
+    // Перші секунди чекаємо свіжий бал: картка варта того, щоб стати з новим числом.
+    await expect(checkScoreReadyAction(0)).resolves.toEqual({ ready: false });
+    // Але не безкінечно: далі картка виходить з того балу, що вже є.
+    const res = await checkScoreReadyAction(CARD_WAIT_MS + 1);
+    expect(res).toMatchObject({ ready: true });
+    expect(rows("SELECT role FROM cards")).toEqual([{ role: "bd" }]);
+  });
+
+  it("puts a fresh job in the queue itself when sources changed", async () => {
+    await finished();
+    job("done", 120);
+    score("bd", 52);
+    exec("INSERT INTO audit_log (actor, action) VALUES ('u', 'sources.change')");
+    await checkScoreReadyAction(0);
+    expect(rows("SELECT COUNT(*) AS n FROM score_jobs WHERE status = 'queued'")).toEqual([{ n: 1 }]);
+  });
+
+  it("waits for the engine while a job runs, but not longer than the wait", async () => {
+    await finished();
+    job("running", 5);
+    score("bd", 52);
+    await expect(checkScoreReadyAction(0)).resolves.toEqual({ ready: false });
+    // Рушій може й зависнути (sweepStuck бере його за 10 хвилин). Людина не мусить сидіти без
+    // картки весь цей час: після CARD_WAIT_MS виходить картка з наявного балу.
+    await expect(checkScoreReadyAction(CARD_WAIT_MS + 1)).resolves.toMatchObject({ ready: true });
   });
 
   it("is not ready when nothing scored yet", async () => {

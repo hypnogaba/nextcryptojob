@@ -1,10 +1,10 @@
-import { ArrowUpRight, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { logoPath } from "@/lib/jobs/companies";
 import { applyLink, EXTERNAL_JOB_REL, externalJobLink } from "@/lib/jobs/link";
 import { companySiteUrl, type TokenChip } from "@/lib/jobs/token";
 import { cn } from "@/lib/utils";
+import { ApplyChoice } from "./apply-choice";
 import { CompanyLogo } from "./company-logo";
 import { SaveButton } from "./save-button";
 
@@ -172,13 +172,16 @@ function Apply({ job, compact, jobRef, saved }: { job: CardJob; compact: boolean
   }
   return (
     <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button asChild size={compact ? "default" : "lg"} variant={compact ? "outline" : "default"} className="w-full sm:w-auto">
-        <a href={apply.href} {...(apply.newTab ? { target: "_blank", rel: apply.rel ?? undefined } : {})}>
-          {apply.label}
-          {apply.newTab ? <ArrowUpRight aria-hidden="true" data-icon="inline-end" /> : null}
-          {apply.newTab ? <span className="sr-only"> (opens in a new tab)</span> : null}
-        </a>
-      </Button>
+      {/* Власник 17.09: «Apply» дає вибір із двох шляхів (сайт компанії або наш PDF на одну
+          сторінку), а не веде відразу назовні. Вибір живе в ApplyChoice. */}
+      <ApplyChoice
+        href={apply.href}
+        label={apply.label}
+        newTab={apply.newTab}
+        rel={apply.rel}
+        company={job.company}
+        compact={compact}
+      />
       {save}
       {note ? <p className={`text-xs text-ink-muted ${WRAP}`}>{note}</p> : null}
     </div>

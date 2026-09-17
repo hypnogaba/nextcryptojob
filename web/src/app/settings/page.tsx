@@ -16,6 +16,7 @@ import { TelegramPanel } from "../account/telegram-panel";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
 import { LeaderboardSwitch, VisibilityForm } from "./visibility-form";
+import { loadWalletVisibility, WalletVisibility } from "./wallet-visibility";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
 
@@ -40,6 +41,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   const s = await loadSettings(db(), user.id);
   if (!s) redirect("/login");
+  const walletView = await loadWalletVisibility(user.id);
 
   return (
     <AccountShell active="settings" title="Settings" sub="How we reach you and who can see you.">
@@ -89,6 +91,8 @@ export default async function SettingsPage() {
       />
 
       <LeaderboardSwitch cardPublic={s.cardPublic} />
+
+      <WalletVisibility state={walletView} />
 
       <Section id="data" title="Your data">
         <div className="grid gap-3">

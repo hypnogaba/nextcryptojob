@@ -7,6 +7,7 @@ const VIEW: ProfileView = {
   mode: "full",
   roles: ["Engineer"],
   place: "Remote or Київ",
+  want: { roles: "Engineer", place: "Remote or Київ", pay: "from $5k" },
   groups: [
     {
       key: "github",

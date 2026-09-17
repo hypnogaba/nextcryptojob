@@ -87,7 +87,9 @@ export default async function AccountPage() {
 
   // Раунд 5, п.2 + п.14: людина, хто «Skip»-нула чекання балу (welcome/score/scoring-wait.tsx),
   // бачить тут «Your card is ready», коли рушій закінчить, без повернення на ту сторінку.
-  const watchScore = hasX && cards.length === 0;
+  // 17.09 (власник: «картка сама не створилась»): чекаємо картку кожному, хто пройшов анкету, а
+  // не лише тим, хто додав X. Бал буває і з гаманця чи GitHub, а картка мусить з'явитись сама.
+  const watchScore = cards.length === 0;
 
   return (
     <AccountShell active="overview" title="Account" sub="Your card, your jobs and your settings, in one place.">

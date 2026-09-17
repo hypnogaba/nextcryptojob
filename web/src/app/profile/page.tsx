@@ -165,7 +165,6 @@ export default async function ProfilePage({ searchParams }: Props) {
           publicUrl={`/c/${card0.slug}`}
           applyUrl={proofApply}
           pdfUrl={`/c/${card0.slug}/profile.pdf`}
-          showWallet={proof.input.prefs.showWallet}
         />
       ) : null}
 

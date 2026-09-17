@@ -31,11 +31,21 @@ export type ProofGroup = {
 
 export type WordsItem = { id: "words.role" | "words.target"; label: string; text: string; hidden: boolean };
 
+/**
+ * Рядок «що людина шукає», складений НАМИ (власник 17.09: «ми просто маємо написати, яку роль
+ * вона шукає», а не подавати її слова так, ніби ми пишемо від її імені). Третя особа, лише з
+ * анкети: ролі, формат роботи й нижня межа плати. Власні слова людини лишаються окремо, нижче,
+ * підписані як її слова.
+ */
+export type WantLine = { roles: string; place: string | null; pay: string | null };
+
 export type ProfileView = {
   mode: ProfileMode;
   roles: string[];
   /** «Remote», «Remote or Lisbon», «Lisbon» або null. */
   place: string | null;
+  /** Що людина шукає, нашими словами й третьою особою. */
+  want: WantLine;
   groups: ProofGroup[];
   /** Далі лише full і owner; у public порожньо або null. */
   words: WordsItem[];
@@ -48,6 +58,9 @@ export type ProfileInput = {
   roles: RoleKey[];
   remoteMode: string | null;
   city: string | null;
+  /** Нижня межа плати з анкети (users.salary_min) і її валюта. */
+  salaryMin?: number | null;
+  salaryCurrency?: string | null;
   roleText: string | null;
   targetText: string | null;
   telegramUsername: string | null;
@@ -121,11 +134,16 @@ function githubLines(f: Record<string, unknown>): { id: string; text: string }[]
 }
 
 function xLines(f: Record<string, unknown>): { id: string; text: string }[] {
+  // Власник 17.09: у PDF «майже нічого немає». Середні на пост тут були лише перегляди, і навіть
+  // вони виходили порожні, бо збирач не бачив власних постів (engine/src/collectors/x.ts, 17.09).
   return countLines("x", [
     ["followers", num(f.followers), (n, r) => `${n} ${plural(r, "follower", "followers")} on X`],
     ["kol", f.kolSourceGap === true ? null : num(f.kol), (n, r) => `Followed by ${n} notable crypto ${plural(r, "account", "accounts")}`],
     ["own30d", num(f.own30d), (n, r) => `${n} own ${plural(r, "post", "posts")} in the last 30 days`],
     ["ownAvgViews", num(f.ownAvgViews), (n) => `${n} views per post on average`],
+    ["ownAvgLikesRt", num(f.ownAvgLikesRt), (n) => `${n} likes and reposts per post on average`],
+    ["ownAvgReplies", num(f.ownAvgReplies), (n) => `${n} replies per post on average`],
+    ["own", num(f.own), (n, r) => `${n} own ${plural(r, "post", "posts")} we read for this score`],
   ]);
 }
 
@@ -241,6 +259,17 @@ function linesOf(key: SourceGroupKey, rows: FactRow[], now: Date): { id: string;
 
 // --- Вигляд -------------------------------------------------------------------------------
 
+const PAY_SYMBOL: Record<string, string> = { USD: "$", EUR: "\u20ac", GBP: "\u00a3" };
+
+/** «from $5k» тим самим письмом, що причини під вакансією (lib/jobs/fit.ts). */
+export function payFloor(min: number | null | undefined, currency: string | null | undefined): string | null {
+  if (typeof min !== "number" || !Number.isFinite(min) || min <= 0) return null;
+  const k = min >= 1000 ? `${Math.round(min / 1000)}k` : String(Math.round(min));
+  const cur = (currency ?? "USD").toUpperCase();
+  const sym = PAY_SYMBOL[cur];
+  return sym ? `from ${sym}${k}` : `from ${cur} ${k}`;
+}
+
 export function placeOf(remoteMode: string | null, city: string | null, withCity: boolean): string | null {
   const modes = workModes(remoteMode);
   const c = withCity ? safeCity(city) : null;
@@ -253,8 +282,11 @@ export function placeOf(remoteMode: string | null, city: string | null, withCity
 }
 
 export function profileView(input: ProfileInput, mode: ProfileMode): ProfileView {
-  const hidden = new Set(input.prefs.hidden);
-  const keep = <T extends { hidden: boolean }>(items: T[]) => (mode === "owner" ? items : items.filter((i) => !i.hidden));
+  // Власник 17.09: людина більше не ховає окремі рядки (перемикачі Hide/Show прибрано з
+  // /profile). Показуємо всі факти, які ми зібрали: PDF був «дуже сухий», а половина рядків ще й
+  // могла бути схована. prefs.hidden лишається в базі незайманим, тож рішення можна відкотити.
+  // Адреси гаманців і далі за вибором людини (prefs.showWallet, тепер у Settings).
+  const keep = <T,>(items: T[]) => items;
   const personal = mode !== "public";
 
   const groups = GROUPS.flatMap(({ key, title, identity }) => {
@@ -264,7 +296,7 @@ export function profileView(input: ProfileInput, mode: ProfileMode): ProfileView
     // чужої людини. З ключем ?k= (full) чи на власній /profile (owner) людина сама вирішила
     // показати більше, там група лишається.
     if (key === "wallets" && mode === "public") return [];
-    const lines = keep(linesOf(key, input.facts, input.now).map((l) => ({ ...l, hidden: hidden.has(l.id) })));
+    const lines = keep(linesOf(key, input.facts, input.now).map((l) => ({ ...l, hidden: false })));
     if (!lines.length) return [];
     const value = identity ? input.identities.find((i) => i.kind === identity)?.value : undefined;
     const link = personal && value ? identityLink(identity!, value) : null;
@@ -276,6 +308,11 @@ export function profileView(input: ProfileInput, mode: ProfileMode): ProfileView
     roles: input.roles.map((r) => ROLES[r].name),
     // Місто лише з ключем: разом з фактами воно звужує коло до однієї людини.
     place: placeOf(input.remoteMode, input.city, personal),
+    want: {
+      roles: input.roles.map((r) => ROLES[r].name).join(" or "),
+      place: placeOf(input.remoteMode, input.city, personal),
+      pay: payFloor(input.salaryMin, input.salaryCurrency),
+    },
     groups,
     words: [],
     links: [],
@@ -286,9 +323,9 @@ export function profileView(input: ProfileInput, mode: ProfileMode): ProfileView
 
   const words: WordsItem[] = [];
   const role = input.roleText?.trim();
-  if (role) words.push({ id: "words.role", label: "Role in their words", text: role, hidden: hidden.has("words.role") });
+  if (role) words.push({ id: "words.role", label: "The candidate\u2019s own words about the role", text: role, hidden: false });
   const target = input.targetText?.trim();
-  if (target) words.push({ id: "words.target", label: "What they are looking for", text: target, hidden: hidden.has("words.target") });
+  if (target) words.push({ id: "words.target", label: "What they are looking for, in their own words", text: target, hidden: false });
 
   const tg = input.telegramUsername?.replace(/^@/, "").trim();
   return {

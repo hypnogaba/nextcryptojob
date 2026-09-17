@@ -31,12 +31,17 @@ export function ScoreReadyWatcher({ watch }: { watch: boolean }) {
 
     async function poll() {
       if (stopped) return;
-      if (document.hidden || Date.now() - started.current > GIVE_UP_AFTER_MS) {
+      const waited = Date.now() - started.current;
+      // Вкладка схована: не питаємо, але й не здаємось, поки не вийшов час.
+      if (waited > GIVE_UP_AFTER_MS) return;
+      if (document.hidden) {
         timer = setTimeout(poll, 4_000);
         return;
       }
       try {
-        const res = await checkScoreReadyAction();
+        // Скільки людина вже чекає: після CARD_WAIT_MS сервер видає картку з наявного балу,
+        // не чекаючи свіжого перерахунку (ready-actions.ts).
+        const res = await checkScoreReadyAction(waited);
         if (res.ready) {
           setReady({ slug: res.slug, path: res.path });
           // Раунд 6 (власник: «натиснув пропустити, картинка потім сама не з'явилась»): саме

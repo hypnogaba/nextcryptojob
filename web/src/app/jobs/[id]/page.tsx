@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { Check } from "lucide-react";
+import { ApplyChoice } from "@/components/jobs/apply-choice";
 import { CompanySite, TokenBadge } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
 import { ROLES } from "@/lib/card/roles";
@@ -176,24 +177,34 @@ function Reasons({ reasons }: { reasons: string[] | null }) {
  * Подача з профілем-доказом (власник 16.09, j3): людина з карткою бере свій PDF на подачу замість CV
  * або вставляє посилання для подачі. PDF власнику віддається за сесією (/c/<код>/profile.pdf).
  */
-function ApplyWithProof({ slug }: { slug: string }) {
+function ApplyWithProof({ slug }: { slug: string | null }) {
   return (
     <section aria-labelledby="apply-proof" className="grid gap-3 rounded-3xl bg-soft p-5 sm:p-6">
       <h2 id="apply-proof" className="text-lg font-semibold tracking-tight">
         Apply with your proof, not a CV
       </h2>
       <p className="text-sm text-ink-muted">
-        Download your one-page PDF and attach it where the form asks for a CV, or paste your apply link in the form.
+        {slug
+          ? "Download your one-page PDF and attach it where the form asks for a CV, or paste your apply link in the form."
+          : "Create your card and we build a one-page PDF from your public work: your score and the facts behind it. Attach it where the form asks for a CV."}
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Button asChild size="lg" className="h-11 px-5">
-          <a href={`/c/${slug}/profile.pdf`} download>
-            Download my PDF
-          </a>
-        </Button>
-        <Link href="/profile#proof" className="text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
-          Get my apply link
-        </Link>
+        {slug ? (
+          <>
+            <Button asChild size="lg" className="h-11 px-5">
+              <a href={`/c/${slug}/profile.pdf`} download>
+                Download my PDF
+              </a>
+            </Button>
+            <Link href="/profile#proof" className="text-sm font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+              Get my apply link
+            </Link>
+          </>
+        ) : (
+          <Button asChild size="lg" className="h-11 px-5">
+            <Link href="/profile#proof">Create my card</Link>
+          </Button>
+        )}
       </div>
     </section>
   );
@@ -237,11 +248,7 @@ function ScannedJobView({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         {apply ? (
-          <Button asChild size="lg" className="h-11 w-full px-6 text-base sm:w-fit">
-            <a href={apply.href} {...(apply.newTab ? { target: "_blank", rel: apply.rel ?? undefined } : {})}>
-              {apply.label}
-            </a>
-          </Button>
+          <ApplyChoice href={apply.href} label={apply.label} newTab={apply.newTab} rel={apply.rel} company={job.company} />
         ) : null}
         <p className="text-sm text-ink-muted">
           You apply directly with {job.company}{apply?.via ? `, via ${apply.via}` : job.via ? `, via ${job.via}` : ""}.
@@ -257,7 +264,7 @@ function ScannedJobView({
         </section>
       ) : null}
 
-      {proofSlug ? <ApplyWithProof slug={proofSlug} /> : null}
+      {signedIn ? <ApplyWithProof slug={proofSlug} /> : null}
 
       <Reasons reasons={reasons} />
 
@@ -320,15 +327,13 @@ export default async function PublicJobPageView({ params }: Props) {
         </header>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Button asChild size="lg" className="h-11 w-full px-6 text-base sm:w-fit">
-            <a href={`/jobs/${job.id}/apply`} rel="nofollow">
-              Apply
-            </a>
-          </Button>
+          {/* Вакансія компанії: подача через /jobs/<id>/apply (+1 до apply_clicks). Вибір із двох
+              шляхів той самий, що й на картці в списку (власник 17.09). */}
+          <ApplyChoice href={`/jobs/${job.id}/apply`} label="Apply" newTab={false} rel="nofollow" company={job.company} />
           <p className="text-sm text-ink-muted">You apply directly with {job.company}.</p>
         </div>
 
-        {proofSlug ? <ApplyWithProof slug={proofSlug} /> : null}
+        {signedIn ? <ApplyWithProof slug={proofSlug} /> : null}
 
         {signedIn ? null : <CreateProfile jobRef={`co:${job.id}`} />}
 

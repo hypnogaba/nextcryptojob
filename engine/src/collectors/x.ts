@@ -22,10 +22,20 @@ export const X_CALL_ESTIMATE_MS = 4_000;
 
 type Envelope = { data?: unknown; success?: boolean; error?: string };
 
-/** Пост у відповіді twitter_user_tweets (поля з нулем 6551 просто пропускає). */
+/**
+ * Пост у відповіді twitter_user_tweets (поля з нулем 6551 просто пропускає).
+ *
+ * 17.09, вимір: `conversationId` цей виклик НЕ віддає (жива відповідь для @toly має лише
+ * createdAt, favoriteCount, id, media, quoteCount, replyCount, retweetCount, retweetedStatus,
+ * text, userFollowers, userIdStr, userName, userScreenName, viewCount). Ретвіт видно по
+ * `retweetedStatus` (там пост автора-джерела). Поле лишаємо необов'язковим: якщо 6551 почне
+ * віддавати його знову, isOwnPost ним скористається.
+ */
 export type Tweet = {
   id?: string | number; conversationId?: string | number; text?: string; createdAt?: string;
   favoriteCount?: number; retweetCount?: number; replyCount?: number; viewCount?: number;
+  /** Є лише в ретвіті: пост, який людина ретвітнула. */
+  retweetedStatus?: unknown;
 };
 
 type UserInfo = { success?: boolean; followersCount?: number; statusesCount?: number };
@@ -70,17 +80,32 @@ export function parseTweetDate(s: unknown): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
-/** Власний пост: conversationId == id і текст не починається з "RT @" (docs/contracts.md §3). */
-export const isOwnPost = (t: Tweet): boolean =>
-  t.id != null && t.conversationId != null && String(t.conversationId) === String(t.id) &&
-  !(t.text ?? "").startsWith("RT @");
+/** Ретвіт: 6551 кладе поруч пост-джерело, а текст старих ретвітів починається з "RT @". */
+export const isRetweet = (t: Tweet): boolean => t.retweetedStatus != null || (t.text ?? "").startsWith("RT @");
+
+/** Відповідь: лише коли 6551 дав conversationId і він не збігається з id. */
+export const isReply = (t: Tweet): boolean =>
+  t.id != null && t.conversationId != null && String(t.conversationId) !== String(t.id);
+
+/**
+ * Власний пост: не ретвіт і не відповідь (docs/contracts.md §3).
+ *
+ * До 17.09 правило вимагало `conversationId == id`. Це поле twitter_user_tweets не віддає, тож
+ * власним не був НІ ОДИН пост: own, own30d і всі середні виходили нуль чи null у всіх людей, а
+ * з ними падав бал X (55 зі 100 балів джерела) і сторінка казала «nothing to score in your X».
+ * Сам виклик іде без відповідей (includeReplies за замовчуванням false), тож власний пост це
+ * просто «те, що не ретвіт».
+ */
+export const isOwnPost = (t: Tweet): boolean => t.id != null && !isRetweet(t) && !isReply(t);
 
 const mean = (xs: number[]): number | null => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
 /** XFacts з профілю, KOL і постів. Чиста функція: тести звіряють її напряму. */
 export function xFacts(info: UserInfo, kolData: unknown, tweets: Tweet[], now: number): XFacts {
   const own = tweets.filter(isOwnPost);
-  const replies = tweets.filter((t) => t.id != null && t.conversationId != null && String(t.conversationId) !== String(t.id));
+  // Відповіді цей виклик не віддає, а без conversationId їх і не відрізнити: null означає
+  // «не знаємо», а не «нуль» (бал не має права спиратись на вигадане число).
+  const replies = tweets.some((t) => t.conversationId != null) ? tweets.filter(isReply).length : null;
   const stamps = tweets.map((t) => parseTweetDate(t.createdAt)).filter((t): t is number => t !== null);
   const kol = kolData && typeof kolData === "object" && !Array.isArray(kolData)
     ? num((kolData as { totalCount?: unknown }).totalCount) : null;
@@ -90,7 +115,7 @@ export function xFacts(info: UserInfo, kolData: unknown, tweets: Tweet[], now: n
     kolSourceGap: kol === null,
     fetched: tweets.length,
     own: own.length,
-    repliesMade: replies.length,
+    repliesMade: replies,
     own30d: own.filter((t) => (parseTweetDate(t.createdAt) ?? 0) > now - 30 * DAY_MS).length,
     ownAvgLikesRt: mean(own.map((t) => (num(t.favoriteCount) ?? 0) + (num(t.retweetCount) ?? 0))),
     ownAvgViews: mean(own.map((t) => num(t.viewCount) ?? 0)),

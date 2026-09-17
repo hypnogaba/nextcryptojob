@@ -6,35 +6,22 @@ import {
   createApplyLinkAction,
   removeProofLinkAction,
   resetApplyLinkAction,
-  setProofWalletAction,
-  toggleProofItemAction,
 } from "./proof-actions";
 import { ProofLinkForm } from "./proof-link-form";
 
 // «Your proof profile» (docs/specs/2026-09-16-proof-profile-design.md, розділ 2): вигляд owner
-// з lib/card/profile.ts, тобто з позначками схованих пунктів.
+// з lib/card/profile.ts. З 17.09 без редактора рядків: показуємо все, що зібрали.
 
 const SMALL = "h-11 px-3 text-sm";
 
-function Toggle({ id, hidden }: { id: string; hidden: boolean }) {
-  return (
-    <form action={toggleProofItemAction} className="shrink-0">
-      <input type="hidden" name="item" value={id} />
-      <input type="hidden" name="hide" value={hidden ? "0" : "1"} />
-      <Button type="submit" variant="outline" className={SMALL} aria-label={hidden ? "Show this line" : "Hide this line"}>
-        {hidden ? "Show" : "Hide"}
-      </Button>
-    </form>
-  );
-}
-
-function Line({ id, hidden, children }: { id: string; hidden: boolean; children: React.ReactNode }) {
-  return (
-    <li className="flex items-start justify-between gap-3">
-      <span className={hidden ? "text-ink-muted line-through" : "text-ink"}>{children}</span>
-      <Toggle id={id} hidden={hidden} />
-    </li>
-  );
+/**
+ * Власник 17.09: «нам потрібно заховати всі пункти PDF-меню там, де людина це все бачить; людина
+ * не мала би це все редагувати». Перемикачі Hide/Show на кожному рядку прибрано: PDF і картка
+ * показують усі факти, які ми зібрали. Адреси гаманців лишились єдиним вибором, і він переїхав у
+ * Settings (privacy), бо це про приватність, а не про вигляд PDF.
+ */
+function Line({ children }: { children: React.ReactNode }) {
+  return <li className="flex items-start justify-between gap-3 text-ink">{children}</li>;
 }
 
 export function ProofPanel({
@@ -42,13 +29,11 @@ export function ProofPanel({
   publicUrl,
   applyUrl,
   pdfUrl,
-  showWallet,
 }: {
   view: ProfileView;
   publicUrl: string;
   applyUrl: string | null;
   pdfUrl: string;
-  showWallet: boolean;
 }) {
   return (
     <section id="proof" aria-labelledby="proof-panel-title" className="grid gap-6 rounded-xl border border-line bg-surface p-4 sm:p-6">
@@ -58,7 +43,8 @@ export function ProofPanel({
         </h2>
         <p className="text-sm text-ink-muted">
           Use it instead of a CV. Everyone with your card link sees the facts without names or links. Your apply link and
-          the PDF also show your links, your own words and how to reach you. Hiding a line never changes your score.
+          the PDF also show your links, your own words and how to reach you. Every fact we collected is in there; you do
+          not have to pick the lines.
         </p>
       </div>
 
@@ -112,9 +98,7 @@ export function ProofPanel({
           </h3>
           <ul className="grid gap-2">
             {g.lines.map((l) => (
-              <Line key={l.id} id={l.id} hidden={l.hidden}>
-                {l.text}
-              </Line>
+              <Line key={l.id}>{l.text}</Line>
             ))}
           </ul>
         </div>
@@ -125,25 +109,15 @@ export function ProofPanel({
           <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">Your words</h3>
           <ul className="grid gap-2">
             {view.words.map((w) => (
-              <Line key={w.id} id={w.id} hidden={w.hidden}>
-                <span className="text-ink-muted">{w.label}: </span>
-                {w.text}
+              <Line key={w.id}>
+                <span>
+                  <span className="text-ink-muted">{w.label}: </span>
+                  {w.text}
+                </span>
               </Line>
             ))}
           </ul>
         </div>
-      ) : null}
-
-      {view.wallets.length ? (
-        <form action={setProofWalletAction} className="flex flex-wrap items-center justify-between gap-3">
-          <input type="hidden" name="on" value={showWallet ? "0" : "1"} />
-          <span className="text-sm text-ink">
-            Wallet addresses in your apply link and PDF: <strong>{showWallet ? "shown" : "hidden"}</strong>
-          </span>
-          <Button type="submit" variant="outline" className={SMALL}>
-            {showWallet ? "Hide addresses" : "Show addresses"}
-          </Button>
-        </form>
       ) : null}
 
       <div className="grid gap-3">
