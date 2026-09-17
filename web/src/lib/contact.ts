@@ -28,7 +28,10 @@ export type SubmitContactInput = {
 };
 
 export type SubmitContactResult =
-  | { ok: true; id: string | null }
+  /** Записано: id, і те, що треба для сповіщення власнику (пошта вже нормалізована, текст обрізаний). */
+  | { ok: true; id: string; email: string; message: string }
+  /** Honeypot: удаваний успіх, нічого не записано. */
+  | { ok: true; id: null }
   | { ok: false; reason: "invalid_email" | "invalid_topic" | "message_too_short" | "message_too_long" };
 
 /** Перевіряє й записує лист. Обмеження частоти перевіряє викликач (той самий ключ, що auth_attempts). */
@@ -49,7 +52,7 @@ export async function submitContact(db: D1Database, input: SubmitContactInput, n
     .prepare("INSERT INTO contact_messages (id, email, topic, message, created_at) VALUES (?, ?, ?, ?, ?)")
     .bind(id, email, input.topic, message, sqlTime(now))
     .run();
-  return { ok: true, id };
+  return { ok: true, id, email, message };
 }
 
 export type ContactMessageRow = {

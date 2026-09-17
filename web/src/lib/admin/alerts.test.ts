@@ -78,6 +78,33 @@ describe("recipients and message", () => {
     expect(tg).toContain('<a href="https://nextcryptojob.xyz/admin/sources">Open in admin</a>');
     expect(tg).not.toMatch(/\u2014/);
   });
+
+  it("carries the sender and the whole text, so the reply needs no trip to the admin", () => {
+    const written: OwnerAlert = {
+      ...ALERT,
+      title: "New contact message (company) from ada@example.com",
+      from: "ada@example.com",
+      body: "We hire a Rust engineer.\nWhat does a listing cost?",
+    };
+    const m = ownerAlertMessage(written, "https://nextcryptojob.xyz");
+    expect(m.telegramHtml).toContain("<code>ada@example.com</code>");
+    expect(m.telegramHtml).toContain("<blockquote>We hire a Rust engineer.\nWhat does a listing cost?</blockquote>");
+    expect(m.email.subject).toBe("NextCryptoJob: New contact message (company) from ada@example.com");
+    expect(m.email.text).toContain("From: ada@example.com");
+    expect(m.email.text).toContain("What does a listing cost?");
+    expect(m.email.html).toContain('href="mailto:ada%40example.com?subject=Re%3A%20your%20message%20to%20NextCryptoJob"');
+    expect(m.email.html).toContain("What does a listing cost?");
+  });
+
+  it("escapes the sender's text and keeps Telegram under its message limit", () => {
+    const m = ownerAlertMessage({ ...ALERT, from: "ada@example.com", body: `<script>x</script> ${"a".repeat(4000)}` }, "https://nextcryptojob.xyz");
+    expect(m.telegramHtml).toContain("&lt;script&gt;");
+    expect(m.telegramHtml).not.toContain("<script>");
+    expect(m.telegramHtml.length).toBeLessThan(4096);
+    expect(m.telegramHtml).toContain("…");
+    // Обрізає лише Telegram: лист несе текст цілком.
+    expect(m.email.text).toContain("a".repeat(4000));
+  });
 });
 
 describe("dedupe", () => {

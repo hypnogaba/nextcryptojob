@@ -17,13 +17,19 @@ const TOPIC_TITLE: Record<ContactTopic, string> = {
   other: "other",
 };
 
-function contactAlert(id: string, topic: ContactTopic): OwnerAlert {
+/**
+ * Сповіщення власнику про лист з /contact. Несе пошту автора й текст цілком: у Telegram
+ * чи в пошті одразу видно, хто написав і що, і чи треба відповідати, без заходу в адмінку.
+ */
+function contactAlert(id: string, topic: ContactTopic, from: string, message: string): OwnerAlert {
   return {
     key: `contact:${id}`,
     kind: "contact",
-    title: `New contact message (${TOPIC_TITLE[topic]})`,
+    title: `New contact message (${TOPIC_TITLE[topic]}) from ${from}`,
+    from,
+    body: message,
     why: "Someone wrote in from /contact and is waiting for a reply.",
-    next: "Open Messages, read it and reply by email, then mark it answered.",
+    next: `Reply to ${from} by email, then mark it answered in Messages.`,
     href: "/admin/messages",
     windowMs: 365 * 24 * 60 * 60 * 1000,
   };
@@ -60,7 +66,7 @@ export async function submitContactAction(_prev: ContactState, form: FormData): 
 
   if (res.id) {
     try {
-      await sendOwnerAlert(db(), contactAlert(res.id, topic as ContactTopic), {
+      await sendOwnerAlert(db(), contactAlert(res.id, topic as ContactTopic, res.email, res.message), {
         notifier: notifierFromEnv(appEnv()),
         adminEmails: (appEnv() as { ADMIN_EMAILS?: string }).ADMIN_EMAILS,
       });

@@ -24,7 +24,9 @@ import { parseDbTime, scannerMissed } from "./job-sources";
  *     або вже dead; розвідка роботодавців упала чи не запускалась тиждень;
  *   - оплати x402 без результату (чекають повернення) і завислі;
  *   - сплеск збоїв добірки, або добірки не йдуть добу.
- * Персональних даних у текстах немає: лише назви компаній, джерел, числа й причини збоїв.
+ * Персональних даних у перевірках cron немає: лише назви компаній, джерел, числа й причини
+ * збоїв. Виняток: сповіщення про лист з /contact (kind 'contact') несе пошту й текст автора,
+ * щоб відповісти прямо з пошти чи Telegram, не відкриваючи адмінку. Іде лише адмінам.
  */
 
 const MIN = 60_000;
@@ -60,6 +62,10 @@ export interface OwnerAlert {
   windowMs?: number;
   /** Рядки під заголовком (напр. список джерел). */
   details?: string[];
+  /** Пошта людини, якій відповідати (сповіщення про лист з /contact). */
+  from?: string;
+  /** Текст людини цілком, цитатою під заголовком. */
+  body?: string;
   /**
    * Складене сповіщення: кожен пункт займає свій ключ, і в повідомлення йдуть лише ті, що
    * зайнято зараз (джерела: кожне не частіше SOURCE_WINDOW_MS). Порожньо = не слати.
@@ -83,23 +89,48 @@ export async function ownerRecipients(db: D1Database, rawAdminEmails: string | u
   return emails.map((email) => ({ email, telegramId: tg.get(email) ?? null }));
 }
 
+/**
+ * Скільки тексту людини йде в Telegram. Ліміт повідомлення Bot API 4096 знаків, а лист з
+ * /contact дозволяє 4000: довший обрізаємо, решта лишається в листі й в адмінці.
+ */
+export const TELEGRAM_BODY_MAX = 2800;
+
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n).trimEnd()}…` : s);
+
 /** Текст сповіщення: Telegram (HTML) і лист. */
-export function ownerAlertMessage(a: Pick<OwnerAlert, "title" | "why" | "next" | "href" | "details">, origin: string): OutgoingMessage {
+export function ownerAlertMessage(
+  a: Pick<OwnerAlert, "title" | "why" | "next" | "href" | "details" | "from" | "body">,
+  origin: string,
+): OutgoingMessage {
   const url = new URL(a.href, origin).toString();
   const details = a.details ?? [];
   const tgDetails = details.length ? `\n${details.map((d) => `• ${escapeHtml(d)}`).join("\n")}` : "";
+  const body = (a.body ?? "").trim();
+  // Пошта в Telegram кодом: одним дотиком копіюється (посилання mailto бот не приймає).
+  const tgFrom = a.from ? `\n<b>From:</b> <code>${escapeHtml(a.from)}</code>` : "";
+  const tgBody = body ? `\n\n<blockquote>${escapeHtml(clip(body, TELEGRAM_BODY_MAX))}</blockquote>` : "";
   const telegramHtml =
-    `<b>${escapeHtml(a.title)}</b>${tgDetails}\n\n` +
+    `<b>${escapeHtml(a.title)}</b>${tgDetails}${tgFrom}${tgBody}\n\n` +
     `<b>Why it matters:</b> ${escapeHtml(a.why)}\n` +
     `<b>What to do:</b> ${escapeHtml(a.next)}\n\n` +
     `<a href="${escapeHtml(url)}">Open in admin</a>`;
+  const mailto = a.from ? `mailto:${encodeURIComponent(a.from)}?subject=${encodeURIComponent("Re: your message to NextCryptoJob")}` : null;
   const text =
-    `${a.title}\n${details.map((d) => `- ${d}\n`).join("")}\n` +
-    `Why it matters: ${a.why}\nWhat to do: ${a.next}\n\nOpen in admin: ${url}\n`;
+    `${a.title}\n${details.map((d) => `- ${d}\n`).join("")}` +
+    (a.from ? `From: ${a.from}\n` : "") +
+    (body ? `\n${body}\n` : "") +
+    `\nWhy it matters: ${a.why}\nWhat to do: ${a.next}\n\n` +
+    (a.from ? `Reply to: ${a.from}\n` : "") +
+    `Open in admin: ${url}\n`;
   const html =
     `<p><b>${escapeHtml(a.title)}</b></p>` +
     (details.length ? `<ul>${details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>` : "") +
+    (a.from && mailto ? `<p><b>From:</b> <a href="${escapeHtml(mailto)}">${escapeHtml(a.from)}</a></p>` : "") +
+    (body
+      ? `<blockquote style="margin:0 0 16px;padding:8px 14px;border-left:3px solid #d4d4d8;white-space:pre-wrap">${escapeHtml(body)}</blockquote>`
+      : "") +
     `<p><b>Why it matters:</b> ${escapeHtml(a.why)}</p><p><b>What to do:</b> ${escapeHtml(a.next)}</p>` +
+    (a.from && mailto ? `<p><a href="${escapeHtml(mailto)}">Reply to ${escapeHtml(a.from)}</a></p>` : "") +
     `<p><a href="${escapeHtml(url)}">Open in admin</a></p>`;
   return { telegramHtml, email: { subject: `NextCryptoJob: ${a.title}`, text, html } };
 }

@@ -97,7 +97,10 @@ export function AdminNav({
   const moreCurrent = current !== undefined && ADMIN_MORE.includes(current);
   return (
     <nav aria-label="Admin" className={cn("relative z-20 flex flex-wrap items-end gap-x-4 gap-y-1 border-b border-line text-sm", className)}>
-      <span className="font-display text-base font-extrabold tracking-[0.04em] text-ink-muted uppercase">Admin</span>
+      {/* Мітка тієї ж висоти й з тією ж прозорою рискою, що вкладки: усе стоїть одним рядком по центру. */}
+      <span className="inline-flex min-h-11 items-center border-b-2 border-transparent font-display text-base font-extrabold tracking-[0.04em] text-ink-muted uppercase">
+        Admin
+      </span>
       {ADMIN_MAIN.map((href) => (
         <Link key={href} href={href} aria-current={href === current ? "page" : undefined} className={href === current ? TAB_CURRENT : TAB}>
           {PAGE_BY_HREF.get(href)}
