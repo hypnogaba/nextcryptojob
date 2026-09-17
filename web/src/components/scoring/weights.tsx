@@ -44,7 +44,12 @@ function Cell({ points }: { points?: number }) {
 /** Три шари балу однією смугою. */
 export function Layers() {
   const parts = [
-    { name: "Work", points: WORK_POINTS, text: "Your role's main sources, below.", cls: "bg-ink text-white" },
+    {
+      name: "Work",
+      points: WORK_POINTS,
+      text: "Your role's main sources: GitHub for an engineer, trading for a trader, X or YouTube for media roles. See the table below.",
+      cls: "bg-ink text-white",
+    },
     { name: "Reputation", points: REP_POINTS, text: REPUTATION_TEXT, cls: "bg-brand-soft text-ink" },
     {
       name: "Breadth",
@@ -54,16 +59,24 @@ export function Layers() {
     },
   ];
   return (
-    <ol className="grid gap-3 sm:grid-cols-[60fr_25fr_15fr]" aria-label="Score layers">
-      {parts.map((p) => (
-        <li key={p.name} className={cn("grid content-start gap-1 rounded-2xl p-4", p.cls)}>
-          <span className="font-display text-xl font-semibold">
-            {p.name} <span className="tabular-nums">{p.points}</span>
-          </span>
-          <span className="text-sm opacity-80">{p.text}</span>
-        </li>
-      ))}
-    </ol>
+    <div className="grid gap-3">
+      {/* Пропорції шарів смугою; картки нижче однакової ширини, щоб текст не тіснився. */}
+      <div aria-hidden="true" className="flex h-2 overflow-hidden rounded-full">
+        {parts.map((p) => (
+          <span key={p.name} className={cn("h-full border-r-2 border-surface last:border-r-0", p.cls)} style={{ flex: p.points }} />
+        ))}
+      </div>
+      <ol className="grid gap-3 sm:grid-cols-3" aria-label="Score layers">
+        {parts.map((p) => (
+          <li key={p.name} className={cn("grid content-start gap-1 rounded-2xl p-4", p.cls)}>
+            <span className="font-display text-xl font-semibold">
+              {p.name} <span className="tabular-nums">{p.points}</span>
+            </span>
+            <span className="text-sm opacity-80">{p.text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -90,7 +103,7 @@ export function WeightsTable() {
         <tbody>
           {rows().map((r) => (
             <tr key={r.key} className={TR}>
-              <th scope="row" className={cn(TD, "text-left font-normal")}>
+              <th scope="row" className={cn(TD, "min-w-[15rem] text-left font-normal")}>
                 <span className={cn(POS, "mr-2 inline-block w-10 text-base")}>{r.code}</span>
                 {r.label}
               </th>
