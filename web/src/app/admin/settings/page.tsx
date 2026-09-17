@@ -141,16 +141,28 @@ function NoticeForm({ values, loaded, now }: { values: AppSettings; loaded: Load
   );
 }
 
+/**
+ * «Немає» саме по собі нічого не каже (власник 17.09). Червоне лише те, без чого сайт працює
+ * гірше, ніж має; вимкнена свідомо можливість і необов'язковий ключ ідуть тихо й підписані.
+ */
 function ConfigValue({ item }: { item: ConfigItem }) {
   if (item.state === "value") return <span className="font-mono text-xs break-all">{item.value}</span>;
-  return item.state === "set" ? (
-    <span className="text-xs font-semibold text-ink">Set</span>
-  ) : (
-    <span className="text-xs font-semibold text-danger">Missing</span>
-  );
+  if (item.state === "set") return <span className="text-xs font-semibold text-ink">Set</span>;
+  if (item.need === "unused") return <span className="text-xs text-ink-muted">Not set, and not needed</span>;
+  if (item.need === "optional") return <span className="text-xs text-ink-muted">Not set, optional</span>;
+  return <span className="text-xs font-semibold text-danger">Missing, needed</span>;
 }
 
 function EngineKeys({ keys, now }: { keys: EngineKeyReport[] | null; now: number }) {
+  const missing = keys?.filter((k) => k.missingIn > 0) ?? null;
+  if (missing !== null && missing.length === 0) {
+    return (
+      <p className="text-sm text-ink-muted" data-engine-keys="none">
+        Every engine key the scoring engine asked for was there: no source result says &ldquo;not configured&rdquo;.
+        Nothing to do.
+      </p>
+    );
+  }
   return (
     <div className={BOARD}>
       <table className={`${TABLE} min-w-[520px]`} data-table="engine-keys">
@@ -166,12 +178,12 @@ function EngineKeys({ keys, now }: { keys: EngineKeyReport[] | null; now: number
           </tr>
         </thead>
         <tbody>
-          {keys === null ? (
+          {missing === null ? (
             <tr className={TR}>
               <td colSpan={3} className={`${TD_TIGHT} text-ink-muted`}>Could not read source results.</td>
             </tr>
           ) : (
-            keys.map((k) => (
+            missing.map((k) => (
               <tr key={k.key} className={TR}>
                 <th scope="row" className={`${TD_TIGHT} font-mono text-xs font-normal`}>{k.key}</th>
                 <td className={cn(`${TD_TIGHT} text-right tabular-nums`, k.missingIn > 0 && "font-semibold text-danger")}>
@@ -288,10 +300,15 @@ export default async function AdminSettingsPage({
         <EngineKeys keys={keys} now={now} />
       </div>
 
-      <h2 className="display mt-12 text-[1.75rem] leading-none">Limits in code</h2>
-      <p className="mt-2 max-w-prose text-sm text-ink-muted">
-        Quotas, seats, the trial and prices are read in many places at once and are also stated on public pages and in the
-        company terms, so they change with a code edit and a deploy, not here.
+      <details className="group mt-12" data-code-tables="">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-line-strong">
+          <span className="group-open:hidden">Show the limits that live in code</span>
+          <span className="hidden group-open:inline">Hide the limits that live in code</span>
+          <span className="font-normal text-ink-muted">Quotas, seats, trial and prices: reference only, nothing to do here</span>
+        </summary>
+      <p className="mt-4 max-w-prose text-sm text-ink-muted">
+        They are read in many places at once and are also stated on public pages and in the company terms, so they change
+        with a code edit and a deploy, not here.
       </p>
       <div className="mt-4 grid gap-6">
         {tables.map((t) => (
@@ -329,6 +346,7 @@ export default async function AdminSettingsPage({
           </div>
         ))}
       </div>
+      </details>
     </section>
   );
 }

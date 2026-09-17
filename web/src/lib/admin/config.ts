@@ -22,6 +22,14 @@ export type ConfigItem = {
   state: "set" | "missing" | "value";
   value?: string;
   note?: string;
+  /**
+   * Що означає «немає» (власник 17.09: «тут не зрозуміло, скажи, що від мене»):
+   * needed = сайт без цього не працює як слід, це треба поставити;
+   * optional = працює й без цього, просто гірше;
+   * unused = можливість вимкнена свідомо, ставити нічого не треба.
+   * Типово needed.
+   */
+  need?: "needed" | "optional" | "unused";
 };
 
 export type ConfigGroup = { title: string; status?: { ok: boolean; text: string }; items: ConfigItem[] };
@@ -34,8 +42,8 @@ function present(env: Env, name: string): boolean {
   return v !== undefined && v !== null;
 }
 
-function secret(env: Env, name: string, note?: string): ConfigItem {
-  return { name, state: present(env, name) ? "set" : "missing", note };
+function secret(env: Env, name: string, note?: string, need: ConfigItem["need"] = "needed"): ConfigItem {
+  return { name, state: present(env, name) ? "set" : "missing", note, need };
 }
 
 /** Групи змінних Worker для сторінки налаштувань. */
@@ -87,24 +95,26 @@ export function workerConfig(env: Env, nodeEnv: string | undefined = process.env
     },
     {
       title: "Payments",
-      status: stripe.enabled ? { ok: true, text: "Card payments on" } : { ok: false, text: `Card payments off (${stripe.reason})` },
+      status: stripe.enabled
+        ? { ok: true, text: "Card payments on" }
+        : { ok: true, text: "Card payments off. Companies pay by hand or in USDC; set these three only if you want card checkout." },
       items: [
-        secret(env, "STRIPE_SECRET_KEY"),
-        secret(env, "STRIPE_PRICE_ID"),
-        secret(env, "STRIPE_WEBHOOK_SECRET"),
+        secret(env, "STRIPE_SECRET_KEY", "From the Stripe dashboard.", "unused"),
+        secret(env, "STRIPE_PRICE_ID", "The monthly price you created in Stripe.", "unused"),
+        secret(env, "STRIPE_WEBHOOK_SECRET", "From the Stripe webhook endpoint.", "unused"),
       ],
     },
     {
       title: "x402 (USDC)",
       status: x402.enabled
         ? { ok: true, text: `x402 on, ${x402.mode}, facilitator ${x402.facilitator.kind}` }
-        : { ok: false, text: `x402 off (${x402.reason})` },
+        : { ok: true, text: "Pay per request in USDC is off. Set these only if you want agents and companies to pay per call." },
       items: [
         { name: "X402_NETWORK", state: "value", value: network ?? "not set", note: network ? undefined : "Default: mainnet in production, testnet elsewhere." },
-        secret(env, "X402_PAY_TO_EVM", "Receiving address on Base."),
-        secret(env, "X402_PAY_TO_SOLANA", "Receiving address on Solana."),
-        secret(env, "CDP_API_KEY_ID"),
-        secret(env, "CDP_API_KEY_SECRET"),
+        secret(env, "X402_PAY_TO_EVM", "Your receiving address on Base.", "unused"),
+        secret(env, "X402_PAY_TO_SOLANA", "Your receiving address on Solana.", "unused"),
+        secret(env, "CDP_API_KEY_ID", "Coinbase Developer Platform key, to check payments.", "unused"),
+        secret(env, "CDP_API_KEY_SECRET", "The secret of the same key.", "unused"),
       ],
     },
     {
@@ -113,7 +123,7 @@ export function workerConfig(env: Env, nodeEnv: string | undefined = process.env
         secret(env, "WEBHOOK_SIGNING_KEY", "Company webhooks. Never change it after launch (docs/ops.md)."),
         secret(env, "INTERNAL_API_SECRET", "Digest emails from the engine."),
         secret(env, "TWITTER_TOKEN", "X checks in onboarding."),
-        secret(env, "GITHUB_TOKEN", "Optional: GitHub checks without it are limited to 60 an hour."),
+        secret(env, "GITHUB_TOKEN", "GitHub checks work without it, just 60 an hour instead of 5000.", "optional"),
       ],
     },
   ];

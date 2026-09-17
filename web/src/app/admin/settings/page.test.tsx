@@ -93,15 +93,17 @@ describe("/admin/settings for an admin", () => {
     expect(html).not.toContain(SECRET);
     expect(html).not.toContain("bot-token-value");
     expect(html).toMatch(/data-config="STRIPE_SECRET_KEY".*?>Set</);
-    expect(html).toMatch(/data-config="STRIPE_WEBHOOK_SECRET".*?>Missing</);
-    expect(html).toContain("Card payments off (not configured: STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET)");
+    // «Немає» підписано тим, що це означає: картки вимкнені свідомо, робити нічого не треба.
+    expect(html).toMatch(/data-config="STRIPE_WEBHOOK_SECRET".*?>Not set, and not needed</);
+    expect(html).toContain("Card payments off. Companies pay by hand or in USDC");
     // Несекретні значення видно: хто адмін і адреса сайту.
     expect(html).toMatch(/data-config="ADMIN_EMAILS".*?boss@example.com/);
     expect(html).toMatch(/data-config="SITE_URL".*?https:\/\/nextcryptojob.xyz/);
-    // Ключі рушія: сайт їх не бачить.
-    expect(html).toContain("Set on the VPS");
-    expect(html).toContain("HELIUS_KEY");
-    // Квоти й пробний строк лише для читання.
+    // Ключі рушія: жодної прогалини, тож замість таблиці нулів один рядок.
+    expect(html).toContain('data-engine-keys="none"');
+    expect(html).not.toContain("HELIUS_KEY");
+    // Квоти й пробний строк лише для читання, під розкривкою.
+    expect(html).toContain("Show the limits that live in code");
     expect(html).toContain("14 days");
     expect(html).toMatch(/Subscription<\/th><td[^>]*>300<\/td>/);
     expect(html).not.toMatch(/name="company_trial_days"/);

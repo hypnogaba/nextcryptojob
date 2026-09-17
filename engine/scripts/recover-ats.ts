@@ -44,10 +44,27 @@ export function slugCandidates(name: string): string[] {
 }
 
 /** Домени-кандидати, коли слаг ATS не вгадався. */
+/**
+ * Другий захід для однослівних назв: дошка часто заведена на повну назву компанії, а не на бренд
+ * («Ondo» → `ondofinance`). Ці варіанти пробуємо лише на трьох найчастіших ATS, щоб не робити
+ * десятки марних запитів на кожну назву.
+ */
+export function extraSlugCandidates(name: string): string[] {
+  const first = slugCandidates(name)[0];
+  if (!first || /(labs?|finance|protocol|network|foundation|capital|markets?)$/.test(first)) return [];
+  return ["labs", "finance", "protocol", "network"].map((w) => first + w);
+}
+
+/** ATS, на яких перевіряємо додаткові варіанти слага. */
+const PROBE_EXTRA: AtsProvider[] = ["ashby", "greenhouse", "lever"];
+
 export function domainCandidates(name: string): string[] {
   const s = slugCandidates(name)[0];
   return s ? [`https://${s}.com/`, `https://${s}.io/`, `https://${s}.xyz/`] : [];
 }
+
+/** Рядок входу: назва обов'язкова, адреса сайту необов'язкова (список DefiLlama її має). */
+export interface Row { company: string; n?: number; site?: string }
 
 export interface Hit {
   company: string;
@@ -62,9 +79,13 @@ export interface Hit {
 
 const opt = { retries: 0, timeoutMs: 15_000 } as const;
 
-async function probeSlugs(name: string): Promise<Hit | null> {
-  for (const slug of slugCandidates(name)) {
-    for (const provider of PROBE) {
+async function probeSlugs(name: string, fast = false): Promise<Hit | null> {
+  const plan: Array<[string, readonly AtsProvider[]]> = [
+    ...slugCandidates(name).map((s): [string, readonly AtsProvider[]] => [s, fast ? PROBE_EXTRA : PROBE]),
+    ...extraSlugCandidates(name).map((s): [string, readonly AtsProvider[]] => [s, PROBE_EXTRA]),
+  ];
+  for (const [slug, providers] of plan) {
+    for (const provider of providers) {
       let jobs;
       try { jobs = await ATS[provider](slug, name, opt); } catch { continue; }
       if (jobs.length === 0) continue;
@@ -75,8 +96,8 @@ async function probeSlugs(name: string): Promise<Hit | null> {
   return null;
 }
 
-async function probeSite(name: string): Promise<Hit | null> {
-  for (const site of domainCandidates(name)) {
+async function probeSite(name: string, sites: readonly string[]): Promise<Hit | null> {
+  for (const site of sites) {
     let found;
     try { found = await resolveCompanySite(site, opt); } catch { continue; }
     if (!found) continue;
@@ -90,13 +111,25 @@ async function probeSite(name: string): Promise<Hit | null> {
   return null;
 }
 
-export async function recover(rows: ReadonlyArray<{ company: string; n?: number }>, log: (s: string) => void): Promise<{ hits: Hit[]; misses: string[] }> {
+export interface RecoverOptions {
+  /** Лише сторінка кар'єри за відомою адресою: для довгих списків, де здогади про слаг надто дорогі. */
+  siteOnly?: boolean;
+  /** Лише три найчастіші ATS і жодних здогадів про домен: для списків у тисячу назв. */
+  fast?: boolean;
+  concurrency?: number;
+}
+
+export async function recover(rows: ReadonlyArray<Row>, log: (s: string) => void, o: RecoverOptions = {}): Promise<{ hits: Hit[]; misses: string[] }> {
   const hits: Hit[] = [];
   const misses: string[] = [];
-  await mapLimit(rows, 4, async (row) => {
+  await mapLimit(rows, o.concurrency ?? 4, async (row) => {
     const name = row.company;
     if (isNonCryptoCompany(companyKey(name), name)) { log(`− ${name}: не крипто (список добірки)`); return; }
-    const hit = (await probeSlugs(name)) ?? (await probeSite(name));
+    // Відома адреса сайту точніша за здогад про слаг: ATS беремо з їхньої ж сторінки кар'єри.
+    const known = row.site ? [row.site] : [];
+    const hit = (known.length ? await probeSite(name, known) : null)
+      ?? (o.siteOnly ? null
+        : (await probeSlugs(name, o.fast)) ?? (o.fast ? null : await probeSite(name, domainCandidates(name))));
     if (!hit) { misses.push(name); log(`· ${name}: ATS не знайдено`); return; }
     hit.had = row.n ?? 0;
     hits.push(hit);
@@ -120,9 +153,11 @@ async function main(argv: string[]): Promise<void> {
   if (!file) { console.error("usage: recover-ats.ts <companies.json> [--out f] [--sql f] [--limit N]"); process.exit(2); }
   const arg = (k: string): string | undefined => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
   const limit = Number(arg("--limit") ?? 0);
-  let rows = JSON.parse(readFileSync(file, "utf8")) as Array<{ company: string; n?: number }>;
+  let rows = JSON.parse(readFileSync(file, "utf8")) as Row[];
   if (limit > 0) rows = rows.slice(0, limit);
-  const { hits, misses } = await recover(rows, (s) => console.log(s));
+  const { hits, misses } = await recover(rows, (s) => console.log(s),
+    { siteOnly: argv.includes("--site-only"), fast: argv.includes("--fast"),
+      concurrency: Number(arg("--concurrency") ?? 0) || undefined });
   const found = hits.reduce((n, h) => n + h.jobs, 0);
   console.log(`\nкомпаній ${rows.length}: знайдено ${hits.length}, вакансій на їхніх дошках ${found}; не знайдено ${misses.length}`);
   const out = arg("--out"); if (out) writeFileSync(out, JSON.stringify({ hits, misses }, null, 1));

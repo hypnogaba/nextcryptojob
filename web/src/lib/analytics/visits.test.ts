@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { crmDb } from "@/test/crm-fixtures";
-import { conversion, isBot, loadVisits, pathGroup, recordVisit, refHost, visitorHash } from "./visits";
+import { conversion, isBot, loadVisitSeries, loadVisits, pathGroup, recordVisit, refHost, visitorHash } from "./visits";
 
 /** Власний лічильник: групи сторінок, referrer, боти, хеш відвідувача з сіллю дня, без сирих IP. */
 
@@ -105,5 +105,63 @@ describe("recordVisit and loadVisits", () => {
     expect(conversion(3, 25)).toBe("12%");
     expect(conversion(1, 40)).toBe("2.5%");
     expect(conversion(0, 0)).toBe("0%");
+  });
+});
+
+describe("loadVisitSeries", () => {
+  const seed = (raw: { exec: (sql: string) => void }) => {
+    raw.exec(`INSERT INTO visit_days (day, path_group, ref_host, views, uniques) VALUES
+      ('2026-09-17', 'home', 'direct', 30, 9),
+      ('2026-09-16', 'home', 'direct', 149, 11),
+      ('2026-09-15', 'home', 'x.com', 140, 18),
+      ('2026-08-20', 'home', 'direct', 10, 4)`);
+    raw.exec("INSERT INTO users (id, email, created_at) VALUES ('u1', 'a@example.com', '2026-09-17 09:00:00')");
+    raw.exec("INSERT INTO users (id, email, created_at, is_demo) VALUES ('d1', NULL, '2026-09-17 09:00:00', 1)");
+  };
+  const NOW = new Date("2026-09-17T12:00:00Z");
+
+  it("gives 30 days, oldest first, with sign-ups and no demo accounts", async () => {
+    const { d1, raw } = crmDb();
+    seed(raw);
+    const s = await loadVisitSeries(d1, "day", NOW);
+    expect(s.points).toHaveLength(30);
+    expect(s.points.at(-1)).toMatchObject({ key: "2026-09-17", uniques: 9, views: 30, signups: 1 });
+    expect(s.points.at(-2)).toMatchObject({ key: "2026-09-16", uniques: 11, views: 149, signups: 0 });
+    expect(s.points[0]!.key).toBe("2026-08-19");
+    expect(s.totals.uniques).toBe(42);
+  });
+
+  it("adds days up into weeks that start on Monday", async () => {
+    const { d1, raw } = crmDb();
+    seed(raw);
+    const s = await loadVisitSeries(d1, "week", NOW);
+    expect(s.points).toHaveLength(12);
+    // 17.09 це четвер, тож поточний тиждень почався в понеділок 14.09 і тримає 15, 16 і 17 вересня.
+    expect(s.points.at(-1)).toMatchObject({ key: "2026-09-14", uniques: 38, views: 319 });
+    expect(s.points.at(-1)!.title).toContain("Week of");
+  });
+
+  it("adds days up into calendar months", async () => {
+    const { d1, raw } = crmDb();
+    seed(raw);
+    const s = await loadVisitSeries(d1, "month", NOW);
+    expect(s.points).toHaveLength(12);
+    expect(s.points.at(-1)).toMatchObject({ key: "2026-09", uniques: 38 });
+    expect(s.points.at(-2)).toMatchObject({ key: "2026-08", uniques: 4 });
+    expect(s.points[0]!.key).toBe("2025-10");
+  });
+
+  it("says visit counting is not on instead of throwing", async () => {
+    const stmt = { bind: () => stmt };
+    const broken = {
+      prepare: () => stmt,
+      batch: async () => {
+        throw new Error("no such table: visit_days");
+      },
+    } as unknown as D1Database;
+    const s = await loadVisitSeries(broken, "day", NOW);
+    expect(s.available).toBe(false);
+    expect(s.points).toHaveLength(30);
+    expect(s.totals.uniques).toBe(0);
   });
 });

@@ -121,9 +121,9 @@ describe("/admin/sources for an admin", () => {
     expect(fresh).toContain("Updated just now");
   });
 
-  it("folds sources with fewer than 20 live jobs behind a toggle and keeps the big ones in view", async () => {
+  it("folds sources with fewer than 50 live jobs behind a toggle and keeps the big ones in view", async () => {
     const t = jobsTestDb();
-    for (let i = 0; i < 25; i++) addCachedJob(t.raw, { source: "ashby:kraken", company: "Kraken", fetchedAt: "2026-09-12T04:40:00.000Z" });
+    for (let i = 0; i < 55; i++) addCachedJob(t.raw, { source: "ashby:kraken", company: "Kraken", fetchedAt: "2026-09-12T04:40:00.000Z" });
     addCachedJob(t.raw, { source: "greenhouse:coinbase", company: "Coinbase", fetchedAt: "2026-09-12T04:40:00.000Z" });
     addCachedJob(t.raw, { source: "lever:moonpay", company: "MoonPay", fetchedAt: "2026-09-12T04:40:00.000Z" });
     addScanRun(t.raw, { id: "s1", startedAt: "2026-09-12T04:30:00.000Z" });
