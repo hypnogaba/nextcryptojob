@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { requireUser } from "@/lib/auth/session";
 import { addLink, ensureKeyVersion, isItemId, removeLink, resetKey, setHidden, setShowWallet } from "@/lib/card/profile-prefs";
 import { db } from "@/lib/db";
+import { enqueueScoreJob } from "@/lib/score/queue";
 
 // Керування профілем-доказом (docs/specs/2026-09-16-proof-profile-design.md, розділ 2).
 // Лише свої налаштування: user_id з сесії, не з форми. У журнал ні ключ, ні адреси, ні посилання.
@@ -39,6 +40,9 @@ export async function addProofLinkAction(_prev: LinkState, form: FormData): Prom
   const res = await addLink(db(), user.id, label, url);
   if (!res.ok) return { message: { tone: "error", text: res.error }, label, url };
   await audit(user.id, "profile.link_add", null);
+  // v7: посилання рахуються в балі. Рушій читає їх, коли бере завдання, тож кілька посилань поспіль
+  // покриває одне завдання (правило 60 секунд і «вже в черзі» лишаються).
+  await enqueueScoreJob(db(), user.id, "manual");
   redirect(BACK);
 }
 
@@ -46,6 +50,7 @@ export async function removeProofLinkAction(form: FormData): Promise<void> {
   const user = await requireUser();
   await removeLink(db(), user.id, Number(form.get("index")));
   await audit(user.id, "profile.link_remove", null);
+  await enqueueScoreJob(db(), user.id, "manual");
   redirect(BACK);
 }
 

@@ -1,25 +1,39 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SourceParts, WeightsTable } from "./weights";
+import { Layers, SourceParts, WeightsTable } from "./weights";
 
-describe("weights on /scoring", () => {
-  it("shows each role's main part and bonus, with the Onchain column", () => {
+const cellsOf = (html: string, label: string) => {
+  const row = html.slice(html.indexOf(`>${label}<`));
+  return [...row.slice(0, row.indexOf("</tr>")).matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1]!.replace(/<[^>]+>/g, ""));
+};
+
+describe("weights on /scoring (v7)", () => {
+  it("shows the Work points of every role, with the Onchain column", () => {
     const html = renderToStaticMarkup(<WeightsTable />);
-    // Одинадцять рядків: десять ролей, аудитор двома шляхами.
-    expect(html.match(/<th scope="row"/g)).toHaveLength(11);
+    // 16 рядків: 15 ролей, аудитор двома шляхами.
+    expect(html.match(/<th scope="row"/g)).toHaveLength(16);
     expect(html).toContain(">Onchain</th>");
-    const trader = html.slice(html.indexOf(">Trader<"));
-    const cells = [...trader.slice(0, trader.indexOf("</tr>")).matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1]!.replace(/<[^>]+>/g, ""));
-    // gh_eng, gh_builder, x, media, output, onchain, trading, site, audits
-    expect(cells).toEqual(["·not used", "·not used", "+5", "·not used", "·not used", "10", "90", "+5", "·not used"]);
+    // gh_eng, gh_builder, x, media, output, onchain, trading, site, audits, links, best
+    const no = "·not used";
+    expect(cellsOf(html, "Trader")).toEqual([no, no, no, no, no, "10", "50", no, no, no, no]);
+    expect(cellsOf(html, "Designer")).toEqual([no, no, "20", no, no, no, no, no, no, "40", no]);
     expect(html).toContain("Security auditor, with audit contests");
+    expect(html).toContain("out of 60");
   });
 
-  it("lists what each source counts, onchain first", () => {
+  it("names the three layers with their points", () => {
+    const html = renderToStaticMarkup(<Layers />);
+    expect(html).toMatch(/Work.*60/);
+    expect(html).toMatch(/Reputation.*25/);
+    expect(html).toMatch(/Breadth.*15/);
+  });
+
+  it("lists what each source counts, onchain first, with team work and links", () => {
     const html = renderToStaticMarkup(<SourceParts />);
     expect(html.indexOf(">Onchain</h3>")).toBeLessThan(html.indexOf(">GitHub</h3>"));
     expect(html).toContain("Wallet age");
-    expect(html).toContain("Full at 6 years, even steps");
-    expect(html).toContain("The higher of your X and YouTube scores.");
+    expect(html).toContain("commits to your team&#x27;s repos");
+    expect(html).toContain("Links to your work you add yourself (not checked)");
+    expect(html).toContain("Whichever of your sources scores highest.");
   });
 });

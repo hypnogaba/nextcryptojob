@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CardBackFace } from "@/components/card/card-back";
 import { CardFront } from "@/components/card/card-front";
-import { SourceParts, WeightsTable } from "@/components/scoring/weights";
+import { Layers, SourceParts, WeightsTable } from "@/components/scoring/weights";
 import { MiniCard } from "@/components/card/mini-card";
 import { SharePreview } from "@/components/landing/share-preview";
 import { Button } from "@/components/ui/button";
@@ -41,14 +41,14 @@ export default function ScoringPage() {
           <div>
             <h1 className="display text-title">How your score works</h1>
             <div className="mt-4 grid gap-3 text-ink-muted">
-              <p>We read public data only: your posts on X, your wallets&apos; history and your GitHub.</p>
+              <p>We read public data only: X, GitHub, wallets, YouTube, your site and the links to your work you add.</p>
               <p>
                 Each role weighs them differently.{" "}
                 <b className="font-semibold text-ink">For an engineer, GitHub counts most. For a trader, your wallets do.</b>
               </p>
               <p>
-                The score runs from 0 to 100, and every 10 points is a new level. A source you haven&apos;t linked stays
-                empty. It never pulls you down.
+                The score runs from 0 to 100, and every 10 points is a new level. Every source you connect can add
+                points. A source you haven&apos;t linked stays empty. It never pulls you down.
               </p>
               <p>It is optional and free. Your daily jobs come with or without it.</p>
             </div>
@@ -117,10 +117,12 @@ export default function ScoringPage() {
               Every weight, in the open
             </h2>
             <p className="text-lg text-ink-muted">
-              Each role takes a main part out of 100 from one or two sources, and up to 10 bonus points from others.
-              Onchain, your wallets&apos; own history, is the main source for traders and a bonus for every other role.
+              Your score has three layers. Work comes from your role&apos;s main sources. Reputation shows who in crypto
+              follows you. Breadth rewards everything else you connect: your site, YouTube, wallets, links to your work.
+              Onchain is part of Work for BD, Community and Trader, and counts as Breadth for everyone else.
             </p>
           </div>
+          <Layers />
           <WeightsTable />
           <div className="grid gap-3">
             <h3 className="font-display text-2xl font-semibold">What each source counts</h3>
@@ -131,7 +133,7 @@ export default function ScoringPage() {
           </div>
           <SourceParts />
           <p className="text-sm text-ink-muted">
-            Formula v6. More on sources, gaps and refresh:{" "}
+            Formula v7. More on sources, gaps and refresh:{" "}
             <Link href="/how-scoring-works" className={LINK}>
               how scoring works
             </Link>

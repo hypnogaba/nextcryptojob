@@ -53,8 +53,10 @@ describe("rankRoles: the person's scored roles, highest first", () => {
     ]);
   });
 
-  it("ignores roles the person did not pick and roles that have no score yet", () => {
-    expect(rankRoles(["engineer", "designer"], scores)).toEqual([]);
+  it("ignores roles the person did not pick and roles without a score number", () => {
+    expect(rankRoles(["engineer"], scores)).toEqual([]);
+    // v7: дизайнер теж рахується.
+    expect(rankRoles(["engineer", "designer"], scores)).toEqual([{ role: "designer", score: 50, level: 6 }]);
   });
 
   it("keeps the person's order on a tie", () => {

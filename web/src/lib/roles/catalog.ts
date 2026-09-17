@@ -8,14 +8,8 @@ export const ROLE_ORDER = Object.keys(ROLES) as RoleKey[];
 
 export type UnscoredReason = "needs_cv" | "needs_portfolio";
 
-/** Ролі, яких публічні джерела не доводять: у релізі 1 без балу. */
-export const UNSCORED: Partial<Record<RoleKey, UnscoredReason>> = {
-  designer: "needs_portfolio",
-  operations_support: "needs_cv",
-  finance: "needs_cv",
-  legal_compliance: "needs_cv",
-  hr_recruiting: "needs_cv",
-};
+/** Ролі без балу. З формули v7 (17.09) рахуються всі 15: Designer з посилань на роботи, решта загальною формулою. */
+export const UNSCORED: Partial<Record<RoleKey, UnscoredReason>> = {};
 
 export const MAX_ROLES = 3;
 

@@ -60,6 +60,15 @@ describe("proof actions", () => {
     expect(JSON.stringify(rows("SELECT meta_json FROM audit_log"))).not.toContain("ex.org");
   });
 
+  it("v7: a saved link queues a score update when the person agreed to scoring", async () => {
+    exec("INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('u', 'terms', 1, 'terms-0.2')");
+    await run(addProofLinkAction({}, fd({ label: "Portfolio", url: "https://ex.org/p" })));
+    expect(rows("SELECT reason, status FROM score_jobs WHERE user_id = 'u'")).toEqual([{ reason: "manual", status: "queued" }]);
+    // Друге посилання поспіль: завдання вже чекає, нового не додаємо.
+    await run(addProofLinkAction({}, fd({ label: "Talk", url: "https://ex.org/t" })));
+    expect(rows("SELECT COUNT(*) AS n FROM score_jobs WHERE user_id = 'u'")).toEqual([{ n: 1 }]);
+  });
+
   it("wallet addresses toggle, key create and reset", async () => {
     await run(setProofWalletAction(fd({ on: "1" })));
     expect((await loadPrefs(harness.env.DB, "u")).showWallet).toBe(true);

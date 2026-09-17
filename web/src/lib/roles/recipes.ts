@@ -1,9 +1,11 @@
-// Рецепти ролей формули v6 (docs/contracts.md, §4) для показу: код позиції на
-// картці, ядро з вагами й додатки. Числа ті самі, що в engine/src/formula/roles.ts;
-// якщо договір зміниться, міняти обидва місця (тест recipes.test.ts тримає суми).
+// Рецепти ролей формули v7 (власник 17.09.2026) для показу: код позиції на картці і «Робота» кожної
+// ролі в балах (разом WORK_POINTS). Репутація й ширина однакові для всіх ролей. Числа ті самі, що в
+// engine/src/formula/v7.ts; тест recipes.test.ts звіряє їх з рушієм.
 import type { RoleKey } from "@/lib/card/roles";
 
-export type SourceKey = "gh_eng" | "gh_builder" | "x" | "yt" | "media" | "output" | "onchain" | "trading" | "site" | "audits" | "dune";
+export type SourceKey =
+  | "gh_eng" | "gh_builder" | "x" | "yt" | "media" | "output" | "onchain" | "trading" | "site" | "audits" | "dune"
+  | "links" | "rep" | "best";
 
 /** Коротка назва джерела на картці й у рецепті. */
 export const SOURCE_NAME: Record<SourceKey, string> = {
@@ -18,6 +20,9 @@ export const SOURCE_NAME: Record<SourceKey, string> = {
   site: "Website",
   audits: "Audit contests",
   dune: "Dune",
+  links: "Work links",
+  rep: "Reputation",
+  best: "Strongest source",
 };
 
 /** Код джерела в рядку статистики на лицьовому боці. */
@@ -33,6 +38,9 @@ export const SOURCE_CODE: Record<SourceKey, string> = {
   site: "WEB",
   audits: "AUD",
   dune: "DUN",
+  links: "LNK",
+  rep: "REP",
+  best: "TOP",
 };
 
 export function isSourceKey(key: string): key is SourceKey {
@@ -59,27 +67,34 @@ export const POSITION_CODE: Record<RoleKey, string> = {
 };
 
 type Weights = readonly (readonly [SourceKey, number])[];
-export type Recipe = { paths: readonly Weights[]; bonus: Weights };
+export type Recipe = { paths: readonly Weights[] };
 
-/** Десять ролей, які рахуються в релізі 1, у порядку договору. */
+/** Шари v7 (engine/src/formula/v7.ts). */
+export const WORK_POINTS = 60;
+export const REP_POINTS = 25;
+export const WIDTH_SOURCES = 3;
+export const WIDTH_EACH = 5;
+
+const GENERAL: Recipe = { paths: [[["best", 40], ["links", 20]]] };
+
+/** Усі 15 ролей рахуються з v7. Вага = бали «Роботи». */
 export const RECIPES = {
-  engineer: { paths: [[["gh_eng", 80], ["x", 20]]], bonus: [["onchain", 5], ["site", 5]] },
-  security_auditor: {
-    paths: [
-      [["audits", 60], ["gh_eng", 25], ["x", 15]],
-      [["gh_eng", 70], ["x", 30]],
-    ],
-    bonus: [["site", 5], ["onchain", 5]],
-  },
-  devrel: { paths: [[["media", 50], ["gh_eng", 50]]], bonus: [["site", 5], ["onchain", 5]] },
-  data_research: { paths: [[["output", 50], ["x", 50]]], bonus: [["onchain", 5], ["gh_builder", 5]] },
-  product_manager: { paths: [[["x", 50], ["gh_builder", 25], ["site", 25]]], bonus: [["onchain", 5], ["gh_eng", 5]] },
-  bd: { paths: [[["x", 100]]], bonus: [["onchain", 5], ["site", 5]] },
-  marketing_content: { paths: [[["media", 100]]], bonus: [["site", 7], ["onchain", 3]] },
-  creator_kol: { paths: [[["media", 100]]], bonus: [["onchain", 5], ["site", 5]] },
-  community: { paths: [[["x", 100]]], bonus: [["onchain", 7], ["site", 3]] },
-  trader: { paths: [[["trading", 90], ["onchain", 10]]], bonus: [["x", 5], ["site", 5]] },
-} as const satisfies Partial<Record<RoleKey, Recipe>>;
+  engineer: { paths: [[["gh_eng", 40], ["gh_builder", 20]]] },
+  security_auditor: { paths: [[["audits", 30], ["gh_eng", 30]], [["gh_eng", 60]]] },
+  devrel: { paths: [[["media", 30], ["gh_eng", 30]]] },
+  data_research: { paths: [[["output", 30], ["x", 30]]] },
+  product_manager: { paths: [[["x", 20], ["gh_builder", 20], ["output", 20]]] },
+  bd: { paths: [[["x", 50], ["onchain", 10]]] },
+  marketing_content: { paths: [[["media", 40], ["site", 20]]] },
+  creator_kol: { paths: [[["media", 60]]] },
+  community: { paths: [[["x", 50], ["onchain", 10]]] },
+  trader: { paths: [[["trading", 50], ["onchain", 10]]] },
+  designer: { paths: [[["links", 40], ["x", 20]]] },
+  operations_support: GENERAL,
+  finance: GENERAL,
+  legal_compliance: GENERAL,
+  hr_recruiting: GENERAL,
+} as const satisfies Record<RoleKey, Recipe>;
 
 export type ScoredRoleKey = keyof typeof RECIPES;
 export const SCORED_ROLE_KEYS = Object.keys(RECIPES) as ScoredRoleKey[];
@@ -90,12 +105,12 @@ export function isScoredRoleKey(role: string): role is ScoredRoleKey {
 
 const list = (w: Weights) => w.map(([k, n]) => `${SOURCE_NAME[k]} ${n}`).join(", ");
 
-/** «GitHub 80, X 20» або «Audit contests 60, GitHub 25, X 15, or GitHub 70, X 30». */
+/** «GitHub 40, GitHub projects 20» або «Audit contests 30, GitHub 30, or GitHub 60». */
 export function recipeCore(role: ScoredRoleKey): string {
   return RECIPES[role].paths.map(list).join(", or ");
 }
 
-/** «Onchain up to 5, Website up to 5». */
-export function recipeBonus(role: ScoredRoleKey): string {
-  return RECIPES[role].bonus.map(([k, n]) => `${SOURCE_NAME[k]} up to ${n}`).join(", ");
+/** Те, що однаково для всіх ролей: репутація й ширина. */
+export function recipeBonus(_role?: ScoredRoleKey): string {
+  return `Reputation up to ${REP_POINTS}, and your ${WIDTH_SOURCES} strongest other sources up to ${WIDTH_EACH} each`;
 }

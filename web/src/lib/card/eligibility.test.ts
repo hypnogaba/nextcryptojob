@@ -8,9 +8,9 @@ describe("cardEligibility (trust model of 13.09: no verified source needed)", ()
     for (const role of SCORED_ROLE_KEYS) expect(cardEligibility(role)).toEqual({ ok: true });
   });
 
-  it("refuses roles that have no score yet", () => {
+  it("v7 scores every role, so every role can have a card; an unknown role cannot", () => {
     const unscored = (Object.keys(ROLES) as RoleKey[]).filter((r) => !(SCORED_ROLE_KEYS as string[]).includes(r));
-    expect(unscored).toEqual(["designer", "operations_support", "finance", "legal_compliance", "hr_recruiting"]);
-    for (const role of unscored) expect(cardEligibility(role)).toMatchObject({ ok: false });
+    expect(unscored).toEqual([]);
+    expect(cardEligibility("wizard" as RoleKey)).toMatchObject({ ok: false });
   });
 });

@@ -1,37 +1,36 @@
 import { Fragment } from "react";
 import { BOARD, POS, TABLE, TD, TH, TR } from "@/components/board";
 import { ROLES } from "@/lib/card/roles";
-import { POSITION_CODE, RECIPES, SCORED_ROLE_KEYS, SOURCE_NAME, type SourceKey } from "@/lib/roles/recipes";
-import { COMBINED_SOURCES, SOURCE_PARTS, WEIGHT_COLUMNS } from "@/lib/roles/source-parts";
+import {
+  POSITION_CODE, RECIPES, REP_POINTS, SCORED_ROLE_KEYS, SOURCE_NAME, type SourceKey, WIDTH_EACH, WIDTH_SOURCES, WORK_POINTS,
+} from "@/lib/roles/recipes";
+import { COMBINED_SOURCES, REPUTATION_TEXT, SOURCE_PARTS, WEIGHT_COLUMNS } from "@/lib/roles/source-parts";
 import { cn } from "@/lib/utils";
 
 /**
- * Усі ваги формули на одній сторінці (власник 16.09, c5): роль × джерело, і з чого складається
- * кожне джерело. Ончейн окремою підсвіченою колонкою: власнику важливо, скільки вона важить.
+ * Усі ваги формули v7 на одній сторінці (власник 16.09, c5; 17.09 v7): бал = Робота + Репутація + Ширина.
+ * Таблиця: роль × джерело, числа = бали «Роботи». Ончейн підсвічено: власнику важливо, скільки він важить.
  */
 
 const ONCHAIN_COL = "bg-brand-soft";
 const NUM = "text-right tabular-nums whitespace-nowrap";
 
-type Row = { key: string; label: string; code: string; core: Map<SourceKey, number>; bonus: Map<SourceKey, number> };
+type Row = { key: string; label: string; code: string; work: Map<SourceKey, number> };
 
 function rows(): Row[] {
   return SCORED_ROLE_KEYS.flatMap((role) => {
     const r = RECIPES[role];
-    const bonus = new Map<SourceKey, number>(r.bonus.map(([k, n]) => [k, n]));
     return r.paths.map((path, i) => ({
       key: `${role}-${i}`,
       label: r.paths.length === 1 ? ROLES[role].name : `${ROLES[role].name}, ${i === 0 ? "with audit contests" : "without them"}`,
       code: POSITION_CODE[role],
-      core: new Map<SourceKey, number>(path.map(([k, n]) => [k, n])),
-      bonus,
+      work: new Map<SourceKey, number>(path.map(([k, n]) => [k, n])),
     }));
   });
 }
 
-function Cell({ core, bonus }: { core?: number; bonus?: number }) {
-  if (core) return <span className="font-semibold text-ink">{core}</span>;
-  if (bonus) return <span className="text-ink-muted">+{bonus}</span>;
+function Cell({ points }: { points?: number }) {
+  if (points) return <span className="font-semibold text-ink">{points}</span>;
   return (
     <>
       <span aria-hidden="true" className="text-line-strong">
@@ -42,12 +41,39 @@ function Cell({ core, bonus }: { core?: number; bonus?: number }) {
   );
 }
 
+/** Три шари балу однією смугою. */
+export function Layers() {
+  const parts = [
+    { name: "Work", points: WORK_POINTS, text: "Your role's main sources, below.", cls: "bg-ink text-white" },
+    { name: "Reputation", points: REP_POINTS, text: REPUTATION_TEXT, cls: "bg-brand-soft text-ink" },
+    {
+      name: "Breadth",
+      points: WIDTH_SOURCES * WIDTH_EACH,
+      text: `Your ${WIDTH_SOURCES} strongest other sources, up to ${WIDTH_EACH} points each. Everything you connect can count.`,
+      cls: "bg-soft text-ink",
+    },
+  ];
+  return (
+    <ol className="grid gap-3 sm:grid-cols-[60fr_25fr_15fr]" aria-label="Score layers">
+      {parts.map((p) => (
+        <li key={p.name} className={cn("grid content-start gap-1 rounded-2xl p-4", p.cls)}>
+          <span className="font-display text-xl font-semibold">
+            {p.name} <span className="tabular-nums">{p.points}</span>
+          </span>
+          <span className="text-sm opacity-80">{p.text}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function WeightsTable() {
   return (
     <div className={BOARD}>
       <table className={TABLE} data-table="weights">
         <caption className="px-4 pt-3 pb-1 text-left text-sm text-ink-muted">
-          Main part out of 100, and bonus points (+) that only add. Onchain is highlighted.
+          Points of Work for each role, out of {WORK_POINTS}. Every role also gets Reputation (up to {REP_POINTS}) and Breadth (up to{" "}
+          {WIDTH_SOURCES * WIDTH_EACH}). Onchain is highlighted.
         </caption>
         <thead>
           <tr>
@@ -70,7 +96,7 @@ export function WeightsTable() {
               </th>
               {WEIGHT_COLUMNS.map((k) => (
                 <td key={k} className={cn(TD, NUM, k === "onchain" && ONCHAIN_COL)}>
-                  <Cell core={r.core.get(k)} bonus={r.bonus.get(k)} />
+                  <Cell points={r.work.get(k)} />
                 </td>
               ))}
             </tr>
@@ -118,14 +144,14 @@ export function SourceParts() {
       ))}
       <section aria-labelledby="src-combined" className="grid content-start gap-2 rounded-3xl bg-soft p-5">
         <h3 id="src-combined" className="font-display text-xl font-semibold">
-          {SOURCE_NAME.media} and {SOURCE_NAME.output}
+          Combined sources
         </h3>
-        <p className="text-sm text-ink">
-          <b>{SOURCE_NAME.media}:</b> {COMBINED_SOURCES.media}
-        </p>
-        <p className="text-sm text-ink">
-          <b>{SOURCE_NAME.output}:</b> {COMBINED_SOURCES.output}
-        </p>
+        {(["media", "output", "best"] as const).map((k) => (
+          <p key={k} className="text-sm text-ink">
+            <b>{SOURCE_NAME[k]}:</b> {COMBINED_SOURCES[k]}
+          </p>
+        ))}
+        <p className="text-sm text-ink-muted">Audit contests and Dune are found by your GitHub or X; you do not add them.</p>
       </section>
     </div>
   );

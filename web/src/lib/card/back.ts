@@ -1,9 +1,10 @@
-// Зворот картки: бал, розкладений по рядках формули (v5, v6; docs/contracts.md, §4). Ваги беруться з
+// Зворот картки: бал, розкладений по рядках формули (v5, v6, v7; docs/contracts.md, §4). Ваги беруться з
 // breakdown_json, тож зворот показує ту версію, якою бал пораховано.
 // Джерело, вага, значення, бали; окремо ядро, додатки й покриття. Джерело без
 // даних друкується як «none» з причиною людськими словами: null ніколи не 0.
 //
-// core = Σ w·(s ?? 0) / Σ w, bonus = Σ max·(s ?? 0) / 100, score = min(100, core + bonus).
+// v5–v6: core = Σ w·(s ?? 0) / Σ w, bonus = Σ max·(s ?? 0) / 100, score = min(100, core + bonus).
+// v7: core («Робота») = Σ w·(s ?? 0) / 100 (ваги вже в балах, разом 60); bonus = репутація (rep) і ширина.
 // Для data_research без опублікованої роботи (reason = 'x_only') ядро = 0.8·X.
 import type { IdentityKind } from "@/lib/identity/normalize";
 import { isSourceKey, SOURCE_CODE, SOURCE_NAME } from "@/lib/roles/recipes";
@@ -34,6 +35,8 @@ export type CardBack = {
   cover: number;
   /** Пояснення шляху (аудити, лише X) або null. */
   note: string | null;
+  /** v7: суми називаються «Work» і «Reputation and breadth». */
+  layered: boolean;
 };
 
 /** Які підключення живлять джерело (як FEEDS у score/explain.ts). */
@@ -49,6 +52,9 @@ const FEEDS: Record<string, IdentityKind[]> = {
   site: ["site"],
   output: ["site", "github"],
   audits: ["sherlock"],
+  links: [],
+  rep: ["x", "github"],
+  best: [],
 };
 
 /** Ключ прогалини (x, evm.base, solana.BGjMfx5B, …) → підключення. Хвіст після крапки не показуємо ніколи. */
@@ -75,13 +81,16 @@ const NOT_CONNECTED: Record<string, string> = {
   trading: "no wallet linked",
   site: "no website linked",
   output: "no website or GitHub linked",
-  audits: "no Sherlock profile linked",
+  audits: "no audit contests found",
+  links: "no links to your work added",
+  rep: "no X or GitHub linked",
 };
 
 function gapReason(raw: string): string {
   if (/not verified/i.test(raw)) return "not verified yet";
   if (/sample too small/i.test(raw)) return "too few trades to judge";
   if (/^not configured/i.test(raw)) return "we do not collect it yet";
+  if (/Sherlock|no contests/i.test(raw)) return "no audit contests found";
   return "we could not read it this time";
 }
 
@@ -119,7 +128,9 @@ export function cardBack(json: string | Breakdown, connected?: ReadonlySet<Ident
   if (coreEntries.length === 0) return null;
   const gaps = b.gaps ?? {};
   const xOnly = b.reason === "x_only";
-  const totalWeight = coreEntries.reduce((s, [, e]) => s + (num(e.weight) ?? 0), 0) || 100;
+  const layered = b.formula === "v7";
+  // v7: ваги роботи вже в балах, тож ділимо на 100, а не на суму ваг.
+  const totalWeight = layered ? 100 : coreEntries.reduce((s, [, e]) => s + (num(e.weight) ?? 0), 0) || 100;
 
   const line = (key: string, kind: BackLine["kind"], weight: number, value: number | null, points: number): BackLine => ({
     key,
@@ -165,15 +176,27 @@ export function cardBack(json: string | Breakdown, connected?: ReadonlySet<Ident
       ? "No published work found, so X counts for 80 of 100."
       : b.reason === "path:audits"
         ? "Scored on audit contest results."
-        : b.reason === "path:gh_eng+x"
-          ? "Scored on GitHub and X. Audit contests would open the audits path."
-          : null,
+        : b.reason === "path:gh_eng+x" || b.reason === "path:gh_eng"
+          ? "Scored on GitHub. Audit contests would open the audits path."
+          : b.selfAddedLinks
+            ? "Work links are added by the person and not checked."
+            : null,
+    layered,
   };
 }
 
 /** «GitHub 74.2, X 46.3 and an onchain bonus»: рядок причин для картинки X. */
 export function builtFrom(back: CardBack | null): string | null {
   if (!back) return null;
+  if (back.layered) {
+    const work = back.lines.filter((l) => l.kind === "core" && l.value !== null).map((l) => `${l.name} ${l.value!.toFixed(1)}`);
+    if (work.length === 0) return null;
+    const rep = back.lines.some((l) => l.key === "rep" && l.points > 0);
+    const more = back.lines.filter((l) => l.kind === "bonus" && l.key !== "rep" && l.points > 0).length;
+    const extras = [rep ? "reputation" : null, more ? `${more} more source${more === 1 ? "" : "s"}` : null].filter(Boolean);
+    const head = work.length === 1 ? work[0] : `${work.slice(0, -1).join(", ")} and ${work.at(-1)}`;
+    return `Built from ${head}${extras.length ? `, plus ${extras.join(" and ")}` : ""}.`;
+  }
   const cores = back.lines.filter((l) => l.kind === "core" && l.value !== null).map((l) => `${l.name} ${l.value!.toFixed(1)}`);
   const bonuses = back.lines.filter((l) => l.kind === "bonus" && l.value !== null && l.points > 0).map((l) => l.name.toLowerCase());
   if (cores.length === 0) return null;

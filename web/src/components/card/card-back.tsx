@@ -19,7 +19,7 @@ export function CardBackFace({
 }: {
   face: CardFace;
   back: CardBack | null;
-  /** «Formula v6, checked 13 Sep 2026.» */
+  /** «Formula v7, checked 17 Sep 2026.» */
   meta: string;
   /** Чому розкладу немає. */
   missing?: string | null;
@@ -68,13 +68,13 @@ export function CardBackFace({
                 : [row];
             })}
             <tr className="ncj-sum">
-              <th scope="row">Core</th>
+              <th scope="row">{back.layered ? "Work" : "Core"}</th>
               <td />
               <td />
               <td>{pts(back.core)}</td>
             </tr>
             <tr className="ncj-sum">
-              <th scope="row">Bonus</th>
+              <th scope="row">{back.layered ? "Reputation and breadth" : "Bonus"}</th>
               <td />
               <td />
               <td>{pts(back.bonus)}</td>

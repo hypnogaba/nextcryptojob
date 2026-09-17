@@ -85,10 +85,12 @@ export function RolesForm({
         </p>
         {notes.map((role) => (
           <p key={role} className="text-sm text-ink">
-            {ROLES[role].name}: we send you jobs, but there is no score for it yet. It needs{" "}
-            {UNSCORED[role] === "needs_portfolio" ? "a portfolio" : "a CV"}, and that is coming soon.
+            {ROLES[role].name}: we send you jobs, but there is no score for it yet.
           </p>
         ))}
+        {selected.includes("designer") ? (
+          <p className="text-sm text-ink">Designer: add links to your portfolio in your profile, and we score you on them.</p>
+        ) : null}
       </section>
 
       <section aria-labelledby="add-h" className="grid gap-3">

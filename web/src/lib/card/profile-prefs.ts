@@ -4,7 +4,8 @@
 import { hmacSha256Hex, safeEqual } from "@/lib/auth/hash";
 import { isPublicHostname } from "@/lib/identity/normalize";
 
-export const LINKS_MAX = 5;
+/** Посилань на роботи: v7 рахує до 10 (engine LINKS_TOP). */
+export const LINKS_MAX = 10;
 export const LINK_LABEL_MAX = 40;
 export const LINK_URL_MAX = 300;
 const HIDDEN_MAX = 64;

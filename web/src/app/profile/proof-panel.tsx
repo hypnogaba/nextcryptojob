@@ -165,7 +165,10 @@ export function ProofPanel({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-muted">A project, a talk or a win we could not find. They do not change your score.</p>
+          <p className="text-sm text-ink-muted">
+            Your portfolio, articles, talks or projects. Each link adds to your score (up to {LINKS_MAX}). We do not check
+            them, and your card says they were added by you.
+          </p>
         )}
         {view.links.length < LINKS_MAX ? <ProofLinkForm /> : null}
       </div>

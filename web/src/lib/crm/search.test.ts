@@ -295,7 +295,7 @@ describe("empty results always say why", () => {
   });
 
   it("the current formula comes from the contract, the same constant as the engine's", () => {
-    const engine = readFileSync(new URL("../../../../engine/src/formula/score.ts", import.meta.url), "utf8");
+    const engine = readFileSync(new URL("../../../../engine/src/formula/v7.ts", import.meta.url), "utf8");
     expect(engine).toContain(`export const FORMULA_VERSION = "${FORMULA_VERSION}"`);
   });
 

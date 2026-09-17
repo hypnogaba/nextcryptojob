@@ -41,12 +41,12 @@ describe("prefs", () => {
     expect((await loadPrefs(db, "u1")).hidden).toEqual([]);
   });
 
-  it("adds up to five links and removes by index", async () => {
-    for (let i = 0; i < 5; i++) expect((await addLink(db, "u1", `L${i}`, `https://ex.org/${i}`)).ok).toBe(true);
-    expect(await addLink(db, "u1", "L5", "https://ex.org/5")).toEqual({ ok: false, error: "You can add up to 5 links." });
+  it("adds up to ten links and removes by index", async () => {
+    for (let i = 0; i < 10; i++) expect((await addLink(db, "u1", `L${i}`, `https://ex.org/${i}`)).ok).toBe(true);
+    expect(await addLink(db, "u1", "L10", "https://ex.org/10")).toEqual({ ok: false, error: "You can add up to 10 links." });
     await removeLink(db, "u1", 0);
     await removeLink(db, "u1", 99);
-    expect((await loadPrefs(db, "u1")).links.map((l) => l.label)).toEqual(["L1", "L2", "L3", "L4"]);
+    expect((await loadPrefs(db, "u1")).links.map((l) => l.label)).toEqual(["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]);
   });
 });
 

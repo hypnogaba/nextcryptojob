@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  srcAudits, srcDune, srcGhBuilder, srcGhEng, srcOnchain, srcSite, srcTrading, srcX, srcYt,
+  srcAudits, srcDune, srcGhBuilder, srcOnchain, srcSite, srcTrading, srcYt,
 } from "../../../../engine/src/formula/sources";
+import { srcGhEngV7 as srcGhEng, srcLinks, srcXV7 as srcX } from "../../../../engine/src/formula/v7";
 import { RECIPES, SCORED_ROLE_KEYS } from "./recipes";
 import { SOURCE_PARTS, WEIGHT_COLUMNS } from "./source-parts";
 
@@ -41,7 +42,7 @@ describe("SOURCE_PARTS", () => {
   });
 
   it("matches the engine's X and YouTube weights", () => {
-    expect(srcX({ ...x, kol: 1000 })).toBeCloseTo(30);
+    expect(srcX({ ...x, kol: 500 })).toBeCloseTo(30);
     expect(srcX({ ...x, followers: 500_000 })).toBeCloseTo(15);
     expect(srcX({ ...x, ownAvgLikesRt: 1500 })).toBeCloseTo(15);
     expect(srcX({ ...x, ownAvgViews: 150_000 })).toBeCloseTo(15);
@@ -78,12 +79,19 @@ describe("SOURCE_PARTS", () => {
     expect(srcDune({ spellbookPrs: 300, spellbookPrs12m: 0 })).toBeCloseTo(70);
     expect(srcDune({ spellbookPrs: 1, spellbookPrs12m: 50 })! - srcDune({ spellbookPrs: 1, spellbookPrs12m: 0 })!).toBeCloseTo(30);
     expect(weights("dune")).toEqual([70, 30]);
+    expect(srcLinks({ count: 10 })).toBe(100);
+    expect(weights("links")).toEqual([100]);
+  });
+
+  it("counts team work in GitHub like the engine", () => {
+    expect(srcGhEng({ ...gh, teamCommits: 1000 })).toBeCloseTo(35);
+    expect(srcGhEng({ ...gh, teamStars: 5000 })).toBeCloseTo(25);
   });
 
   it("has a column for every source any role uses", () => {
     for (const role of SCORED_ROLE_KEYS) {
       const r = RECIPES[role];
-      for (const [k] of [...r.paths.flat(), ...r.bonus]) expect(WEIGHT_COLUMNS, `${role}: ${k}`).toContain(k);
+      for (const [k] of r.paths.flat()) expect(WEIGHT_COLUMNS, `${role}: ${k}`).toContain(k);
     }
   });
 });

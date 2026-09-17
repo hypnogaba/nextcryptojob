@@ -5,15 +5,18 @@ import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, EXAMPLE_SCORE } from "./example";
 describe("cardBack", () => {
   it("itemizes the formula: weight, value and points per source, core, bonus and cover", () => {
     const back = cardBack(JSON.stringify(EXAMPLE_BREAKDOWN), new Set(["github", "x", "evm"] as const))!;
+    // v7: вага роботи вже в балах (40 з 100), репутація до 25, ширина по 5.
     expect(back.lines.map((l) => [l.name, l.kind, l.weight, l.value, l.points])).toEqual([
-      ["GitHub", "core", 80, 74.2, 59.4],
-      ["X", "core", 20, 46.3, 9.3],
+      ["GitHub", "core", 40, 82, 32.8],
+      ["GitHub projects", "core", 20, 80, 16],
+      ["Reputation", "bonus", 25, 70, 17.5],
       ["Onchain", "bonus", 5, 91.7, 4.6],
-      ["Website", "bonus", 5, null, 0],
+      ["X", "bonus", 5, 46.3, 2.3],
     ]);
-    expect(back.core).toBe(68.6);
-    expect(back.bonus).toBe(4.6);
+    expect(back.core).toBe(48.8);
+    expect(back.bonus).toBe(24.4);
     expect(back.cover).toBe(100);
+    expect(back.layered).toBe(true);
     expect(Math.floor(back.core + back.bonus)).toBe(Math.floor(EXAMPLE_SCORE));
   });
 
@@ -48,9 +51,23 @@ describe("cardBack", () => {
   });
 
   it("prints a missing source as null with a human reason, never as a zero value", () => {
-    const site = EXAMPLE_BACK.lines.find((l) => l.key === "site")!;
+    const back = cardBack({
+      formula: "v7",
+      core: { media: { weight: 40, value: 70 }, site: { weight: 20, value: null } },
+      bonus: { rep: { max: 25, value: 50 } },
+      cover: 67,
+    }, new Set(["x"]))!;
+    const site = back.lines.find((l) => l.key === "site")!;
     expect(site.value).toBeNull();
+    expect(site.points).toBe(0);
     expect(site.reason).toBe("no website linked");
+    expect(back.core).toBe(28);
+  });
+
+  it("notes self-added work links", () => {
+    const back = cardBack({ formula: "v7", core: { links: { weight: 40, value: 50 } }, bonus: {}, selfAddedLinks: true })!;
+    expect(back.note).toBe("Work links are added by the person and not checked.");
+    expect(back.lines[0]!.name).toBe("Work links");
   });
 
   it("names the reason from the gap, without the wallet address after the dot", () => {
@@ -84,7 +101,10 @@ describe("cardBack", () => {
 
 describe("builtFrom", () => {
   it("says what the score was built from", () => {
-    expect(builtFrom(EXAMPLE_BACK)).toBe("Built from GitHub 74.2, X 46.3 and an onchain bonus.");
+    expect(builtFrom(EXAMPLE_BACK)).toBe("Built from GitHub 82.0 and GitHub projects 80.0, plus reputation and 2 more sources.");
+    const v6 = cardBack({ formula: "v6", core: { gh_eng: { weight: 80, value: 74.2 }, x: { weight: 20, value: 46.3 } },
+      bonus: { onchain: { max: 5, value: 91.7 } } })!;
+    expect(builtFrom(v6)).toBe("Built from GitHub 74.2, X 46.3 and an onchain bonus.");
     expect(builtFrom(null)).toBeNull();
   });
 });

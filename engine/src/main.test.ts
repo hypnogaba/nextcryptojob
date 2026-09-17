@@ -186,6 +186,17 @@ describe("cli", () => {
     expect((await cli(["enqueue-refresh", "--stale-formula"])).out).toMatch(/^enqueue-refresh: 0 queued/);
   });
 
+  it("enqueue-refresh --stale-formula не чіпає демо-кандидатів (без джерел їхній бал став би порожнім)", async () => {
+    db.exec("ALTER TABLE users ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0");
+    for (const [id, demo] of [["real", 0], ["demo", 1]] as const) {
+      db.addUser(id);
+      db.exec("UPDATE users SET is_demo = ? WHERE id = ?", demo, id);
+      db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', 'v6')", id);
+    }
+    expect((await cli(["enqueue-refresh", "--stale-formula"])).out).toMatch(/^enqueue-refresh: 1 queued/);
+    expect(jobs().map((j) => j.user_id)).toEqual(["real"]);
+  });
+
   it("enqueue-refresh --stale-formula --per-hour N ставить не більше N", async () => {
     for (const id of ["a1", "a2", "a3"]) {
       db.addUser(id);

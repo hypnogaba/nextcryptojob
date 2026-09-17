@@ -150,13 +150,21 @@ export class JobQueue {
    * без нього всіх. Хто вже в черзі чи в роботі, не дублюється; найдавніше пораховані першими.
    */
   async enqueueFormulaRefresh(version: string, o: { limit?: number } = {}): Promise<{ enqueued: number }> {
-    const { changes } = await this.db.run(
+    // Демо-кандидатів (users.is_demo, 0021) не перераховуємо: джерел у них немає, і бал став би порожнім.
+    const sql = (demo: string) =>
       "INSERT INTO score_jobs (user_id, reason) " +
       "SELECT s.user_id, 'refresh' FROM scores s " +
-      "WHERE s.formula_version <> ? " +
+      "WHERE s.formula_version <> ? " + demo +
       "AND NOT EXISTS (SELECT 1 FROM score_jobs j WHERE j.user_id = s.user_id AND j.status IN ('queued', 'running')) " +
-      "GROUP BY s.user_id ORDER BY MIN(s.computed_at), s.user_id" + (o.limit === undefined ? "" : " LIMIT ?"),
-      o.limit === undefined ? [version] : [version, o.limit]);
-    return { enqueued: changes };
+      "GROUP BY s.user_id ORDER BY MIN(s.computed_at), s.user_id" + (o.limit === undefined ? "" : " LIMIT ?");
+    const params = o.limit === undefined ? [version] : [version, o.limit];
+    try {
+      const { changes } = await this.db.run(sql("AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = s.user_id AND u.is_demo = 1) "), params);
+      return { enqueued: changes };
+    } catch (e) {
+      if (!(e instanceof Error && /no such column:?\s*(u\.)?is_demo/i.test(e.message))) throw e;
+      const { changes } = await this.db.run(sql(""), params);
+      return { enqueued: changes };
+    }
   }
 }

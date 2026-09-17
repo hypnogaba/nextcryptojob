@@ -94,7 +94,7 @@ export function validationError(error: z.ZodError): ActionError {
  * Чинна версія формули балу (docs/contracts.md §4; engine/src/formula/score.ts FORMULA_VERSION).
  * Порожній пошук з фільтром балу каже scores_not_published, доки ворота якості цієї версії не пройдено.
  */
-export const FORMULA_VERSION = "v6";
+export const FORMULA_VERSION = "v7";
 
 const ROLE_KEYS = Object.keys(ROLES) as [RoleKeyType, ...RoleKeyType[]];
 export const RoleKey = z.enum(ROLE_KEYS);

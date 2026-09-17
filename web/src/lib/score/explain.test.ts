@@ -116,15 +116,19 @@ describe("explainRole", () => {
     ]);
   });
 
-  it("marks roles that need a CV or portfolio, whatever the row says", () => {
-    expect(explainRole("designer", null, kinds())).toMatchObject({
-      state: "unscored",
-      note: "Score needs a portfolio, coming soon",
+  it("v7: a designer without work links is told to add them; every role can be scored", () => {
+    expect(explainRole("designer", null, kinds())).toMatchObject({ state: "waiting" });
+    expect(explainRole("designer", row(null, { formula: "v7", reason: "missing_anchor:links" }), kinds("x"))).toMatchObject({
+      state: "missing",
+      reason: "Add links to your work (portfolio, case studies, articles) in your profile to get a Designer score.",
     });
-    expect(explainRole("finance", row(null, { reason: "needs_cv" }), kinds())).toMatchObject({
-      state: "unscored",
-      note: "Score needs a CV, coming soon",
-    });
+  });
+
+  it("v7: suggests adding work links while there are none", () => {
+    const v = explainRole("engineer", row(60, { formula: "v7", core: { gh_eng: { weight: 40, value: 80 } }, bonus: { rep: { max: 25, value: 40 } } }), kinds("github", "x"));
+    expect(v.state === "scored" && v.tips).toContain("Add links to your work in your profile: they count for every role.");
+    const withLinks = explainRole("engineer", row(60, { formula: "v7", selfAddedLinks: true, core: { gh_eng: { weight: 40, value: 80 } } }), kinds("github"));
+    expect(withLinks.state === "scored" && withLinks.tips).not.toContain("Add links to your work in your profile: they count for every role.");
   });
 
   it("waits when there is no row yet, and survives a broken breakdown", () => {

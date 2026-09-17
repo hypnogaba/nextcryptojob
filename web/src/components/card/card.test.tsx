@@ -97,7 +97,7 @@ describe("Seal motion", () => {
 describe("CardBackFace", () => {
   it("itemizes the formula and prints none with the reason", () => {
     const html = renderToStaticMarkup(<CardBackFace face={exampleFace()} back={EXAMPLE_BACK} meta="Formula v5." />);
-    for (const text of [">Weight<", ">74.2<", ">59.4<", ">+5<", ">none<", "none: no website linked", ">68.6<", ">100%<"]) {
+    for (const text of [">Weight<", ">82.0<", ">32.8<", ">+25<", ">+5<", ">Work<", ">Reputation and breadth<", ">48.8<", ">100%<"]) {
       expect(html).toContain(text);
     }
   });

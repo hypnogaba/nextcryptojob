@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
+import { V7_ROLES } from "../../../../engine/src/formula/v7";
+import * as engine from "../../../../engine/src/formula/v7";
 import { isScoredRole } from "./catalog";
-import { POSITION_CODE, RECIPES, recipeBonus, recipeCore, SCORED_ROLE_KEYS } from "./recipes";
+import {
+  POSITION_CODE, RECIPES, recipeBonus, recipeCore, REP_POINTS, SCORED_ROLE_KEYS, WIDTH_EACH, WIDTH_SOURCES, WORK_POINTS,
+} from "./recipes";
 import { ROLES } from "@/lib/card/roles";
 
-describe("recipes", () => {
-  it("covers exactly the ten roles scored in release 1", () => {
+describe("recipes (v7)", () => {
+  it("scores all 15 roles", () => {
     expect(SCORED_ROLE_KEYS).toEqual((Object.keys(ROLES) as (keyof typeof ROLES)[]).filter(isScoredRole));
-    expect(SCORED_ROLE_KEYS).toHaveLength(10);
+    expect(SCORED_ROLE_KEYS).toHaveLength(15);
   });
 
-  it("has core weights that add up to 100 on every path", () => {
+  it("matches the engine: the same work weights and layers for every role", () => {
+    expect([WORK_POINTS, REP_POINTS, WIDTH_SOURCES, WIDTH_EACH]).toEqual([engine.WORK_POINTS, engine.REP_POINTS, engine.WIDTH_SOURCES, engine.WIDTH_EACH]);
     for (const role of SCORED_ROLE_KEYS) {
-      for (const path of RECIPES[role].paths) expect(path.reduce((s, [, w]) => s + w, 0)).toBe(100);
+      const ours = RECIPES[role].paths.map((p) => Object.fromEntries(p));
+      const theirs = V7_ROLES[role].paths.map((p) => p.work);
+      expect(ours, role).toEqual(theirs);
+      for (const p of RECIPES[role].paths) expect(p.reduce((s, [, w]) => s + w, 0)).toBe(WORK_POINTS);
     }
   });
 
@@ -21,11 +29,11 @@ describe("recipes", () => {
     for (const c of codes) expect(c).toMatch(/^[A-Z]{2,3}$/);
   });
 
-  it("reads the recipe like the contract", () => {
-    expect(recipeCore("engineer")).toBe("GitHub 80, X 20");
-    expect(recipeBonus("engineer")).toBe("Onchain up to 5, Website up to 5");
-    expect(recipeCore("security_auditor")).toBe("Audit contests 60, GitHub 25, X 15, or GitHub 70, X 30");
-    expect(recipeCore("trader")).toBe("Trading 90, Onchain 10");
-    expect(recipeBonus("trader")).toBe("X up to 5, Website up to 5");
+  it("reads the recipe in words", () => {
+    expect(recipeCore("engineer")).toBe("GitHub 40, GitHub projects 20");
+    expect(recipeCore("security_auditor")).toBe("Audit contests 30, GitHub 30, or GitHub 60");
+    expect(recipeCore("designer")).toBe("Work links 40, X 20");
+    expect(recipeCore("finance")).toBe("Strongest source 40, Work links 20");
+    expect(recipeBonus("engineer")).toBe("Reputation up to 25, and your 3 strongest other sources up to 5 each");
   });
 });

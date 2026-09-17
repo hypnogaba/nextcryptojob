@@ -14,6 +14,12 @@ export type Breakdown = {
   level?: number | null;
   reason?: string | null;
   gaps?: Record<string, string>;
+  /** v7: три шари балу. */
+  layers?: { work: number; rep: number; width: number } | null;
+  /** v7: яке джерело найсильніше (для «best»). */
+  bestOf?: string | null;
+  /** v7: є посилання, додані людиною без перевірки. */
+  selfAddedLinks?: boolean;
 };
 
 export type ScoreRow = {
@@ -65,6 +71,9 @@ const SOURCE_LABEL: Record<string, string> = {
   output: "Published work",
   audits: "Audit contests",
   dune: "Dune Spellbook",
+  links: "Links to your work",
+  rep: "Reputation",
+  best: "Your strongest source",
 };
 
 /** Які підключення живлять джерело балу. */
@@ -80,6 +89,7 @@ const FEEDS: Record<string, IdentityKind[]> = {
   site: ["site"],
   output: ["site", "github"],
   audits: ["sherlock"],
+  rep: ["x"],
 };
 
 /** Як назвати підключення в пораді «Connect …». */
@@ -177,6 +187,9 @@ function reasonSentence(role: RoleKey, breakdown: Breakdown, state: SourceState)
   const reason = breakdown.reason;
   if (!reason) return null;
   const name = ROLES[role].name;
+  if (reason === "missing_anchor:links") {
+    return `Add links to your work (portfolio, case studies, articles) in your profile to get ${article(name)} ${name} score.`;
+  }
   if (reason.startsWith("missing_anchor:")) {
     const kinds = [...new Set(anchorKinds({ reason }))];
     const have = kinds.filter((k) => state.counted.has(k));
@@ -192,6 +205,7 @@ function reasonSentence(role: RoleKey, breakdown: Breakdown, state: SourceState)
   }
   if (reason === "path:audits") return "Scored on your audit contest results.";
   if (reason === "path:gh_eng+x") return "Scored on GitHub and X.";
+  if (reason === "path:gh_eng") return "Scored on GitHub.";
   if (reason === "x_only") return "Scored on X only, because we found no published work yet.";
   return null;
 }
@@ -211,6 +225,10 @@ function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): strin
     const kinds = (FEEDS[key] ?? []).filter((k) => !state.counted.has(k));
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
     out.push({ kinds, text: `${actionFor(kinds, state)}: it can add up to ${max} points.`, rank: max });
+  }
+  // v7: посилання на роботи рахуються в кожній ролі; порада, поки їх немає.
+  if (breakdown.formula === "v7" && !breakdown.selfAddedLinks && breakdown.reason !== "missing_anchor:links") {
+    out.push({ kinds: [], text: "Add links to your work in your profile: they count for every role.", rank: 4 });
   }
   // Без головного джерела про нього вже каже причина; порада повторила б її.
   const anchors = new Set(anchorKinds(breakdown));

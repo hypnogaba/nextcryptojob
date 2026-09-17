@@ -1,4 +1,4 @@
-import { RECIPES, type ScoredRoleKey } from "@/lib/roles/recipes";
+import { RECIPES, REP_POINTS, type ScoredRoleKey } from "@/lib/roles/recipes";
 import { CONTACT_CONSENT, SCORING_CONSENT, VISIBILITY_CONSENT } from "@/lib/consent";
 import { grantManualAccess } from "@/lib/billing/manual";
 import { COMPANY_TERMS_VERSION } from "@/lib/crm/company";
@@ -81,7 +81,7 @@ export function demoHandle(n: number): string {
   return `ncj-demo-${String(n).padStart(2, "0")}`;
 }
 
-/** Бали джерел ядра й додатків, з яких складається бал ролі (рецепт v6, перший шлях). */
+/** Бали джерел роботи й репутації, з яких складається бал ролі (рецепт v7, перший шлях). */
 export function demoBreakdown(role: Role, score: number, cover: number, formula: string): Record<string, unknown> {
   const recipe = RECIPES[role];
   const path = recipe.paths[0];
@@ -95,11 +95,8 @@ export function demoBreakdown(role: Role, score: number, cover: number, formula:
     core[source] = { weight, value: missing ? null : value };
     if (missing) gaps[source === "x" ? "x" : "github"] = "timeout";
   });
-  const bonus: Record<string, { max: number; value: number }> = {};
-  recipe.bonus.forEach(([source, max]) => {
-    // Гаманців у демо немає: ончейн-додаток 0; сайт чи GitHub дає половину балу.
-    bonus[source] = { max, value: source === "onchain" ? 0 : Math.round(score / 2) };
-  });
+  // Репутація: половина балу; ширини в демо немає (у демо-людей лише X і GitHub).
+  const bonus: Record<string, { max: number; value: number }> = { rep: { max: REP_POINTS, value: Math.round(score / 2) } };
   return { formula, core, bonus, cover, level: null, reason: null, gaps };
 }
 
