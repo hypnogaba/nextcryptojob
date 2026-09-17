@@ -116,6 +116,66 @@ function People({ report, now }: { report: DemandReport; now: number }) {
   );
 }
 
+/**
+ * Вакансії, у назві яких немає жодної з наших 15 ролей. Вони в базі й у списку, і власні слова
+ * людини їх дістають, але підбір за роллю не візьме їх ніколи. Назви кажуть, якої ролі бракує.
+ */
+function NoRole({ report }: { report: DemandReport }) {
+  const s = report.sieve;
+  if (!s) return null;
+  return (
+    <Panel id="no-role" title="Jobs with no role of ours" className="lg:col-span-2">
+      <Stats className="sm:grid-cols-4">
+        <Stat label="Live in the database" value={NUM.format(s.read)} note="All web3 jobs the latest scan saw" />
+        <Stat label="In the board" value={NUM.format(s.kept)} note="What people can see and search" />
+        <Stat
+          label="No role of ours"
+          value={NUM.format(s.roleless)}
+          note="Only their own words reach these"
+          alert={s.roleless > 0}
+        />
+        <Stat
+          label="Not ours at all"
+          value={NUM.format(s.dropped.tag + s.dropped.company + s.dropped.title + s.dropped.url)}
+          note="Not web3, a non-crypto employer or title, or a broken link"
+        />
+      </Stats>
+      {s.rolelessTitles.length === 0 ? (
+        <p className="text-sm text-ink-muted">Every live job matches a role.</p>
+      ) : (
+        <>
+          <SubHead>The most common titles with no role</SubHead>
+          <div className={BOARD}>
+            <table className={TABLE} data-table="roleless-titles">
+              <thead>
+                <tr>
+                  <th scope="col" className={TH_TIGHT}>Title</th>
+                  <th scope="col" className={TH_TIGHT}>An employer with it</th>
+                  <th scope="col" className={TH_NUM}>Live jobs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.rolelessTitles.map((t) => (
+                  <tr key={t.title} className={TR}>
+                    <th scope="row" className={`${TD} font-normal`}>{t.title}</th>
+                    <td className={`${TD} text-ink-muted`}>{t.company}</td>
+                    <td className={TD_NUM}>{NUM.format(t.n)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-ink-muted">
+            A daily digest never picks these: it goes by role. A person reaches them by writing their own role in the
+            brief, or by looking through the board. If a title keeps coming back, add the role, or a phrase to an
+            existing one, in web/src/lib/jobs/roles.ts and its copy in the engine, and deploy both.
+          </p>
+        </>
+      )}
+    </Panel>
+  );
+}
+
 function Jobs({ report }: { report: DemandReport }) {
   const j = report.jobs;
   return (
@@ -216,6 +276,7 @@ export default async function AdminDemandPage() {
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
         <People report={report} now={now} />
         <Jobs report={report} />
+        <NoRole report={report} />
       </div>
 
       <p className="mt-8 text-xs text-ink-muted" data-cost="">

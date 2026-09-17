@@ -76,8 +76,11 @@ export interface DigestProfile {
 
 export interface DigestPick {
   job: DigestJob;
-  /** Роль людини, за якою вакансія потрапила в добірку; для збігу за словами перша роль вакансії. */
-  role: RoleKey;
+  /**
+   * Роль людини, за якою вакансія потрапила в добірку; для збігу за словами перша роль вакансії,
+   * а якщо ролі в назві немає зовсім (вакансія знайшлась лише словами людини), null.
+   */
+  role: RoleKey | null;
   /** Фраза своєї ролі людини, за якою вакансія підійшла (лише коли не підійшла за роллю). */
   keyword?: string;
   place: "remote" | "city";
@@ -303,7 +306,11 @@ export function stillOpenNote(job: DigestJob, now: Date): string | null {
  * З `now` давніша за FRESH_DAYS вакансія ще й каже, що вона досі відкрита і коли опублікована.
  */
 export function whyLine(pick: Omit<DigestPick, "why">, profile: DigestProfile, now?: Date): string {
-  const parts = [pick.keyword ? `Matches "${pick.keyword}" from your own words.` : `Matches your ${ROLE_NAMES[pick.role]} role.`];
+  const parts = [
+    pick.keyword || pick.role === null
+      ? `Matches "${pick.keyword ?? ""}" from your own words.`
+      : `Matches your ${ROLE_NAMES[pick.role]} role.`,
+  ];
   parts.push(pick.place === "city" && profile.city ? `In ${cityLabel(profile.city)}.` : "Remote.");
   const salary = formatSalary(pick.job.salary);
   if (salary) parts.push(pick.meetsSalary ? `Salary listed: ${salary}, meets your minimum.` : `Salary listed: ${salary}.`);
@@ -339,10 +346,11 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
     if (o.exclude.has(job.ref)) continue;
     if (job.dedupeKey && excludedDedupe.has(job.dedupeKey)) continue;
     const own = profile.roles.find((r) => job.roles.includes(r));
-    // Не наша роль, але в назві слова своєї ролі людини: вакансія підходить під першою роллю вакансії.
+    // Не наша роль, але в назві слова своєї ролі людини: вакансія підходить під першою роллю вакансії,
+    // а коли ролі в назві немає зовсім, без ролі (role null): у тексті однаково стоять слова людини.
     const keyword = own ? null : keywordHit(job.title, phrases);
-    const role = own ?? (keyword ? job.roles[0] : undefined);
-    if (!role) continue;
+    if (!own && !keyword) continue;
+    const role: RoleKey | null = own ?? job.roles[0] ?? null;
     const place = placeMatch(job, effectiveModes, profile.city);
     if (!place) continue;
     // Живе все, що в пулі (jobs.ts); 30 днів лише ділять вакансії зі сканування на свіжі й давніші.

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { JobsDb } from "@/lib/jobs-db";
-import { FAILURE_BACKOFF_MS, crawlPool, POOL_ROW_CAP, POOL_TTL_MS, resetCrawlPool } from "./pool";
+import { FAILURE_BACKOFF_MS, crawlPool, POOL_ROW_CAP, POOL_TTL_MS, poolStats, resetCrawlPool } from "./pool";
 
 /**
  * Пул вакансій для search_jobs: читання не частіше за раз на POOL_TTL_MS, без спільного
@@ -122,5 +122,30 @@ describe("Job pool", () => {
       }, NOW);
     })();
     expect(unbound).toBeNull();
+  });
+});
+
+describe("pool sieve counters", () => {
+  it("keeps a crypto job with no role of ours, counts it, and names the most common such titles", async () => {
+    const { db } = fakeDb(async () => [
+      row("a", "Senior Solidity Engineer"),
+      row("b", "Security Auditor"),
+      row("c", "Tokenomics Wizard"),
+      row("d", "Tokenomics Wizard"),
+      { ...row("e", "Solidity Engineer"), tags: '["jobs"]' },
+    ]);
+    const pool = await crawlPool(() => db, NOW);
+    const s = poolStats();
+    expect(s).not.toBeNull();
+    expect(s!.read).toBe(5);
+    expect(s!.kept).toBe(pool!.length);
+    expect(s!.kept + s!.dropped.title + s!.dropped.tag + s!.dropped.company + s!.dropped.url).toBe(5);
+    // Не web3 падає за тегом; «Tokenomics Wizard» лишається, але без ролі.
+    expect(s!.dropped.tag).toBe(1);
+    expect(s!.dropped.title).toBe(0);
+    expect(s!.roleless).toBe(2);
+    expect(pool!.filter((j) => j.roles.length === 0)).toHaveLength(2);
+    // Найчастіша безрольна назва перша, рівно як у базі.
+    expect(s!.rolelessTitles[0]).toMatchObject({ title: "Tokenomics Wizard", company: "Chain Labs", n: 2 });
   });
 });

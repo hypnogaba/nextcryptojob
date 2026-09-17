@@ -1,5 +1,6 @@
 import type { RoleKey } from "@/lib/card/roles";
 import type { JobsDb } from "@/lib/jobs-db";
+import { crawlPool, poolStats, type PoolStats } from "@/lib/jobs/pool";
 import { parseRoles, ROLE_NAMES } from "@/lib/jobs/roles";
 import { sqlTime } from "@/lib/time";
 
@@ -60,6 +61,11 @@ export interface DemandReport {
     pay: PayAsk[];
     words: OwnWords[];
   };
+  /**
+   * Що сито зробило з живими вакансіями: скільки лишилось людям і скільки ми маємо, але
+   * нікому не показуємо (назва не лягла в жодну з 15 ролей). null, якщо пул не зібрався.
+   */
+  sieve: PoolStats | null;
   /** Що в нас є. */
   jobs: {
     live: number;
@@ -206,7 +212,13 @@ export async function loadJobsSupply(jobs: JobsDb, now: Date): Promise<DemandRep
 
 export async function loadDemandReport(db: D1Database, jobs: JobsDb, now: Date = new Date()): Promise<DemandReport> {
   const [people, supply] = await Promise.all([loadPeopleDemand(db), loadJobsSupply(jobs, now)]);
-  return { computedAt: now.getTime(), people, jobs: supply };
+  // Пул уже може бути в пам'яті ізолята (його бере головна й пошук); якщо ні, зберемо тут.
+  let sieve = poolStats();
+  if (!sieve) {
+    await crawlPool(() => jobs, now);
+    sieve = poolStats();
+  }
+  return { computedAt: now.getTime(), people, jobs: supply, sieve };
 }
 
 /** Кеш звіту в пам'яті ізоляту, як у звіті джерел: підрахунок читає тисячі рядків. */

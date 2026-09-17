@@ -117,11 +117,14 @@ const quoted = (words: readonly string[]): string =>
 
 /** До MAX_REASONS причин, кожна окремим реченням з крапкою. Перша завжди про роль. */
 export function fitReasons(pick: FitPick, profile: DigestProfile, ctx: FitContext): string[] {
-  const role = ROLE_NAMES[pick.role];
-  const words = pick.keyword ? [] : wordsInTitle(ctx.words, pick.job.title, pick.role);
+  // Роль може бути null: вакансія знайшлась лише словами людини, і в її назві нашої ролі немає.
+  const role = pick.role === null ? null : ROLE_NAMES[pick.role];
+  const words = pick.keyword || pick.role === null ? [] : wordsInTitle(ctx.words, pick.job.title, pick.role);
   // Підійшла за своєю роллю словами (не за роллю зі списку): кажемо саме це.
   const first = pick.keyword
     ? `Matches "${pick.keyword}" from your own words.`
+    : role === null
+    ? "Matches your own words."
     : words.length
       ? `Matches your ${role} role, and the title has your words ${quoted(words)}.`
       : `Matches your ${role} role.`;
@@ -141,7 +144,7 @@ export function fitReasons(pick: FitPick, profile: DigestProfile, ctx: FitContex
     extra.push(workModes(profile.remoteMode).includes("remote") ? "Remote, as you asked." : "Remote.");
   }
   // Для збігу за словами роль вакансії не роль людини, тож її бал тут ні до чого.
-  const score = pick.keyword ? undefined : ctx.scores[pick.role];
+  const score = pick.keyword || pick.role === null ? undefined : ctx.scores[pick.role];
   if (typeof score === "number" && score >= SCORE_REASON_MIN) {
     extra.push(`Your ${role} score is ${Math.round(score)}, from your public work.`);
   }

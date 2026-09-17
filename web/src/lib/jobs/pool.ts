@@ -3,7 +3,7 @@ import { cleanText, plausibleSalary, safeUrl } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
 import { brandKey, isNonCryptoCompany } from "./clean";
 import { foldText, isRemoteLocation } from "./place";
-import { titleRoles } from "./roles";
+import { isNonCryptoTitle, titleRoles } from "./roles";
 
 /**
  * Вакансії зі сканування (база вакансій NextCryptoJob, binding JOBS_DB; пише її сканер engine,
@@ -207,8 +207,12 @@ export function crawlSieve(r: PoolRow): { tags: string[]; roles: RoleKey[] } | {
   // Тег web3 перевіряє вже SQL (LIKE); тут ще раз точно, бо LIKE бачить і підрядок.
   if (!tags.includes("web3")) return { drop: "tag" };
   if (isNonCryptoCompany(r.company_key, r.company)) return { drop: "company" };
+  // Назва явно не про крипто-роль (кухар, водій): не наша вакансія, геть.
+  if (isNonCryptoTitle(r.title)) return { drop: "title" };
+  // Роль з назви може не знайтись («Tokenomics Wizard»). Таку вакансію лишаємо в пулі з порожнім
+  // roles: за роллю людини вона не підбереться ніколи, але власні слова людини її дістануть
+  // (match.ts, keywordHit), і вона рахується як жива вакансія бази (власник 17.09).
   const roles = titleRoles(r.title, tags);
-  if (roles.length === 0) return { drop: "title" };
   return { tags, roles };
 }
 
@@ -253,8 +257,35 @@ export function crawlJob(r: PoolRow): PoolJob | null {
   };
 }
 
-let cached: { at: number; jobs: PoolJob[] } | null = null;
+/**
+ * Що сито зробило з останнім читанням пулу: скільки живих рядків прочитано, скільки лишилось,
+ * і що відкинуто й чому. Потрібне двом місцям: головна показує, скільки вакансій у базі всього
+ * (не лише тих, чия назва лягла в наші ролі), а /admin/demand показує, що ми маємо, але нікому
+ * не показуємо, і які це назви.
+ */
+export type PoolStats = {
+  /** Живих рядків web3, які прочитав запит пулу. */
+  read: number;
+  /** З них лишилось у пулі (пошук, добірка, стрічка головної). */
+  kept: number;
+  /** З лишених: без нашої ролі в назві. Їх дістануть лише власні слова людини чи перегляд списку. */
+  roleless: number;
+  dropped: { tag: number; company: number; title: number; url: number };
+  /** Найчастіші назви без нашої ролі, найчастіші перші: видно, якої ролі бракує. */
+  rolelessTitles: { title: string; company: string; n: number }[];
+};
+
+/** Скільки різних безрольних назв запам'ятовуємо для адмінки. */
+export const ROLELESS_TITLES_KEPT = 30;
+
+
+let cached: { at: number; jobs: PoolJob[]; stats: PoolStats } | null = null;
 let failedAt: number | null = null;
+
+/** Лічильники останнього зібраного пулу (з пам'яті ізолята), або null, якщо пулу ще не було. */
+export function poolStats(): PoolStats | null {
+  return cached?.stats ?? null;
+}
 
 /** Для тестів: наступний пошук читає пул знову. */
 export function resetCrawlPool(): void {
@@ -262,7 +293,7 @@ export function resetCrawlPool(): void {
   failedAt = null;
 }
 
-async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<PoolJob[] | null> {
+async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<{ jobs: PoolJob[]; stats: PoolStats } | null> {
   const started = Date.now();
   let rows: PoolRow[];
   try {
@@ -276,12 +307,32 @@ async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<PoolJob[]
     console.warn(`search_jobs: job pool hit the ${cap}-row cap; older jobs are left out`);
   }
   const out: PoolJob[] = [];
+  const stats: PoolStats = { read: rows.length, kept: 0, roleless: 0, dropped: { tag: 0, company: 0, title: 0, url: 0 }, rolelessTitles: [] };
+  const titles = new Map<string, { title: string; company: string; n: number }>();
   for (const r of rows) {
+    const sieved = crawlSieve(r);
+    if ("drop" in sieved) {
+      stats.dropped[sieved.drop]++;
+      continue;
+    }
     const job = crawlJob(r);
-    if (job) out.push(job);
+    if (!job) {
+      stats.dropped.url++;
+      continue;
+    }
+    out.push(job);
+    if (job.roles.length === 0) {
+      stats.roleless++;
+      const key = r.title.trim().toLowerCase();
+      const seen = titles.get(key);
+      if (seen) seen.n++;
+      else titles.set(key, { title: cleanText(r.title, 120), company: cleanText(r.company, 60), n: 1 });
+    }
   }
+  stats.kept = out.length;
+  stats.rolelessTitles = [...titles.values()].sort((a, b) => b.n - a.n || a.title.localeCompare(b.title)).slice(0, ROLELESS_TITLES_KEPT);
   console.log(`search_jobs: job pool ${out.length} of ${rows.length} rows in ${Date.now() - started} ms`);
-  return out;
+  return { jobs: out, stats };
 }
 
 /**
@@ -293,7 +344,7 @@ export async function crawlPool(open: () => JobsDb, now: Date, cap = POOL_ROW_CA
   const t = Date.now();
   if (cached && t - cached.at < POOL_TTL_MS) return cached.jobs;
   if (failedAt !== null && t - failedAt < FAILURE_BACKOFF_MS) return cached?.jobs ?? null;
-  let pool: PoolJob[] | null;
+  let pool: { jobs: PoolJob[]; stats: PoolStats } | null;
   try {
     pool = await loadPool(open(), now, cap);
   } catch (e) {
@@ -306,6 +357,6 @@ export async function crawlPool(open: () => JobsDb, now: Date, cap = POOL_ROW_CA
     return cached?.jobs ?? null;
   }
   failedAt = null;
-  cached = { at: Date.now(), jobs: pool };
-  return pool;
+  cached = { at: Date.now(), jobs: pool.jobs, stats: pool.stats };
+  return pool.jobs;
 }

@@ -122,15 +122,18 @@ describe("loadCrawlPool", () => {
     expect(jobs.find((j) => j.id === "undated")!.firstSeenAt).toBe(NOW.getTime() - 45 * 86_400_000);
   });
 
-  it("чистить не-крипто компанії й назви та назви без нашої ролі", async () => {
+  it("чистить не-крипто компанії й назви, а назву без нашої ролі лишає в пулі без ролі", async () => {
     fake.add({ id: "a", title: "Expert Audio Transcriber, Bulgarian", company: "Perle", companyKey: "perle" });
     fake.add({ id: "b", title: "Customer Success Manager", company: "Notion", companyKey: "notion" });
     fake.add({ id: "c", title: "Robata Chef", company: "Katana" });
     fake.add({ id: "d", title: "Associate", company: "Katana" });
     fake.add({ id: "e", title: "Senior Protocol Engineer", company: "Katana" });
     const { jobs, stats } = await loadCrawlPool(readOnlyJobsDb(fake), NOW);
-    expect(jobs.map((j) => j.id)).toEqual(["e"]);
-    expect(stats).toMatchObject({ fetched: 5, kept: 1, dropped: { tag: 0, company: 2, title: 2 } });
+    // «Associate» не має нашої ролі, але це крипто-компанія: лишається в пулі з порожнім roles,
+    // щоб її дістали власні слова людини. «Robata Chef» не наша назва взагалі.
+    expect(jobs.map((j) => j.id)).toEqual(["d", "e"]);
+    expect(jobs.find((j) => j.id === "d")!.roles).toEqual([]);
+    expect(stats).toMatchObject({ fetched: 5, kept: 2, roleless: 1, dropped: { tag: 0, company: 2, title: 1 } });
   });
 
   it("гібрид з прапорцем remote стає не віддаленим, дати з ISO розбираються", async () => {

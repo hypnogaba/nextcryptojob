@@ -10,7 +10,7 @@ import { ATS_PROVIDERS } from "../jobs/types.js";
 import { brandKey, isNonCryptoCompany } from "./clean.js";
 import type { JobsDb } from "./jobs-db.js";
 import { annualRange, type DigestJob, formatSalary, isFresh, isRemoteLocation, type JobSalary } from "./match.js";
-import { parseRoles, titleRoles } from "./roles.js";
+import { isNonCryptoTitle, parseRoles, titleRoles } from "./roles.js";
 import { type TokenColumns, type TokenQuote, tokenQuoteOf } from "./token.js";
 
 // Правило «жива вакансія» (14.09.2026, однакове для сканера, добірки, сайту й адмінки):
@@ -112,8 +112,10 @@ function salaryOf(min: number | null, max: number | null, currency: string | nul
 export type PoolStats = {
   /** Рядків повернуто з jobs_cache (після SQL). */
   fetched: number;
-  /** Скільки лишилось після чистки (роль, не-крипто компанія чи назва). */
+  /** Скільки лишилось після чистки (не-крипто компанія чи назва). */
   kept: number;
+  /** З них без ролі в назві: за роллю людини не підберуться, лише за її власними словами. */
+  roleless: number;
   /** З них ще відкриті, але опубліковані давніше за FRESH_DAYS (добірка бере їх лише добрати до п'яти). */
   older: number;
   dropped: { tag: number; company: number; title: number };
@@ -122,14 +124,18 @@ export type PoolStats = {
   wallMs: number;
 };
 
-/** Рядок бази вакансій → вакансія пулу; drop, якщо це не крипто або не наша роль. */
+/** Рядок бази вакансій → вакансія пулу; drop, якщо це не крипто (тег, компанія чи назва). */
 export function crawlJob(r: PoolRow): { job: DigestJob } | { drop: "tag" | "company" | "title" } {
   const tags = tagsOf(r.tags);
   // Тег web3 перевіряє вже SQL (LIKE); тут ще раз точно, бо LIKE бачить і підрядок.
   if (!tags.includes("web3")) return { drop: "tag" };
   if (isNonCryptoCompany(r.company_key, r.company)) return { drop: "company" };
+  // Назва явно не про крипто-роль (кухар, водій): не наша вакансія, геть.
+  if (isNonCryptoTitle(r.title)) return { drop: "title" };
+  // Роль з назви може не знайтись («Tokenomics Wizard»). Таку вакансію лишаємо в пулі з порожнім
+  // roles: за роллю людини вона не підбереться ніколи, але власні слова людини її дістануть
+  // (match.ts, keywordHit), і вона рахується як жива вакансія бази (власник 17.09).
   const roles = titleRoles(r.title, tags);
-  if (roles.length === 0) return { drop: "title" };
   return {
     job: {
       ref: `nr:${r.id}`, source: "nextrole", id: r.id, title: r.title.trim(), company: r.company.trim(),
@@ -183,7 +189,12 @@ export async function loadCrawlPool(jobs: JobsDb, now: Date): Promise<{ jobs: Di
   }
   return {
     jobs: out, estimates,
-    stats: { fetched: res.rows.length, kept: out.length, older: out.filter((j) => !isFresh(j, now)).length, dropped, rowsRead: res.meta.rowsRead, d1Ms: res.meta.durationMs, wallMs: res.wallMs },
+    stats: {
+      fetched: res.rows.length, kept: out.length, older: out.filter((j) => !isFresh(j, now)).length,
+      // Лишені в пулі, але без ролі в назві: їх дістають лише власні слова людини.
+      roleless: out.filter((j) => j.roles.length === 0).length,
+      dropped, rowsRead: res.meta.rowsRead, d1Ms: res.meta.durationMs, wallMs: res.wallMs,
+    },
   };
 }
 

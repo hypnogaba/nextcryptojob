@@ -74,6 +74,17 @@ describe("своя роль словами (users.role_text)", () => {
     expect(hit.why).toBe('Matches "tokenomics designer" from your own words. Remote.');
   });
 
+  it("вакансія без жодної нашої ролі в назві йде лише за словами людини, і пояснення без ролі", () => {
+    // Сито лишає таку вакансію в пулі з порожнім roles (jobs.ts): роль з назви не дістається.
+    const noRole = job({ title: "Tokenomics Wizard", roles: [] });
+    // За роллю людини її не візьме ніхто.
+    expect(pick([noRole], profile({ roles: ["engineer"], roleText: null }))).toEqual([]);
+    const out = pick([noRole], profile({ roles: ["engineer"], roleText: "Tokenomics wizard" }));
+    expect(out.map((p) => p.job.id)).toEqual([noRole.id]);
+    expect(out[0]).toMatchObject({ role: null, keyword: "tokenomics wizard" });
+    expect(out[0]!.why).toBe('Matches "tokenomics wizard" from your own words. Remote.');
+  });
+
   it("без ролей, але зі своєю роллю словами, добірка не порожня; без обох порожня", () => {
     const own = job({ title: "Governance Lead", roles: ["operations_support"] });
     expect(pick([own], profile({ roles: [], roleText: "governance" })).map((p) => p.job.id)).toEqual([own.id]);
