@@ -137,7 +137,7 @@ function annualTop(s: PoolJob["salary"]): number | null {
   return top === null ? null : top * (s.period === "month" ? 12 : 1);
 }
 
-function matches(job: PoolJob, input: SearchJobsInput): boolean {
+export function matches(job: PoolJob, input: SearchJobsInput): boolean {
   if (input.role && !job.roles.includes(input.role)) return false;
   if (input.q) {
     const words = foldText(input.q).split(" ").filter(Boolean);
@@ -163,7 +163,7 @@ function matches(job: PoolJob, input: SearchJobsInput): boolean {
 }
 
 /** Новіші спершу, без дати в кінці, далі компанії перед сканованими і за job_id. */
-function compare(a: PoolJob, b: PoolJob): number {
+export function compare(a: PoolJob, b: PoolJob): number {
   if (a.postedMs !== b.postedMs) {
     if (a.postedMs === null) return 1;
     if (b.postedMs === null) return -1;

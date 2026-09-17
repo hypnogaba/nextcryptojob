@@ -146,6 +146,12 @@ function SignedOutJobs() {
         </Button>
       </div>
       <p className="text-sm text-ink-muted">
+        Just looking?{" "}
+        <Link href="/jobs/all" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+          Browse all live jobs
+        </Link>
+      </p>
+      <p className="text-sm text-ink-muted">
         Already have an account?{" "}
         <Link href="/login" className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
           Sign in
@@ -197,6 +203,9 @@ export default async function JobsPage() {
             {now.state === "ok" ? (
               <p className={HINT}>Picked just now by the same rules as your daily list, one job per company.</p>
             ) : null}
+            <Link href="/jobs/all" className={`${TEXT_LINK} w-fit`}>
+              Search all live jobs
+            </Link>
           </div>
           <JobsNow now={now} savedRefs={savedRefs} />
         </section>

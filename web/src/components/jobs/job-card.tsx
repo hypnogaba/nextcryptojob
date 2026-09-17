@@ -194,6 +194,7 @@ export function JobCard({
   compact = false,
   jobRef,
   saved,
+  openRoles,
 }: {
   job: CardJob;
   /** Причини списком (вибір «зараз»). */
@@ -210,6 +211,8 @@ export function JobCard({
   jobRef?: string;
   /** Чи вже збережена (Saved на /jobs). */
   saved?: boolean;
+  /** Скільки живих позицій у компанії й адреса їхнього списку (/jobs/all, j5). */
+  openRoles?: { count: number; href: string } | null;
 }) {
   const domain = job.domain ?? null;
   const hasWhy = Boolean(reasons?.length || why);
@@ -242,6 +245,11 @@ export function JobCard({
               <span className="font-semibold text-ink">{job.company}</span>
               {domain ? <CompanySite domain={domain} /> : null}
               {job.location ? <span>{job.location}</span> : null}
+              {openRoles ? (
+                <Link href={openRoles.href} prefetch={false} className="underline decoration-line-strong underline-offset-2 hover:decoration-ink">
+                  {openRoles.count} open {openRoles.count === 1 ? "role" : "roles"}
+                </Link>
+              ) : null}
             </p>
             {job.freshness ? <p className="mt-1 text-[0.8125rem] text-ink-muted tabular-nums">{job.freshness}</p> : null}
             {job.token ? (
