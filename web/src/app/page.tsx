@@ -38,7 +38,9 @@ const SITE_LD = {
 };
 
 export const metadata: Metadata = {
-  title: "Crypto and web3 jobs matched to what you have actually shipped",
+  // Назва головної шаблон layout не чіпає (це той самий відрізок шляху), тож назву бренду
+  // пишемо тут самі: за словами «next crypto job» шукають і нас, і просто крипто-роботу.
+  title: "NextCryptoJob: crypto and web3 jobs by proof of work",
   description:
     "Get hired for what you've actually done. The easy way to find a crypto job: we match you by your X, your wallets and your GitHub, and send up to 5 jobs a day by Telegram or email. Free.",
 };
