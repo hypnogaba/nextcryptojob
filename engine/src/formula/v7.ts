@@ -1,6 +1,7 @@
-// Формула v8 (власник 18.09.2026: «кожен може отримати бали за все»; v7 від 17.09 + ширина за всі джерела).
+// Формула v9 (18.09.2026). v8: «кожен може отримати бали за все», ширина за всі джерела. v9: репутація =
+// більше з X і GitHub, щоб підключення X ніколи не знижувало бал.
 // Бал = Робота + Репутація + Ширина. Робота: головні джерела ролі, WORK_POINTS балів. Репутація: відомі
-// крипто-акаунти серед підписників X (без X: підписники GitHub), REP_POINTS для всіх ролей. Ширина: КОЖНЕ
+// крипто-акаунти серед підписників X або підписники GitHub, що більше; REP_POINTS для всіх ролей. Ширина: КОЖНЕ
 // інше підключене джерело людини, по WIDTH_EACH, разом не більше WIDTH_MAX. Файл лишився v7.ts заради історії.
 // Чисті функції, без IO. v6 лишається в score-v6.ts для звірки з Python.
 import type { GithubFacts, LinksFacts, PersonFacts, RoleKey, XFacts } from "../types.js";
@@ -9,7 +10,7 @@ import { ROLE_ORDER } from "./roles.js";
 import { srcAudits, srcDune, srcGhBuilder, srcOnchain, srcSite, srcTrading, srcYt } from "./sources.js";
 import { SOLANA_MIN_SAMPLE, aggregateWallets, solanaSwapsKnown } from "./wallets.js";
 
-export const FORMULA_VERSION = "v8" as const;
+export const FORMULA_VERSION = "v9" as const;
 
 export const WORK_POINTS = 60;
 export const REP_POINTS = 25;
@@ -58,12 +59,14 @@ export function srcLinks(l: Maybe<LinksFacts>): number | null {
   return 100 * (lin(l.count, LINKS_TOP) ?? 0);
 }
 
-/** Репутація 0–100 або null: відомі підписники X, без них підписники GitHub. */
+/** Репутація 0–100 або null: більше з двох, відомі підписники X або підписники GitHub. */
 export function reputation(f: PersonFacts): number | null {
   const x = f.x;
-  if (x && x.followers !== null && !x.kolSourceGap && x.kol !== null) return 100 * (logn(x.kol, KOL_TOP) ?? 0);
-  if (f.github) return 100 * (logn(f.github.followers, GH_FOLLOWERS_TOP) ?? 0);
-  return null;
+  const fromX = x && x.followers !== null && !x.kolSourceGap && x.kol !== null ? 100 * (logn(x.kol, KOL_TOP) ?? 0) : null;
+  const fromGh = f.github ? 100 * (logn(f.github.followers, GH_FOLLOWERS_TOP) ?? 0) : null;
+  // v9: більше з двох. До v9 X, коли він був, заміняв GitHub, і інженер, що підключив X з кількома
+  // відомими підписниками, втрачав бали. Підключене джерело ніколи не забирає бали.
+  return maxOf(fromX, fromGh);
 }
 
 export function computeSourcesV7(f: PersonFacts, nowMs: number): V7Sources & { bestOf: BaseSource | null } {

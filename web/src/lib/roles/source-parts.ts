@@ -76,7 +76,7 @@ export const COMBINED_SOURCES: Record<"media" | "output" | "best", string> = {
 
 /** Репутація: однакова для всіх ролей. */
 export const REPUTATION_TEXT =
-  "Well-known crypto accounts that follow you on X, full at 500. Without X, your GitHub followers, full at 3,000.";
+  "Well-known crypto accounts that follow you on X (full at 500) or your GitHub followers (full at 3,000), whichever counts for more.";
 
 /** Колонки таблиці ваг: усі джерела, які є в рецептах ролей, у порядку показу. */
 export const WEIGHT_COLUMNS: readonly SourceKey[] = ["gh_eng", "gh_builder", "x", "media", "output", "onchain", "trading", "site", "audits", "links", "best"];

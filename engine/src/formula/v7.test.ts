@@ -63,6 +63,35 @@ describe("v7: джерела", () => {
     expect(reputation({})).toBeNull();
   });
 
+  it("v9: репутація = більше з X і GitHub, тож X з кількома відомими підписниками її не знижує", () => {
+    const gh = { ...GH, followers: 3000 };
+    expect(reputation({ x: { ...X, kol: 10 }, github: gh })).toBeCloseTo(100);
+    expect(reputation({ x: { ...X, kol: 500 }, github: { ...GH, followers: 0 } })).toBeCloseTo(100);
+    expect(reputation({ x: { ...X, kol: 0 } })).toBe(0);
+  });
+
+  it("підключене джерело ніколи не знижує бал жодної ролі", () => {
+    const wallet: PersonFacts = { evm: { "0xa": { eth: { firstTs: NOW / 1000 - 3 * 365 * 86400, sent: 500, swaps: 20 } } } } as unknown as PersonFacts;
+    const extras: Array<[string, PersonFacts]> = [
+      ["x", { x: { ...X, kol: 3, followers: 150, ownAvgLikesRt: 1, ownAvgViews: 50, ownAvgReplies: 0 } }],
+      ["youtube", { youtube: { ...YT, subscribers: 100, avgViewsRecent: 10, videos90d: 1 } }],
+      ["links", { links: { count: 1 } }],
+      ["site", { site: { reachable: true, feedItems: 0, items90d: 0, sitemapUrls: 0, latestTs: null } }],
+      ["wallet", wallet],
+    ];
+    const bases: PersonFacts[] = [{ github: { ...GH, followers: 3000 } }, { x: X }, { github: GH, x: X }];
+    for (const base of bases) {
+      const before = scorePersonV7(base, NOW).roles;
+      for (const [name, extra] of extras) {
+        const after = scorePersonV7({ ...base, ...extra, ...(base.x && extra.x ? { x: base.x } : {}) }, NOW).roles;
+        for (const role of ROLE_ORDER) {
+          if (before[role].score === null) continue;
+          expect(after[role].score!, `${name} → ${role}`).toBeGreaterThanOrEqual(before[role].score!);
+        }
+      }
+    }
+  });
+
   it("найсильніше джерело й змішані", () => {
     const s = computeSourcesV7({ x: X, youtube: YT, links: { count: 10 } }, NOW);
     expect(s.bestOf).toBe("links");

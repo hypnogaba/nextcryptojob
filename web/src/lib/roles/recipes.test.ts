@@ -3,7 +3,7 @@ import { V7_ROLES } from "../../../../engine/src/formula/v7";
 import * as engine from "../../../../engine/src/formula/v7";
 import { isScoredRole } from "./catalog";
 import {
-  POSITION_CODE, RECIPES, recipeBonus, recipeCore, REP_POINTS, SCORED_ROLE_KEYS, WIDTH_EACH, WIDTH_MAX, WORK_POINTS,
+  POSITION_CODE, RECIPES, recipeBonus, recipeCore, REP_POINTS, SCORED_ROLE_KEYS, WIDTH_EACH, WIDTH_MAX, WORK_POINTS, isLayeredFormula,
 } from "./recipes";
 import { ROLES } from "@/lib/card/roles";
 
@@ -35,5 +35,12 @@ describe("recipes (v7)", () => {
     expect(recipeCore("designer")).toBe("Work links 40, X 20");
     expect(recipeCore("finance")).toBe("Strongest source 40, Work links 20");
     expect(recipeBonus("engineer")).toBe("Reputation up to 25, and every other source you connect up to 5 each (20 in total)");
+  });
+});
+
+describe("isLayeredFormula", () => {
+  it("shows layers for v7 and every later formula, not for v6 or junk", () => {
+    for (const v of ["v7", "v8", "v9", "v10"]) expect(isLayeredFormula(v), v).toBe(true);
+    for (const v of ["v6", "v5", "", null, undefined, "v9b"]) expect(isLayeredFormula(v), String(v)).toBe(false);
   });
 });

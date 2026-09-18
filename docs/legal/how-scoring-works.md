@@ -39,7 +39,8 @@ Your score has three layers. Together they can pass 100, so the total is capped 
 1. **Work, up to 60.** Each role has its main sources. An engineer is measured mainly on
    GitHub, a trader on trading, media roles on X or YouTube. Some roles use two.
 2. **Reputation, up to 25.** The same for every role: how many well-known crypto accounts
-   follow you on X. Without X, your GitHub followers.
+   follow you on X, or your GitHub followers, whichever counts for more. Connecting X
+   never lowers it.
 3. **Breadth, up to 20.** Everything else you connect counts: every other source adds up to
    5 points, and breadth stops at 20.
 4. **A role needs its main source.** Without it we show "not enough data" instead of a low

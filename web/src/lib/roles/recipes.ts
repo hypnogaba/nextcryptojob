@@ -75,8 +75,11 @@ export const REP_POINTS = 25;
 export const WIDTH_EACH = 5;
 export const WIDTH_MAX = 20;
 
-/** Бал з шарами «робота + репутація + ширина»: v7 і v8 (v8 змінила лише ширину). */
-export const isLayeredFormula = (formula: string | null | undefined): boolean => formula === "v7" || formula === "v8";
+/** Бал з шарами «робота + репутація + ширина»: v7 і новіші (v8 змінила ширину, v9 репутацію). */
+export const isLayeredFormula = (formula: string | null | undefined): boolean => {
+  const n = /^v(\d+)$/.exec(formula ?? "")?.[1];
+  return n !== undefined && Number(n) >= 7;
+};
 
 const GENERAL: Recipe = { paths: [[["best", 40], ["links", 20]]] };
 
