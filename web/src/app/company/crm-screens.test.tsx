@@ -20,6 +20,8 @@ import { deleteSavedSearchAction, toggleAlertAction } from "./(crm)/saved-search
 import SavedSearchesPage from "./(crm)/saved-searches/page";
 import { addFromSearchAction, loadMoreAction, saveSearchAction } from "./(crm)/search/actions";
 import SearchPage from "./(crm)/search/page";
+import { briefAction } from "./(crm)/shortlist/actions";
+import ShortlistPage from "./(crm)/shortlist/page";
 import { createDemo } from "@/lib/admin/demo";
 
 vi.mock("@opennextjs/cloudflare", async () => (await import("@/test/harness")).cloudflareModule);
@@ -301,6 +303,58 @@ describe("search", () => {
     const page = await html(SearchPage(sp({ role: "engineer", q: "1" })));
     expect(page).toContain("Searching in the web app needs a subscription.");
     expect(rows("SELECT * FROM usage_events")).toEqual([]);
+  });
+});
+
+describe("shortlist from a brief", () => {
+  const BRIEF = "Senior Solidity Engineer\nWe build a lending protocol on Arbitrum. Fully remote. Secret codename: KESTREL.";
+
+  it("the brief turns into filters in the address; the text itself is not kept", async () => {
+    const a = await company("Acme Labs");
+    const url = await redirectOf(briefAction(form({ company_id: a.co, brief: BRIEF })));
+    expect(url).toBe("/company/shortlist?role=engineer&roles=engineer&work=remote&chains=arbitrum");
+    expect(url).not.toContain("KESTREL");
+    expect(rows("SELECT * FROM usage_events")).toEqual([]);
+    expect(await redirectOf(briefAction(form({ company_id: a.co, brief: " " })))).toBe("/company/shortlist?error=empty");
+  });
+
+  it("the empty page does not search", async () => {
+    await company("Acme Labs");
+    candidate();
+    const page = await html(ShortlistPage(sp()));
+    expect(page).toContain("Find people");
+    expect(rows("SELECT * FROM usage_events")).toEqual([]);
+  });
+
+  it("shows the top 10 by score with why each fits, for one search, without people already in the pipeline", async () => {
+    const a = await company("Acme Labs");
+    const ids = Array.from({ length: 13 }, (_, i) => candidate(50 + i * 3));
+    const inPipeline = ids[12];
+    expect(await addFromSearchAction({ companyId: a.co, candidateId: inPipeline, role: "engineer" })).toMatchObject({ ok: true });
+    const page = await html(ShortlistPage(sp({ role: "engineer", roles: "engineer", work: "remote", chains: "arbitrum" })));
+    expect(rows("SELECT action FROM usage_events WHERE action = 'search_candidates'")).toHaveLength(1);
+    expect(page).toContain("Top 10: Engineer");
+    expect(page).toContain("We read: Engineer, remote, Arbitrum (preferred, not required)");
+    expect(page).toContain("10 candidates shown");
+    expect(page.match(/data-fit=""/g)).toHaveLength(10);
+    expect(page).toContain("Why they fit:");
+    expect(page).toContain("Wants remote");
+    expect(page).not.toContain(candidateLabel(inPipeline));
+    expect(page.indexOf(candidateLabel(ids[11]))).toBeLessThan(page.indexOf(candidateLabel(ids[10])));
+    expect(page).not.toContain(candidateLabel(ids[0]));
+    expect(page).not.toContain("Load more");
+    expect(page).toContain("Open the full search");
+    noContact(page);
+  });
+
+  it("a job opens its own shortlist from the jobs list", async () => {
+    const { briefFromJob, briefQuery } = await import("@/lib/crm/brief");
+    const q = briefQuery(
+      briefFromJob({ title: "BD Lead", roles: ["bd"], work_mode: ["city"], city: "Lisbon", salary: null }),
+      undefined,
+      "job_x",
+    );
+    expect(q).toBe("role=bd&roles=bd&work=city&city=Lisbon&job=job_x");
   });
 });
 

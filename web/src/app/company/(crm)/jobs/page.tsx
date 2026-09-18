@@ -4,6 +4,7 @@ import { doneText, errorText, first } from "@/components/crm/messages";
 import { CARD, EmptyState, H3, LINK, NoAccess, Notice, PAGE, PageTitle } from "@/components/crm/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { readAction } from "@/lib/crm/actions";
+import { briefFromJob, briefQuery } from "@/lib/crm/brief";
 import { hiddenJobIds, notLiveReason, openJobCount, openJobLimit, placeText, type JobList } from "@/lib/crm/jobs";
 import { cn } from "@/lib/utils";
 import { crmPage } from "../crm";
@@ -101,6 +102,15 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                   >
                     {canWrite ? "Edit" : "View"}
                   </Link>
+                  {canWrite && job.status !== "closed" ? (
+                    <Link
+                      href={`/company/shortlist?${briefQuery(briefFromJob(job), undefined, job.job_id)}`}
+                      prefetch={false}
+                      className={cn(buttonVariants({ variant: "outline" }), "h-11 px-4 text-sm")}
+                    >
+                      Shortlist
+                    </Link>
+                  ) : null}
                   {job.public_url ? (
                     <a href={job.public_url} target="_blank" rel="noopener noreferrer" className={cn(LINK, "px-2 text-sm")}>
                       Public page

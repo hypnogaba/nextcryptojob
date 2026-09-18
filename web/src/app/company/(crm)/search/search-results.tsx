@@ -21,6 +21,7 @@ export function SearchResults({
   role,
   canWrite,
   signals: initialSignals = {},
+  fit,
 }: {
   companyId: string;
   /** Рядок адреси пошуку (фільтри + сортування), для наступних сторінок. */
@@ -30,6 +31,8 @@ export function SearchResults({
   canWrite: boolean;
   /** Сильні сторони за `${id}:${роль}` (lib/crm/signals.ts). */
   signals?: Record<string, Signal[]>;
+  /** Шортлист за брифом: «чому підходить» за id кандидата; без «Load more» і підсумку пошуку. */
+  fit?: Record<string, string[]>;
 }) {
   const [items, setItems] = useState<CandidateSummary[]>(initial.data);
   const [signals, setSignals] = useState<Record<string, Signal[]>>(initialSignals);
@@ -70,6 +73,7 @@ export function SearchResults({
               c={c}
               roleParam={role}
               signals={signals[`${c.candidate_id}:${c.headline.role}`]}
+              fit={fit?.[c.candidate_id]}
               action={
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
                   {canWrite ? <IntroLink c={c} role={role} /> : null}
@@ -101,7 +105,7 @@ export function SearchResults({
         <p className="text-center text-sm text-ink-muted">
           You reached the end of this search (200 results). Narrow the filters to see others.
         </p>
-      ) : items.length > 0 ? (
+      ) : items.length > 0 && !fit ? (
         <p className="text-center text-sm text-ink-muted">
           That is everyone who matches these filters.{" "}
           <Link href="/company/saved-searches" className={LINK}>

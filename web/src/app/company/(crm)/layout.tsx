@@ -15,6 +15,7 @@ import { loadCrm, pageAllowed, type CrmPage } from "./crm";
 const NAV: { page: CrmPage; href: string; label: string }[] = [
   { page: "apply", href: "/company/apply", label: "Application" },
   { page: "dashboard", href: "/company/dashboard", label: "Dashboard" },
+  { page: "shortlist", href: "/company/shortlist", label: "Shortlist" },
   { page: "search", href: "/company/search", label: "Search" },
   { page: "pipeline", href: "/company/pipeline", label: "Pipeline" },
   { page: "saved-searches", href: "/company/saved-searches", label: "Saved searches" },
