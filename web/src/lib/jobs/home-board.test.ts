@@ -292,6 +292,30 @@ describe("the board on the home page", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it("a new isolate takes the board from the edge cache instead of reading the database again", async () => {
+    // Пам'ять ізолята живе, поки живе ізолят. Кеш краю спільний для колонії, тож холодний
+    // ізолят не повторює читання пулу (замір 18.09: воно коштувало 1 до 2,4 с на першому байті).
+    const store = new Map<string, Response>();
+    vi.stubGlobal("caches", {
+      default: {
+        match: async (k: string) => store.get(k)?.clone(),
+        put: async (k: string, r: Response) => void store.set(k, r.clone()),
+      },
+    } as unknown as CacheStorage);
+
+    const first = await board();
+    const afterFirst = reads;
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(store.size).toBe(1);
+
+    resetHomeBoard();
+    resetCrawlPool();
+    const second = await board();
+    expect(reads).toBe(afterFirst);
+    expect(second).toEqual(first);
+    vi.unstubAllGlobals();
+  });
+
   it("counts from the same pool as the digest and fills the example list from it", async () => {
     const b = await board();
     expect(b.available).toBe(true);

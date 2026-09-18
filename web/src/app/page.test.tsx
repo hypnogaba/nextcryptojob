@@ -7,6 +7,7 @@ import { crmDb } from "@/test/crm-fixtures";
 import { harness, resetHarness } from "@/test/harness";
 import { addPoolJob, jobsTestDb } from "@/test/jobs-db";
 import AgentsPage from "./agents/page";
+import { HomeBoard } from "./home-board";
 import CompanyLandingPage from "./company/page";
 import HomePage from "./page";
 import ScoringPage from "./scoring/page";
@@ -43,6 +44,9 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 const home = async () => renderToStaticMarkup(await HomePage());
+// Табло їде окремим шматком під <Suspense> (сторінка не чекає на базу), тож у тестах
+// малюємо його прямо: у сторінці на його місці стоїть каркас.
+const boardHtml = async () => renderToStaticMarkup(await HomeBoard());
 
 /** Текст сторінки без тегів: так його бачить людина (цифри лічильника в окремих span). */
 const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "'").replace(/&amp;/g, "&");
@@ -81,9 +85,17 @@ describe("home page", () => {
     expect(stage).toContain("ncj-medal-core");
   });
 
-  it("counts live jobs with a rolling counter and lists them in a vertical feed", async () => {
+  it("the page shows its own frame at once and waits for the board under Suspense", async () => {
     const html = await home();
-    const board = html.slice(html.indexOf('class="ncj-board"'), html.indexOf("</section>", html.indexOf('class="ncj-board"')));
+    // Каркас: заголовок і рамка вже є, поки числа їдуть. Перший байт не чекає на базу.
+    expect(html).toContain('id="board-h"');
+    expect(text(html)).toContain("Live jobs");
+    expect(text(html)).toContain("Loading today's jobs.");
+    expect(html).not.toContain("ncj-feed");
+  });
+
+  it("counts live jobs with a rolling counter and lists them in a vertical feed", async () => {
+    const board = await boardHtml();
     // 15 рядків у пулі, 3 джерела.
     expect(text(board)).toContain("15 live jobs");
     expect(text(board)).toContain("3 sources");
@@ -102,7 +114,7 @@ describe("home page", () => {
     const from = board.lastIndexOf("<ul");
     const copy = board.slice(from, board.indexOf("</ul>", from));
     expect(copy.match(/<a /g)?.length).toBe(copy.match(/tabindex="-1"/g)?.length);
-    expect(text(html)).not.toContain("Today's jobs did not load just now.");
+    expect(text(board)).not.toContain("Today's jobs did not load just now.");
   });
 
   it("says what we read: X, wallets and GitHub, delivery by Telegram or email", async () => {
@@ -125,10 +137,12 @@ describe("home page", () => {
     const html = await home();
     const t = text(html);
     expect(t).toContain("Get hired for what you've actually done.");
-    expect(t).toContain("Today's jobs did not load just now.");
-    expect(t).not.toContain("live jobs");
-    expect(html).not.toContain("ncj-feed");
     expect(html).toMatch(/action="\/start"/);
+    // Сама сторінка стоїть, а табло каже, що сьогоднішніх вакансій нема.
+    const board = text(await boardHtml());
+    expect(board).toContain("Today's jobs did not load just now.");
+    expect(board).not.toContain("live jobs");
+    expect(await boardHtml()).not.toContain("ncj-feed");
   });
 
   it("still renders when the Worker has no jobs database binding", async () => {
@@ -136,7 +150,8 @@ describe("home page", () => {
     jobsHolder.open = () => {
       throw new Error("JOBS_DB is not bound");
     };
-    expect(text(await home())).toContain("Today's jobs did not load just now.");
+    expect(text(await home())).toContain("Get hired for what you've actually done.");
+    expect(text(await boardHtml())).toContain("Today's jobs did not load just now.");
   });
 
   it("keeps companies, agents, x402 and the scoring details off the home page body", async () => {

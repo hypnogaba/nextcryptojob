@@ -274,6 +274,61 @@ export function resetHomeBoard(): void {
   board = null;
 }
 
+/**
+ * Кеш табло в краю Cloudflare (Cache API, без нових прив'язок): пам'ять ізолята живе лише поки живе
+ * ізолят, а їх гасять часто, тож холодний ізолят інакше знову читає весь пул з D1 (1 до 2,4 с на
+ * першому байті, замір 18.09). Тут табло спільне для всіх ізолятів однієї колонії.
+ * Ключ з версією: міняй `v`, коли міняється форма HomeBoard, інакше старий запис прочитається як новий.
+ */
+const EDGE_KEY = "https://home-board.nextcryptojob.internal/v1";
+/**
+ * Скільки табло живе в краю. Скан оновлює базу раз на добу, тож числа можуть стояти годинами
+ * (рішення власника 18.09: «цифру вакансій можна оновлювати раз на день»). Беремо годину, а не добу:
+ * на швидкість це не впливає (ізолят живе хвилини), зате вакансія компанії, яка щойно заплатила,
+ * потрапляє на головну за годину, а не за добу.
+ */
+export const EDGE_TTL_S = 3600;
+
+/** Кеш краю або null (тести й будь-що поза Worker). */
+function edgeCache(): Cache | null {
+  try {
+    const c = (globalThis as { caches?: { default?: Cache } }).caches;
+    return c?.default ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Табло з краю, або null. Порожнє табло (available: false) не кешуємо й не читаємо. */
+async function fromEdge(): Promise<HomeBoard | null> {
+  const c = edgeCache();
+  if (!c) return null;
+  try {
+    const hit = await c.match(EDGE_KEY);
+    if (!hit) return null;
+    const value = (await hit.json()) as HomeBoard;
+    return value?.available ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Кладе табло в край. Помилка кешу нічого не ламає: сторінка вже має значення. */
+async function toEdge(value: HomeBoard): Promise<void> {
+  const c = edgeCache();
+  if (!c || !value.available) return;
+  try {
+    await c.put(
+      EDGE_KEY,
+      new Response(JSON.stringify(value), {
+        headers: { "content-type": "application/json", "cache-control": `max-age=${EDGE_TTL_S}` },
+      }),
+    );
+  } catch {
+    // Кеш краю не обов'язковий.
+  }
+}
+
 export async function homeBoard(deps: {
   db: () => D1Database;
   env: { SITE_URL?: string };
@@ -282,6 +337,11 @@ export async function homeBoard(deps: {
 }): Promise<HomeBoard> {
   const t = Date.now();
   if (board && t - board.at < (board.value.available ? POOL_TTL_MS : FAILURE_BACKOFF_MS)) return board.value;
+  const shared = await fromEdge();
+  if (shared) {
+    board = { at: Date.now(), value: shared };
+    return shared;
+  }
   let value: HomeBoard;
   try {
     const crawl = await crawlPool(deps.jobs, deps.now);
@@ -303,5 +363,6 @@ export async function homeBoard(deps: {
     value = UNAVAILABLE;
   }
   board = { at: Date.now(), value };
+  await toEdge(value);
   return value;
 }

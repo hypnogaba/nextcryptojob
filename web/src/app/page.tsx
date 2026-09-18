@@ -1,32 +1,24 @@
 import { ArrowRight, Send, Wallet } from "lucide-react";
 import type { Metadata } from "next";
-import type { CSSProperties } from "react";
+import { Suspense } from "react";
 import { GithubLogo, XLogo } from "@/components/brand-icons";
 import { CardStack } from "@/components/landing/card-stack";
-import { JobFeed } from "@/components/landing/job-feed";
-import { Odometer } from "@/components/landing/odometer";
-import { RollOnView } from "@/components/landing/roll-on-view";
 import { exampleFace } from "@/lib/card/example";
 import { underprintDataUri } from "@/lib/card/seal";
-import { appEnv, db } from "@/lib/db";
-import { homeBoard, updatedAgo } from "@/lib/jobs/home-board";
-import { roughCount } from "@/lib/jobs/instant";
-import { jobsDb } from "@/lib/jobs-db";
 import { BRIEF_MAX_CHARS } from "@/lib/onboarding/brief-cookie";
+import { HomeBoard, HomeBoardShell } from "./home-board";
 
 export const metadata: Metadata = {
   description:
     "Get hired for what you've actually done. The easy way to find a crypto job: we match you by your X, your wallets and your GitHub, and send up to 5 jobs a day by Telegram or email. Free.",
 };
 
-// Живі числа й стрічка з пулу вакансій: сторінку рендеримо на запит (кеш у пам'яті
-// ізолята, lib/jobs/home-board.ts), бо статична збірка не бачить бази, а ISR цей кеш OpenNext не вміє.
+// Живі числа й стрічка з пулу вакансій: сторінку рендеримо на запит, бо статична збірка не бачить
+// бази, а ISR цей кеш OpenNext не вміє. Саме табло їде окремо через <Suspense> (./home-board.tsx),
+// тож перший байт не чекає на базу.
 export const dynamic = "force-dynamic";
 
 const WRAP = "mx-auto max-w-[1280px] px-[clamp(16px,4vw,32px)]";
-
-/** Скільки рядків у стрічці панелі: сьогоднішні п'ять і далі стрічка. */
-const FEED_SIZE = 14;
 
 /** Що ми читаємо: те, що вже показує роботу людини. Лише публічне. X і гаманець обов'язкові (анкета). */
 // Раунд 5, п.12: без позначок Required/Optional біля джерел (текст пояснює це в анкеті самій).
@@ -36,13 +28,7 @@ const SOURCES = [
   { name: "GitHub", body: "Repos, stars, and pull requests merged into other projects.", icon: "github" },
 ] as const;
 
-export default async function HomePage() {
-  const now = new Date();
-  const board = await homeBoard({ db, env: safeEnv(), jobs: jobsDb, now });
-  const feed = board.available ? [...board.today.jobs, ...board.ticker].slice(0, FEED_SIZE) : [];
-  const s = board.available ? board.stats : null;
-  const ago = s ? updatedAgo(s.updatedMs, now.getTime()) : null;
-
+export default function HomePage() {
   const underprint = underprintDataUri("#0e0f12", 1);
 
   return (
@@ -86,40 +72,9 @@ export default async function HomePage() {
       </section>
 
       <section aria-labelledby="board-h" className={`${WRAP} pb-24`}>
-        <div className="ncj-board">
-          <div className="ncj-board-h">
-            <h2 id="board-h" className="font-display text-[1.375rem] leading-7 font-bold tracking-[-0.02em] sm:text-[1.875rem] sm:leading-9">
-              {s ? (
-                <RollOnView className="inline">
-                  <Odometer value={roughCount(s.live)} style={{ "--odo-delay": "0ms" } as CSSProperties} /> live jobs
-                </RollOnView>
-              ) : (
-                "Live jobs"
-              )}
-            </h2>
-            {s ? (
-              <div className="ncj-chip-row">
-                <span className="ncj-chip-pill">
-                  {s.sources > 0 ? `${roughCount(s.sources)} sources` : `${roughCount(s.companies)} companies`}
-                </span>
-                <span className="ncj-chip-pill">
-                  <i className="ncj-pulse-dot" aria-hidden="true" />
-                  Updated daily
-                </span>
-                {ago ? <span className="ncj-chip-pill">Last check {ago}</span> : null}
-              </div>
-            ) : null}
-          </div>
-          <section id="today" aria-labelledby="board-h" className="ncj-sheet-jobs scroll-mt-24">
-            {feed.length > 0 ? (
-              <JobFeed jobs={feed} />
-            ) : (
-              <p className="px-1 pb-4 text-ink-muted">
-                Today&apos;s jobs did not load just now. Your brief still works: we show your matches as soon as they load.
-              </p>
-            )}
-          </section>
-        </div>
+        <Suspense fallback={<HomeBoardShell />}>
+          <HomeBoard />
+        </Suspense>
       </section>
 
       <section aria-labelledby="read-h" className={`${WRAP} pb-24`}>
@@ -158,13 +113,4 @@ export default async function HomePage() {
       </section>
     </>
   );
-}
-
-/** SITE_URL для посилань на вакансії компаній; без оточення Worker порожньо (посилання відносні). */
-function safeEnv(): { SITE_URL?: string } {
-  try {
-    return { SITE_URL: appEnv().SITE_URL };
-  } catch {
-    return {};
-  }
 }
