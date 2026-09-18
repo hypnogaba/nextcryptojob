@@ -24,9 +24,12 @@ export const metadata: Metadata = {
   // Поки DNS не готовий, workers.dev може передати свою; за замовчуванням домен.
   metadataBase: new URL(process.env.SITE_URL ?? "https://nextcryptojob.xyz"),
   title: {
-    default: "NextCryptoJob",
+    default: "NextCryptoJob: crypto and web3 jobs matched to your proof of work",
     template: "%s | NextCryptoJob",
   },
+  // Своя адреса для кожної сторінки: './' Next розгортає відносно поточного шляху. Без цього
+  // адреси з мітками (?utm=…) і друга адреса на workers.dev виглядають для пошуку як копії сайту.
+  alternates: { canonical: "./" },
   description:
     "Crypto jobs that fit you. Answer a short brief and get a few matching jobs every day by Telegram or email, free.",
 };

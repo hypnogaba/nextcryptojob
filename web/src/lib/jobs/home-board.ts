@@ -280,7 +280,12 @@ export function resetHomeBoard(): void {
  * першому байті, замір 18.09). Тут табло спільне для всіх ізолятів однієї колонії.
  * Ключ з версією: міняй `v`, коли міняється форма HomeBoard, інакше старий запис прочитається як новий.
  */
-const EDGE_KEY = "https://home-board.nextcryptojob.internal/v1";
+const EDGE_PATH = "/__cache/home-board/v1";
+/** Ключ кеша краю. Хост мусить бути наш: чужий хост Cache API мовчки не зберігає. */
+function edgeKey(env: { SITE_URL?: string }): string {
+  const base = env.SITE_URL?.startsWith("http") ? env.SITE_URL : "https://nextcryptojob.xyz";
+  return new URL(EDGE_PATH, base).toString();
+}
 /**
  * Скільки табло живе в краю. Скан оновлює базу раз на добу, тож числа можуть стояти годинами
  * (рішення власника 18.09: «цифру вакансій можна оновлювати раз на день»). Беремо годину, а не добу:
@@ -300,32 +305,34 @@ function edgeCache(): Cache | null {
 }
 
 /** Табло з краю, або null. Порожнє табло (available: false) не кешуємо й не читаємо. */
-async function fromEdge(): Promise<HomeBoard | null> {
+async function fromEdge(env: { SITE_URL?: string }): Promise<HomeBoard | null> {
   const c = edgeCache();
   if (!c) return null;
   try {
-    const hit = await c.match(EDGE_KEY);
+    const hit = await c.match(edgeKey(env));
     if (!hit) return null;
     const value = (await hit.json()) as HomeBoard;
     return value?.available ? value : null;
-  } catch {
+  } catch (e) {
+    console.warn(`home: edge cache read failed (${e instanceof Error ? e.message : "unknown"})`);
     return null;
   }
 }
 
 /** Кладе табло в край. Помилка кешу нічого не ламає: сторінка вже має значення. */
-async function toEdge(value: HomeBoard): Promise<void> {
+async function toEdge(env: { SITE_URL?: string }, value: HomeBoard): Promise<void> {
   const c = edgeCache();
   if (!c || !value.available) return;
   try {
     await c.put(
-      EDGE_KEY,
+      edgeKey(env),
       new Response(JSON.stringify(value), {
         headers: { "content-type": "application/json", "cache-control": `max-age=${EDGE_TTL_S}` },
       }),
     );
-  } catch {
-    // Кеш краю не обов'язковий.
+  } catch (e) {
+    // Кеш краю не обов'язковий, але мовчати не треба: інакше не видно, чому головна знову читає базу.
+    console.warn(`home: edge cache write failed (${e instanceof Error ? e.message : "unknown"})`);
   }
 }
 
@@ -337,7 +344,7 @@ export async function homeBoard(deps: {
 }): Promise<HomeBoard> {
   const t = Date.now();
   if (board && t - board.at < (board.value.available ? POOL_TTL_MS : FAILURE_BACKOFF_MS)) return board.value;
-  const shared = await fromEdge();
+  const shared = await fromEdge(deps.env);
   if (shared) {
     board = { at: Date.now(), value: shared };
     return shared;
@@ -363,6 +370,6 @@ export async function homeBoard(deps: {
     value = UNAVAILABLE;
   }
   board = { at: Date.now(), value };
-  await toEdge(value);
+  await toEdge(deps.env, value);
   return value;
 }

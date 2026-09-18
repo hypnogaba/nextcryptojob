@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "FAQ | NextCryptoJob",
+  title: "FAQ",
   description:
     "Answers for candidates: how NextCryptoJob works, why no CV is needed, where the jobs come from, how the score works, privacy and wallets.",
 };

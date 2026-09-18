@@ -8,7 +8,37 @@ import { underprintDataUri } from "@/lib/card/seal";
 import { BRIEF_MAX_CHARS } from "@/lib/onboarding/brief-cookie";
 import { HomeBoard, HomeBoardShell } from "./home-board";
 
+/**
+ * Хто ми, для пошуковика: назва, адреса, знак і акаунт у X. Без цього Google бачить лише текст
+ * сторінки й не звязує домен з назвою. GitHub сюди не ставимо (рішення власника 17.09 про
+ * відокремлення проєкту від особистого акаунта).
+ */
+const SITE_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://nextcryptojob.xyz/#organization",
+      name: "NextCryptoJob",
+      url: "https://nextcryptojob.xyz",
+      logo: "https://nextcryptojob.xyz/icon.svg",
+      description:
+        "NextCryptoJob scores a person's public crypto track record on X, GitHub and wallets, and sends matching crypto and web3 jobs every day.",
+      sameAs: ["https://x.com/nextcryptojob"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://nextcryptojob.xyz/#website",
+      name: "NextCryptoJob",
+      url: "https://nextcryptojob.xyz",
+      inLanguage: "en",
+      publisher: { "@id": "https://nextcryptojob.xyz/#organization" },
+    },
+  ],
+};
+
 export const metadata: Metadata = {
+  title: "Crypto and web3 jobs matched to what you have actually shipped",
   description:
     "Get hired for what you've actually done. The easy way to find a crypto job: we match you by your X, your wallets and your GitHub, and send up to 5 jobs a day by Telegram or email. Free.",
 };
@@ -33,6 +63,7 @@ export default function HomePage() {
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(SITE_LD) }} />
       <section
         className={`${WRAP} relative grid items-center gap-x-12 gap-y-10 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:pt-10`}
       >

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ContactForm } from "./contact-form";
 
 export const metadata: Metadata = {
-  title: "Contact | NextCryptoJob",
+  title: "Contact",
   description: "Reach the NextCryptoJob team: candidates, companies or press.",
 };
 
