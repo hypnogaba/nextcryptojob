@@ -39,12 +39,15 @@ export function CandidateRow({
   action,
   roleParam,
   signals,
+  fit,
 }: {
   c: CandidateSummary;
   action?: ReactNode;
   roleParam?: string;
   /** Сильні сторони для ролі рядка (lib/crm/signals.ts): «GitHub 94», «X 71». */
   signals?: Signal[];
+  /** Шортлист: чому людина підходить під бриф (lib/crm/brief.ts fitReasons). */
+  fit?: string[];
 }) {
   const h = c.headline;
   const others = c.roles.filter((r) => r.role !== h.role);
@@ -89,6 +92,11 @@ export function CandidateRow({
               </li>
             ))}
           </ul>
+        ) : null}
+        {fit?.length ? (
+          <p className="mt-1 text-sm text-ink" data-fit="">
+            <span className="font-semibold">Why they fit:</span> {fit.join(" · ")}
+          </p>
         ) : null}
         {others.length ? <p className="text-sm text-ink-muted">Also: {others.map(roleScoreText).join(", ")}</p> : null}
         <p className="mt-1 text-sm text-ink">{place.join(" · ")}</p>

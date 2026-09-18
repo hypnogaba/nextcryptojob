@@ -30,6 +30,7 @@ export interface CrmView {
 export type CrmPage =
   | "dashboard"
   | "search"
+  | "shortlist"
   | "candidates"
   | "pipeline"
   | "saved-searches"
