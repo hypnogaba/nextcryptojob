@@ -52,6 +52,19 @@ const boardHtml = async () => renderToStaticMarkup(await HomeBoard());
 const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "'").replace(/&amp;/g, "&");
 
 describe("home page", () => {
+  it("says under the button what a person gets, and explains how it works in three steps", async () => {
+    const t = text(await home());
+    expect(t).toContain("Free for candidates");
+    expect(t).toContain("Up to 5 jobs a day that fit you, by Telegram or email");
+    expect(t).toContain("How it works");
+    expect(t).toContain("You tell us once. We look for you every day.");
+    const steps = ["Say what you want", "Connect X and a wallet", "Get up to 5 jobs a day"].map((s) => t.indexOf(s));
+    expect(steps.every((i) => i > 0)).toBe(true);
+    expect([...steps].sort((x, y) => x - y)).toEqual(steps);
+    // Блок стоїть одразу під першим екраном, перед табло вакансій.
+    expect(t.indexOf("How it works")).toBeLessThan(t.indexOf("Live jobs"));
+  });
+
   it("leads with one promise and a brief box that carries the text to the brief", async () => {
     const html = await home();
     const t = text(html);
@@ -126,7 +139,8 @@ describe("home page", () => {
     expect(t).toContain("GitHub");
     expect(t).not.toContain("Required");
     expect(t).not.toContain("Optional");
-    expect(t).toContain("Up to 5 matching jobs a day, by Telegram or email.");
+    // Обіцянку «5 на день» тепер несуть рядок під кнопкою і крок 3, унизу вона не повторюється.
+    expect(t).not.toContain("Up to 5 matching jobs a day, by Telegram or email.");
     expect(t).not.toContain("Public data only.");
     expect(t).not.toContain("Free for job seekers");
   });

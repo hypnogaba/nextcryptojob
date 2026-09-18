@@ -1,4 +1,5 @@
-import { ArrowRight, Send, Wallet } from "lucide-react";
+import { ArrowRight, Check, Send, Wallet } from "lucide-react";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { GithubLogo, XLogo } from "@/components/brand-icons";
@@ -60,6 +61,27 @@ const SOURCES = [
   { name: "GitHub", body: "Repos, stars, and pull requests merged into other projects.", icon: "github" },
 ] as const;
 
+/**
+ * Як це працює, трьома кроками: нова людина мусить зрозуміти з першого екрана, що вона дає і що
+ * отримує (рішення власника 18.09). Кожне речення тут правда в коді: X і гаманець обов'язкові,
+ * GitHub ні; без CV (FAQ); у кожної вакансії в добірці є причина; добірку можна поставити на паузу
+ * в налаштуваннях.
+ */
+const STEPS = [
+  {
+    title: "Say what you want",
+    body: "Role, field, city or remote, pay. In your own words. No CV and no cover letter.",
+  },
+  {
+    title: "Connect X and a wallet",
+    body: "GitHub too, if you have one. We read only public work and build your score card from it.",
+  },
+  {
+    title: "Get up to 5 jobs a day",
+    body: "Every day we check the new crypto jobs and send you the 5 that fit best, each with the reason why. Pause any time.",
+  },
+] as const;
+
 export default function HomePage() {
   const underprint = underprintDataUri("#0e0f12", 1);
 
@@ -97,11 +119,55 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
+            <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-[0.9375rem] text-ink-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <Check aria-hidden className="size-4 text-ink" strokeWidth={2.5} /> Free for candidates
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Send aria-hidden className="size-4 text-ink" strokeWidth={2} /> Up to 5 jobs a day that fit you, by
+                Telegram or email
+              </span>
+            </p>
           </form>
         </div>
 
         <CardStack faces={[exampleFace(10), exampleFace(6), exampleFace(4), exampleFace(2)]} />
         <div className="ncj-wave" aria-hidden="true" style={{ backgroundImage: `url("${underprint}")` }} />
+      </section>
+
+      <section aria-labelledby="how-h" className={`${WRAP} pb-14`}>
+        <div className="border-t border-line pt-10 sm:pt-12">
+          <p className="ncj-label">How it works</p>
+          <h2 id="how-h" className="display mt-4 max-w-[760px] text-section">
+            You tell us once. We look for you <span className="ncj-mark">every day</span>.
+          </h2>
+          <ol className="mt-8 grid overflow-hidden rounded-[28px] border-[1.5px] border-line md:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <li
+                key={step.title}
+                className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-4 p-7 max-md:[&+&]:border-t-[1.5px] md:[&+&]:border-l-[1.5px] [&+&]:border-line"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid size-12 place-items-center rounded-[14px] bg-soft font-display text-xl font-semibold tabular-nums"
+                >
+                  {i + 1}
+                </span>
+                <div>
+                  <h3 className="font-display text-xl leading-7 font-semibold">{step.title}</h3>
+                  <p className="mt-1 text-[0.9375rem] leading-[22px] text-ink-muted">{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-5 text-[0.9375rem] text-ink-muted">
+            More answers in the{" "}
+            <Link href="/faq" className="font-semibold text-ink underline underline-offset-4">
+              FAQ
+            </Link>
+            .
+          </p>
+        </div>
       </section>
 
       <section aria-labelledby="board-h" className={`${WRAP} pb-24`}>
@@ -137,11 +203,6 @@ export default function HomePage() {
               </li>
             ))}
           </ul>
-          <div className="mt-8 flex flex-wrap items-center gap-4 text-lg leading-7">
-            <span className="inline-flex items-center gap-2">
-              <Send aria-hidden className="size-5" strokeWidth={2} /> Up to 5 matching jobs a day, by Telegram or email.
-            </span>
-          </div>
         </div>
       </section>
     </>
