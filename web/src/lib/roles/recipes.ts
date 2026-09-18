@@ -69,15 +69,18 @@ export const POSITION_CODE: Record<RoleKey, string> = {
 type Weights = readonly (readonly [SourceKey, number])[];
 export type Recipe = { paths: readonly Weights[] };
 
-/** Шари v7 (engine/src/formula/v7.ts). */
+/** Шари v8 (engine/src/formula/v7.ts): ширина рахує кожне інше джерело, по WIDTH_EACH, разом до WIDTH_MAX. */
 export const WORK_POINTS = 60;
 export const REP_POINTS = 25;
-export const WIDTH_SOURCES = 3;
 export const WIDTH_EACH = 5;
+export const WIDTH_MAX = 20;
+
+/** Бал з шарами «робота + репутація + ширина»: v7 і v8 (v8 змінила лише ширину). */
+export const isLayeredFormula = (formula: string | null | undefined): boolean => formula === "v7" || formula === "v8";
 
 const GENERAL: Recipe = { paths: [[["best", 40], ["links", 20]]] };
 
-/** Усі 15 ролей рахуються з v7. Вага = бали «Роботи». */
+/** Усі 15 ролей рахуються з v7/v8. Вага = бали «Роботи». */
 export const RECIPES = {
   engineer: { paths: [[["gh_eng", 40], ["gh_builder", 20]]] },
   security_auditor: { paths: [[["audits", 30], ["gh_eng", 30]], [["gh_eng", 60]]] },
@@ -112,5 +115,5 @@ export function recipeCore(role: ScoredRoleKey): string {
 
 /** Те, що однаково для всіх ролей: репутація й ширина. */
 export function recipeBonus(_role?: ScoredRoleKey): string {
-  return `Reputation up to ${REP_POINTS}, and your ${WIDTH_SOURCES} strongest other sources up to ${WIDTH_EACH} each`;
+  return `Reputation up to ${REP_POINTS}, and every other source you connect up to ${WIDTH_EACH} each (${WIDTH_MAX} in total)`;
 }

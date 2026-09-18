@@ -7,7 +7,7 @@ const cellsOf = (html: string, label: string) => {
   return [...row.slice(0, row.indexOf("</tr>")).matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1]!.replace(/<[^>]+>/g, ""));
 };
 
-describe("weights on /scoring (v7)", () => {
+describe("weights on /scoring (v8)", () => {
   it("shows the Work points of every role, with the Onchain column", () => {
     const html = renderToStaticMarkup(<WeightsTable />);
     // 16 рядків: 15 ролей, аудитор двома шляхами.
@@ -25,7 +25,8 @@ describe("weights on /scoring (v7)", () => {
     const html = renderToStaticMarkup(<Layers />);
     expect(html).toMatch(/Work.*60/);
     expect(html).toMatch(/Reputation.*25/);
-    expect(html).toMatch(/Breadth.*15/);
+    expect(html).toMatch(/Breadth.*20/);
+    expect(html).toContain("Every other source you connect");
   });
 
   it("lists what each source counts, onchain first, with team work and links", () => {

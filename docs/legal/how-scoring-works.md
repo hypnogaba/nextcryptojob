@@ -34,14 +34,14 @@ profit and loss, or at how much money sits in your wallets.
 
 ## How the number is built
 
-Your score has three layers, and together they make 100.
+Your score has three layers. Together they can pass 100, so the total is capped at 100.
 
 1. **Work, up to 60.** Each role has its main sources. An engineer is measured mainly on
    GitHub, a trader on trading, media roles on X or YouTube. Some roles use two.
 2. **Reputation, up to 25.** The same for every role: how many well-known crypto accounts
    follow you on X. Without X, your GitHub followers.
-3. **Breadth, up to 15.** Everything else you connect can count: your three strongest other
-   sources add up to 5 points each.
+3. **Breadth, up to 20.** Everything else you connect counts: every other source adds up to
+   5 points, and breadth stops at 20.
 4. **A role needs its main source.** Without it we show "not enough data" instead of a low
    score.
 5. **Missing is not zero.** A source that does not answer or has too little data is shown

@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import { BOARD, POS, TABLE, TD, TH, TR } from "@/components/board";
 import { ROLES } from "@/lib/card/roles";
 import {
-  POSITION_CODE, RECIPES, REP_POINTS, SCORED_ROLE_KEYS, SOURCE_NAME, type SourceKey, WIDTH_EACH, WIDTH_SOURCES, WORK_POINTS,
+  POSITION_CODE, RECIPES, REP_POINTS, SCORED_ROLE_KEYS, SOURCE_NAME, type SourceKey, WIDTH_EACH, WIDTH_MAX, WORK_POINTS,
 } from "@/lib/roles/recipes";
 import { COMBINED_SOURCES, REPUTATION_TEXT, SOURCE_PARTS, WEIGHT_COLUMNS } from "@/lib/roles/source-parts";
 import { cn } from "@/lib/utils";
@@ -53,8 +53,8 @@ export function Layers() {
     { name: "Reputation", points: REP_POINTS, text: REPUTATION_TEXT, cls: "bg-brand-soft text-ink" },
     {
       name: "Breadth",
-      points: WIDTH_SOURCES * WIDTH_EACH,
-      text: `Your ${WIDTH_SOURCES} strongest other sources, up to ${WIDTH_EACH} points each. Everything you connect can count.`,
+      points: WIDTH_MAX,
+      text: `Every other source you connect, up to ${WIDTH_EACH} points each and ${WIDTH_MAX} in total. Everything you connect counts.`,
       cls: "bg-soft text-ink",
     },
   ];
@@ -86,7 +86,7 @@ export function WeightsTable() {
       <table className={TABLE} data-table="weights">
         <caption className="px-4 pt-3 pb-1 text-left text-sm text-ink-muted">
           Points of Work for each role, out of {WORK_POINTS}. Every role also gets Reputation (up to {REP_POINTS}) and Breadth (up to{" "}
-          {WIDTH_SOURCES * WIDTH_EACH}). Onchain is highlighted.
+          {WIDTH_MAX}). The total is capped at 100. Onchain is highlighted.
         </caption>
         <thead>
           <tr>

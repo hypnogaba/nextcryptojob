@@ -5,6 +5,7 @@ import { ROLES, type RoleKey } from "@/lib/card/roles";
 import { displayScore, levelFor } from "@/lib/card/tiers";
 import type { IdentityKind } from "@/lib/identity/normalize";
 import { unscoredNote } from "@/lib/roles/catalog";
+import { isLayeredFormula } from "@/lib/roles/recipes";
 
 export type Breakdown = {
   formula?: string;
@@ -230,8 +231,8 @@ function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): strin
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
     out.push({ kinds, text: `${actionFor(kinds, state)}: it can add up to ${max} points.`, rank: max });
   }
-  // v7: посилання на роботи рахуються в кожній ролі; порада, поки їх немає.
-  if (breakdown.formula === "v7" && !breakdown.selfAddedLinks && breakdown.reason !== "missing_anchor:links") {
+  // v7/v8: посилання на роботи рахуються в кожній ролі; порада, поки їх немає.
+  if (isLayeredFormula(breakdown.formula) && !breakdown.selfAddedLinks && breakdown.reason !== "missing_anchor:links") {
     out.push({ kinds: [], text: "Add links to your work in your profile: they count for every role.", rank: 4 });
   }
   // Без головного джерела про нього вже каже причина; порада повторила б її.

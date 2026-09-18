@@ -7,7 +7,7 @@
 // v7: core («Робота») = Σ w·(s ?? 0) / 100 (ваги вже в балах, разом 60); bonus = репутація (rep) і ширина.
 // Для data_research без опублікованої роботи (reason = 'x_only') ядро = 0.8·X.
 import type { IdentityKind } from "@/lib/identity/normalize";
-import { isSourceKey, SOURCE_CODE, SOURCE_NAME } from "@/lib/roles/recipes";
+import { isLayeredFormula, isSourceKey, SOURCE_CODE, SOURCE_NAME } from "@/lib/roles/recipes";
 import type { Breakdown } from "@/lib/score/explain";
 
 export type BackLine = {
@@ -128,8 +128,8 @@ export function cardBack(json: string | Breakdown, connected?: ReadonlySet<Ident
   if (coreEntries.length === 0) return null;
   const gaps = b.gaps ?? {};
   const xOnly = b.reason === "x_only";
-  const layered = b.formula === "v7";
-  // v7: ваги роботи вже в балах, тож ділимо на 100, а не на суму ваг.
+  const layered = isLayeredFormula(b.formula);
+  // v7/v8: ваги роботи вже в балах, тож ділимо на 100, а не на суму ваг.
   const totalWeight = layered ? 100 : coreEntries.reduce((s, [, e]) => s + (num(e.weight) ?? 0), 0) || 100;
 
   const line = (key: string, kind: BackLine["kind"], weight: number, value: number | null, points: number): BackLine => ({
@@ -170,7 +170,8 @@ export function cardBack(json: string | Breakdown, connected?: ReadonlySet<Ident
   return {
     lines: [...core, ...bonus],
     core: sum(core),
-    bonus: sum(bonus),
+    // v8: ширина обрізається на 20, тож сума рядків може бути більшою; рушій уже порахував шари.
+    bonus: layered && b.layers ? r1(b.layers.rep + b.layers.width) : sum(bonus),
     cover: Math.round(num(b.cover) ?? 0),
     note: xOnly
       ? "No published work found, so X counts for 80 of 100."

@@ -3,7 +3,7 @@ import type { GithubFacts, PersonFacts, XFacts, YoutubeFacts } from "../types.js
 import { ROLE_ORDER } from "./roles.js";
 import {
   computeSourcesV7, FORMULA_VERSION, KOL_TOP, LINKS_TOP, REP_POINTS, reputation, scorePersonV7, srcGhEngV7, srcLinks, srcXV7,
-  V7_ROLES, WIDTH_EACH, WIDTH_SOURCES, WORK_POINTS,
+  V7_ROLES, WIDTH_EACH, WIDTH_MAX, WORK_POINTS,
 } from "./v7.js";
 
 const NOW = Date.parse("2026-09-17T00:00:00Z");
@@ -19,7 +19,8 @@ describe("v7: будова", () => {
     for (const role of ROLE_ORDER) {
       for (const p of V7_ROLES[role].paths) expect(Object.values(p.work).reduce((a, b) => a + b, 0), role).toBe(WORK_POINTS);
     }
-    expect(WORK_POINTS + REP_POINTS + WIDTH_SOURCES * WIDTH_EACH).toBe(100);
+    // v8: ширина до WIDTH_MAX зверху роботи й репутації; сума шарів може бути 105, бал обрізається на 100.
+    expect([WORK_POINTS, REP_POINTS, WIDTH_EACH, WIDTH_MAX]).toEqual([60, 25, 5, 20]);
   });
 
   it("рахує кожну роль, зокрема дизайнера й загальні ролі", () => {
@@ -71,8 +72,8 @@ describe("v7: джерела", () => {
   });
 });
 
-describe("v7: шари", () => {
-  it("робота + репутація + три найсильніші інші джерела по 5", () => {
+describe("v8: шари", () => {
+  it("робота + репутація + кожне інше джерело по 5", () => {
     const f: PersonFacts = { x: X, github: GH, youtube: YT, links: { count: 10 } };
     const r = scorePersonV7(f, NOW).roles.engineer;
     const s = computeSourcesV7(f, NOW);
@@ -86,14 +87,27 @@ describe("v7: шари", () => {
     expect(r.breakdown.selfAddedLinks).toBe(true);
   });
 
-  it("ширина бере не більше трьох і не повторює джерела роботи", () => {
+  it("ширина бере всі інші джерела, а не три найсильніші, і не повторює джерела роботи", () => {
     const f: PersonFacts = { x: X, github: GH, youtube: YT, links: { count: 3 },
       site: { reachable: true, feedItems: 50, items90d: 4, sitemapUrls: 80, latestTs: null } };
     const kol = scorePersonV7(f, NOW).roles.creator_kol;
-    const widthKeys = Object.keys(kol.breakdown.bonus).filter((k) => k !== "rep");
-    expect(widthKeys).toHaveLength(WIDTH_SOURCES);
-    expect(widthKeys).not.toContain("x");
-    expect(widthKeys).not.toContain("yt");
+    const widthKeys = Object.keys(kol.breakdown.bonus).filter((k) => k !== "rep").sort();
+    expect(widthKeys).toEqual(["gh_builder", "gh_eng", "links", "site"]);
+    // Четверте джерело додає бали: у v7 воно б не рахувалось.
+    const s = computeSourcesV7(f, NOW);
+    const width = [s.gh_eng!, s.gh_builder!, s.links!, s.site!].reduce((a, v) => a + (WIDTH_EACH * v) / 100, 0);
+    expect(kol.breakdown.layers!.width).toBeCloseTo(Math.round(Math.min(WIDTH_MAX, width) * 10) / 10, 5);
+  });
+
+  it("ширина не більша за WIDTH_MAX, і нове джерело ніколи не знижує бал", () => {
+    const top = (v: number) => ({ ...GH, stars: v, followers: v, commits12m: v, reviews12m: v, mergedPrsElsewhere: v, reposPushed12m: 50, reposWithSite: 10 });
+    const f: PersonFacts = { x: X, github: top(1e5), youtube: { ...YT, subscribers: 1e7, avgViewsRecent: 1e6, videos90d: 50 }, links: { count: 20 },
+      site: { reachable: true, feedItems: 500, items90d: 20, sitemapUrls: 500, latestTs: null },
+      audits: { earningsUsd: 1_000_000, high: 150, contests: 40, providers: {}, verifiedBy: "github" as const } };
+    const bd = scorePersonV7(f, NOW).roles.bd;
+    expect(bd.breakdown.layers!.width).toBe(WIDTH_MAX);
+    const without = scorePersonV7({ ...f, audits: undefined }, NOW).roles.bd;
+    expect(bd.score!).toBeGreaterThanOrEqual(without.score!);
   });
 
   it("лише X: робота й репутація, без ширини; бал не вище WORK+REP", () => {

@@ -1,7 +1,7 @@
-// Формула v7 (власник 17.09.2026, артефакт «Ваги v7»): бал = Робота + Репутація + Ширина.
-// Робота: головні джерела ролі, WORK_POINTS балів. Репутація: відомі крипто-акаунти серед підписників X
-// (без X: підписники GitHub), REP_POINTS для всіх ролей. Ширина: WIDTH_SOURCES найсильніших інших
-// джерел людини, по WIDTH_EACH кожне. Кожне підключене джерело може дати бали в будь-якій ролі.
+// Формула v8 (власник 18.09.2026: «кожен може отримати бали за все»; v7 від 17.09 + ширина за всі джерела).
+// Бал = Робота + Репутація + Ширина. Робота: головні джерела ролі, WORK_POINTS балів. Репутація: відомі
+// крипто-акаунти серед підписників X (без X: підписники GitHub), REP_POINTS для всіх ролей. Ширина: КОЖНЕ
+// інше підключене джерело людини, по WIDTH_EACH, разом не більше WIDTH_MAX. Файл лишився v7.ts заради історії.
 // Чисті функції, без IO. v6 лишається в score-v6.ts для звірки з Python.
 import type { GithubFacts, LinksFacts, PersonFacts, RoleKey, XFacts } from "../types.js";
 import { combine, lin, logn, maxOf } from "./math.js";
@@ -9,12 +9,13 @@ import { ROLE_ORDER } from "./roles.js";
 import { srcAudits, srcDune, srcGhBuilder, srcOnchain, srcSite, srcTrading, srcYt } from "./sources.js";
 import { SOLANA_MIN_SAMPLE, aggregateWallets, solanaSwapsKnown } from "./wallets.js";
 
-export const FORMULA_VERSION = "v7" as const;
+export const FORMULA_VERSION = "v8" as const;
 
 export const WORK_POINTS = 60;
 export const REP_POINTS = 25;
-export const WIDTH_SOURCES = 3;
+/** Кожне інше джерело дає до WIDTH_EACH, разом до WIDTH_MAX (v7: лише 3 найсильніші по 5). */
 export const WIDTH_EACH = 5;
+export const WIDTH_MAX = 20;
 /** Відомих крипто-підписників, з яких репутація (і частина X) повна. v6: 1000. */
 export const KOL_TOP = 500;
 /** Підписників GitHub для повної репутації, коли X немає. */
@@ -128,7 +129,7 @@ export type BreakdownV7 = {
   sources: V7Sources;
   /** Робота: вага в балах (разом WORK_POINTS). */
   core: Record<string, { weight: number; value: number | null }>;
-  /** Репутація (ключ rep, max REP_POINTS) і вибрані джерела ширини (max WIDTH_EACH). */
+  /** Репутація (ключ rep, max REP_POINTS) і всі джерела ширини (max WIDTH_EACH кожне, разом WIDTH_MAX). */
   bonus: Record<string, { max: number; value: number | null }>;
   /** Покриття роботи, % від WORK_POINTS. */
   cover: number;
@@ -188,9 +189,8 @@ function scoreRole(spec: V7Role, s: V7Sources, bestOf: BaseSource | null, rep: n
     }
     const used = usedBy(path.work, bestOf);
     const widthKeys = BASE_SOURCES.filter((k) => !used.has(k) && s[k] !== null)
-      .sort((a, b) => s[b]! - s[a]! || BASE_SOURCES.indexOf(a) - BASE_SOURCES.indexOf(b))
-      .slice(0, WIDTH_SOURCES);
-    const width = widthKeys.reduce((sum, k) => sum + (WIDTH_EACH * s[k]!) / 100, 0);
+      .sort((a, b) => s[b]! - s[a]! || BASE_SOURCES.indexOf(a) - BASE_SOURCES.indexOf(b));
+    const width = Math.min(WIDTH_MAX, widthKeys.reduce((sum, k) => sum + (WIDTH_EACH * s[k]!) / 100, 0));
     const total = work + repPoints + width;
     if (!best || total > best.total) best = { total, work, width, cover, path, widthKeys };
   }

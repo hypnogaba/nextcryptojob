@@ -3,7 +3,7 @@ import { V7_ROLES } from "../../../../engine/src/formula/v7";
 import * as engine from "../../../../engine/src/formula/v7";
 import { isScoredRole } from "./catalog";
 import {
-  POSITION_CODE, RECIPES, recipeBonus, recipeCore, REP_POINTS, SCORED_ROLE_KEYS, WIDTH_EACH, WIDTH_SOURCES, WORK_POINTS,
+  POSITION_CODE, RECIPES, recipeBonus, recipeCore, REP_POINTS, SCORED_ROLE_KEYS, WIDTH_EACH, WIDTH_MAX, WORK_POINTS,
 } from "./recipes";
 import { ROLES } from "@/lib/card/roles";
 
@@ -14,7 +14,7 @@ describe("recipes (v7)", () => {
   });
 
   it("matches the engine: the same work weights and layers for every role", () => {
-    expect([WORK_POINTS, REP_POINTS, WIDTH_SOURCES, WIDTH_EACH]).toEqual([engine.WORK_POINTS, engine.REP_POINTS, engine.WIDTH_SOURCES, engine.WIDTH_EACH]);
+    expect([WORK_POINTS, REP_POINTS, WIDTH_MAX, WIDTH_EACH]).toEqual([engine.WORK_POINTS, engine.REP_POINTS, engine.WIDTH_MAX, engine.WIDTH_EACH]);
     for (const role of SCORED_ROLE_KEYS) {
       const ours = RECIPES[role].paths.map((p) => Object.fromEntries(p));
       const theirs = V7_ROLES[role].paths.map((p) => p.work);
@@ -34,6 +34,6 @@ describe("recipes (v7)", () => {
     expect(recipeCore("security_auditor")).toBe("Audit contests 30, GitHub 30, or GitHub 60");
     expect(recipeCore("designer")).toBe("Work links 40, X 20");
     expect(recipeCore("finance")).toBe("Strongest source 40, Work links 20");
-    expect(recipeBonus("engineer")).toBe("Reputation up to 25, and your 3 strongest other sources up to 5 each");
+    expect(recipeBonus("engineer")).toBe("Reputation up to 25, and every other source you connect up to 5 each (20 in total)");
   });
 });
