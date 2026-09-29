@@ -29,13 +29,23 @@ export function jobsDatabaseId(env: EngineEnv): string {
   return id;
 }
 
-/** Клієнт D1 бази вакансій. Без облікових даних ясна помилка з назвами змінних. */
-export function jobsD1FromEnv(env: EngineEnv): D1Client {
-  const missing = ["CF_ACCOUNT_ID", "CF_API_TOKEN"].filter((k) => !env[k]);
+/** Окремий токен лише для читання бази вакансій (D1 Read); без нього добірка бере CF_API_TOKEN. */
+export const JOBS_READ_TOKEN_ENV = "CF_JOBS_D1_READ_TOKEN";
+
+/**
+ * Клієнт D1 бази вакансій. Без облікових даних ясна помилка з назвами змінних.
+ * `readOnly` (добірка, яка лише читає): токен з CF_JOBS_D1_READ_TOKEN, якщо він заданий, інакше CF_API_TOKEN
+ * як раніше. Сканер (запис) завжди бере CF_API_TOKEN.
+ */
+export function jobsD1FromEnv(env: EngineEnv, o: { readOnly?: boolean; fetchImpl?: typeof fetch } = {}): D1Client {
+  const readToken = o.readOnly ? env[JOBS_READ_TOKEN_ENV]?.trim() : "";
+  const token = readToken || env.CF_API_TOKEN;
+  const missing = [...(env.CF_ACCOUNT_ID ? [] : ["CF_ACCOUNT_ID"]), ...(token ? [] : ["CF_API_TOKEN"])];
   if (missing.length) {
     throw new Error(`немає змінних оточення для бази вакансій: ${missing.join(", ")} (див. /etc/nextcryptojob-engine.env)`);
   }
-  return new D1Client({ accountId: env.CF_ACCOUNT_ID!, databaseId: jobsDatabaseId(env), token: env.CF_API_TOKEN! });
+  return new D1Client({ accountId: env.CF_ACCOUNT_ID!, databaseId: jobsDatabaseId(env), token: token! },
+    o.fetchImpl ? { fetchImpl: o.fetchImpl } : {});
 }
 
 /** Число з оточення з межами; погане значення = ясна помилка, а не мовчазний типовий. */

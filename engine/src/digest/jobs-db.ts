@@ -101,9 +101,10 @@ export function readOnlyJobsDb(backend: SelectBackend): JobsDb {
 }
 
 /**
- * База вакансій з оточення engine: CF_ACCOUNT_ID і CF_API_TOKEN ті самі, що для основної бази;
+ * База вакансій з оточення engine: CF_ACCOUNT_ID той самий, що для основної бази. Токен: окремий
+ * CF_JOBS_D1_READ_TOKEN (лише читання), а без нього CF_API_TOKEN, як раніше.
  * CF_JOBS_D1_DATABASE_ID обов'язковий (типового значення немає, src/jobs/env.ts).
  */
-export function jobsDbFromEnv(env: EngineEnv): JobsDb {
-  return readOnlyJobsDb(jobsD1FromEnv(env));
+export function jobsDbFromEnv(env: EngineEnv, fetchImpl?: typeof fetch): JobsDb {
+  return readOnlyJobsDb(jobsD1FromEnv(env, { readOnly: true, ...(fetchImpl ? { fetchImpl } : {}) }));
 }
