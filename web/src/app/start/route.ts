@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
   await recordFunnelEvent(db(), "brief_started");
   const next = signedIn ? (job ? `/jobs/${encodeURIComponent(job)}` : "/welcome") : "/login";
   const res = NextResponse.redirect(new URL(next, req.nextUrl), 303);
+  // Службовий перехід, не сторінка: пошуку його індексувати ні до чого.
+  res.headers.set("X-Robots-Tag", "noindex");
   if (job) {
     res.cookies.set(WANTED_JOB_COOKIE, job, {
       path: "/",

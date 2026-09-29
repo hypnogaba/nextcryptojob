@@ -9,7 +9,7 @@ import { telegramLoginEnabled } from "@/lib/auth/telegram-oidc";
 import { telegramEnv } from "@/lib/telegram/env";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: "Sign in" };
+export const metadata: Metadata = { title: "Sign in", robots: { index: false } };
 
 export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ next?: string | string[] }> }) {
   const rawNext = (await searchParams)?.next;

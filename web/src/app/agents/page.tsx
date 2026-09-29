@@ -3,9 +3,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Agents",
+  title: "Crypto jobs API and MCP server for AI agents",
   description:
-    "REST and MCP for crypto jobs and candidates. Job search is free. Candidate search takes a company key with a subscription. Pay per request with x402 is coming soon.",
+    "REST API and MCP server for crypto jobs and candidates. Job search is free. Candidate search takes a company key. Pay per request with x402 is coming soon.",
 };
 
 const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";

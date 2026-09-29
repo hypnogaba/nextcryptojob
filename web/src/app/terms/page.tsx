@@ -7,7 +7,8 @@ import { renderMarkdown } from "@/lib/legal/markdown";
 // чернетки для юриста), лише склад сторінки. /terms/companies тепер редирект на #companies.
 export const metadata: Metadata = {
   title: "Terms",
-  description: "Terms for candidates and for companies that use NextCryptoJob, on one page.",
+  description:
+    "The terms for candidates and for companies that use NextCryptoJob, on one page. Candidates use the service free of charge.",
   alternates: { canonical: "/terms" },
 };
 

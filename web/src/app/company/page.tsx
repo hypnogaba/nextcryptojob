@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { fnv1a } from "@/lib/card/pattern";
 
 export const metadata: Metadata = {
-  title: "For companies",
+  title: "Hire crypto talent by proof of work",
   description:
-    "Onchain proof, not a CV. Search crypto candidates scored from what they have shipped: GitHub, X, onchain history and published work.",
+    "Search crypto candidates scored from what they have shipped: GitHub, X, onchain history and published work. Onchain proof, not a CV.",
 };
 
 const POINTS = [
