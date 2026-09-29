@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetLimiters } from "../limits.js";
-import { collectGithub, TEAM_MIN_COMMITS, teamQuery, teamWork } from "./github.js";
+import { collectGithub, githubFacts, TEAM_MIN_COMMITS, teamQuery, teamWork } from "./github.js";
 import { GITHUB_MAX_WAIT_MS, rateLimitWaitMs } from "./github-api.js";
 import { ctxWith, json, mockFetch, NOW } from "./testkit.js";
 
@@ -142,6 +142,24 @@ describe("collectGithub", () => {
 });
 
 describe("командна робота (v7)", () => {
+  it("v10 (E): PR у репозиторії, де людина єдина жива учасниця (власний орг), не рахуються як чужі; невідоме рахується", () => {
+    const pr = (owner: string, humans?: number) => ({ repository: { owner: { login: owner },
+      ...(humans === undefined ? {} : { mentionableUsers: { totalCount: humans } }) } });
+    const u = { ...USER.data.user, pullRequests: { totalCount: 40, nodes: [pr("my-own-org", 1), pr("real-team", 25), pr("no-data"), pr("solo-2", 0)] } };
+    // З чотирьох чужих за власником два соло: лишається 2 з 4 = 50% від 40.
+    expect(githubFacts(u, "test-dev", NOW).mergedPrsElsewhere).toBe(20);
+    const allSolo = { ...u, pullRequests: { totalCount: 40, nodes: [pr("my-org", 1), pr("my-org2", 1)] } };
+    expect(githubFacts(allSolo, "test-dev", NOW).mergedPrsElsewhere).toBe(0);
+  });
+
+  it("v10 (E): командні коміти не рахують соло-репозиторії (власний орг, другий акаунт)", () => {
+    const w = (repo: string, owner: string, n: number, humans?: number) => ({ contributions: { totalCount: n },
+      repository: { nameWithOwner: repo, stargazerCount: 10, isFork: false, owner: { login: owner },
+        ...(humans === undefined ? {} : { mentionableUsers: { totalCount: humans } }) } });
+    const windows = { y2026: { commitContributionsByRepository: [w("my-org/app", "my-org", 500, 1), w("acme/protocol", "acme", 30, 12), w("x/y", "x", 40)] } };
+    expect(teamWork(windows, "test-dev")).toEqual({ teamStars: 20, teamCommits: 70 });
+  });
+
   it("рахує лише чужі не-форки від TEAM_MIN_COMMITS комітів за всі роки", () => {
     expect(TEAM_MIN_COMMITS).toBe(20);
     expect(teamWork(TEAM.data.user, "test-dev")).toEqual({ teamStars: 9000, teamCommits: 25 });

@@ -52,7 +52,9 @@ export type EvmFacts = { [address: string]: { ethereum?: EvmChainFacts; base?: E
 export type HyperliquidFacts = { [address: string]: { volumeUsd: number|null; fillsRecent: number|null } };
 
 export type SolanaFacts = { [address: string]: { sigs: number; sigsOk: number; sigsCapped: boolean;
-  firstTs: number|null; sampleSeen: number; sampleSwaps: number; swaps: number|null } };
+  firstTs: number|null; sampleSeen: number; sampleSwaps: number; swaps: number|null;
+  /** v10: скільки підписів (успішних) підписала сама адреса, а не вхідний спам; оцінка за вибіркою. Відсутнє = невідомо. */
+  sigsSigned?: number|null; sampleSigned?: number } };
 // swaps = null, якщо sampleSeen < 50 (замала вибірка = прогалина); ВИНЯТОК: перевірено всі успішні
 // (sampleSeen = sigsOk) і список не обрізаний (sigsCapped = false) → кількість точна, swaps = sampleSwaps
 

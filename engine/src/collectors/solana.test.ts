@@ -158,7 +158,7 @@ describe("collectSolana", () => {
     if (!res.ok) throw new Error(res.gap);
     expect(res.facts[OWNER]).toEqual({
       sigs: 1300, sigsOk: 1170, sigsCapped: false, firstTs: 1_780_000_000 - 1298 * 60,
-      sampleSeen: 8, sampleSwaps: 3, swaps: Math.round((3 / 8) * 1170),
+      sampleSeen: 8, sampleSwaps: 3, swaps: Math.round((3 / 8) * 1170), sampleSigned: 8, sigsSigned: 1170,
     });
     const pages = f.of("getSignaturesForAddress");
     expect(pages).toHaveLength(2);
@@ -187,7 +187,7 @@ describe("collectSolana", () => {
     const res = await collectSolana([OWNER], base(f.fetchImpl, {}));
     if (!res.ok) throw new Error(res.gap);
     expect(f.of("getTransaction")).toHaveLength(0);
-    expect(res.facts[OWNER]).toEqual({ sigs: 31, sigsOk: 31, sigsCapped: false, firstTs: 1_780_000_000 - 30 * 60, sampleSeen: 0, sampleSwaps: 0, swaps: null });
+    expect(res.facts[OWNER]).toEqual({ sigs: 31, sigsOk: 31, sigsCapped: false, firstTs: 1_780_000_000 - 30 * 60, sampleSeen: 0, sampleSwaps: 0, swaps: null, sampleSigned: 0, sigsSigned: null });
     expect(res.partial).toEqual({ [OWNER]: "swaps: not configured: HELIUS_KEY" });
   });
 
@@ -211,7 +211,21 @@ describe("collectSolana", () => {
     const f = rpcFake({ sigList: sigs(60), txs: { sig0: tx({ outer: [JUP6] }) } });
     const res = await collectSolana([OWNER], { ...base(f.fetchImpl), sampleSize: 40 });
     if (!res.ok) throw new Error(res.gap);
-    expect(res.facts[OWNER]).toEqual({ sigs: 60, sigsOk: 60, sigsCapped: false, firstTs: 1_780_000_000 - 59 * 60, sampleSeen: 40, sampleSwaps: 1, swaps: null });
+    expect(res.facts[OWNER]).toEqual({ sigs: 60, sigsOk: 60, sigsCapped: false, firstTs: 1_780_000_000 - 59 * 60, sampleSeen: 40, sampleSwaps: 1, swaps: null, sampleSigned: 40, sigsSigned: null });
+  });
+
+  it("v10 (E): вхідний спам, де адреса не підписант, не рахується у власних підписах", async () => {
+    // Кожна друга транзакція: чужий переказ на адресу (OWNER лише отримувач, без signer).
+    const spam = (): ParsedTx => {
+      const t = tx();
+      (t.transaction!.message!.accountKeys![0] as { signer?: boolean }).signer = false;
+      return t;
+    };
+    const txs = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`sig${i}`, i % 2 === 0 ? tx() : spam()]));
+    const f = rpcFake({ sigList: sigs(20), txs });
+    const res = await collectSolana([OWNER], base(f.fetchImpl));
+    if (!res.ok) throw new Error(res.gap);
+    expect(res.facts[OWNER]).toMatchObject({ sigs: 20, sampleSeen: 20, sampleSigned: 10, sigsSigned: 10 });
   });
 
   it("20 з 20 успішних прочитано: точна кількість обмінів", async () => {
@@ -233,7 +247,7 @@ describe("collectSolana", () => {
     const f = rpcFake({ sigList: [] });
     const res = await collectSolana([OWNER], base(f.fetchImpl));
     if (!res.ok) throw new Error(res.gap);
-    expect(res.facts[OWNER]).toEqual({ sigs: 0, sigsOk: 0, sigsCapped: false, firstTs: null, sampleSeen: 0, sampleSwaps: 0, swaps: 0 });
+    expect(res.facts[OWNER]).toEqual({ sigs: 0, sigsOk: 0, sigsCapped: false, firstTs: null, sampleSeen: 0, sampleSwaps: 0, swaps: 0, sampleSigned: 0, sigsSigned: 0 });
   });
 
   it("10 повних сторінок: sigsCapped, вік невідомий, одинадцятої сторінки немає, малої вибірки не досить", async () => {

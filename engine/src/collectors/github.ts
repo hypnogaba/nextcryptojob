@@ -10,14 +10,16 @@ export const GITHUB_QUERY = `query($login:String!){ user(login:$login){ createdA
   repositories(ownerAffiliations:OWNER,isFork:false,first:100,orderBy:{field:STARGAZERS,direction:DESC}){
     nodes{ stargazerCount pushedAt homepageUrl } }
   pullRequests(states:MERGED,first:100,orderBy:{field:CREATED_AT,direction:DESC}){
-    totalCount nodes{ repository{ owner{ login } } } }
+    totalCount nodes{ repository{ owner{ login } mentionableUsers{ totalCount } } } }
   contributionsCollection{ totalCommitContributions totalPullRequestReviewContributions } } }`;
 
 export type GithubUser = {
   createdAt: string;
   followers: { totalCount: number };
   repositories: { nodes: Array<{ stargazerCount: number; pushedAt: string | null; homepageUrl: string | null } | null> };
-  pullRequests: { totalCount: number; nodes: Array<{ repository: { owner: { login: string } | null } | null } | null> };
+  pullRequests: { totalCount: number; nodes: Array<{ repository: { owner: { login: string } | null;
+    /** Люди, яких можна згадати в репозиторії (власник, учасники). ≤1 = людина там сама. Може бути відсутнє. */
+    mentionableUsers?: { totalCount: number } | null } | null } | null> };
   contributionsCollection: { totalCommitContributions: number; totalPullRequestReviewContributions: number };
 };
 
@@ -33,12 +35,19 @@ export const GRAPHQL_RETRIES = 2;
 /** Оцінка одного важкого виклику GraphQL для рішення «чи встигне повтор». */
 export const GRAPHQL_CALL_ESTIMATE_MS = 12_000;
 
+/** Репозиторій, де людей ≤1: командою це не є. null/undefined = невідомо, тобто не соло. */
+export function isSoloRepo(m: { totalCount: number } | null | undefined): boolean {
+  return m != null && Number.isFinite(m.totalCount) && m.totalCount <= 1;
+}
+
 /** GithubFacts з відповіді GraphQL. Чиста функція. */
 export function githubFacts(u: GithubUser, login: string, now: number): GithubFacts {
   const repos = u.repositories.nodes.filter((r): r is NonNullable<typeof r> => r != null);
   const prs = u.pullRequests.nodes.filter((p): p is NonNullable<typeof p> => p != null);
   const me = login.toLowerCase();
-  const elsewhere = prs.filter((p) => (p.repository?.owner?.login ?? "").toLowerCase() !== me).length;
+  // v10: PR у репозиторії, де людина єдина жива учасниця (власний орг чи другий акаунт), не «чужа робота».
+  // Невідомо (поле не прийшло) = рахуємо як раніше: відсутнє значення не карає.
+  const elsewhere = prs.filter((p) => (p.repository?.owner?.login ?? "").toLowerCase() !== me && !isSoloRepo(p.repository?.mentionableUsers)).length;
   // Частка чужих серед останніх 100, перенесена на весь totalCount (оцінка, як у дослідженні).
   const share = prs.length ? elsewhere / prs.length : 0;
   const yearAgo = now - 365 * DAY_MS;
@@ -62,7 +71,8 @@ export const TEAM_YEARS = 10;
 export const TEAM_CALL_ESTIMATE_MS = 8_000;
 
 type YearWindow = { commitContributionsByRepository: Array<{ contributions: { totalCount: number };
-  repository: { nameWithOwner: string; stargazerCount: number; isFork: boolean; owner: { login: string } } | null } | null> };
+  repository: { nameWithOwner: string; stargazerCount: number; isFork: boolean; owner: { login: string };
+    mentionableUsers?: { totalCount: number } | null } | null } | null> };
 
 /** Один запит: внесок за кожен рік (аліаси y<рік>), від року створення акаунта, не більше TEAM_YEARS. */
 export function teamQuery(createdAt: string, now: number): string {
@@ -73,7 +83,7 @@ export function teamQuery(createdAt: string, now: number): string {
   for (let y = first; y <= last; y++) {
     years.push(`y${y}: contributionsCollection(from:"${y}-01-01T00:00:00Z", to:"${y}-12-31T23:59:59Z"){ ` +
       "commitContributionsByRepository(maxRepositories:10){ contributions{totalCount} " +
-      "repository{ nameWithOwner stargazerCount isFork owner{ login } } } }");
+      "repository{ nameWithOwner stargazerCount isFork owner{ login } mentionableUsers{ totalCount } } } }");
   }
   return `query($login:String!){ user(login:$login){ ${years.join(" ")} } }`;
 }
@@ -85,7 +95,8 @@ export function teamWork(windows: Record<string, YearWindow | null> | null | und
   for (const w of Object.values(windows ?? {})) {
     for (const c of w?.commitContributionsByRepository ?? []) {
       const r = c?.repository;
-      if (!r || r.isFork || (r.owner?.login ?? "").toLowerCase() === me) continue;
+      // v10: соло-репозиторії (власний орг, другий акаунт) не команда.
+      if (!r || r.isFork || (r.owner?.login ?? "").toLowerCase() === me || isSoloRepo(r.mentionableUsers)) continue;
       const cur = repos.get(r.nameWithOwner) ?? { stars: r.stargazerCount || 0, commits: 0 };
       cur.commits += c.contributions?.totalCount || 0;
       repos.set(r.nameWithOwner, cur);

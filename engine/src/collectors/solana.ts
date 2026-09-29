@@ -147,6 +147,11 @@ function ownerBalances(list: TokenBalance[] | null | undefined, owner: string): 
   return out;
 }
 
+/** Чи власник сам підписав транзакцію (а не отримав вхідний переказ чи спам). Рядкові ключі без signer не доводять. */
+export function isSignedBy(tx: ParsedTx, owner: string): boolean {
+  return (tx.transaction?.message?.accountKeys ?? []).some((k) => typeof k === "object" && k.pubkey === owner && k.signer === true);
+}
+
 /**
  * Чи транзакція обмін власника: він її підписав, і є програма DEX у зовнішніх або вкладених
  * інструкціях чи серед адрес; інакше евристика балансів: хоч один токен прибув і хоч один убув.
@@ -154,9 +159,7 @@ function ownerBalances(list: TokenBalance[] | null | undefined, owner: string): 
 export function isSwapTx(tx: ParsedTx, owner: string): boolean {
   const msg = tx.transaction?.message;
   const meta = tx.meta ?? {};
-  // Лише транзакції, які власник підписав сам. Рядкові ключі без signer підпису не доводять.
-  const signed = (msg?.accountKeys ?? []).some((k) => typeof k === "object" && k.pubkey === owner && k.signer === true);
-  if (!signed) return false;
+  if (!isSignedBy(tx, owner)) return false;
   if ((msg?.instructions ?? []).some((ix) => ix.programId !== undefined && DEX_PROGRAMS.has(ix.programId))) return true;
   for (const inner of meta.innerInstructions ?? []) {
     if ((inner.instructions ?? []).some((ix) => ix.programId !== undefined && DEX_PROGRAMS.has(ix.programId))) return true;
@@ -248,7 +251,7 @@ async function collectAddress(address: string, r: Rpc, o: SolanaOptions, b: Budg
     if (!b.open()) { cut = true; return undefined; }
     try {
       const tx = await rpc<ParsedTx>(r, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }], ro);
-      return tx ? isSwapTx(tx, address) : undefined;
+      return tx ? { signed: isSignedBy(tx, address), swap: isSwapTx(tx, address) } : undefined;
     } catch (e) {
       if (o.signal?.aborted) throw e;
       if (b.stopped()) cut = true;
@@ -257,12 +260,15 @@ async function collectAddress(address: string, r: Rpc, o: SolanaOptions, b: Budg
   });
   if (cut) notes.push(`swaps: ${STOPPED_EARLY}`);
   const sampleSeen = verdicts.filter((v) => v !== undefined).length;
-  const sampleSwaps = verdicts.filter((v) => v === true).length;
+  const sampleSwaps = verdicts.filter((v) => v?.swap === true).length;
+  const sampleSigned = verdicts.filter((v) => v?.signed === true).length;
 
   return {
     facts: {
       sigs: sigs.length, sigsOk: ok.length, sigsCapped: !complete, firstTs,
       sampleSeen, sampleSwaps, swaps: estimateSwaps(sampleSeen, sampleSwaps, ok.length, !complete, minSample),
+      // Так само, як обміни: оцінка за вибіркою (null при замалій), точна, коли прочитано всі успішні.
+      sampleSigned, sigsSigned: estimateSwaps(sampleSeen, sampleSigned, ok.length, !complete, minSample),
     },
     notes,
   };
