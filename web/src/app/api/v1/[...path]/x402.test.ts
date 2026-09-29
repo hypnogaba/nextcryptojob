@@ -291,13 +291,13 @@ describe("usage", () => {
     const { key } = await company({ subscribed: false });
     const required = requiredFrom(await post("/candidates/search", { key, body: {} }));
     expect((await post("/candidates/search", { key, body: {}, payment: paymentHeader(required) })).status).toBe(200);
-    await get("/pipeline", { key });
+    await get("/intros", { key });
     const res = await get("/usage", { key });
     expect(res.status).toBe(200);
     expect(schemaErrors("GET", "/usage", res)).toEqual([]);
     const today = sqlTime(new Date()).slice(0, 10);
     expect(res.body.days).toEqual([
-      { date: today, action: "list_pipeline", calls: 1, x402_usd: "0.00" },
+      { date: today, action: "list_intros", calls: 1, x402_usd: "0.00" },
       { date: today, action: "search_candidates", calls: 1, x402_usd: "0.50" },
     ]);
     expect(res.body.totals).toEqual({ calls: 2, x402_usd: "0.50" });

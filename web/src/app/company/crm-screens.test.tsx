@@ -167,12 +167,15 @@ describe("shell and dashboard", () => {
     expect(shell).toContain("Go to billing");
 
     const x = candidate(81);
+    // Профіль, воронка й нотатки лише з підпискою (аудит 29.09, G): без неї сторінка каже це прямо.
     const profile = await html(CandidatePage(cand(x)));
-    expect(profile).toContain("Open-source engineering (GitHub)");
+    expect(profile).toContain("Candidate profiles need a subscription.");
+    expect(profile).not.toContain("Open-source engineering (GitHub)");
     expect(profile).not.toContain("Add to pipeline");
     expect(profile).not.toContain("Request intro");
+    expect(rows("SELECT * FROM usage_events WHERE action = 'get_candidate'")).toEqual([]);
     const refused = await panel(a.co, x, "add");
-    expect(refused.error).toBe("Subscribe to do this in the web app, or use the API.");
+    expect(refused.error).toBe("This action needs a subscription.");
     expect(rows("SELECT * FROM pipeline")).toEqual([]);
   });
 });

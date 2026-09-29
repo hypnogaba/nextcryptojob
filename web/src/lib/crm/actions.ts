@@ -136,7 +136,7 @@ export const ACTIONS = [
   defineAction({
     name: "get_account",
     description:
-      "Returns your company, access mode (subscription or pay per request), quotas left today and x402 prices. Call this first.",
+      "Returns your company, access mode (subscription or none), quotas left today and the planned x402 prices (x402 is coming soon). Call this first.",
     rest: { method: "GET", path: "/me", status: 200, operationId: "getAccount" },
     mcp: { tool: "get_account", annotations: READ },
     input: T.Empty,
@@ -185,7 +185,7 @@ export const ACTIONS = [
     input: withCandidate({}),
     output: T.CandidateView,
     permission: "candidates.view",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     quota: ["get_candidate"],
     audit: "candidate.view",
     touchesCandidate: true,
@@ -204,7 +204,7 @@ export const ACTIONS = [
     }),
     output: T.PipelineList,
     permission: "pipeline.read",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     handler: async (ctx, input) => ({ output: await listPipeline(ctx, input) }),
   }),
   defineAction({
@@ -215,7 +215,7 @@ export const ACTIONS = [
     input: withCandidate(T.PipelineAdd.shape),
     output: T.PipelineCard,
     permission: "pipeline.write",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     audit: "pipeline.add",
     touchesCandidate: true,
     handler: async (ctx, input) => {
@@ -235,7 +235,7 @@ export const ACTIONS = [
     }),
     output: T.PipelineCard,
     permission: "pipeline.write",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     audit: "pipeline.stage",
     touchesCandidate: true,
     handler: async (ctx, input) => ({ output: await updateCard(ctx, input), auditWritten: true }),
@@ -248,7 +248,7 @@ export const ACTIONS = [
     input: withCandidate({}),
     output: T.Empty,
     permission: "pipeline.write",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     audit: "pipeline.remove",
     touchesCandidate: true,
     handler: async (ctx, input) => {
@@ -264,7 +264,7 @@ export const ACTIONS = [
     input: withCandidate(cursorLimit50),
     output: T.PipelineEventList,
     permission: "pipeline.read",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     handler: async (ctx, input) => ({ output: await listHistory(ctx, input) }),
   }),
   defineAction({
@@ -275,7 +275,7 @@ export const ACTIONS = [
     input: withCandidate(T.NoteCreate.shape),
     output: T.PipelineEvent,
     permission: "pipeline.write",
-    access: ALL_ACCESS,
+    access: SUBSCRIPTION_ONLY,
     audit: "pipeline.note",
     touchesCandidate: true,
     handler: async (ctx, input) => ({ output: await addNote(ctx, input), auditWritten: true }),
@@ -331,7 +331,7 @@ export const ACTIONS = [
   }),
   defineAction({
     name: "cancel_intro",
-    description: "Withdraw a pending intro. An x402 payment is not refunded.",
+    description: "Withdraw a pending intro.",
     rest: { method: "POST", path: "/intros/{intro_id}/cancel", status: 200, operationId: "cancelIntro" },
     mcp: { tool: "cancel_intro", annotations: { destructiveHint: true } },
     input: z.strictObject({ intro_id: T.IntroId }),
@@ -511,7 +511,7 @@ export const ACTIONS = [
   }),
   defineAction({
     name: "buy_usdc_month",
-    description: "Pay 100 USDC on Base or Solana for 30 days of subscription access.",
+    description: "Coming soon, not available yet: pay 100 USDC on Solana with x402 for 30 days of subscription access. Today, pay in the web app (Billing).",
     rest: { method: "POST", path: "/billing/usdc-month", status: 200, operationId: "buyUsdcMonth" },
     mcp: { tool: "buy_usdc_month", annotations: {} },
     input: T.Empty,
