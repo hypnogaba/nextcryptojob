@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { builtFrom } from "@/lib/card/back";
 import { EXAMPLE_BACK, EXAMPLE_BREAKDOWN, exampleFace } from "@/lib/card/example";
 import { FINISHES } from "@/lib/card/tiers";
+import { FORMULA_VERSION } from "@/lib/score/formula";
 
 export const metadata: Metadata = {
   title: "How your score works",
@@ -117,9 +118,11 @@ export default function ScoringPage() {
               Every weight, in the open
             </h2>
             <p className="text-lg text-ink-muted">
-              Your score has three layers. Work comes from your role&apos;s main sources. Reputation shows who in crypto
-              follows you. Breadth rewards everything else you connect: your site, YouTube, wallets, links to your work.
-              Onchain is part of Work for BD, Community and Trader, and counts as Breadth for everyone else.
+              Your score has three layers. Work comes from your role&apos;s main sources. Reputation is the stronger of
+              two signals: well-known crypto accounts among your X followers, or your GitHub followers. Connecting X
+              never lowers it. Breadth rewards every other source you connect, up to 5 points each and 20 in total:
+              your site, YouTube, wallets, links to your work. Onchain is part of Work for BD, Community and Trader, and
+              counts as Breadth for everyone else.
             </p>
           </div>
           <Layers />
@@ -133,7 +136,7 @@ export default function ScoringPage() {
           </div>
           <SourceParts />
           <p className="text-sm text-ink-muted">
-            Formula v7. More on sources, gaps and refresh:{" "}
+            Formula {FORMULA_VERSION}. More on sources, gaps and refresh:{" "}
             <Link href="/how-scoring-works" className={LINK}>
               how scoring works
             </Link>

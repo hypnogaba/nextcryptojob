@@ -69,7 +69,7 @@ export const POSITION_CODE: Record<RoleKey, string> = {
 type Weights = readonly (readonly [SourceKey, number])[];
 export type Recipe = { paths: readonly Weights[] };
 
-/** Шари v8 (engine/src/formula/v7.ts): ширина рахує кожне інше джерело, по WIDTH_EACH, разом до WIDTH_MAX. */
+/** Шари чинної формули (engine/src/formula/v7.ts, v9): ширина рахує кожне інше джерело, по WIDTH_EACH, разом до WIDTH_MAX. */
 export const WORK_POINTS = 60;
 export const REP_POINTS = 25;
 export const WIDTH_EACH = 5;
@@ -83,7 +83,7 @@ export const isLayeredFormula = (formula: string | null | undefined): boolean =>
 
 const GENERAL: Recipe = { paths: [[["best", 40], ["links", 20]]] };
 
-/** Усі 15 ролей рахуються з v7/v8. Вага = бали «Роботи». */
+/** Усі 15 ролей рахуються з v7 (ті самі ваги в v8 і v9). Вага = бали «Роботи». */
 export const RECIPES = {
   engineer: { paths: [[["gh_eng", 40], ["gh_builder", 20]]] },
   security_auditor: { paths: [[["audits", 30], ["gh_eng", 30]], [["gh_eng", 60]]] },
