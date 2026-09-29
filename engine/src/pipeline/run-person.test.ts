@@ -6,6 +6,7 @@ import {
   fakeRegistry, hangUntilAborted, neverResolves, sampleAudits, sampleDune, sampleEvm, sampleGithub, sampleHyperliquid,
   sampleSolana, sampleX,
 } from "./fake-registry.js";
+import { isTransientGap } from "./collect.js";
 import { groupIdentities, type IdentityRow } from "./identities.js";
 import { FAST_FIRST_PASS_DEADLINE_MS, FAST_FIRST_PASS_SAMPLE, loadLinkCount, scoreUser } from "./run-person.js";
 
@@ -359,3 +360,101 @@ describe("groupIdentities", () => {
   });
 });
 
+
+describe("тимчасова прогалина не стирає добрі факти (C2)", () => {
+  const XROW = (): FactRow => facts().x!;
+
+  async function firstGoodRun(): Promise<void> {
+    db.addIdentity(USER, "x", "alice");
+    db.addIdentity(USER, "github", "alice-gh");
+    await scoreUser(USER, { registry: fakeRegistry(), db, env: {}, now: () => NOW });
+    // «Тиждень тому»: так видно, чи fetched_at не зачепили.
+    db.exec("UPDATE source_facts SET fetched_at = '2026-09-01 10:00:00' WHERE user_id = ?", USER);
+  }
+
+  it.each([
+    ["timeout", "timeout"],
+    ["виняток збирача", "error: socket hang up"],
+    ["ліміт 6551", "x: 6551 returned no profile after retries (rate limit)"],
+    ["HTTP 503", "x: HTTP 503"],
+  ])("%s: факти X, gap_reason і fetched_at лишаються; бал рахується з них; джерело в transient/kept", async (_name, gap) => {
+    await firstGoodRun();
+    const goodX = XROW();
+    const goodScores = scores();
+    expect(goodScores.creator_kol!.score).not.toBeNull();
+
+    const summary = await scoreUser(USER, {
+      registry: fakeRegistry({ collectX: async () => ({ ok: false, gap }) }), db, env: {}, now: () => NOW,
+    });
+
+    expect(XROW()).toEqual(goodX);                       // факти, gap_reason, fetched_at: як були
+    expect(XROW().fetched_at).toBe("2026-09-01 10:00:00");
+    expect(summary.transient).toEqual(["x"]);
+    expect(summary.kept).toEqual(["x"]);
+    // Бал такий самий, як з живих фактів, а не missing_anchor.
+    for (const [role, row] of Object.entries(scores())) {
+      expect(row.score, role).toBe(goodScores[role]!.score);
+      expect(JSON.parse(row.breakdown_json).reason ?? null, role).toBe(JSON.parse(goodScores[role]!.breakdown_json).reason ?? null);
+    }
+    // Решта джерел, що відповіли, оновились як звичайно.
+    expect(facts().github!.fetched_at).not.toBe("2026-09-01 10:00:00");
+  });
+
+  it("справжня прогалина («акаунта немає») ЗАМІНЮЄ факти й ставить бал за відсутнім джерелом", async () => {
+    await firstGoodRun();
+    const summary = await scoreUser(USER, {
+      registry: fakeRegistry({ collectX: async () => ({ ok: false, gap: "x: 6551 could not load the profile (missing or suspended account)" }) }),
+      db, env: {}, now: () => NOW,
+    });
+    expect(XROW()).toMatchObject({ facts_json: null, gap_reason: expect.stringContaining("missing or suspended") });
+    expect(XROW().fetched_at).not.toBe("2026-09-01 10:00:00");
+    expect(summary.transient).toEqual([]);
+    expect(summary.kept).toEqual([]);
+    expect(scores().creator_kol!.score).toBeNull();
+  });
+
+  it("тимчасова прогалина без попередніх фактів пишеться як є (лишати нічого), але джерело позначено для повтору", async () => {
+    db.addIdentity(USER, "x", "alice");
+    const summary = await scoreUser(USER, {
+      registry: fakeRegistry({ collectX: async () => ({ ok: false, gap: "timeout" }) }), db, env: {}, now: () => NOW,
+    });
+    expect(XROW()).toMatchObject({ facts_json: null, gap_reason: "timeout" });
+    expect(summary.transient).toEqual(["x"]);
+    expect(summary.kept).toEqual([]);
+  });
+
+  it("попередні факти лишились би, якби прогалина була вдруге: два збої поспіль нічого не стирають", async () => {
+    await firstGoodRun();
+    const bad = fakeRegistry({ collectX: async () => ({ ok: false, gap: "timeout" }) });
+    await scoreUser(USER, { registry: bad, db, env: {}, now: () => NOW });
+    await scoreUser(USER, { registry: bad, db, env: {}, now: () => NOW });
+    expect(JSON.parse(XROW().facts_json!)).toEqual(sampleX());
+    expect(XROW().fetched_at).toBe("2026-09-01 10:00:00");
+  });
+
+  it("ПОШКОДЖЕНІ збережені факти не підставляються: джерело стає прогалиною, як раніше", async () => {
+    await firstGoodRun();
+    db.exec("UPDATE source_facts SET facts_json = 'not json' WHERE user_id = ? AND source = 'x'", USER);
+    const summary = await scoreUser(USER, {
+      registry: fakeRegistry({ collectX: async () => ({ ok: false, gap: "timeout" }) }), db, env: {}, now: () => NOW,
+    });
+    expect(XROW()).toMatchObject({ facts_json: null, gap_reason: "timeout" });
+    expect(summary.kept).toEqual([]);
+  });
+});
+
+describe("isTransientGap", () => {
+  it.each([
+    "timeout", "error: fetch failed", "GitHub: GitHub rate limit (resets in 30 s)", "x: 6551 returned no posts after retries (rate limit)",
+    "GitHub: GitHub HTTP 502", "youtube: HTTP 429", "EVM: no chain answered (etherscan: HTTP 503)", "Solana: helius: HTTP 500",
+    "Hyperliquid: api.hyperliquid.xyz: timeout", "GitHub: GraphQL failed on GitHub's side after 3 attempt(s)",
+    "GitHub: GitHub unreachable (fetch failed)",
+  ])("тимчасова: %s", (gap) => expect(isTransientGap(gap)).toBe(true));
+
+  it.each([
+    "not configured: HELIUS_KEY", "GitHub: user not found", "x: 6551 could not load the profile (missing or suspended account)",
+    "youtube: channel not found", "youtube: HTTP 404", "site: not a URL", "site: only https URLs are accepted",
+    "no valid EVM address", "no valid Solana address", "GitHub: GitHub rejected the token (HTTP 401)", "invalid collector result",
+    "Sherlock: no Sherlock profile with this handle", "something never seen before",
+  ])("справжня прогалина (або невпізнана): %s", (gap) => expect(isTransientGap(gap)).toBe(false));
+});

@@ -9,6 +9,20 @@ export const DEFAULT_DEADLINE_MS = 45_000;
 /** Прогалина джерела, яке не встигло до дедлайну. Завдання від неї не падає. */
 export const TIMEOUT_GAP = "timeout";
 
+/**
+ * Прогалина, що мине сама: дедлайн, збій мережі, ліміт запитів, 5xx. На відміну від справжнього
+ * «даних немає» (акаунта немає, ключ не задано, адреса крива). Тимчасова прогалина не повинна
+ * стирати вже збережені добрі факти джерела (run-person.ts).
+ * Невпізнана причина вважається справжньою прогалиною: так було завжди, і гірше вона не стає.
+ */
+export function isTransientGap(gap: string): boolean {
+  const g = gap.trim();
+  if (g === TIMEOUT_GAP || g.startsWith("error:")) return true;
+  // Що не мине само: спершу його, бо тексти нижче можуть містити ті самі слова («HTTP 404», «rate limit» у не про ліміт).
+  if (/not configured|not found|no valid|invalid|not a url|only https|refused|rejected the token|missing or suspended|no Sherlock profile|does not link/i.test(g)) return false;
+  return /rate limit|HTTP (429|5\d\d)\b|unreachable|timed? ?out|timeout|aborted|fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket|network|no chain answered|GraphQL failed on GitHub's side|returned non-JSON|^(Solana|Hyperliquid):/i.test(g);
+}
+
 export type SourceOutcome = {
   result: Fetched<unknown>;
   /** Скільки мс ішов збирач (до відповіді або до дедлайну). */

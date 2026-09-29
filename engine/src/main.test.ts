@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runCli } from "./cli.js";
+import { runCli, STALE_FORMULA_PER_RUN } from "./cli.js";
 import { FORMULA_VERSION } from "./formula/score.js";
 import { runWorker, type WorkerOptions } from "./main.js";
 import { fakeRegistry, hangUntilAborted, sampleGithub } from "./pipeline/fake-registry.js";
@@ -243,5 +243,86 @@ describe("cli", () => {
     const code = await runCli(["enqueue-refresh"], { env: {}, err: (l) => out.push(l) });
     expect(code).toBe(1);
     expect(out.join()).toMatch(/CF_ACCOUNT_ID, CF_D1_DATABASE_ID, CF_API_TOKEN/);
+  });
+});
+
+describe("worker: повтор після тимчасової прогалини (C2)", () => {
+  it("таймаут джерела: завдання done, факти збережені, повтор стоїть у черзі з затримкою й номером; журнал каже про це", async () => {
+    const id = addPerson(1);
+    // Перший збір добрий, другий (тижневе оновлення) зі збоєм джерела.
+    await runCliScore(id);
+    db.exec("UPDATE source_facts SET fetched_at = '2026-09-01 10:00:00' WHERE user_id = ?", id);
+    db.exec("DELETE FROM score_jobs");
+    db.exec("INSERT INTO score_jobs (user_id, reason) VALUES (?, 'refresh')", id);
+    const w = start(fakeRegistry({ collectGithub: async () => ({ ok: false, gap: "timeout" }) }));
+    await waitFor(() => jobs().some((j) => j.status === "done"));
+    w.stop.abort();
+    await w.done;
+
+    expect(db.get<{ fetched_at: string; facts_json: string | null }>("SELECT fetched_at, facts_json FROM source_facts WHERE user_id = ? AND source = 'github'", id))
+      .toMatchObject({ fetched_at: "2026-09-01 10:00:00", facts_json: JSON.stringify(sampleGithub()) });
+    const retry = jobs().find((j) => j.status === "queued");
+    expect(retry).toMatchObject({ user_id: id, error: "gap-retry:1", attempts: 0 });
+    expect(w.log.some((l) => /transient=github kept=github gap-retry queued \(1\/3\)/.test(l))).toBe(true);
+    // Через годину повтор береться; знову збій: далі ланцюжок росте, поки не вичерпається.
+    db.exec("UPDATE score_jobs SET started_at = datetime('now', '-2 minutes') WHERE status = 'queued'");
+    const w2 = start(fakeRegistry({ collectGithub: async () => ({ ok: false, gap: "timeout" }) }));
+    await waitFor(() => jobs().some((j) => j.error === "gap-retry:2"));
+    w2.stop.abort();
+    await w2.done;
+    expect(jobs().filter((j) => j.status === "queued").map((j) => j.error)).toEqual(["gap-retry:2"]);
+  });
+
+  it("справжня прогалина повтор не ставить", async () => {
+    addPerson(1);
+    const w = start(fakeRegistry({ collectGithub: async () => ({ ok: false, gap: "GitHub: user not found" }) }));
+    await waitFor(() => jobs().every((j) => j.status === "done"));
+    w.stop.abort();
+    await w.done;
+    expect(jobs()).toHaveLength(1);
+  });
+
+  async function runCliScore(id: string): Promise<void> {
+    const code = await runCli(["score-user", id], { env: {}, db: () => db, registry: () => fakeRegistry(), out: () => undefined, err: () => undefined });
+    expect(code).toBe(0);
+  }
+});
+
+describe("cli: enqueue-refresh сам перераховує старі формули (C6)", () => {
+  const cli = async (argv: string[]) => {
+    const out: string[] = [];
+    const code = await runCli(argv, { env: {}, db: () => db, registry: () => fakeRegistry(), out: (l) => out.push(l), err: (l) => out.push(l) });
+    return { code, out: out.join("\n") };
+  };
+  const addScored = (id: string, version: string) => {
+    db.addUser(id);
+    db.exec("INSERT INTO source_facts (user_id, source, facts_json) VALUES (?, 'x', '{}')", id);
+    db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', ?)", id, version);
+  };
+
+  it("звичайний прогін таймера без прапорців ставить людей зі старою версією, і повтор нікого не дублює", async () => {
+    addScored("old1", "v8"); addScored("old2", "v8"); addScored("cur", FORMULA_VERSION);
+    const first = await cli(["enqueue-refresh"]);
+    expect(first.out).toMatch(new RegExp(`, 2 more with scores from a formula other than ${FORMULA_VERSION}$`));
+    expect(jobs().map((j) => j.user_id).sort()).toEqual(["old1", "old2"]);
+    expect((await cli(["enqueue-refresh"])).out).not.toMatch(/more with scores/);
+    expect(jobs()).toHaveLength(2);
+  });
+
+  it("темп черги: не більше STALE_FORMULA_PER_RUN за прогін, решта наступного разу", async () => {
+    for (let i = 0; i < STALE_FORMULA_PER_RUN + 5; i++) addScored(`p${String(i).padStart(3, "0")}`, "v8");
+    await cli(["enqueue-refresh"]);
+    expect(jobs()).toHaveLength(STALE_FORMULA_PER_RUN);
+    // Worker перерахував тих двадцятьох: бал уже нової версії, завдання done.
+    db.exec(`UPDATE scores SET formula_version = '${FORMULA_VERSION}' WHERE user_id IN (SELECT user_id FROM score_jobs)`);
+    db.exec("UPDATE score_jobs SET status = 'done', finished_at = datetime('now')");
+    await cli(["enqueue-refresh"]);
+    expect(jobs().filter((j) => j.status === "queued")).toHaveLength(5);
+  });
+
+  it("людина, чий бал вже нової версії, не ставиться; кому оновлення щойно вдалось, теж", async () => {
+    addScored("cur", FORMULA_VERSION);
+    expect((await cli(["enqueue-refresh"])).out).not.toMatch(/more with scores/);
+    expect(jobs()).toHaveLength(0);
   });
 });

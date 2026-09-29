@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_DEADLINE_MS } from "./pipeline/collect.js";
 import { type Db, dbFromEnv } from "./pipeline/db.js";
 import { shortError } from "./pipeline/errors.js";
-import { type ClaimedJob, JobQueue, type QueueOptions } from "./pipeline/queue.js";
+import { type ClaimedJob, JobQueue, MAX_GAP_RETRIES, type QueueOptions } from "./pipeline/queue.js";
 import { createRealRegistry } from "./pipeline/realRegistry.js";
 import type { CollectorRegistry, EngineEnv } from "./pipeline/registry.js";
 import { scoreUser } from "./pipeline/run-person.js";
@@ -73,8 +73,15 @@ export async function runWorker(o: WorkerOptions): Promise<WorkerStats> {
         });
         const recorded = await queue.complete(job);
         stats.done++;
+        // Тимчасова прогалина (таймаут, ліміт, 5xx): факти джерела збережено, збір повторюємо скоро, кілька разів.
+        let retryNote = "";
+        if (s.transient.length) {
+          const queued = await queue.enqueueGapRetry(job.userId, job.gapRetry + 1)
+            .catch((err: unknown) => { log(`${who} could not queue gap retry: ${shortError(err, 120)}`); return false; });
+          retryNote = ` transient=${s.transient.join(",")} kept=${s.kept.join(",") || "none"} gap-retry ${queued ? `queued (${job.gapRetry + 1}/${MAX_GAP_RETRIES})` : "not queued"}`;
+        }
         log(`${who} done ${s.totalMs}ms gaps=${s.gaps.length}${s.gaps.length ? `(${s.gaps.join(",")})` : ""} ` +
-          `scored=${s.scored} self-reported=${s.selfReported.join(",") || "none"}${recorded ? "" : " (job row already moved on)"}`);
+          `scored=${s.scored} self-reported=${s.selfReported.join(",") || "none"}${retryNote}${recorded ? "" : " (job row already moved on)"}`);
       } catch (e) {
         if (abort.signal.aborted) {
           const back = await queue.requeue(job).catch(() => false);

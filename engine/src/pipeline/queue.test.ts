@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SqliteD1 } from "../testing/sqlite-d1.js";
-import { JobQueue } from "./queue.js";
+import { JobQueue, MAX_GAP_RETRIES } from "./queue.js";
 
 type JobRow = { id: number; user_id: string; reason: string; status: string; attempts: number; error: string | null;
   started_at: string | null; finished_at: string | null };
@@ -210,5 +210,81 @@ describe("enqueueRefresh", () => {
     expect(await q.enqueueRefresh({ perHour: 10 })).toEqual({ enqueued: 1, budget: 10 });
     const refreshed = db.all<{ user_id: string }>("SELECT user_id FROM score_jobs WHERE reason = 'refresh' ORDER BY id").map((r) => r.user_id);
     expect(refreshed).toEqual([oldest, mixed]);
+  });
+});
+
+describe("повтор після тимчасової прогалини (C2)", () => {
+  const addFacts = (userId: string, source: string, ageSql: string): void =>
+    db.exec(`INSERT INTO source_facts (user_id, source, facts_json, fetched_at) VALUES (?, ?, '{}', datetime('now', '${ageSql}'))`,
+      userId, source);
+
+  it("ставиться з затримкою: одразу не береться, а коли час настав, береться з номером повтору", async () => {
+    const [u] = users(1);
+    const q = new JobQueue(db);
+    expect(await q.enqueueGapRetry(u!, 1)).toBe(true);
+    expect(await q.claimNext()).toBeNull();              // ще за ~годину
+    db.exec("UPDATE score_jobs SET started_at = datetime('now', '-2 minutes')");
+    expect(await q.claimNext()).toMatchObject({ userId: u, reason: "refresh", gapRetry: 1 });
+  });
+
+  it("не більше MAX_GAP_RETRIES повторів у ланцюжку", async () => {
+    const [u] = users(1);
+    const q = new JobQueue(db);
+    expect(await q.enqueueGapRetry(u!, MAX_GAP_RETRIES)).toBe(true);
+    db.exec("UPDATE score_jobs SET status = 'done'");
+    expect(await q.enqueueGapRetry(u!, MAX_GAP_RETRIES + 1)).toBe(false);
+    expect(await q.enqueueGapRetry(u!, 0)).toBe(false);
+  });
+
+  it("не дублює, якщо людина вже в черзі чи в роботі (той збір і так свіжий)", async () => {
+    const [queued, running] = users(2);
+    enqueue(queued!);
+    db.exec("INSERT INTO score_jobs (user_id, reason, status, attempts, started_at) VALUES (?, 'manual', 'running', 1, datetime('now'))", running);
+    const q = new JobQueue(db);
+    expect(await q.enqueueGapRetry(queued!, 1)).toBe(false);
+    expect(await q.enqueueGapRetry(running!, 1)).toBe(false);
+  });
+
+  it("завершене завдання-повтор скидає позначку, тож ланцюжок рахує лише свої повтори", async () => {
+    const [u] = users(1);
+    const q = new JobQueue(db, { retryAfterSeconds: 0 });
+    await q.enqueueGapRetry(u!, 2, 0);
+    const claimed = (await q.claimNext())!;
+    expect(claimed.gapRetry).toBe(2);
+    await q.complete(claimed);
+    expect(db.get<{ error: string | null }>("SELECT error FROM score_jobs WHERE id = ?", claimed.id)!.error).toBeNull();
+  });
+
+  it("тижневе оновлення не бере людину, яку щойно оновлено (тимчасова прогалина не тримає факти свіжими)", async () => {
+    const [stuck, other] = users(2);
+    addFacts(stuck!, "x", "-30 days");   // найстарший: без винятку тягнувся б першим щогодини
+    addFacts(other!, "x", "-9 days");
+    db.exec("INSERT INTO score_jobs (user_id, reason, status, attempts, queued_at, finished_at) VALUES (?, 'refresh', 'done', 1, datetime('now', '-3 hours'), datetime('now', '-2 hours'))", stuck);
+    const q = new JobQueue(db);
+    expect(await q.enqueueRefresh({ perHour: 1 })).toEqual({ enqueued: 1, budget: 1 });
+    expect(db.all<{ user_id: string }>("SELECT user_id FROM score_jobs WHERE status = 'queued'")).toEqual([{ user_id: other }]);
+    // Доба минула: знову його черга.
+    db.exec("UPDATE score_jobs SET status = 'done', queued_at = datetime('now', '-3 hours') WHERE status = 'queued'");
+    db.exec("UPDATE score_jobs SET finished_at = datetime('now', '-30 hours') WHERE user_id = ?", stuck);
+    db.exec("UPDATE score_jobs SET finished_at = datetime('now', '-30 hours') WHERE user_id = ?", other);
+    expect((await q.enqueueRefresh({ perHour: 1 })).enqueued).toBe(1);
+    expect(db.all<{ user_id: string }>("SELECT user_id FROM score_jobs WHERE status = 'queued'")).toEqual([{ user_id: stuck }]);
+  });
+});
+
+describe("enqueueFormulaRefresh auto (C6)", () => {
+  const addScore = (id: string, version: string) =>
+    db.exec("INSERT INTO scores (user_id, role, score, core, cover, breakdown_json, formula_version) VALUES (?, 'bd', 50, 50, 100, '{}', ?)", id, version);
+
+  it("auto пропускає тих, кого перераховано за 6 годин, і тих, чий збір упав за добу; ручний режим бере всіх", async () => {
+    const [fresh, failed, plain] = users(3);
+    for (const u of [fresh!, failed!, plain!]) addScore(u, "v5");
+    db.exec("INSERT INTO score_jobs (user_id, reason, status, attempts, finished_at) VALUES (?, 'refresh', 'done', 1, datetime('now', '-1 hours'))", fresh);
+    db.exec("INSERT INTO score_jobs (user_id, reason, status, attempts, finished_at) VALUES (?, 'refresh', 'failed', 3, datetime('now', '-3 hours'))", failed);
+    const q = new JobQueue(db);
+    expect((await q.enqueueFormulaRefresh("v9", { auto: true })).enqueued).toBe(1);
+    expect(db.all<{ user_id: string }>("SELECT user_id FROM score_jobs WHERE status = 'queued'")).toEqual([{ user_id: plain }]);
+    db.exec("UPDATE score_jobs SET status = 'done' WHERE status = 'queued'");
+    expect((await q.enqueueFormulaRefresh("v9")).enqueued).toBe(3);
   });
 });

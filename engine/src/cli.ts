@@ -37,6 +37,9 @@ import { loadSeed, SEED_PATH } from "./jobs/seed.js";
 import { type JobsBackend, JobsStore } from "./jobs/store.js";
 import { runCompanyTokens, runTokenPrices } from "./jobs/tokens.js";
 
+/** Скільки людей зі старою формулою годинний таймер ставить у чергу за один прогін (далі черга розбирає їх у своєму темпі). */
+export const STALE_FORMULA_PER_RUN = 20;
+
 export const USAGE = `usage: nextcryptojob-engine <command>
   worker                                   run the score_jobs worker until SIGTERM
   score-user <user-id>                     collect and score one person now, print the summary
@@ -141,8 +144,13 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
           out(`enqueue-refresh: ${r.enqueued} queued with scores from a formula other than ${FORMULA_VERSION}`);
           return 0;
         }
-        const r = await new JobQueue(db()).enqueueRefresh(perHour === undefined ? {} : { perHour });
-        out(`enqueue-refresh: ${r.enqueued} queued (hourly budget left ${r.budget})`);
+        const queue = new JobQueue(db());
+        const r = await queue.enqueueRefresh(perHour === undefined ? {} : { perHour });
+        // Після зміни формули старі бали перераховуються самі, без ручного --stale-formula: годинний таймер
+        // ставить не більше STALE_FORMULA_PER_RUN людей за раз (черга розбирає їх у своєму темпі), повтор нікого не дублює.
+        const stale = await queue.enqueueFormulaRefresh(FORMULA_VERSION, { limit: STALE_FORMULA_PER_RUN, auto: true });
+        out(`enqueue-refresh: ${r.enqueued} queued (hourly budget left ${r.budget})` +
+          `${stale.enqueued ? `, ${stale.enqueued} more with scores from a formula other than ${FORMULA_VERSION}` : ""}`);
         return 0;
       }
       case "quality-gate": {

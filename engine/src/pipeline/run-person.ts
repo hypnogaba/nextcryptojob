@@ -2,7 +2,7 @@
 import type { D1Statement } from "../d1.js";
 import { FORMULA_VERSION, scorePerson } from "../formula/score.js";
 import type { RoleKey, SourceKey } from "../types.js";
-import { collectPerson, DEFAULT_DEADLINE_MS, type Outcomes, partialReason, toPersonFacts } from "./collect.js";
+import { collectPerson, DEFAULT_DEADLINE_MS, isTransientGap, type Outcomes, partialReason, toPersonFacts } from "./collect.js";
 import type { Db } from "./db.js";
 import { type CollectorInputs, groupIdentities, withAutoAudits, loadIdentities, plannedSources, selfReportedSources } from "./identities.js";
 import type { CollectorRegistry, EngineEnv } from "./registry.js";
@@ -44,6 +44,13 @@ export type ScoreSummary = {
   /** Мс кожного збирача; `gap` є, якщо джерело не дало фактів. */
   sources: Partial<Record<SourceKey, { ms: number; gap?: string; partial?: number }>>;
   gaps: SourceKey[];
+  /**
+   * Джерела з тимчасовою прогалиною (таймаут, ліміт, 5xx): збір треба повторити скоро.
+   * Якщо для джерела вже були факти, вони збережені й бал пораховано з них (kept).
+   */
+  transient: SourceKey[];
+  /** Підмножина transient: попередні добрі факти лишено, fetched_at не чіпали. */
+  kept: SourceKey[];
   /** Ролі з балом (не null). */
   scored: number;
   /** Джерела, які людина вписала сама, без підтвердження (модель довіри 13.09). */
@@ -92,13 +99,30 @@ const UPSERT_SCORE =
 async function collectScoreWrite(
   userId: string, inputs: CollectorInputs, db: Db, linkCount: number,
   collectOpts: { registry: CollectorRegistry; env: EngineEnv; deadlineMs: number; signal?: AbortSignal; now?: () => number },
-): Promise<{ outcomes: Outcomes; collectMs: number; scoredRoles: number }> {
+): Promise<{ outcomes: Outcomes; collectMs: number; scoredRoles: number; transient: SourceKey[]; kept: SourceKey[] }> {
   const { outcomes, ms: collectMs } = await collectPerson(inputs, collectOpts);
   collectOpts.signal?.throwIfAborted();
-
-  const facts = { ...toPersonFacts(outcomes), links: linkCount > 0 ? { count: linkCount } : null };
-  const result = scorePerson(facts, (collectOpts.now ?? Date.now)());
   const planned = plannedSources(inputs);
+
+  // Тимчасова прогалина не стирає добрі факти: лишаємо збережені, рахуємо бал з них, fetched_at не чіпаємо.
+  const transient = planned.filter((s) => { const r = outcomes[s]?.result; return !!r && !r.ok && isTransientGap(r.gap); });
+  const kept: SourceKey[] = [];
+  const effective: Outcomes = { ...outcomes };
+  if (transient.length) {
+    const stored = await db.query<{ source: SourceKey; facts_json: string | null }>(
+      "SELECT source, facts_json FROM source_facts WHERE user_id = ? AND facts_json IS NOT NULL", [userId]);
+    for (const row of stored) {
+      if (!transient.includes(row.source)) continue;
+      let parsed: unknown;
+      try { parsed = JSON.parse(row.facts_json!); } catch { continue; }
+      if (parsed === null || typeof parsed !== "object") continue;
+      effective[row.source] = { result: { ok: true, facts: parsed }, ms: outcomes[row.source]!.ms };
+      kept.push(row.source);
+    }
+  }
+
+  const facts = { ...toPersonFacts(effective), links: linkCount > 0 ? { count: linkCount } : null };
+  const result = scorePerson(facts, (collectOpts.now ?? Date.now)());
 
   const statements: D1Statement[] = [];
   statements.push(planned.length
@@ -106,6 +130,7 @@ async function collectScoreWrite(
         params: [userId, ...planned] }
     : { sql: "DELETE FROM source_facts WHERE user_id = ?", params: [userId] });
   for (const source of planned) {
+    if (kept.includes(source)) continue; // рядок джерела лишається як був (факти й fetched_at)
     const { result: r, partial } = outcomes[source]!;
     // Часткова відповідь: факти пишуться, а адреси без відповіді чи з невідомим видно в gap_reason.
     statements.push({ sql: UPSERT_FACTS,
@@ -118,7 +143,7 @@ async function collectScoreWrite(
   // UPSERT і DELETE без приростів: повтор після загубленої відповіді дає той самий стан.
   await db.batch(statements, { idempotent: true });
 
-  return { outcomes, collectMs, scoredRoles: Object.values(result.roles).filter((r) => r.score !== null).length };
+  return { outcomes, collectMs, scoredRoles: Object.values(result.roles).filter((r) => r.score !== null).length, transient, kept };
 }
 
 /**
@@ -151,15 +176,15 @@ export async function scoreUser(userId: string, o: ScoreUserOptions): Promise<Sc
     }
   }
 
-  const { outcomes, collectMs, scoredRoles } = await collectScoreWrite(userId, inputs, o.db, linkCount, {
+  const { outcomes, collectMs, scoredRoles, transient, kept } = await collectScoreWrite(userId, inputs, o.db, linkCount, {
     registry: o.registry, env: o.env, deadlineMs, ...(o.signal ? { signal: o.signal } : {}), ...(o.now ? { now: o.now } : {}),
   });
 
-  return summarize(userId, outcomes, collectMs, Math.round(performance.now() - t0), scoredRoles, selfReportedSources(inputs));
+  return { ...summarize(userId, outcomes, collectMs, Math.round(performance.now() - t0), scoredRoles, selfReportedSources(inputs)), transient, kept };
 }
 
 function summarize(userId: string, outcomes: Outcomes, collectMs: number, totalMs: number, scored: number,
-  selfReported: SourceKey[]): ScoreSummary {
+  selfReported: SourceKey[]): Omit<ScoreSummary, "transient" | "kept"> {
   const sources: ScoreSummary["sources"] = {};
   const gaps: SourceKey[] = [];
   for (const [source, out] of Object.entries(outcomes) as Array<[SourceKey, NonNullable<Outcomes[SourceKey]>]>) {

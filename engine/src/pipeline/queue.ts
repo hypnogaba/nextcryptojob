@@ -9,7 +9,19 @@ export type JobReason = "connect" | "refresh" | "manual";
  * змінюють рядок лише за тим самим attempts, тож запізнілий worker (його завдання вже
  * підібрав sweepStuck і взяв інший) нічого не зіпсує.
  */
-export type ClaimedJob = { id: number; userId: string; reason: JobReason; attempts: number };
+export type ClaimedJob = { id: number; userId: string; reason: JobReason; attempts: number; gapRetry: number };
+
+/** Позначка в score_jobs.error завдання-повтору після тимчасової прогалини джерела: «gap-retry:<номер повтору>». */
+export const GAP_RETRY_PREFIX = "gap-retry:";
+/** Скільки повторів після тимчасової прогалини на один ланцюжок (далі чекаємо тижневого оновлення). */
+export const MAX_GAP_RETRIES = 3;
+/** Через скільки хвилин повторювати збір після тимчасової прогалини. */
+export const GAP_RETRY_DELAY_MINUTES = 60;
+
+const gapRetryOf = (error: string | null): number => {
+  const m = error?.startsWith(GAP_RETRY_PREFIX) ? Number(error.slice(GAP_RETRY_PREFIX.length)) : 0;
+  return Number.isInteger(m) && m > 0 ? m : 0;
+};
 
 export interface QueueOptions {
   /** Спроб до `failed` (договір: 3). */
@@ -25,7 +37,7 @@ export interface QueueOptions {
 /** Людей, чиї факти старші за тиждень, ставимо на оновлення не більше стількох на годину. */
 export const REFRESH_SPREAD_HOURS = 7 * 24;
 
-type Row = { id: number; user_id: string; reason: JobReason; attempts: number };
+type Row = { id: number; user_id: string; reason: JobReason; attempts: number; error: string | null };
 
 export class JobQueue {
   readonly maxAttempts: number;
@@ -51,7 +63,7 @@ export class JobQueue {
    */
   async claimNext(): Promise<ClaimedJob | null> {
     const candidates = await this.db.query<Row>(
-      "SELECT id, user_id, reason, attempts FROM score_jobs q " +
+      "SELECT id, user_id, reason, attempts, error FROM score_jobs q " +
       "WHERE status = 'queued' AND (started_at IS NULL OR started_at <= datetime('now', ?)) " +
       "AND NOT EXISTS (SELECT 1 FROM score_jobs r WHERE r.user_id = q.user_id AND r.status = 'running') " +
       "ORDER BY queued_at, id LIMIT ?",
@@ -62,7 +74,7 @@ export class JobQueue {
         "WHERE id = ? AND status = 'queued' AND attempts = ? " +
         "AND NOT EXISTS (SELECT 1 FROM score_jobs r WHERE r.user_id = score_jobs.user_id AND r.status = 'running')",
         [c.id, c.attempts]);
-      if (changes === 1) return { id: c.id, userId: c.user_id, reason: c.reason, attempts: c.attempts + 1 };
+      if (changes === 1) return { id: c.id, userId: c.user_id, reason: c.reason, attempts: c.attempts + 1, gapRetry: gapRetryOf(c.error) };
     }
     return null;
   }
@@ -95,6 +107,23 @@ export class JobQueue {
       [this.maxAttempts, text, this.maxAttempts, job.id, job.attempts], { idempotent: true });
     if (changes !== 1) return "stale";
     return job.attempts < this.maxAttempts ? "queued" : "failed";
+  }
+
+  /**
+   * Після тимчасової прогалини джерела (таймаут, ліміт, 5xx) поставити повтор через ~GAP_RETRY_DELAY_MINUTES.
+   * `retry` = номер повтору (1..MAX_GAP_RETRIES); далі false: чекаємо тижневого оновлення (факти джерела
+   * не оновились, тож fetched_at старіє і enqueueRefresh його підбере). Не ставить, якщо в людини вже є
+   * `queued` чи `running` (той збір і так свіжий). Затримка через started_at у майбутньому: claimNext бере
+   * завдання, коли started_at <= now - retryAfterSeconds. Не ідемпотентна.
+   */
+  async enqueueGapRetry(userId: string, retry: number, delayMinutes = GAP_RETRY_DELAY_MINUTES): Promise<boolean> {
+    if (!Number.isInteger(retry) || retry < 1 || retry > MAX_GAP_RETRIES) return false;
+    const { changes } = await this.db.run(
+      "INSERT INTO score_jobs (user_id, reason, error, started_at) " +
+      "SELECT ?, 'refresh', ?, datetime('now', ?, ?) " +
+      "WHERE NOT EXISTS (SELECT 1 FROM score_jobs j WHERE j.user_id = ? AND j.status IN ('queued', 'running'))",
+      [userId, `${GAP_RETRY_PREFIX}${retry}`, `-${this.retryAfterSeconds} seconds`, `+${delayMinutes} minutes`, userId]);
+    return changes === 1;
   }
 
   /** Зупинка процесу перервала завдання: повернути в чергу, спробу не рахувати. */
@@ -138,6 +167,9 @@ export class JobQueue {
       "INSERT INTO score_jobs (user_id, reason) " +
       "SELECT sf.user_id, 'refresh' FROM source_facts sf " +
       "WHERE NOT EXISTS (SELECT 1 FROM score_jobs j WHERE j.user_id = sf.user_id AND j.status IN ('queued', 'running')) " +
+      // Хто щойно оновлювався (навіть без свіжих фактів через тимчасову прогалину), не займає годинний бюджет знову:
+      // інакше найстарішого невдахи тягнуло б щогодини, а решта люди чекали б.
+      "AND NOT EXISTS (SELECT 1 FROM score_jobs d WHERE d.user_id = sf.user_id AND d.status = 'done' AND d.finished_at > datetime('now', '-1 day')) " +
       "GROUP BY sf.user_id HAVING MIN(sf.fetched_at) < datetime('now', '-7 days') " +
       "ORDER BY MIN(sf.fetched_at), sf.user_id LIMIT ?",
       [budget]);
@@ -148,13 +180,19 @@ export class JobQueue {
    * Після зміни формули: людей, у яких хоч один рядок `scores` не з версії `version`, ставить на
    * оновлення (reason 'refresh') незалежно від віку фактів. `limit` = не більше стількох за раз;
    * без нього всіх. Хто вже в черзі чи в роботі, не дублюється; найдавніше пораховані першими.
+   * `auto` (годинний таймер, cli enqueue-refresh без прапорців): не чіпає тих, кого щойно (6 год) вже
+   * перераховано, і тих, чий збір упав за добу, щоб недосяжна людина не поверталась у чергу щогодини.
    */
-  async enqueueFormulaRefresh(version: string, o: { limit?: number } = {}): Promise<{ enqueued: number }> {
+  async enqueueFormulaRefresh(version: string, o: { limit?: number; auto?: boolean } = {}): Promise<{ enqueued: number }> {
     // Демо-кандидатів (users.is_demo, 0021) не перераховуємо: джерел у них немає, і бал став би порожнім.
+    const recent = o.auto
+      ? "AND NOT EXISTS (SELECT 1 FROM score_jobs r WHERE r.user_id = s.user_id AND " +
+        "((r.status = 'done' AND r.finished_at > datetime('now', '-6 hours')) OR (r.status = 'failed' AND r.finished_at > datetime('now', '-1 day')))) "
+      : "";
     const sql = (demo: string) =>
       "INSERT INTO score_jobs (user_id, reason) " +
       "SELECT s.user_id, 'refresh' FROM scores s " +
-      "WHERE s.formula_version <> ? " + demo +
+      "WHERE s.formula_version <> ? " + demo + recent +
       "AND NOT EXISTS (SELECT 1 FROM score_jobs j WHERE j.user_id = s.user_id AND j.status IN ('queued', 'running')) " +
       "GROUP BY s.user_id ORDER BY MIN(s.computed_at), s.user_id" + (o.limit === undefined ? "" : " LIMIT ?");
     const params = o.limit === undefined ? [version] : [version, o.limit];
