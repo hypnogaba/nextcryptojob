@@ -142,6 +142,49 @@ runuser -u nextcryptojob -- /usr/local/bin/node dist/cli.js score-facts --x <н�
 Тимчасовий `GITHUB_TOKEN` для ручного прогону (поки його немає в env): лише в оточення одного процесу
 через stdin, не на диск: `gh auth token | ssh "$VPS" 'IFS= read -r GH; …; export GITHUB_TOKEN="$GH"; runuser …'`.
 
+## 5a. Сповіщення про збій юніта (OnFailure → Telegram власнику)
+
+Кожен юніт (`engine`, `digest`, `refresh`, `jobs-scan`, `jobs-discover`, `jobs-prune`) має
+`OnFailure=nextcryptojob-notify@%n.service`. Шаблон `nextcryptojob-notify@.service` запускає крихітний
+скрипт `nextcryptojob-notify-failure.sh` (`sh` + `curl`): одне повідомлення власнику з іменем юніта,
+хостом, часом UTC і п'ятьма останніми рядками журналу юніта (якщо служба може читати journal).
+Токен іде в `curl` через stdin, тож у `ps` його немає. Немає токена чи чату: рядок у journal і код 0.
+
+Змінні в `/etc/nextcryptojob-engine.env` (одинарні лапки, без друку значень; у git їх немає):
+
+| Змінна | Потрібна | Що робить |
+|---|---|---|
+| `NCJ_OWNER_TG_CHAT_ID` | так | chat id власника (число). Бот має вміти писати в цей чат: власник хоч раз натискає Start у боті |
+| `NCJ_OWNER_TG_BOT_TOKEN` | ні | токен бота для сповіщень; без нього береться `TELEGRAM_BOT_TOKEN` (бот сайту) |
+
+Встановлення (controller, разом із деплоєм; `daemon-reload` обов'язковий, бо змінились наявні юніти):
+
+```sh
+scp deploy/nextcryptojob-notify-failure.sh "$VPS":/usr/local/bin/nextcryptojob-notify-failure
+ssh "$VPS" 'chown root:root /usr/local/bin/nextcryptojob-notify-failure && chmod 755 /usr/local/bin/nextcryptojob-notify-failure'
+scp deploy/nextcryptojob-*.service deploy/nextcryptojob-*.timer "$VPS":/etc/systemd/system/
+systemd-analyze verify nextcryptojob-notify@nextcryptojob-digest.service nextcryptojob-digest.service
+systemctl daemon-reload
+# перевірка без справжнього збою (шле одне повідомлення):
+systemctl start nextcryptojob-notify@nextcryptojob-digest.service
+```
+
+Що НЕ падає юнітом, того сповіщення не побачить: `digest-due` закінчує з кодом 0, коли частина людей
+отримала `failed`. Для цього в рядку підсумку є `failed`, `retried`, `tz-fallback`, а раз на тиждень
+(понеділок 06 UTC) рядок `digest-weekly` з числом порожніх днів за 7 діб по людях.
+
+## 5b. Окремий токен лише для читання бази вакансій
+
+Добірка (`digest-due`) лише читає `nextcryptojob-jobs`, але `CF_API_TOKEN` уміє й писати. Власник створює
+другий токен Cloudflare: Custom Token, права **D1 Read** лише на базу `nextcryptojob-jobs`, акаунт
+NextCryptoJob. Кладе в `/etc/nextcryptojob-engine.env`:
+
+| Змінна | Потрібна | Що робить |
+|---|---|---|
+| `CF_JOBS_D1_READ_TOKEN` | ні | токен D1 Read для бази вакансій. Заданий: `digest-due` читає базу вакансій ним, а не `CF_API_TOKEN`. Порожній чи немає: як раніше, `CF_API_TOKEN`. Сканер (`jobs-scan`, `jobs-about`, `jobs-prune`…) завжди пише через `CF_API_TOKEN` |
+
+Основну базу `nextcryptojob` добірка й далі пише через `CF_API_TOKEN` (sent, digest_runs).
+
 ## 6. Добірка вакансій (`digest-due`, задача E7)
 
 Що робить і контракт листа: `src/digest/README.md`. Юніти: `nextcryptojob-digest.service` (oneshot) і

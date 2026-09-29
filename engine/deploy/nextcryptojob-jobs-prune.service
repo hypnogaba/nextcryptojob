@@ -2,6 +2,7 @@
 Description=NextCryptoJob engine: weekly prune of jobs the scan has not seen for 30 days (jobs-prune)
 After=network-online.target
 Wants=network-online.target
+OnFailure=nextcryptojob-notify@%n.service
 
 [Service]
 Type=oneshot

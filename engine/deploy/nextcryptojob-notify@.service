@@ -1,0 +1,18 @@
+[Unit]
+Description=NextCryptoJob engine: tell the owner in Telegram that %i failed
+# Шаблон: OnFailure=nextcryptojob-notify@%n.service у інших юнітах підставляє сюди їхнє ім'я (%i).
+# Сам не має OnFailure=, щоб збій сповіщення не породжував нових сповіщень.
+
+[Service]
+Type=oneshot
+User=nextcryptojob
+Group=nextcryptojob
+EnvironmentFile=/etc/nextcryptojob-engine.env
+# Скрипт кладуть у /usr/local/bin (engine/deploy/README.md §5a), не в /opt: туди rsync-ом іде лише dist.
+ExecStart=/usr/local/bin/nextcryptojob-notify-failure %i
+TimeoutStartSec=45
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true

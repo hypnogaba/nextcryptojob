@@ -2,6 +2,7 @@
 Description=NextCryptoJob engine: daily job digests for people whose hour it is (digest-due)
 After=network-online.target
 Wants=network-online.target
+OnFailure=nextcryptojob-notify@%n.service
 
 [Service]
 Type=oneshot

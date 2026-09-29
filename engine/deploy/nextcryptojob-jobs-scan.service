@@ -2,6 +2,7 @@
 Description=NextCryptoJob engine: daily crypto job scan into the jobs DB (jobs-scan)
 After=network-online.target
 Wants=network-online.target
+OnFailure=nextcryptojob-notify@%n.service
 
 [Service]
 Type=oneshot
