@@ -8,8 +8,8 @@ import { ActionError } from "./types";
  *
  * Денні й місячні квоти рахуються в D1: COUNT(*) по usage_events (індекс
  * (company_id, action, created_at)), лише успішні виклики (статус 2xx).
- * Доба за UTC; місяць за періодом підписки Stripe, для manual і usdc за
- * календарним місяцем UTC. Сплески ріже Workers Rate Limiting (RL_*): його
+ * Доба за UTC; місяць за періодом підписки Stripe чи пробного, для manual і usdc
+ * за календарним місяцем UTC. Сплески ріже Workers Rate Limiting (RL_*): його
  * лічильник приблизний, тому він не замінює квот.
  *
  * Бронювання атомарне: рядок usage_events пишеться однією інструкцією
@@ -76,11 +76,13 @@ export function dayWindow(now: Date): QuotaWindow {
 }
 
 /**
- * Місячне вікно: період підписки Stripe (current_period_start…end), інакше
- * календарний місяць UTC (manual, usdc, або період невідомий).
+ * Місячне вікно: власний період підписки (current_period_start…end) для Stripe і для будь-якого
+ * пробного (status 'trialing', зокрема manual): «5 за весь пробний» не мусить обнулятись на межі
+ * календарного місяця. Інакше календарний місяць UTC (manual чи usdc без пробного, або період невідомий).
  */
 export function monthWindow(now: Date, subscription: SubscriptionInfo | null): QuotaWindow {
-  if (subscription?.provider === "stripe" && subscription.periodStart && subscription.periodEnd) {
+  const ownPeriod = subscription?.provider === "stripe" || subscription?.status === "trialing";
+  if (ownPeriod && subscription.periodStart && subscription.periodEnd) {
     return { start: subscription.periodStart, resetsAt: fromSqlTime(subscription.periodEnd) };
   }
   const start = startOfUtcMonth(now);
