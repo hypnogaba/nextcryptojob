@@ -80,11 +80,15 @@ function tidy(j: DigestEmailJob, site: string): Job {
   };
 }
 
-/** «We checked 1,437 live crypto jobs. These 5 fit you best.» (як checkedLine в engine/src/digest/deliver.ts). */
-export function checkedLine(checked: number | null | undefined, shown: number): string | null {
-  if (!checked || checked < shown || shown <= 0) return null;
+/**
+ * «212 open crypto jobs match your roles and place. These 5 fit you best.» Число від рушія (pool_jobs) це
+ * збіги САМЕ цієї людини (її ролі й місце, ще не надіслані), не весь пул. Не більше, ніж показано: речення немає.
+ * Як checkedLine в engine/src/digest/deliver.ts.
+ */
+export function checkedLine(matches: number | null | undefined, shown: number): string | null {
+  if (!matches || matches <= shown || shown <= 0) return null;
   const these = shown === 1 ? "This one fits" : `These ${shown} fit`;
-  return `We checked ${checked.toLocaleString("en-US")} live crypto job${checked === 1 ? "" : "s"}. ${these} you best.`;
+  return `${matches.toLocaleString("en-US")} open crypto jobs match your roles and place. ${these} you best.`;
 }
 
 /** Квадрат логотипа компанії в рядку вакансії, як у листах Getro. */
