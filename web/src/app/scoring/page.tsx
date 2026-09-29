@@ -42,7 +42,7 @@ export default function ScoringPage() {
           <div>
             <h1 className="display text-title">How your score works</h1>
             <div className="mt-4 grid gap-3 text-ink-muted">
-              <p>We read public data only: X, GitHub, wallets, YouTube, your site and the links to your work you add.</p>
+              <p>We read public data only: X, GitHub, wallets, YouTube and your site.</p>
               <p>
                 Each role weighs them differently.{" "}
                 <b className="font-semibold text-ink">For an engineer, GitHub counts most. For a trader, your wallets do.</b>
@@ -120,9 +120,16 @@ export default function ScoringPage() {
             <p className="text-lg text-ink-muted">
               Your score has three layers. Work comes from your role&apos;s main sources. Reputation is the stronger of
               two signals: well-known crypto accounts among your X followers, or your GitHub followers. Connecting X
-              never lowers it. Breadth rewards every other source you connect, up to 5 points each and 20 in total:
-              your site, YouTube, wallets, links to your work. Onchain is part of Work for BD, Community and Trader, and
-              counts as Breadth for everyone else.
+              never lowers it. Followers count in Reputation only, never in Work too. Breadth rewards every other
+              source you connect, up to 5 points each and 20 in total: your site, YouTube, wallets. Onchain is part of
+              Work for BD, Community and Trader, and counts as Breadth for everyone else.
+            </p>
+            <p className="text-lg text-ink-muted">
+              Some roles have no score: Designer, Operations, Finance, Legal and HR. Public data cannot prove them yet,
+              so we show no number rather than a wrong one. Links you add do not count as proof. You still get jobs for
+              these roles, matched to your own words. A site earns points only for real content: posts, fresh posts and
+              a sitemap. Your own second account or your own organisation does not count as work for others, and
+              incoming spam on a wallet does not count as activity.
             </p>
           </div>
           <Layers />

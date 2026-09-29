@@ -7,6 +7,7 @@ import { FORMULA_VERSION, type PersonScore, scorePerson } from "../formula/score
 import { SqliteD1 } from "../testing/sqlite-d1.js";
 import type { RoleKey, XFacts } from "../types.js";
 import { fakeRegistry, neverResolves, sampleX } from "./fake-registry.js";
+import { githubFacts } from "../collectors/github.js";
 import { band, evaluateGate, parseReferencePeople, type ReferencePerson, runQualityGate } from "./quality-gate.js";
 
 /** Мінімальний бал людини для чистої звірки: лише одна роль. */
@@ -216,5 +217,54 @@ describe("quality-gate: прогін", () => {
     const third = fakeRegistry();
     await runQualityGate(people, { registry: third, env: {}, cacheDir, deadlineMs: 50, log: () => undefined });
     expect(third.calls).toEqual([]);
+  });
+});
+
+// Кейси гейминга (аудит 29.09, B3/B4/E): не еталон, а захист від дешевих накруток. Працюють без приватних даних.
+describe("quality-gate: гейминг (v10)", () => {
+  const GH = { createdAt: "2018-01-01T00:00:00Z", followers: 800, stars: 1200, commits12m: 900, reviews12m: 60,
+    mergedPrsElsewhere: 150, reposPushed12m: 8, reposWithSite: 2 };
+  const NOW = Date.parse("2026-09-29T00:00:00Z");
+  const GENERAL = ["operations_support", "finance", "legal_compliance", "hr_recruiting", "designer"] as const;
+
+  it("профіль лише інженера не дає числового балу жодній загальній ролі", () => {
+    const r = scorePerson({ github: GH, x: sampleX(), site: { reachable: true, feedItems: 80, items90d: 8, sitemapUrls: 100, latestTs: null } }, NOW).roles;
+    expect(r.engineer.score).not.toBeNull();
+    for (const role of GENERAL) {
+      expect(r[role].score, role).toBeNull();
+      expect(r[role].breakdown.reason, role).toBe("no_public_proof");
+    }
+  });
+
+  it("10 посилань самі не дають балу нікому; і не піднімають бал інженера", () => {
+    const only = scorePerson({ links: { count: 10 } }, NOW).roles;
+    for (const role of Object.keys(only) as RoleKey[]) expect(only[role].score, role).toBeNull();
+    const a = scorePerson({ github: GH }, NOW).roles.engineer.score;
+    const b = scorePerson({ github: GH, links: { count: 10 } }, NOW).roles.engineer.score;
+    expect(b).toBe(a);
+  });
+
+  it("гаманець лише з вхідним спамом не отримує балів onchain за транзакції", () => {
+    const spam = { S1: { sigs: 50_000, sigsOk: 50_000, sigsCapped: true, firstTs: null, sampleSeen: 150, sampleSwaps: 0, swaps: null, sampleSigned: 0, sigsSigned: null as number | null } };
+    const real = { S1: { ...spam.S1, sigsSigned: 3000, sampleSigned: 9 } };
+    const onc = (solana: typeof spam) => scorePerson({ solana }, NOW).sources.onchain;
+    // sigsSigned відоме й нуль = нічого; невідоме = стеля, а не 50 000.
+    expect(onc({ S1: { ...spam.S1, sigsSigned: 0 } })).toBe(0);
+    expect(onc(spam)!).toBeLessThan(onc(real)!);
+  });
+
+  it("PR у власний орг (соло-репозиторій) не рахуються як робота в чужих проєктах", () => {
+    const pr = (o: string, n: number) => ({ repository: { owner: { login: o }, mentionableUsers: { totalCount: n } } });
+    const u = { createdAt: "2020-01-01T00:00:00Z", followers: { totalCount: 0 },
+      repositories: { nodes: [] }, contributionsCollection: { totalCommitContributions: 0, totalPullRequestReviewContributions: 0 },
+      pullRequests: { totalCount: 500, nodes: Array.from({ length: 100 }, () => pr("my-own-org", 1)) } };
+    const facts = githubFacts(u, "me", NOW);
+    expect(facts.mergedPrsElsewhere).toBe(0);
+    expect(scorePerson({ github: facts }, NOW).sources.gh_eng!).toBeLessThan(5);
+  });
+
+  it("порожній чи чужий досяжний сайт більше не дає бодай 30 балів", () => {
+    const s = scorePerson({ site: { reachable: true, feedItems: 0, items90d: 0, sitemapUrls: 0, latestTs: null } }, NOW).sources.site;
+    expect(s).toBe(0);
   });
 });

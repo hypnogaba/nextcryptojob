@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GithubFacts, PersonFacts, XFacts, YoutubeFacts } from "../types.js";
 import { ROLE_ORDER } from "./roles.js";
 import {
-  computeSourcesV7, FORMULA_VERSION, KOL_TOP, LINKS_TOP, REP_POINTS, reputation, scorePersonV7, srcGhEngV7, srcLinks, srcXV7,
+  computeSourcesV7, FORMULA_VERSION, KOL_TOP, LINKS_TOP, REP_POINTS, reputation, scorePersonV7, srcGhEngV7, srcLinks, srcSiteV10, srcXV7,
   V7_ROLES, WIDTH_EACH, WIDTH_MAX, WORK_POINTS,
 } from "./v7.js";
 
@@ -14,39 +14,90 @@ const GH: GithubFacts = { createdAt: "2018-01-01T00:00:00Z", followers: 800, sta
 const YT: YoutubeFacts = { channelId: "c", subscribers: 50_000, hiddenSubscribers: false, avgViewsRecent: 8_000, videos90d: 6 };
 
 describe("v7: будова", () => {
-  it("має роботу на WORK_POINTS у кожному шляху кожної з 15 ролей", () => {
+  it("має роботу на WORK_POINTS у кожному шляху кожної ролі з доказами; решта 5 без шляхів", () => {
     expect(ROLE_ORDER).toHaveLength(15);
     for (const role of ROLE_ORDER) {
       for (const p of V7_ROLES[role].paths) expect(Object.values(p.work).reduce((a, b) => a + b, 0), role).toBe(WORK_POINTS);
+      // Посилання (links) і «найсильніше» (best) більше не робота жодної ролі.
+      for (const p of V7_ROLES[role].paths) expect(Object.keys(p.work), role).not.toEqual(expect.arrayContaining(["links"]));
+      for (const p of V7_ROLES[role].paths) expect(Object.keys(p.work), role).not.toEqual(expect.arrayContaining(["best"]));
     }
+    expect(ROLE_ORDER.filter((r) => V7_ROLES[r].noProof).sort()).toEqual(
+      ["designer", "finance", "hr_recruiting", "legal_compliance", "operations_support"]);
     // v8: ширина до WIDTH_MAX зверху роботи й репутації; сума шарів може бути 105, бал обрізається на 100.
     expect([WORK_POINTS, REP_POINTS, WIDTH_EACH, WIDTH_MAX]).toEqual([60, 25, 5, 20]);
   });
 
-  it("рахує кожну роль, зокрема дизайнера й загальні ролі", () => {
+  it("рахує 9 ролей з доказами (трейдеру потрібен гаманець), а 5 загальних лишає без балу з причиною", () => {
     const r = scorePersonV7({ x: X, github: GH, links: { count: 4 } }, NOW);
-    expect(r.formula).toBe(FORMULA_VERSION);
-    for (const role of ROLE_ORDER) if (role !== "trader") expect(r.roles[role].score, role).not.toBeNull();
-    // Трейдеру потрібен гаманець.
-    expect(r.roles.trader.score).toBeNull();
-    expect(r.roles.finance.breakdown.bestOf).toBe("gh_eng");
+    expect(r.formula).toBe("v10");
+    for (const role of ROLE_ORDER) {
+      if (V7_ROLES[role].noProof || role === "trader") expect(r.roles[role].score, role).toBeNull();
+      else expect(r.roles[role].score, role).not.toBeNull();
+    }
+  });
+
+  it("v10 (B3): інженер без доказів з юриспруденції не має балу юриста, а причина названа", () => {
+    const r = scorePersonV7({ github: { ...GH, followers: 3000, stars: 1e5, mergedPrsElsewhere: 1000 }, x: X }, NOW);
+    for (const role of ["legal_compliance", "finance", "operations_support", "hr_recruiting", "designer"] as const) {
+      expect(r.roles[role].score, role).toBeNull();
+      expect(r.roles[role].level, role).toBeNull();
+      expect(r.roles[role].breakdown.reason, role).toBe("no_public_proof");
+      expect(r.roles[role].breakdown.gaps.role, role).toBe("no public proof for this role yet");
+    }
+    expect(r.roles.engineer.score).not.toBeNull();
+  });
+
+  it("v10 (B3): десять довільних посилань самі нічого не дають жодній ролі", () => {
+    const r = scorePersonV7({ links: { count: 10 } }, NOW);
+    for (const role of ROLE_ORDER) expect(r.roles[role].score, role).toBeNull();
+    expect(r.sources.links).toBe(100); // показується, але не рахується
+  });
+
+  it("v10 (B3): посилання не додають балу й ролям з доказами (ні роботою, ні шириною)", () => {
+    for (const role of ROLE_ORDER) {
+      const a = scorePersonV7({ x: X, github: GH }, NOW).roles[role];
+      const b = scorePersonV7({ x: X, github: GH, links: { count: 10 } }, NOW).roles[role];
+      expect(b.score, role).toBe(a.score);
+      expect(Object.keys(b.breakdown.bonus), role).not.toContain("links");
+    }
   });
 });
 
 describe("v7: джерела", () => {
-  it("X: KOL_TOP відомих підписників уже дають повну частину", () => {
+  it("v10 (B4): відомі підписники X не входять у джерело X, лише в репутацію", () => {
     expect(KOL_TOP).toBe(500);
-    const full = { ...X, followers: 0, ownAvgLikesRt: 0, ownAvgViews: 0, ownAvgReplies: 0, own: 0, kol: 500 };
-    expect(srcXV7(full)).toBeCloseTo(30);
-    expect(srcXV7({ ...full, kol: 5000 })).toBeCloseTo(30);
+    expect(srcXV7({ ...X, kol: 0 })).toBeCloseTo(srcXV7({ ...X, kol: 5000 })!);
+    expect(srcXV7({ ...X, kol: 0, kolSourceGap: true })).toBeCloseTo(srcXV7({ ...X, kol: 500 })!);
+    expect(reputation({ x: { ...X, kol: 500 } })).toBeCloseTo(100);
+    // Решта ваг нормується: усі сигнали на межі дають 100, а не 70.
+    const full = { ...X, followers: 500_000, ownAvgLikesRt: 1500, ownAvgViews: 150_000, ownAvgReplies: 150, own: 20, daysCovered: 30, kol: 0 };
+    expect(srcXV7(full)).toBeCloseTo(100);
     expect(srcXV7({ ...X, followers: null })).toBeNull();
   });
 
-  it("код: командні зірки додаються до власних", () => {
+  it("v10 (B4): підписники GitHub не входять у код; командні зірки теж", () => {
     const base = { ...GH, stars: 0, followers: 0, commits12m: 0, reviews12m: 0, mergedPrsElsewhere: 0 };
     expect(srcGhEngV7(base)).toBe(0);
-    expect(srcGhEngV7({ ...base, teamStars: 5000 })).toBeCloseTo(25);
-    expect(srcGhEngV7({ ...base, stars: 2500, teamStars: 2500 })).toBeCloseTo(25);
+    expect(srcGhEngV7({ ...base, followers: 100_000 })).toBe(0);
+    expect(srcGhEngV7({ ...base, teamStars: 5000 })).toBe(0);
+    expect(srcGhEngV7({ ...base, teamCommits: 1000 })).toBeCloseTo(35 / 0.85);
+    // Усе на межі = 100 (ваги 35+25+15+10 нормуються).
+    expect(srcGhEngV7({ ...base, stars: 5000, reviews12m: 300, commits12m: 2000, mergedPrsElsewhere: 1000 })).toBeCloseTo(100);
+  });
+
+  it("v10: репутація лишається єдиним місцем підписників (X KOL і GitHub followers)", () => {
+    const r0 = scorePersonV7({ github: { ...GH, followers: 0 } }, NOW).roles.engineer.breakdown.layers!.rep;
+    const r1 = scorePersonV7({ github: { ...GH, followers: 3000 } }, NOW).roles.engineer.breakdown.layers!.rep;
+    expect(r0).toBe(0);
+    expect(r1).toBe(REP_POINTS);
+  });
+
+  it("v10: сайт дає бали лише за вміст; порожній чи чужий досяжний сайт не дає 30", () => {
+    expect(srcSiteV10(null)).toBeNull();
+    expect(srcSiteV10({ reachable: false, feedItems: 100, items90d: 8, sitemapUrls: 150, latestTs: null })).toBeNull();
+    expect(srcSiteV10({ reachable: true, feedItems: 0, items90d: 0, sitemapUrls: 0, latestTs: null })).toBe(0);
+    expect(srcSiteV10({ reachable: true, feedItems: 100, items90d: 8, sitemapUrls: 150, latestTs: null })).toBeCloseTo(100);
   });
 
   it("посилання: лише кількість, до LINKS_TOP; нуль посилань = немає джерела", () => {
@@ -92,12 +143,13 @@ describe("v7: джерела", () => {
     }
   });
 
-  it("найсильніше джерело й змішані", () => {
+  it("найсильніше джерело й змішані (посилання в них не беруть участі)", () => {
     const s = computeSourcesV7({ x: X, youtube: YT, links: { count: 10 } }, NOW);
-    expect(s.bestOf).toBe("links");
-    expect(s.best).toBe(100);
+    expect(s.bestOf).toBe("x");
+    expect(s.best).toBe(s.x);
     expect(s.media).toBe(Math.max(s.x!, s.yt!));
-    expect(s.output).toBe(100);
+    expect(s.output).toBeNull();
+    expect(s.links).toBe(100);
   });
 });
 
@@ -108,11 +160,11 @@ describe("v8: шари", () => {
     const s = computeSourcesV7(f, NOW);
     const work = (40 * s.gh_eng! + 20 * s.gh_builder!) / 100;
     const rep = (REP_POINTS * reputation(f)!) / 100;
-    const others = [s.x!, s.yt!, s.links!].sort((a, b) => b - a);
+    const others = [s.x!, s.yt!];
     const width = others.reduce((a, v) => a + (WIDTH_EACH * v) / 100, 0);
     expect(r.score).toBeCloseTo(Math.round((work + rep + width) * 10) / 10, 5);
     expect(r.breakdown.layers).toEqual({ work: r.core, rep: Math.round(rep * 10) / 10, width: Math.round(width * 10) / 10 });
-    expect(Object.keys(r.breakdown.bonus).sort()).toEqual(["links", "rep", "x", "yt"]);
+    expect(Object.keys(r.breakdown.bonus).sort()).toEqual(["rep", "x", "yt"]);
     expect(r.breakdown.selfAddedLinks).toBe(true);
   });
 
@@ -121,10 +173,10 @@ describe("v8: шари", () => {
       site: { reachable: true, feedItems: 50, items90d: 4, sitemapUrls: 80, latestTs: null } };
     const kol = scorePersonV7(f, NOW).roles.creator_kol;
     const widthKeys = Object.keys(kol.breakdown.bonus).filter((k) => k !== "rep").sort();
-    expect(widthKeys).toEqual(["gh_builder", "gh_eng", "links", "site"]);
+    expect(widthKeys).toEqual(["gh_builder", "gh_eng", "site"]);
     // Четверте джерело додає бали: у v7 воно б не рахувалось.
     const s = computeSourcesV7(f, NOW);
-    const width = [s.gh_eng!, s.gh_builder!, s.links!, s.site!].reduce((a, v) => a + (WIDTH_EACH * v) / 100, 0);
+    const width = [s.gh_eng!, s.gh_builder!, s.site!].reduce((a, v) => a + (WIDTH_EACH * v) / 100, 0);
     expect(kol.breakdown.layers!.width).toBeCloseTo(Math.round(Math.min(WIDTH_MAX, width) * 10) / 10, 5);
   });
 
@@ -151,7 +203,7 @@ describe("v8: шари", () => {
     expect(r.engineer.breakdown.reason).toBe("missing_anchor:gh_eng");
     expect(r.trader.score).toBeNull();
     expect(r.designer.score).toBeNull();
-    expect(r.operations_support.score).not.toBeNull();
+    expect(r.operations_support.score).toBeNull();
   });
 
   it("аудитор: шлях з аудитами, коли він сильніший, інакше лише код", () => {
@@ -170,6 +222,6 @@ describe("v8: шари", () => {
       youtube: { ...YT, subscribers: 1e7, avgViewsRecent: 1e6, videos90d: 50 }, links: { count: 20 },
     };
     for (const role of ROLE_ORDER) expect(scorePersonV7(top, NOW).roles[role].score ?? 0).toBeLessThanOrEqual(100);
-    expect(scorePersonV7(top, NOW).roles.engineer.score).toBe(100);
+    expect(scorePersonV7(top, NOW).roles.engineer.score).toBe(95); // v10: ширина без links (5)
   });
 });

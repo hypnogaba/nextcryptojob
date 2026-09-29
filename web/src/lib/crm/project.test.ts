@@ -324,6 +324,9 @@ describe("projection rules", () => {
         }),
       ),
     ).toEqual(["ethereum", "optimism", "hyperliquid"]);
+    // v10: гаманець лише з вхідним спамом (власних підписів 0) мережею не є.
+    expect(deriveChains(facts({ solana: { s: { sigs: 9000, sigsSigned: 0 } } }))).toEqual([]);
+    expect(deriveChains(facts({ solana: { s: { sigs: 9000, sigsSigned: 12 } } }))).toEqual(["solana"]);
     expect(deriveChains([])).toEqual([]);
     expect(deriveChains([{ user_id: "u", source: "evm", facts_json: "not json" }])).toEqual([]);
   });

@@ -16,17 +16,21 @@ where the number comes from and what to do if it looks wrong.
 
 | Source | What we measure |
 |---|---|
-| X | Followers; well-known crypto accounts that follow you; reactions to your own posts; how often you post |
-| GitHub | Pull requests merged into other people's projects; stars; reviews; followers; commits in the last 12 months; projects with a live site |
+| X | Followers; reactions to your own posts; views; replies; how often you post. Well-known crypto accounts that follow you count in Reputation only |
+| GitHub | Pull requests merged into other people's projects; stars on your own projects; reviews; commits in the last 12 months; projects with a live site. Followers count in Reputation only |
 | Wallets: Ethereum, Arbitrum, Base, Optimism, Solana | Wallet age; transactions; networks used; swaps |
 | Hyperliquid | Recent trades and volume |
 | YouTube | Subscribers; views of recent videos; how often you publish |
-| Your website | How many posts and how recent |
-| Links to your work | How many links you added (portfolio, articles, talks, projects), up to 10. We do not check them, and your card says you added them |
+| Your website | Posts in the feed, recent posts and pages in the sitemap. A site with no content adds nothing |
 | Audit contests and Dune | Found by your GitHub or X. You do not add them |
 
 For GitHub we also count your team's repositories: a repository you do not own where you made at
-least 20 commits counts like your own work.
+least 20 commits counts like your own work. A repository where you are the only person (your own
+organisation, a second account) does not count as work for others. On wallets we count only what
+your own address signed, so incoming spam adds nothing.
+
+Links to your work that you add in your profile are shown to companies, but they do not change
+your score: we cannot check them.
 
 We count reactions to your posts. We do not judge what you write, and we store counts and
 dates, not the content. We never look at your age, gender, nationality or photo, at your
@@ -40,7 +44,7 @@ Your score has three layers. Together they can pass 100, so the total is capped 
    GitHub, a trader on trading, media roles on X or YouTube. Some roles use two.
 2. **Reputation, up to 25.** The same for every role: how many well-known crypto accounts
    follow you on X, or your GitHub followers, whichever counts for more. Connecting X
-   never lowers it.
+   never lowers it. Followers count here only, so they are never counted twice.
 3. **Breadth, up to 20.** Everything else you connect counts: every other source adds up to
    5 points, and breadth stops at 20.
 4. **A role needs its main source.** Without it we show "not enough data" instead of a low
@@ -55,11 +59,14 @@ Your score has three layers. Together they can pass 100, so the total is capped 
 
 ## Roles
 
-Every role is scored. Engineer, Security auditor, DevRel, Data and research, Product or
+Ten roles are scored: Engineer, Security auditor, DevRel, Data and research, Product or
 project manager, BD and partnerships, Marketing and content, Creator or KOL, Community and
-Trader each have their own main sources. Designer is scored on the links to your work.
-Operations and support, Finance, Legal and compliance and HR and recruiting share one
-formula: your strongest source plus the links to your work.
+Trader. Each has its own main sources.
+
+Five roles are not scored: Designer, Operations and support, Finance, Legal and compliance,
+and HR and recruiting. Public data cannot show your skill in them yet, so we show "Not
+scored: no public proof for this role yet" instead of a number. You still get jobs for these
+roles, matched to your own words.
 
 ## Level and coverage
 

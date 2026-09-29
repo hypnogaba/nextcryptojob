@@ -81,35 +81,52 @@ type AuditsFacts = { earningsUsd: number|null; high: number|null; contests: numb
 type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  // злиті PR у duneanalytics/spellbook (за GitHub людини)
 ```
 
-## 4. Формула v9 (`formula_version = "v9"`; чинна з 18.09.2026)
+## 4. Формула v10 (`formula_version = "v10"`; з 29.09.2026)
 
-Чинна формула це v9, код `engine/src/formula/v7.ts` (файл лишився v7.ts заради історії), версія на сайті
+Чинна формула це v10, код `engine/src/formula/v7.ts` (файл лишився v7.ts заради історії), версія на сайті
 в одному місці: `web/src/lib/score/formula.ts` (тест `formula.test.ts` звіряє її з рушієм). Джерела й їхні бали
 (0–100) описані нижче як «джерела v6»: `gh_eng`, `gh_builder`, `x`, `yt`, `onchain`, `trading`, `site`, `audits`,
-`dune` лишились тими самими, з правками v7 (нижче). Ядро й додатки v4–v6 з таблиці ролей замінили шари v7–v9.
+`dune` лишились тими самими, з правками v7 (нижче). Ядро й додатки v4–v6 з таблиці ролей замінили шари v7–v10.
 
-### Чинна схема (v7, v8, v9)
+### Чинна схема (v7–v10)
 Бал ролі = Робота + Репутація + Ширина, `score = min(100, Робота + Репутація + Ширина)`, округлено до 0,1.
 - **Робота** (разом 60 балів, `WORK_POINTS`): вага кожного головного джерела ролі в балах, `Σ w·s/100`.
   Ролі: engineer gh_eng 40 + gh_builder 20; security_auditor (audits 30 + gh_eng 30) або gh_eng 60; devrel media 30 +
   gh_eng 30; data_research output 30 + x 30; product_manager x 20 + gh_builder 20 + output 20; bd x 50 + onchain 10;
   marketing_content media 40 + site 20; creator_kol media 60; community x 50 + onchain 10; trader trading 50 +
-  onchain 10; designer links 40 + x 20; operations_support, finance, legal_compliance, hr_recruiting: best 40 + links 20.
-  Усі 15 ролей отримують бал; без жодного ненульового головного джерела `score = null`, `reason = 'missing_anchor:…'`.
+  onchain 10. **v10 (аудит 29.09, B3): designer, operations_support, finance, legal_compliance, hr_recruiting не
+  мають числа** (`score = null`, `reason = 'no_public_proof'`, `gaps.role = 'no public proof for this role yet'`):
+  жодне наше джерело не доводить саме ці ролі (у v7–v9 вони брали «найсильніше джерело + links»: інженер мав
+  ~36 за юриста, 10 довільних URL давали 60). Підбір вакансій для них іде за словами людини, бал не потрібен.
+  Число з'явиться, коли зʼявиться доказ саме цієї ролі (CV, портфоліо, перевірені посилання).
+  Для 10 ролей з доказами: без жодного ненульового головного джерела `score = null`, `reason = 'missing_anchor:…'`.
 - **Репутація** (до 25, `REP_POINTS`), однакова для всіх ролей. v9: **більше з двох**: відомі крипто-підписники X
   (`logn(kol, 500)`, лише без `kolSourceGap`) або підписники GitHub (`logn(followers, 3000)`). До v9 X, коли він був,
   заміняв GitHub, і підключення X могло знизити бал; тепер підключене джерело бал не знижує ніколи.
+  v10 (B4): **KOL і followers лише тут.** З джерела `x` прибрано KOL (30), з `gh_eng` підписників GitHub (15):
+  вони рахувалися і в Роботі, і в Репутації. Решта ваг нормується на 100 (`combine` ділить на суму ваг, що лишилися):
+  `x` = 15/15/15/15/10 з 70, `gh_eng` = 35/25/15/10 з 85, тож джерело, як і раніше, охоплює 0–100.
 - **Ширина** (до 20, `WIDTH_MAX`). v8: **кожне** інше підключене джерело (те, що не використане в Роботі цієї ролі),
   по 5 балів `WIDTH_EACH · s/100`, разом не більше 20. До v8 (у v7) бралися лише 3 найсильніші.
 - Нові в v7 джерела: `links` (посилання на роботи, додані людиною без перевірки, `100·lin(count, 10)`, позначка
-  «self-added»), `media = max(x, yt)`, `output = max(site, links, gh_eng, dune)`, `best` = найсильніше з базових
-  джерел (для загальних ролей). `gh_eng` рахує й командні репозиторії (`teamCommits`, `teamStars`); `x` бере верх KOL 500.
+  «self-added»), `media = max(x, yt)`, `output`, `best` = найсильніше з базових джерел. **v10: `links` лише для
+  показу**: не робота жодної ролі, не ширина, не входить у `output` і `best` (`output = max(site, gh_eng, dune)`).
+  `gh_eng` рахує командні коміти (`teamCommits`); зірки чужих командних репозиторіїв (`teamStars`) з v10 не
+  рахуються (їх накрутити двома власними акаунтами).
+- **Захист від накруток (v10, аудит E).** `site`: бали лише за вміст (`combine(40·logn(feedItems,100),
+  20·lin(items90d,8), 10·logn(sitemapUrls,150))`), плоских 30 за досяжний сайт немає; сайт без вмісту = 0.
+  GitHub: збирач додає `mentionableUsers{totalCount}` для репозиторіїв злитих PR і командних комітів; репозиторій
+  із ≤1 людиною (власний орг, другий акаунт) не «чужа робота» (`mergedPrsElsewhere`, `teamCommits`); поле
+  відсутнє = рахуємо як раніше. Solana: `SolanaFacts.sigsSigned` (оцінка за вибіркою підписів, які підписала
+  сама адреса, `estimateSwaps`-правила) замінює сирі `sigs` у `tx` і в «мережі з активністю»; факти без цього поля
+  (до v10) і замала вибірка дають `min(sigs, 100)` (`SOLANA_UNKNOWN_SIGS_CAP`) замість повного лічильника.
 - `breakdown_json`: `formula`, `sources`, `core` (вага в балах і значення), `bonus` (`rep` з max 25 і кожне джерело
   ширини з max 5), `cover`, `level`, `reason`, `gaps`, `layers {work, rep, width}`, `bestOf`, `selfAddedLinks`.
 - Рівень: `level = min(10, floor(score/10) + 1)`. Ворота якості (нижче) перевіряють кожну нову версію.
 - Публічно та сама схема пояснена на `/scoring` і `/how-scoring-works`; версію на сторінці бере `FORMULA_VERSION`.
 
-Зміни версій: v7 (17.09) шари й посилання на роботи; v8 (18.09) ширина за всі джерела; v9 (18.09) репутація = більше з X і GitHub.
+Зміни версій: v7 (17.09) шари й посилання на роботи; v8 (18.09) ширина за всі джерела; v9 (18.09) репутація = більше з X і GitHub;
+v10 (29.09) ролі без доказів без числа, links не робота, KOL і followers лише в репутації, сайт за вміст, соло-репозиторії й вхідний спам Solana не рахуються.
 
 ### Історія: формула v6 (`formula_version = "v6"`; v4 + зміни v5 і v6)
 `logn(x, cap) = min(1, log10(1+max(0,x)) / log10(1+cap))`, `lin(x, cap) = min(1, max(0,x)/cap)`;

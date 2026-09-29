@@ -55,8 +55,9 @@ describe("rankRoles: the person's scored roles, highest first", () => {
 
   it("ignores roles the person did not pick and roles without a score number", () => {
     expect(rankRoles(["engineer"], scores)).toEqual([]);
-    // v7: дизайнер теж рахується.
-    expect(rankRoles(["engineer", "designer"], scores)).toEqual([{ role: "designer", score: 50, level: 6 }]);
+    // v10: дизайнер без доказів не рахується, навіть якщо в базі лишився бал зі старої формули.
+    expect(rankRoles(["engineer", "designer"], scores)).toEqual([]);
+    expect(rankRoles(["designer", "bd"], scores)).toEqual([{ role: "bd", score: 44, level: 5 }]);
   });
 
   it("keeps the person's order on a tie", () => {

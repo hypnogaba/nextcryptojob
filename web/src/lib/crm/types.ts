@@ -136,7 +136,7 @@ export const SORTS = ["score", "level", "coverage", "newest"] as const;
 export const Sort = z.enum(SORTS);
 export type Sort = z.infer<typeof Sort>;
 
-export const UNSCORED_REASONS = ["missing_anchor", "needs_cv", "needs_portfolio", "not_published", "pending"] as const;
+export const UNSCORED_REASONS = ["missing_anchor", "no_public_proof", "needs_cv", "needs_portfolio", "not_published", "pending"] as const;
 export const UnscoredReason = z.enum(UNSCORED_REASONS);
 export type UnscoredReason = z.infer<typeof UnscoredReason>;
 

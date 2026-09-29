@@ -171,11 +171,11 @@ export async function loadCandidates(
 
 /** Ролі, які реліз 1 не рахує (contracts §1). */
 const NOT_SCORED: Partial<Record<RoleKey, UnscoredReason>> = {
-  designer: "needs_portfolio",
-  operations_support: "needs_cv",
-  finance: "needs_cv",
-  legal_compliance: "needs_cv",
-  hr_recruiting: "needs_cv",
+  designer: "no_public_proof",
+  operations_support: "no_public_proof",
+  finance: "no_public_proof",
+  legal_compliance: "no_public_proof",
+  hr_recruiting: "no_public_proof",
 };
 
 export function levelOf(score: number): number {
@@ -218,7 +218,7 @@ function unscoredReason(role: RoleKey, row: ScoreRow | undefined): UnscoredReaso
     const reason = parseBreakdown(row.breakdown_json).reason;
     if (typeof reason === "string") {
       if (reason.startsWith("missing_anchor")) return "missing_anchor";
-      if (reason === "needs_cv" || reason === "needs_portfolio") return reason;
+      if (reason === "no_public_proof" || reason === "needs_cv" || reason === "needs_portfolio") return reason;
     }
     return "pending";
   }
@@ -428,7 +428,8 @@ export function deriveChains(facts: FactRow[]): Chain[] {
       if ((num(cf.sent) ?? 0) > 0 || seconds(cf.firstTs) !== null) active.add(chain);
     }
   }
-  for (const s of records(factsOf(facts, "solana"))) if ((num(s.sigs) ?? 0) > 0) active.add("solana");
+  // v10: лише власні підписи (sigsSigned), а не вхідний спам; у старих фактах поля немає, тоді sigs.
+  for (const s of records(factsOf(facts, "solana"))) if ((num(s.sigsSigned) ?? num(s.sigs) ?? 0) > 0) active.add("solana");
   for (const h of records(factsOf(facts, "hyperliquid"))) {
     if ((num(h.fillsRecent) ?? 0) > 0 || (num(h.volumeUsd) ?? 0) > 0) active.add("hyperliquid");
   }

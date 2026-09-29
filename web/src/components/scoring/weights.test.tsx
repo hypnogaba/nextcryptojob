@@ -10,13 +10,14 @@ const cellsOf = (html: string, label: string) => {
 describe("weights on /scoring (v8)", () => {
   it("shows the Work points of every role, with the Onchain column", () => {
     const html = renderToStaticMarkup(<WeightsTable />);
-    // 16 рядків: 15 ролей, аудитор двома шляхами.
-    expect(html.match(/<th scope="row"/g)).toHaveLength(16);
+    // 11 рядків: 10 ролей з доказами, аудитор двома шляхами. Решта 5 ролей без числа.
+    expect(html.match(/<th scope="row"/g)).toHaveLength(11);
+    expect(html).not.toContain(">Designer<");
+    expect(html).toContain("we have no public proof for those roles yet");
     expect(html).toContain(">Onchain</th>");
-    // gh_eng, gh_builder, x, media, output, onchain, trading, site, audits, links, best
+    // gh_eng, gh_builder, x, media, output, onchain, trading, site, audits
     const no = "·not used";
-    expect(cellsOf(html, "Trader")).toEqual([no, no, no, no, no, "10", "50", no, no, no, no]);
-    expect(cellsOf(html, "Designer")).toEqual([no, no, "20", no, no, no, no, no, no, "40", no]);
+    expect(cellsOf(html, "Trader")).toEqual([no, no, no, no, no, "10", "50", no, no]);
     expect(html).toContain("Security auditor, with audit contests");
     expect(html).toContain("out of 60");
   });
@@ -29,12 +30,13 @@ describe("weights on /scoring (v8)", () => {
     expect(html).toContain("Every other source you connect");
   });
 
-  it("lists what each source counts, onchain first, with team work and links", () => {
+  it("lists what each source counts, onchain first, with team work; no links source, no flat site points", () => {
     const html = renderToStaticMarkup(<SourceParts />);
     expect(html.indexOf(">Onchain</h3>")).toBeLessThan(html.indexOf(">GitHub</h3>"));
     expect(html).toContain("Wallet age");
     expect(html).toContain("commits to your team&#x27;s repos");
-    expect(html).toContain("Links to your work you add yourself (not checked)");
+    expect(html).not.toContain("Links to your work you add yourself");
+    expect(html).not.toContain("The site answers");
     expect(html).toContain("Whichever of your sources scores highest.");
   });
 });

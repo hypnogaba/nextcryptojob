@@ -69,21 +69,22 @@ export const POSITION_CODE: Record<RoleKey, string> = {
 type Weights = readonly (readonly [SourceKey, number])[];
 export type Recipe = { paths: readonly Weights[] };
 
-/** Шари чинної формули (engine/src/formula/v7.ts, v9): ширина рахує кожне інше джерело, по WIDTH_EACH, разом до WIDTH_MAX. */
+/** Шари чинної формули (engine/src/formula/v7.ts, v10): ширина рахує кожне інше джерело, по WIDTH_EACH, разом до WIDTH_MAX. */
 export const WORK_POINTS = 60;
 export const REP_POINTS = 25;
 export const WIDTH_EACH = 5;
 export const WIDTH_MAX = 20;
 
-/** Бал з шарами «робота + репутація + ширина»: v7 і новіші (v8 змінила ширину, v9 репутацію). */
+/** Бал з шарами «робота + репутація + ширина»: v7 і новіші (v8 змінила ширину, v9 репутацію, v10 прибрала подвійний рахунок). */
 export const isLayeredFormula = (formula: string | null | undefined): boolean => {
   const n = /^v(\d+)$/.exec(formula ?? "")?.[1];
   return n !== undefined && Number(n) >= 7;
 };
 
-const GENERAL: Recipe = { paths: [[["best", 40], ["links", 20]]] };
-
-/** Усі 15 ролей рахуються з v7 (ті самі ваги в v8 і v9). Вага = бали «Роботи». */
+/**
+ * 10 ролей з доказами (ті самі ваги, що в рушії). v10: Designer, Operations, Finance, Legal, HR не мають рецепта:
+ * для них немає джерела, що доводить саме їх, тож числа немає (lib/roles/catalog.ts UNSCORED). Вага = бали «Роботи».
+ */
 export const RECIPES = {
   engineer: { paths: [[["gh_eng", 40], ["gh_builder", 20]]] },
   security_auditor: { paths: [[["audits", 30], ["gh_eng", 30]], [["gh_eng", 60]]] },
@@ -95,12 +96,7 @@ export const RECIPES = {
   creator_kol: { paths: [[["media", 60]]] },
   community: { paths: [[["x", 50], ["onchain", 10]]] },
   trader: { paths: [[["trading", 50], ["onchain", 10]]] },
-  designer: { paths: [[["links", 40], ["x", 20]]] },
-  operations_support: GENERAL,
-  finance: GENERAL,
-  legal_compliance: GENERAL,
-  hr_recruiting: GENERAL,
-} as const satisfies Record<RoleKey, Recipe>;
+} as const satisfies Partial<Record<RoleKey, Recipe>>;
 
 export type ScoredRoleKey = keyof typeof RECIPES;
 export const SCORED_ROLE_KEYS = Object.keys(RECIPES) as ScoredRoleKey[];
