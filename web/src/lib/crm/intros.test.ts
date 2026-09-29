@@ -39,6 +39,9 @@ let db: TestDb;
 let net: Network;
 
 beforeEach(() => {
+  // Годинник дорівнює NOW фікстур: без цього respondToIntro без `now` бачить знайомство з 12.09 простроченим (14 днів).
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   clearResourceServerCache();
   db = crmDb();
   publishFormula(db.raw);
@@ -46,6 +49,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
