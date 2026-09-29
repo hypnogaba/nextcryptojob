@@ -57,6 +57,8 @@ export function unscoredText(role: RoleKey, reason: UnscoredReason | null): stri
   switch (reason) {
     case "missing_anchor":
       return `Not scored: needs ${ANCHOR_TEXT[role] ?? "more sources"}`;
+    case "no_public_proof":
+      return "Not scored: no public proof for this role yet";
     case "needs_cv":
       return "Not scored yet: needs a CV";
     case "needs_portfolio":

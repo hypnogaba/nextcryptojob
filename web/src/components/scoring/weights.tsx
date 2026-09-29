@@ -8,7 +8,7 @@ import { COMBINED_SOURCES, REPUTATION_TEXT, SOURCE_PARTS, WEIGHT_COLUMNS } from 
 import { cn } from "@/lib/utils";
 
 /**
- * Усі ваги чинної формули на одній сторінці (власник 16.09, c5; шари з v7, ширина v8, репутація v9): бал = Робота + Репутація + Ширина.
+ * Усі ваги чинної формули на одній сторінці (власник 16.09, c5; шари з v7, ширина v8, репутація v9, без подвійного рахунку v10): бал = Робота + Репутація + Ширина.
  * Таблиця: роль × джерело, числа = бали «Роботи». Ончейн підсвічено: власнику важливо, скільки він важить.
  */
 
@@ -54,7 +54,7 @@ export function Layers() {
     {
       name: "Breadth",
       points: WIDTH_MAX,
-      text: `Every other source you connect, up to ${WIDTH_EACH} points each and ${WIDTH_MAX} in total. Everything you connect counts.`,
+      text: `Every other source you connect, up to ${WIDTH_EACH} points each and ${WIDTH_MAX} in total. Links you add do not count.`,
       cls: "bg-soft text-ink",
     },
   ];
@@ -85,8 +85,9 @@ export function WeightsTable() {
     <div className={BOARD}>
       <table className={TABLE} data-table="weights">
         <caption className="px-4 pt-3 pb-1 text-left text-sm text-ink-muted">
-          Points of Work for each role, out of {WORK_POINTS}. Every role also gets Reputation (up to {REP_POINTS}) and Breadth (up to{" "}
-          {WIDTH_MAX}). The total is capped at 100. Onchain is highlighted.
+          Points of Work for each role, out of {WORK_POINTS}. Every scored role also gets Reputation (up to {REP_POINTS}) and Breadth (up to{" "}
+          {WIDTH_MAX}). The total is capped at 100. Onchain is highlighted. Designer, Operations, Finance, Legal and HR are not scored:
+          we have no public proof for those roles yet.
         </caption>
         <thead>
           <tr>

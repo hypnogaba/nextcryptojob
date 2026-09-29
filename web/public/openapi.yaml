@@ -1169,7 +1169,7 @@ components:
         coverage: { type: [integer, "null"], minimum: 0, maximum: 100, description: Share of the role's core weight with connected sources. }
         unscored_reason:
           type: [string, "null"]
-          enum: [missing_anchor, needs_cv, needs_portfolio, not_published, pending, null]
+          enum: [missing_anchor, no_public_proof, needs_cv, needs_portfolio, not_published, pending, null]
     ScoreBreakdown:
       type: object
       description: Source scores only (0 to 100). Never raw facts such as follower counts or transaction counts.

@@ -12,15 +12,14 @@ export type SourcePart = {
   scale: "log" | "linear" | null;
 };
 
-type Direct = Exclude<SourceKey, "media" | "output" | "best" | "rep">;
+type Direct = Exclude<SourceKey, "media" | "output" | "best" | "rep" | "links">;
 
 export const SOURCE_PARTS: Record<Direct, readonly SourcePart[]> = {
   gh_eng: [
-    { label: "Pull requests merged into other projects, or commits to your team's repos", weight: 35, top: "1,000", scale: "log" },
-    { label: "Stars on your own and your team's projects", weight: 25, top: "5,000", scale: "log" },
-    { label: "Code reviews, last 12 months", weight: 15, top: "300", scale: "log" },
-    { label: "Followers", weight: 15, top: "3,000", scale: "log" },
-    { label: "Commits, last 12 months", weight: 10, top: "2,000", scale: "log" },
+    { label: "Pull requests merged into other projects, or commits to your team's repos", weight: 41, top: "1,000", scale: "log" },
+    { label: "Stars on your own projects", weight: 29, top: "5,000", scale: "log" },
+    { label: "Code reviews, last 12 months", weight: 18, top: "300", scale: "log" },
+    { label: "Commits, last 12 months", weight: 12, top: "2,000", scale: "log" },
   ],
   gh_builder: [
     { label: "Projects you pushed to, last 12 months", weight: 40, top: "12", scale: "linear" },
@@ -28,12 +27,11 @@ export const SOURCE_PARTS: Record<Direct, readonly SourcePart[]> = {
     { label: "Commits, last 12 months", weight: 30, top: "1,500", scale: "log" },
   ],
   x: [
-    { label: "Well-known crypto accounts that follow you", weight: 30, top: "500", scale: "log" },
-    { label: "Followers", weight: 15, top: "500,000", scale: "log" },
-    { label: "Likes and reposts per post", weight: 15, top: "1,500", scale: "log" },
-    { label: "Views per post", weight: 15, top: "150,000", scale: "log" },
-    { label: "Replies per post", weight: 15, top: "150", scale: "log" },
-    { label: "Your own posts per 30 days", weight: 10, top: "20", scale: "linear" },
+    { label: "Followers", weight: 22, top: "500,000", scale: "log" },
+    { label: "Likes and reposts per post", weight: 21, top: "1,500", scale: "log" },
+    { label: "Views per post", weight: 21, top: "150,000", scale: "log" },
+    { label: "Replies per post", weight: 21, top: "150", scale: "log" },
+    { label: "Your own posts per 30 days", weight: 15, top: "20", scale: "linear" },
   ],
   yt: [
     { label: "Subscribers", weight: 45, top: "1,000,000", scale: "log" },
@@ -51,16 +49,14 @@ export const SOURCE_PARTS: Record<Direct, readonly SourcePart[]> = {
     { label: "Networks you trade on", weight: 10, top: "6", scale: "linear" },
   ],
   site: [
-    { label: "The site answers", weight: 30, top: null, scale: null },
-    { label: "Posts in the feed", weight: 40, top: "100", scale: "log" },
-    { label: "Posts, last 90 days", weight: 20, top: "8", scale: "linear" },
-    { label: "Pages in the sitemap", weight: 10, top: "150", scale: "log" },
+    { label: "Posts in the feed", weight: 57, top: "100", scale: "log" },
+    { label: "Posts, last 90 days", weight: 29, top: "8", scale: "linear" },
+    { label: "Pages in the sitemap", weight: 14, top: "150", scale: "log" },
   ],
   audits: [
     { label: "Earnings from audit contests", weight: 60, top: "$1M", scale: "log" },
     { label: "High-severity findings", weight: 40, top: "150", scale: "log" },
   ],
-  links: [{ label: "Links to your work you add yourself (not checked)", weight: 100, top: "10", scale: "linear" }],
   dune: [
     { label: "Pull requests merged into Dune Spellbook", weight: 70, top: "300", scale: "log" },
     { label: "Of them, last 12 months", weight: 30, top: "50", scale: "log" },
@@ -70,13 +66,13 @@ export const SOURCE_PARTS: Record<Direct, readonly SourcePart[]> = {
 /** Джерела, що беруть найкраще з інших. */
 export const COMBINED_SOURCES: Record<"media" | "output" | "best", string> = {
   media: "The higher of your X and YouTube scores.",
-  output: "The highest of your Website, Work links, GitHub and Dune scores.",
+  output: "The highest of your Website, GitHub and Dune scores.",
   best: "Whichever of your sources scores highest.",
 };
 
 /** Репутація: однакова для всіх ролей. */
 export const REPUTATION_TEXT =
-  "Well-known crypto accounts that follow you on X (full at 500) or your GitHub followers (full at 3,000), whichever counts for more.";
+  "Well-known crypto accounts that follow you on X (full at 500) or your GitHub followers (full at 3,000), whichever counts for more. Followers count only here, never twice.";
 
 /** Колонки таблиці ваг: усі джерела, які є в рецептах ролей, у порядку показу. */
-export const WEIGHT_COLUMNS: readonly SourceKey[] = ["gh_eng", "gh_builder", "x", "media", "output", "onchain", "trading", "site", "audits", "links", "best"];
+export const WEIGHT_COLUMNS: readonly SourceKey[] = ["gh_eng", "gh_builder", "x", "media", "output", "onchain", "trading", "site", "audits"];

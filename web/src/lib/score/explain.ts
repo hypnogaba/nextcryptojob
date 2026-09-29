@@ -231,10 +231,7 @@ function tipsFor(role: RoleKey, breakdown: Breakdown, state: SourceState): strin
     if (kinds.length === 0 || kinds.length < (FEEDS[key] ?? []).length) continue;
     out.push({ kinds, text: `${actionFor(kinds, state)}: it can add up to ${max} points.`, rank: max });
   }
-  // v7/v8: посилання на роботи рахуються в кожній ролі; порада, поки їх немає.
-  if (isLayeredFormula(breakdown.formula) && !breakdown.selfAddedLinks && breakdown.reason !== "missing_anchor:links") {
-    out.push({ kinds: [], text: "Add links to your work in your profile: they count for every role.", rank: 4 });
-  }
+  // v10: посилання на роботи не рахуються в балі, тож поради додати їх немає.
   // Без головного джерела про нього вже каже причина; порада повторила б її.
   const anchors = new Set(anchorKinds(breakdown));
   const seen = new Set<string>();

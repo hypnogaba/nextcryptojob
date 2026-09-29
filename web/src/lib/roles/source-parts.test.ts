@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  srcAudits, srcDune, srcGhBuilder, srcOnchain, srcSite, srcTrading, srcYt,
+  srcAudits, srcDune, srcGhBuilder, srcOnchain, srcTrading, srcYt,
 } from "../../../../engine/src/formula/sources";
-import { srcGhEngV7 as srcGhEng, srcLinks, srcXV7 as srcX } from "../../../../engine/src/formula/v7";
+import { srcGhEngV7 as srcGhEng, srcSiteV10 as srcSite, srcXV7 as srcX } from "../../../../engine/src/formula/v7";
 import { RECIPES, SCORED_ROLE_KEYS } from "./recipes";
 import { SOURCE_PARTS, WEIGHT_COLUMNS } from "./source-parts";
 
@@ -29,12 +29,14 @@ describe("SOURCE_PARTS", () => {
   });
 
   it("matches the engine's GitHub weights", () => {
-    expect(srcGhEng({ ...gh, mergedPrsElsewhere: 1000 })).toBeCloseTo(35);
-    expect(srcGhEng({ ...gh, stars: 5000 })).toBeCloseTo(25);
-    expect(srcGhEng({ ...gh, reviews12m: 300 })).toBeCloseTo(15);
-    expect(srcGhEng({ ...gh, followers: 3000 })).toBeCloseTo(15);
-    expect(srcGhEng({ ...gh, commits12m: 2000 })).toBeCloseTo(10);
-    expect(weights("gh_eng")).toEqual([35, 25, 15, 15, 10]);
+    // v10: без підписників (вони лише в репутації); ваги 35/25/15/10 нормуються на 100, на сторінці округлені.
+    const near = (got: number | null, shown: number) => expect(Math.abs(got! - shown)).toBeLessThan(1);
+    near(srcGhEng({ ...gh, mergedPrsElsewhere: 1000 }), weights("gh_eng")[0]!);
+    near(srcGhEng({ ...gh, stars: 5000 }), weights("gh_eng")[1]!);
+    near(srcGhEng({ ...gh, reviews12m: 300 }), weights("gh_eng")[2]!);
+    near(srcGhEng({ ...gh, commits12m: 2000 }), weights("gh_eng")[3]!);
+    expect(srcGhEng({ ...gh, followers: 100_000 })).toBe(0);
+    expect(weights("gh_eng")).toEqual([41, 29, 18, 12]);
     expect(srcGhBuilder({ ...gh, reposPushed12m: 12 })).toBeCloseTo(40);
     expect(srcGhBuilder({ ...gh, reposWithSite: 4 })).toBeCloseTo(30);
     expect(srcGhBuilder({ ...gh, commits12m: 1500 })).toBeCloseTo(30);
@@ -42,13 +44,15 @@ describe("SOURCE_PARTS", () => {
   });
 
   it("matches the engine's X and YouTube weights", () => {
-    expect(srcX({ ...x, kol: 500 })).toBeCloseTo(30);
-    expect(srcX({ ...x, followers: 500_000 })).toBeCloseTo(15);
-    expect(srcX({ ...x, ownAvgLikesRt: 1500 })).toBeCloseTo(15);
-    expect(srcX({ ...x, ownAvgViews: 150_000 })).toBeCloseTo(15);
-    expect(srcX({ ...x, ownAvgReplies: 150 })).toBeCloseTo(15);
-    expect(srcX({ ...x, own: 20 })).toBeCloseTo(10);
-    expect(weights("x")).toEqual([30, 15, 15, 15, 15, 10]);
+    // v10: без відомих підписників (KOL лише в репутації); ваги 15/15/15/15/10 нормуються на 100.
+    const near = (got: number | null, shown: number) => expect(Math.abs(got! - shown)).toBeLessThan(1);
+    expect(srcX({ ...x, kol: 500 })).toBe(0);
+    near(srcX({ ...x, followers: 500_000 }), weights("x")[0]!);
+    near(srcX({ ...x, ownAvgLikesRt: 1500 }), weights("x")[1]!);
+    near(srcX({ ...x, ownAvgViews: 150_000 }), weights("x")[2]!);
+    near(srcX({ ...x, ownAvgReplies: 150 }), weights("x")[3]!);
+    near(srcX({ ...x, own: 20 }), weights("x")[4]!);
+    expect(weights("x")).toEqual([22, 21, 21, 21, 15]);
     expect(srcYt({ ...yt, subscribers: 1_000_000 })).toBeCloseTo(45);
     expect(srcYt({ ...yt, avgViewsRecent: 100_000 })).toBeCloseTo(35);
     expect(srcYt({ ...yt, videos90d: 12 })).toBeCloseTo(20);
@@ -68,24 +72,24 @@ describe("SOURCE_PARTS", () => {
   });
 
   it("matches the engine's website, audit and Dune weights", () => {
-    expect(srcSite(site)).toBeCloseTo(30);
-    expect(srcSite({ ...site, feedItems: 100 })).toBeCloseTo(30 + 40);
-    expect(srcSite({ ...site, items90d: 8 })).toBeCloseTo(30 + 20);
-    expect(srcSite({ ...site, sitemapUrls: 150 })).toBeCloseTo(30 + 10);
-    expect(weights("site")).toEqual([30, 40, 20, 10]);
+    // v10: сайт без вмісту = 0 (плоских 30 за «сайт відповідає» немає); ваги 40/20/10 нормуються на 100.
+    const near = (got: number | null, shown: number) => expect(Math.abs(got! - shown)).toBeLessThan(1);
+    expect(srcSite(site)).toBe(0);
+    near(srcSite({ ...site, feedItems: 100 }), weights("site")[0]!);
+    near(srcSite({ ...site, items90d: 8 }), weights("site")[1]!);
+    near(srcSite({ ...site, sitemapUrls: 150 }), weights("site")[2]!);
+    expect(weights("site")).toEqual([57, 29, 14]);
     expect(srcAudits({ ...audits, earningsUsd: 1_000_000 })).toBeCloseTo(60);
     expect(srcAudits({ ...audits, high: 150 })).toBeCloseTo(40);
     expect(weights("audits")).toEqual([60, 40]);
     expect(srcDune({ spellbookPrs: 300, spellbookPrs12m: 0 })).toBeCloseTo(70);
     expect(srcDune({ spellbookPrs: 1, spellbookPrs12m: 50 })! - srcDune({ spellbookPrs: 1, spellbookPrs12m: 0 })!).toBeCloseTo(30);
     expect(weights("dune")).toEqual([70, 30]);
-    expect(srcLinks({ count: 10 })).toBe(100);
-    expect(weights("links")).toEqual([100]);
   });
 
-  it("counts team work in GitHub like the engine", () => {
-    expect(srcGhEng({ ...gh, teamCommits: 1000 })).toBeCloseTo(35);
-    expect(srcGhEng({ ...gh, teamStars: 5000 })).toBeCloseTo(25);
+  it("counts team commits, but not team stars, in GitHub like the engine", () => {
+    expect(Math.abs(srcGhEng({ ...gh, teamCommits: 1000 })! - weights("gh_eng")[0]!)).toBeLessThan(1);
+    expect(srcGhEng({ ...gh, teamStars: 5000 })).toBe(0);
   });
 
   it("has a column for every source any role uses", () => {

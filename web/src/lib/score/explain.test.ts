@@ -116,26 +116,19 @@ describe("explainRole", () => {
     ]);
   });
 
-  it("v7: a designer without work links is told to add them; every role can be scored", () => {
-    expect(explainRole("designer", null, kinds())).toMatchObject({ state: "waiting" });
-    expect(explainRole("designer", row(null, { formula: "v7", reason: "missing_anchor:links" }), kinds("x"))).toMatchObject({
-      state: "missing",
-      reason: "Add links to your work (portfolio, case studies, articles) in your profile to get a Designer score.",
-    });
+  it("v10: roles without public proof read well, with or without an old score row", () => {
+    for (const role of ["designer", "finance", "legal_compliance", "operations_support", "hr_recruiting"] as const) {
+      const note = "Not scored: no public proof for this role yet";
+      expect(explainRole(role, null, kinds()), role).toMatchObject({ state: "unscored", note });
+      // Рядок зі старого балу (v9) не показується числом.
+      expect(explainRole(role, row(70, { formula: "v9" }), kinds("github")), role).toMatchObject({ state: "unscored", note });
+      expect(explainRole(role, row(null, { formula: "v10", reason: "no_public_proof" }), kinds("github")), role).toMatchObject({ state: "unscored", note });
+    }
   });
 
-  it("v7: a general role with nothing connected says what to connect", () => {
-    expect(explainRole("finance", row(null, { formula: "v7", reason: "missing_anchor:best" }), kinds())).toMatchObject({
-      state: "missing",
-      reason: "Connect X, GitHub, a wallet or your website, or add links to your work, to get a Finance score.",
-    });
-  });
-
-  it("v7: suggests adding work links while there are none", () => {
-    const v = explainRole("engineer", row(60, { formula: "v7", core: { gh_eng: { weight: 40, value: 80 } }, bonus: { rep: { max: 25, value: 40 } } }), kinds("github", "x"));
-    expect(v.state === "scored" && v.tips).toContain("Add links to your work in your profile: they count for every role.");
-    const withLinks = explainRole("engineer", row(60, { formula: "v7", selfAddedLinks: true, core: { gh_eng: { weight: 40, value: 80 } } }), kinds("github"));
-    expect(withLinks.state === "scored" && withLinks.tips).not.toContain("Add links to your work in your profile: they count for every role.");
+  it("v10: never suggests adding links: they no longer count", () => {
+    const v = explainRole("engineer", row(60, { formula: "v10", core: { gh_eng: { weight: 40, value: 80 } }, bonus: { rep: { max: 25, value: 40 } } }), kinds("github", "x"));
+    expect(v.state === "scored" && v.tips.join(" ")).not.toMatch(/links/i);
   });
 
   it("waits when there is no row yet, and survives a broken breakdown", () => {
