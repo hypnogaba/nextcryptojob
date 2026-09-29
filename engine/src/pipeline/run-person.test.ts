@@ -74,8 +74,8 @@ describe("scoreUser", () => {
     expect(s.engineer!.score).toBeGreaterThan(0);
     expect(JSON.parse(s.engineer!.breakdown_json).gaps).toEqual({ site: "site: HTTP 404" });
     expect(s.designer).toMatchObject({ score: null });
-    // v7: Designer рахується з посилань на роботи; без них бал не ставимо.
-    expect(JSON.parse(s.designer!.breakdown_json).reason).toBe("missing_anchor:links");
+    // v10: Designer, як і загальні ролі, без власного джерела доказів: бал не ставимо, причина названа.
+    expect(JSON.parse(s.designer!.breakdown_json).reason).toBe("no_public_proof");
 
     expect(summary.gaps).toEqual(["site"]);
     expect(summary.sources.site).toMatchObject({ gap: "site: HTTP 404" });
@@ -148,7 +148,7 @@ describe("scoreUser", () => {
     }
   });
 
-  it("v7: посилання з profile_prefs дають джерело links і бал дизайнеру", async () => {
+  it("v7/v10: посилання з profile_prefs дають джерело links лише для показу; бал дизайнеру не ставиться", async () => {
     db.sqlite.exec(`CREATE TABLE profile_prefs (user_id TEXT PRIMARY KEY, links_json TEXT NOT NULL DEFAULT '[]')`);
     db.sqlite.prepare("INSERT INTO profile_prefs (user_id, links_json) VALUES (?, ?)")
       .run(USER, JSON.stringify([{ label: "Dribbble", url: "https://dribbble.com/a" }, { label: "Case", url: "https://a.dev/case" }, { bad: 1 }]));
@@ -156,7 +156,8 @@ describe("scoreUser", () => {
     db.addIdentity(USER, "x", "alice");
     await scoreUser(USER, { registry: fakeRegistry(), db, env: {}, now: () => NOW });
     const designer = JSON.parse(scores().designer!.breakdown_json);
-    expect(scores().designer!.score).toBeGreaterThan(0);
+    expect(scores().designer!.score).toBeNull();
+    expect(designer.reason).toBe("no_public_proof");
     expect(designer.sources.links).toBe(20);
     expect(designer.selfAddedLinks).toBe(true);
   });

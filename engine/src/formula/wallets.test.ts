@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EvmChainFacts, SolanaFacts } from "../types.js";
-import { aggregateWallets, solanaSwapsKnown } from "./wallets.js";
+import { aggregateWallets, SOLANA_UNKNOWN_SIGS_CAP, solanaSwapsKnown } from "./wallets.js";
 
 const NOW = Date.UTC(2026, 8, 12);
 const YEAR = 365.25 * 86400;
@@ -36,6 +36,20 @@ describe("aggregateWallets", () => {
     }, NOW)!;
     expect(w.tx).toBe(24);
     expect(w.chains).toEqual(["ethereum", "optimism", "solana"]);
+  });
+
+  it("v10 (E): вхідний спам не дає ні транзакцій, ні мережі; рахуються лише власні підписи", () => {
+    const spamOnly = aggregateWallets({ solana: { S1: sol({ sigs: 9000, sigsOk: 9000, sigsSigned: 0, sampleSeen: 150 }) } }, NOW)!;
+    expect(spamOnly.tx).toBe(0);
+    expect(spamOnly.chains).toEqual([]);
+    const mixed = aggregateWallets({ solana: { S1: sol({ sigs: 9000, sigsOk: 9000, sigsSigned: 40, sampleSeen: 150 }) } }, NOW)!;
+    expect(mixed.tx).toBe(40);
+    expect(mixed.chains).toEqual(["solana"]);
+  });
+
+  it("v10: без даних про підписантів (старі факти, мала вибірка) сирі підписи обмежені стелею, а не повні", () => {
+    const w = aggregateWallets({ solana: { S1: sol({ sigs: 9000, sigsSigned: null }), S2: sol({ sigs: 30 }) } }, NOW)!;
+    expect(w.tx).toBe(SOLANA_UNKNOWN_SIGS_CAP + 30);
   });
 
   it("Hyperliquid рахується мережею й торгівлею, лише коли є обсяг або угоди", () => {

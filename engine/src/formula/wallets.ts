@@ -2,12 +2,17 @@ import type { PersonFacts } from "../types.js";
 
 /** Замала вибірка Solana (транзакцій) = прогалина в обмінах, а не число. */
 export const SOLANA_MIN_SAMPLE = 50;
+/**
+ * v10: скільки підписів Solana вважаємо, коли невідомо, які з них підписала сама адреса (факти до v10 або
+ * замала вибірка). Сирий лічильник надувається вхідним спамом, тому стеля.
+ */
+export const SOLANA_UNKNOWN_SIGS_CAP = 100;
 const YEAR_S = 365.25 * 86400;
 
 /** Усі гаманці людини, зведені для джерел onchain і trading (§4). */
 export type WalletSummary = {
   ageYears: number | null;   // від найранішої відомої транзакції
-  tx: number;                // Σ EVM sent + Σ Solana sigs
+  tx: number;                // Σ EVM sent + Σ Solana підписів самої адреси (v10)
   chains: string[];          // мережі з активністю, Hyperliquid рахується
   trades: number;            // Σ EVM swaps + Σ Solana swaps + Σ Hyperliquid fillsRecent
   tradeChains: string[];
@@ -16,6 +21,11 @@ export type WalletSummary = {
 };
 
 type SolanaSwapFacts = { sigsOk: number; sigsCapped: boolean; sampleSeen: number; sampleSwaps: number; swaps: number | null };
+
+/** Власні підписи адреси: оцінка за вибіркою, а без неї обережна стеля замість сирого числа. */
+export function solanaOwnSigs(s: { sigs: number; sigsSigned?: number | null }): number {
+  return typeof s.sigsSigned === "number" ? s.sigsSigned : Math.min(s.sigs, SOLANA_UNKNOWN_SIGS_CAP);
+}
 
 /** Чи прочитано всі успішні транзакції адреси, а список підписів не обрізаний (договір §3). */
 export const solanaFullSample = (s: SolanaSwapFacts): boolean => !s.sigsCapped && s.sampleSeen === s.sigsOk;
@@ -67,8 +77,10 @@ export function aggregateWallets(f: PersonFacts, nowMs: number): WalletSummary |
   }
   for (const s of sol) {
     if (s.firstTs && !s.sigsCapped) firsts.push(s.firstTs);
-    if (s.sigs > 0) chains.add("solana");
-    tx += s.sigs;
+    const own = solanaOwnSigs(s);
+    // Мережа з активністю, лише якщо адреса сама щось підписувала: вхідний спам не робить її «активною».
+    if (own > 0) chains.add("solana");
+    tx += own;
     const swaps = solanaSwapsKnown(s);
     if (swaps === null) tradeGap = true;
     trades += swaps ?? 0;
