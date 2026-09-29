@@ -370,6 +370,8 @@ export async function loadJobsPage(d: D1Database, jobs: JobsDb, userId: string):
     salary_min: user.salary_min,
     salary_currency: user.salary_currency,
     role_text: user.role_text ?? null,
+    target_text: user.target_text,
+    timezone: user.timezone,
   };
   const step = normalizeSavedStep(parseSavedStep(user.onboarding_step), user.scoring === 1);
   const fit: FitContext = { words: user.target_text?.trim() || null, scores };

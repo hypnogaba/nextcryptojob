@@ -6,6 +6,7 @@ import {
   type DigestPick,
   type DigestProfile,
   formatSalary,
+  levelOfScores,
   placeMatch,
   selectJobs,
   workModes,
@@ -66,6 +67,10 @@ export type BriefRow = {
   salary_currency: string | null;
   /** Своя роль словами (0020_role_text). */
   role_text?: string | null;
+  /** Що людина шукає своїми словами: рівень («senior») для м'якого ранжування. */
+  target_text?: string | null;
+  /** users.timezone: регіон людини для віддалених вакансій з обмеженням («US only»). */
+  timezone?: string | null;
 };
 
 /** Анкета для підбору, як profileOf у engine/src/digest/schedule.ts (тест звіряє). */
@@ -73,6 +78,7 @@ export function profileOf(u: BriefRow): DigestProfile {
   return {
     roles: parseRoles(u.roles), remoteMode: u.remote_mode, city: u.city?.trim() || null,
     salaryMin: u.salary_min, salaryCurrency: u.salary_currency, roleText: u.role_text?.trim() || null,
+    targetText: u.target_text?.trim() || null, timezone: u.timezone?.trim() || null,
   };
 }
 
@@ -206,7 +212,8 @@ async function companyJobs(db: D1Database, env: { SITE_URL?: string }, label: st
 export async function instantMatches(
   deps: InstantDeps, brief: BriefRow, exclude: ReadonlySet<string>, fit: FitContext = NO_FIT,
 ): Promise<InstantMatches> {
-  const profile = profileOf(brief);
+  // Рівень картки для м'якого ранжування за сенйорністю: як у щоденній добірці engine.
+  const profile: DigestProfile = { ...profileOf(brief), scoreLevel: levelOfScores(fit.scores) };
   if (profile.roles.length === 0) return { state: "none", reason: { kind: "no_roles" } };
   const [company, crawl, profiles] = await Promise.all([
     companyJobs(deps.db, deps.env, "jobs now"), crawlPool(deps.jobs, deps.now), companyProfiles(deps.jobs),
@@ -233,7 +240,7 @@ export async function instantMatches(
  * не показує розділ причин, без порожнього блоку.
  */
 export async function reasonsForRef(deps: InstantDeps, ref: string, brief: BriefRow, fit: FitContext = NO_FIT): Promise<string[] | null> {
-  const profile = profileOf(brief);
+  const profile: DigestProfile = { ...profileOf(brief), scoreLevel: levelOfScores(fit.scores) };
   if (profile.roles.length === 0) return null;
   const [company, crawl] = await Promise.all([companyJobs(deps.db, deps.env, "job reasons"), crawlPool(deps.jobs, deps.now)]);
   if (!crawl) return null;

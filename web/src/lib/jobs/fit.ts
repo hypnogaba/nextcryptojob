@@ -21,7 +21,7 @@ export interface FitContext {
   scores: Partial<Record<RoleKey, number | null>>;
 }
 
-export type FitPick = Pick<DigestPick, "job" | "role" | "place" | "meetsSalary" | "keyword">;
+export type FitPick = Pick<DigestPick, "job" | "role" | "place" | "meetsSalary" | "keyword" | "levelFit">;
 
 /** Слова, які нічого не кажуть про вакансію: службові, загальні для крипто, місце, рівень. */
 const STOP = new Set([
@@ -148,6 +148,8 @@ export function fitReasons(pick: FitPick, profile: DigestProfile, ctx: FitContex
   if (typeof score === "number" && score >= SCORE_REASON_MIN) {
     extra.push(`Your ${role} score is ${Math.round(score)}, from your public work.`);
   }
+  // Рівень названо в назві вакансії і він у вікні людини (слова чи бал); найнижча за вагою причина, тож лише коли є місце.
+  if (pick.levelFit && !(level && levelOf(pick.job.title) === level)) extra.push("The level fits you.");
   return [first, ...extra].slice(0, MAX_REASONS).map((r) => r.replace(/[\u2014\u2013]/g, "-"));
 }
 

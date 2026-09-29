@@ -8,7 +8,13 @@
 // - свіжість: спершу опубліковані за 30 днів, новіші спершу; ще відкриті давніші (пул їх уже
 //   відібрав, jobs.ts) лише добирають до п'яти, коли свіжих мало, і пояснення це каже;
 // - одна вакансія на компанію, нічого з уже надісланого цій людині;
-// - не більше однієї вакансії компанії (company_jobs_live), і лише з роллю людини.
+// - не більше однієї вакансії компанії (company_jobs_live), і лише з роллю людини;
+// - рівень м'яко (B5, аудит 29.09): сенйорність вакансії з назви проти рівня людини (її слова, а без слів
+//   бал); розбіжність на 2+ щаблі опускає вакансію, але не ховає; невідомий рівень з будь-якого боку не карається;
+// - віддалено з обмеженням («US only», «EMEA», «UTC-3 to UTC+2», geo.ts): коли регіон людини (users.timezone)
+//   відомий і не підходить, вакансії немає; коли невідомий, вона лише нижче. Місто «Paris» не збігається
+//   з «Paris, Texas», якщо країна людини відома.
+import { fitsRestriction, type PersonGeo, parseRestriction, personGeo, sameCountry, UNKNOWN_GEO } from "./geo.js";
 import { ROLE_NAMES } from "./roles.js";
 import type { RoleKey } from "../types.js";
 
@@ -72,6 +78,12 @@ export interface DigestProfile {
   salaryCurrency: string | null;
   /** users.role_text: своя роль словами людини; вакансія з усіма словами однієї фрази в назві теж підходить. */
   roleText?: string | null;
+  /** users.target_text: що людина шукає своїми словами; лише для рівня («senior», «5 years»). */
+  targetText?: string | null;
+  /** Рівень картки 1-10 за найкращою роллю (levelOfScores); null або немає = балу ще немає. */
+  scoreLevel?: number | null;
+  /** users.timezone (IANA): звідси регіон людини для віддалених вакансій з обмеженням. */
+  timezone?: string | null;
 }
 
 export interface DigestPick {
@@ -86,6 +98,8 @@ export interface DigestPick {
   place: "remote" | "city";
   /** true дотягує до мінімуму, false нижче, null невідомо (немає зарплати або мінімуму). */
   meetsSalary: boolean | null;
+  /** Рівень названий у назві вакансії і входить у рівень людини: причина «The level fits you». */
+  levelFit?: boolean;
   why: string;
 }
 
@@ -161,13 +175,85 @@ export function isRemoteLocation(remoteFlag: boolean, location: string | null): 
   return remoteFlag || REMOTE_WORDS.test(text);
 }
 
-/** Як вакансія підходить за місцем: 'city', 'remote' або null (не підходить). Місто важливіше. */
-export function placeMatch(job: DigestJob, modes: ReadonlyArray<"remote" | "city">, city: string | null): "remote" | "city" | null {
-  if (modes.includes("city") && city && mentionsCity(job.placeText, city)) return "city";
+/**
+ * Як вакансія підходить за місцем: 'city', 'remote' або null (не підходить). Місто важливіше. Коли вакансія
+ * називає країну («Paris, Texas»), а країна людини відома й інша, це не те місто.
+ */
+export function placeMatch(
+  job: DigestJob, modes: ReadonlyArray<"remote" | "city">, city: string | null, geo: PersonGeo = UNKNOWN_GEO,
+): "remote" | "city" | null {
+  if (modes.includes("city") && city && mentionsCity(job.placeText, city) && sameCountry(job.placeText, geo.country)) return "city";
   // Національна дошка (country не null) = «віддалено в межах цієї країни»; країни людини ми не знаємо.
   if (modes.includes("remote") && job.remote && !(job.source === "nextrole" && job.country)) return "remote";
   return null;
 }
+
+// ---------------- рівень ----------------
+
+/** 0 intern, 1 junior, 2 mid, 3 senior, 4 staff/principal, 5 lead/head, 6 director/VP/C-level. */
+export type Seniority = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+const LEVEL_WORDS: ReadonlyArray<[RegExp, Seniority]> = [
+  [/\b(interns?|internship|trainee|apprentice|working student)\b/i, 0],
+  [/\b(junior|jr|entry[- ]level|graduate)\b/i, 1],
+  [/\b(mid|mid[- ]level|middle|intermediate)\b/i, 2],
+  [/\b(senior|sr)\b/i, 3],
+  [/\b(staff|principal|distinguished)\b/i, 4],
+  [/\b(lead|head|team lead)\b/i, 5],
+  [/\b(directors?|vp|svp|evp|vice president|chief|cto|ceo|coo|cfo|cmo|cpo|ciso)\b/i, 6],
+];
+
+/** Усі рівні, названі в тексті, від найнижчого. */
+function levelsIn(text: string): Seniority[] {
+  return LEVEL_WORDS.filter(([re]) => re.test(text)).map(([, rank]) => rank).sort((a, b) => a - b);
+}
+
+/** Рівень вакансії з назви: найвищий названий («Senior Director» це 6); null, коли назва рівня не каже. */
+export function jobSeniority(title: string): Seniority | null {
+  const found = levelsIn(title);
+  return found.length ? found[found.length - 1]! : null;
+}
+
+/** Що людина готова взяти: від lo до hi включно. */
+export interface LevelRange { lo: Seniority; hi: Seniority }
+
+/** Рівень картки 1-10 за найкращим балом ролей: min(10, floor(score/10) + 1), як lib/card/tiers; null без балів. */
+export function levelOfScores(scores: Partial<Record<RoleKey, number | null>>): number | null {
+  const best = Math.max(-1, ...Object.values(scores).filter((v): v is number => typeof v === "number" && Number.isFinite(v)));
+  return best < 0 ? null : Math.min(10, Math.floor(best / 10) + 1);
+}
+
+/**
+ * Рівень людини. Її власні слова переважають («senior or lead», «junior», «5 years of experience»), а без слів
+ * рівень картки: 1-2 це від стажера до mid, 3-5 від junior до senior, 6-7 від mid до staff, 8+ від senior вище.
+ * Бал каже про публічні докази, а не про посаду, тож вікно широке. null: нічого не знаємо.
+ */
+export function personLevel(profile: Pick<DigestProfile, "roleText" | "targetText" | "scoreLevel">): LevelRange | null {
+  const text = `${profile.roleText ?? ""} ${profile.targetText ?? ""}`;
+  const words = levelsIn(text);
+  if (words.length) return { lo: words[0]!, hi: words[words.length - 1]! };
+  const years = /\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b/i.exec(text);
+  if (years) {
+    const y = Number(years[1]);
+    const r: Seniority = y <= 2 ? 1 : y <= 5 ? 2 : 3;
+    return { lo: r, hi: r };
+  }
+  const lv = profile.scoreLevel;
+  if (typeof lv !== "number" || !Number.isFinite(lv) || lv < 1) return null;
+  if (lv <= 2) return { lo: 0, hi: 2 };
+  if (lv <= 5) return { lo: 1, hi: 3 };
+  if (lv <= 7) return { lo: 2, hi: 4 };
+  return { lo: 3, hi: 6 };
+}
+
+/** Скільки щаблів вакансія від того, що бере людина; 0 усередині вікна і коли не знаємо одне з двох. */
+export function levelDistance(job: Seniority | null, person: LevelRange | null): number {
+  if (job === null || person === null) return 0;
+  return job < person.lo ? person.lo - job : job > person.hi ? job - person.hi : 0;
+}
+
+/** Розбіжність від цього щабля вакансію опускає. */
+export const LEVEL_PENALTY_STEPS = 2;
 
 // ---------------- своя роль словами ----------------
 
@@ -321,18 +407,22 @@ export function whyLine(pick: Omit<DigestPick, "why">, profile: DigestProfile, n
 
 // ---------------- відбір ----------------
 
-type Candidate = Omit<DigestPick, "why"> & { fresh: boolean; key: [number, number, number, number, string] };
+type Candidate = Omit<DigestPick, "why"> & { fresh: boolean; key: [number, number, number, number, number, string] };
 
-/** Менший ключ = вище: свіжа перед давнішою, місто перед віддаленим (коли обидва), зарплата, свіжість, ref. */
-function rankKey(place: "remote" | "city", meets: boolean | null, job: DigestJob, bothModes: boolean, fresh: boolean): Candidate["key"] {
+/**
+ * Менший ключ = вище: свіжа перед давнішою, потім штраф (рівень і регіон), місто перед віддаленим (коли обидва),
+ * зарплата, свіжість, ref. Штраф 0 нічого не знайдено проти вакансії, 1 одна розбіжність чи невідомий регіон
+ * людини для вакансії з обмеженням, 2 обидві.
+ */
+function rankKey(place: "remote" | "city", meets: boolean | null, job: DigestJob, bothModes: boolean, fresh: boolean, penalty: number): Candidate["key"] {
   const placeTier = bothModes && place === "remote" ? 1 : 0;
   // Дотягує 0, невідомо 1, нижче 2: відсутня зарплата ніколи не нижча за відому погану.
   const salaryTier = meets === true ? 0 : meets === null ? 1 : 2;
-  return [fresh ? 0 : 1, placeTier, salaryTier, -(ageFrom(job) ?? 0), job.ref];
+  return [fresh ? 0 : 1, penalty, placeTier, salaryTier, -(ageFrom(job) ?? 0), job.ref];
 }
 
 function compareKeys(a: Candidate["key"], b: Candidate["key"]): number {
-  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || (a[4] < b[4] ? -1 : a[4] > b[4] ? 1 : 0);
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || a[4] - b[4] || (a[5] < b[5] ? -1 : a[5] > b[5] ? 1 : 0);
 }
 
 function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: SelectOptions, excludedDedupe: ReadonlySet<string>,
@@ -341,6 +431,9 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
   // Місце не задано: віддалено, бо лише це не вимагає міста.
   const effectiveModes: ReadonlyArray<"remote" | "city"> = modes.length ? modes : ["remote"];
   const both = effectiveModes.includes("remote") && effectiveModes.includes("city") && !!profile.city;
+  // Де людина і який рівень вона бере: раз на прогін, не на вакансію.
+  const geo = personGeo(profile.timezone, profile.city, o.now);
+  const level = personLevel(profile);
   const out: Candidate[] = [];
   for (const job of pool) {
     if (o.exclude.has(job.ref)) continue;
@@ -351,13 +444,30 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
     const keyword = own ? null : keywordHit(job.title, phrases);
     if (!own && !keyword) continue;
     const role: RoleKey | null = own ?? job.roles[0] ?? null;
-    const place = placeMatch(job, effectiveModes, profile.city);
+    const place = placeMatch(job, effectiveModes, profile.city, geo);
     if (!place) continue;
+    let penalty = 0;
+    if (place === "remote") {
+      // Віддалено, але «US only» чи «EMEA»: відсіюємо, лише коли знаємо, де людина, і вона не підходить.
+      const restriction = parseRestriction(job.location, job.title);
+      if (restriction) {
+        const fits = fitsRestriction(restriction, geo);
+        if (fits === false) continue;
+        if (fits === null) penalty++;
+      }
+    }
+    const seniority = jobSeniority(job.title);
+    const distance = levelDistance(seniority, level);
+    if (distance >= LEVEL_PENALTY_STEPS) penalty++;
+    const levelFit = seniority !== null && level !== null && distance === 0;
     // Живе все, що в пулі (jobs.ts); 30 днів лише ділять вакансії зі сканування на свіжі й давніші.
     // Вакансії компаній живуть, поки відкриті й оплачені (company_jobs_live), і завжди свіжі.
     const fresh = job.source !== "nextrole" || isFresh(job, o.now);
     const meets = meetsFloor(job, profile.salaryMin, profile.salaryCurrency);
-    out.push({ job, role, ...(keyword ? { keyword } : {}), place, meetsSalary: meets, fresh, key: rankKey(place, meets, job, both, fresh) });
+    out.push({
+      job, role, ...(keyword ? { keyword } : {}), place, meetsSalary: meets, ...(levelFit ? { levelFit } : {}), fresh,
+      key: rankKey(place, meets, job, both, fresh, penalty),
+    });
   }
   return out.sort((a, b) => compareKeys(a.key, b.key));
 }

@@ -191,6 +191,7 @@ describe("Jobs for you now", () => {
     expect(body("../../../../engine/src/digest/schedule.ts")).toBe(body("./instant.ts"));
     expect(profileOf({ roles: '["trader","bogus"]', remote_mode: "remote,city", city: "  Kyiv ", salary_min: 5000, salary_currency: "EUR" })).toEqual({
       roles: ["trader"], remoteMode: "remote,city", city: "Kyiv", salaryMin: 5000, salaryCurrency: "EUR", roleText: null,
+      targetText: null, timezone: null,
     });
     expect(profileOf({ roles: '["bd"]', remote_mode: "remote", city: null, salary_min: null, salary_currency: null, role_text: " Tokenomics " })).toMatchObject({
       roleText: "Tokenomics",

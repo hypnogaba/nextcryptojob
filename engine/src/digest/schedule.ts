@@ -23,7 +23,7 @@ import {
   type CompanyProfile, estimateText, loadCompanyPool, loadCompanyProfiles, loadCrawlPool, type PoolStats, type SalaryEstimate,
 } from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
-import { countMatches, type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
+import { countMatches, type DigestJob, type DigestPick, type DigestProfile, formatSalary, levelOfScores, selectJobs } from "./match.js";
 import { isRoleKey, parseRoles } from "./roles.js";
 import { tokenChip } from "./token.js";
 
@@ -146,10 +146,14 @@ export async function loadDigestUsers(db: Db, log: (l: string) => void, onlyUser
   }
 }
 
-export function profileOf(u: Pick<DigestUserRow, "roles" | "remote_mode" | "city" | "salary_min" | "salary_currency" | "role_text">): DigestProfile {
+export function profileOf(
+  u: Pick<DigestUserRow, "roles" | "remote_mode" | "city" | "salary_min" | "salary_currency" | "role_text"> &
+    Partial<Pick<DigestUserRow, "target_text" | "timezone">>,
+): DigestProfile {
   return {
     roles: parseRoles(u.roles), remoteMode: u.remote_mode, city: u.city?.trim() || null,
     salaryMin: u.salary_min, salaryCurrency: u.salary_currency, roleText: u.role_text?.trim() || null,
+    targetText: u.target_text?.trim() || null, timezone: u.timezone?.trim() || null,
   };
 }
 
@@ -402,7 +406,9 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       const exclude = p.row && db ? await sentRefs(db, p.row.id) : new Set<string>();
       // Пояснення словами людини (fit.ts): сам вибір від цього не залежить.
       const fit: FitContext = { words: p.row?.target_text ?? null, scores: p.row && db ? await userScores(db, p.row.id) : {} };
-      const picks = selectJobs(pool, p.profile, { now, exclude }).map((pk) => ({ ...pk, why: fitLine(pk, p.profile, fit, now) }));
+      // Рівень картки людини для м'якого ранжування за сенйорністю (match.ts personLevel).
+      const profile: DigestProfile = { ...p.profile, scoreLevel: levelOfScores(fit.scores) };
+      const picks = selectJobs(pool, profile, { now, exclude }).map((pk) => ({ ...pk, why: fitLine(pk, profile, fit, now) }));
       if (dry) {
         summary.dry.push({
           who: label, local: `${p.clock.date} ${String(p.clock.hour).padStart(2, "0")}h ${p.clock.tz}`,
@@ -415,7 +421,7 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       const plan = p.plan as Exclude<ChannelPlan, { skip: string }>;
       const retryId = retryOf.get(row.id);
       // Скільки вакансій підійшло саме цій людині (а не розмір пулу до фільтрів).
-      const mine = { ...extras, checked: countMatches(pool, p.profile, { now, exclude }) };
+      const mine = { ...extras, checked: countMatches(pool, profile, { now, exclude }) };
       const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, retryId ?? newId(), log, mine, waitBudget, !!retryId);
       if (retryId && typeof outcome === "object") summary.retried++;
       if (outcome === "empty") summary.empty++;
