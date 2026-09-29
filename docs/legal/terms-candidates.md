@@ -150,10 +150,7 @@ your account. The free-for-candidates rule in section 1 will not change.
 These terms are governed by French law. If you live in another country, you keep the
 protection of the mandatory rules of that country.
 
-If you have a complaint, write to hello@nextcryptojob.xyz first. If we cannot solve it, you can
-use a consumer mediator free of charge (art. L612-1 French Consumer Code,
-<https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032224805>): [MEDIATOR NAME AND
-WEBSITE].
+If you have a complaint, write to hello@nextcryptojob.xyz first.
 
 ## 16. Contact
 
