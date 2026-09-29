@@ -1,23 +1,19 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { H2, LINK, PAGE, PageTitle } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { loadBillingState, type BillingState, type SubscriptionView } from "@/lib/billing/access";
-import { requestOrigin } from "@/lib/billing/origin";
 import {
   findConfirmedMonth, loadInvoice, readSolanaPayConfig, type SolanaPayEnv, type SolanaPayInvoice, solanaPayUrl,
 } from "@/lib/billing/solana-pay";
 import { solanaPayQrSvg } from "@/lib/billing/solana-pay-qr";
 import { stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
 import { resolveWebActor, WEB_BURST_TEXT, type ActionContext } from "@/lib/crm/context";
-import { CRM_HOME } from "@/lib/crm/company";
 import { can } from "@/lib/crm/permissions";
 import { appEnv, db } from "@/lib/db";
 import { fromSqlTime } from "@/lib/time";
-import { readX402Config, type X402Env } from "@/lib/x402/config";
 import { checkSolanaPayInvoiceAction, createSolanaPayInvoiceAction, openPortalAction, type BillingError } from "./actions";
 
 export const metadata: Metadata = { title: "Billing", robots: { index: false } };
@@ -78,7 +74,7 @@ function Banner({ tone, children }: { tone: Tone; children: React.ReactNode }) {
 }
 
 /** Заголовок і пояснення поточного стану доступу. */
-function describe(state: BillingState): { label: string; detail: string } {
+function describe(state: BillingState, now: Date): { label: string; detail: string } {
   if (state.companyStatus === "pending_review") {
     return { label: "Under review", detail: "Your application is under review." };
   }
@@ -105,12 +101,13 @@ function describe(state: BillingState): { label: string; detail: string } {
       detail: cur.cancelAt ? `Active until ${date(cur.cancelAt)}. It will not renew.` : `Active. Renews on ${until}.`,
     };
   }
-  if (state.stripe?.status === "canceled") {
-    return { label: "Canceled", detail: "Your card subscription has ended. Search and intros work through the API with x402 pay per request." };
+  // Доступ закінчився: кажемо, коли, і ведемо платити знову (кнопка Solana Pay нижче). x402 поки не працює, ним не лякаємо.
+  if (state.lastPeriodEnd && fromSqlTime(state.lastPeriodEnd).getTime() <= now.getTime()) {
+    return { label: "Ended", detail: `Your paid period ended on ${date(state.lastPeriodEnd)}. Pay again to get access back.` };
   }
   return {
     label: "No subscription",
-    detail: "Search and intros work through the API with x402 pay per request. Subscribe for full CRM access.",
+    detail: "Pay 100 USDC on Solana for 30 days of full access: the CRM, the API and MCP.",
   };
 }
 
@@ -292,61 +289,36 @@ function SolanaPaySection({
   );
 }
 
-/** Два шляхи після реєстрації компанії (п.8, 15.09: Stripe прибрано, лишились Solana Pay і x402 pay-per-request). */
+/** Після реєстрації компанії (п.8, 15.09: Stripe прибрано; x402 pay-per-request вимкнений, «coming soon»). */
 function Welcome() {
   return (
     <section aria-labelledby="welcome-heading" className="grid gap-4 rounded-xl border-[1.5px] border-line bg-surface p-4 sm:p-6">
       <h2 id="welcome-heading" className={H2}>
-        Your company is ready. Choose how to start.
+        Your company is ready. Pay to start.
       </h2>
-      <ol className="grid gap-3 text-sm text-ink">
-        <li>
-          <a href="#solana-pay-heading" className={LINK}>
-            Pay 100 USDC on Solana
-          </a>{" "}
-          from your own wallet: full CRM for your team, 30 days.
-        </li>
-        <li>
-          <Link href={CRM_HOME} className={LINK}>
-            Continue with pay per request (API only)
-          </Link>
-          : search and intros through the API, paid per request with x402.
-        </li>
-      </ol>
+      <p className="text-sm text-ink">
+        <a href="#solana-pay-heading" className={LINK}>
+          Pay 100 USDC on Solana
+        </a>{" "}
+        from your own wallet: full CRM, API and MCP for your team, 30 days.
+      </p>
     </section>
   );
 }
 
-function UsdcSection({ origin, enabled }: { origin: string; enabled: boolean }) {
-  const endpoint = `${origin}/api/v1/billing/usdc-month`;
-  const curl = [
-    "# 1. Ask for the payment terms. The answer is 402 with a PAYMENT-REQUIRED header.",
-    `curl -i -X POST ${endpoint} \\`,
-    '  -H "Authorization: Bearer $NCJ_API_KEY"',
-    "",
-    "# 2. Sign the payment with your x402 client, then send the same request with it.",
-    `curl -X POST ${endpoint} \\`,
-    '  -H "Authorization: Bearer $NCJ_API_KEY" \\',
-    '  -H "PAYMENT-SIGNATURE: $PAYMENT"',
-  ].join("\n");
+/**
+ * x402 (оплата за запит в USDC через API) вимкнений: немає фасилітатора. Не показуємо ні кнопки, ні
+ * curl-рецепта, які б виглядали робочими (аудит 29.09, D1): лише чесне «coming soon».
+ */
+function X402Soon() {
   return (
     <section aria-labelledby="usdc-heading" className="scroll-mt-6 rounded-xl border border-line bg-surface p-4 sm:p-6">
       <h2 id="usdc-heading" className={H2}>
-        Pay with USDC (x402)
+        Pay per request with x402 (coming soon)
       </h2>
-      {enabled ? null : <p className="mt-3 font-semibold text-ink">USDC payments open soon.</p>}
       <p className="mt-3 max-w-[65ch] text-sm text-ink-muted">
-        Pay 100 USDC on Solana for 30 days of access. Your agent or any x402 client can pay with an API key of this
-        company. There is no automatic renewal: pay again and the next 30 days start when the current ones end.
-      </p>
-      <div className="mt-4 overflow-x-auto rounded-md border border-line bg-wash">
-        <pre className="p-4 font-mono text-xs leading-relaxed text-ink">
-          <code>{curl}</code>
-        </pre>
-      </div>
-      <p className="mt-3 text-sm text-ink-muted">
-        Over MCP, call the <code className="font-mono">buy_usdc_month</code> tool and pass the payment in{" "}
-        <code className="font-mono">{'_meta["x402/payment"]'}</code>.
+        Paying per request through the API, with no subscription, is not available yet. For now, access is a
+        subscription: 100 USDC on Solana for 30 days, above.
       </p>
     </section>
   );
@@ -384,12 +356,10 @@ export default async function BillingPage({
   // Плашки минулого Stripe-стану (якщо він у когось лишився) керуються тим самим правом: /company/billing
   // більше не пропонує картку (п.8), але вже наявний Stripe-стан не втрачає кнопку порталу.
   const cardsEnabled = stripeSettings(env as unknown as StripeEnv).enabled;
-  const usdcEnabled = readX402Config(env as unknown as X402Env).enabled;
   const solanaPay = readSolanaPayConfig(env as unknown as SolanaPayEnv);
   const isOwner = can(ctx.actor.role, "billing.stripe");
-  const origin = requestOrigin(await headers());
   const now = new Date();
-  const status = describe(state);
+  const status = describe(state, now);
 
   const invoiceId = first(params.invoice);
   const invoice = invoiceId ? await loadInvoice(db(), ctx.actor.companyId, invoiceId) : null;
@@ -419,7 +389,7 @@ export default async function BillingPage({
           payTo={solanaPay.enabled ? solanaPay.payTo : null}
           periodEnd={periodEnd}
         />
-        <UsdcSection origin={origin} enabled={usdcEnabled} />
+        <X402Soon />
       </div>
     </>,
   );

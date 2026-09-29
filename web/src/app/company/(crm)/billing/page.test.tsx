@@ -76,18 +76,31 @@ describe("billing page (п.8, 15.09: card payment removed, Solana Pay in its pla
     await signIn(owner);
   });
 
-  it("without NCJ_PAY_ADDRESS/SOLANA_RPC_URL says Solana Pay is not set up, and shows the USDC x402 steps", async () => {
+  it("without NCJ_PAY_ADDRESS/SOLANA_RPC_URL says Solana Pay is not set up, and shows x402 only as coming soon", async () => {
     const html = await render();
     expect(html).toContain("Pay with Solana Pay");
     expect(html).toContain("Solana Pay is not set up yet. Write to support@nextcryptojob.xyz for access.");
     expect(html).not.toContain("Card payments");
     expect(html).not.toContain("Start 14-day trial");
     expect(html).not.toContain("plus VAT");
-    expect(html).toContain("Pay with USDC (x402)");
-    expect(html).toContain("curl -i -X POST https://nextcryptojob.xyz/api/v1/billing/usdc-month");
-    expect(html).toContain('-H "PAYMENT-SIGNATURE: $PAYMENT"');
-    expect(html).toContain("buy_usdc_month");
+    expect(html).toContain("Pay per request with x402 (coming soon)");
+    // Ніщо не виглядає робочим: ні curl-рецепта, ні інструмента MCP, ні «працює через API з x402».
+    expect(html).not.toContain("curl");
+    expect(html).not.toContain("PAYMENT-SIGNATURE");
+    expect(html).not.toContain("buy_usdc_month");
+    expect(html).not.toContain("work through the API with x402");
     expect(html).toContain("No subscription");
+  });
+
+  it("a lapsed subscription says when the paid period ended and offers to pay again, not x402", async () => {
+    setup(SOLANA_PAY_ON);
+    await signIn(owner);
+    addSubscription(harness.raw, company, { provider: "usdc", status: "active", end: "2026-01-05 00:00:00" });
+    const html = await render();
+    expect(html).toContain("Your paid period ended on Jan 5, 2026.");
+    expect(html).toContain("Pay again");
+    expect(html).toContain("Get payment link");
+    expect(html).not.toContain("x402 pay per request");
   });
 
   it("the checkout button, if pressed anyway, still redirects with not_configured (Stripe code stays, just disconnected from the UI)", async () => {
@@ -192,7 +205,7 @@ describe("billing page with Stripe (code stays for a legacy customer, no new che
   it("shows a canceled Stripe subscription's status, without a card upsell", async () => {
     await stripeSays({ id: "sub_old", customer: "cus_acme", status: "canceled", trialEnd: days(-40), canceledAt: days(-10) });
     const html = await render();
-    expect(html).toContain("Canceled");
+    expect(html).toContain("Your paid period ended on");
     expect(html).not.toContain("Start 14-day trial");
     expect(html).not.toContain("Subscribe</button>");
   });

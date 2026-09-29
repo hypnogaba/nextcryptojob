@@ -104,6 +104,8 @@ export interface BillingState {
   stripeCustomerId: string | null;
   /** Пробний ще не використано ні компанією, ні людиною, що дивиться (hadTrial). */
   trialAvailable: boolean;
+  /** Кінець найпізнішого оплаченого чи пробного періоду будь-якої підписки (для «період закінчився ...»); null, якщо підписок не було. */
+  lastPeriodEnd: string | null;
 }
 
 type SubRow = {
@@ -146,7 +148,7 @@ export async function loadBillingState(
   companyId: string,
   opts: { userId?: string | null } = {},
 ): Promise<BillingState | null> {
-  const [company, current, stripe, customer, trial, open] = await db.batch([
+  const [company, current, stripe, customer, trial, open, last] = await db.batch([
     db
       .prepare(
         `SELECT c.id, c.name, c.status, c.billing_email, a.access FROM companies c
@@ -174,6 +176,11 @@ export async function loadBillingState(
       .bind(companyId),
     db.prepare(HAD_TRIAL).bind(companyId, opts.userId ?? null),
     db.prepare(OPEN_STRIPE).bind(companyId),
+    db
+      .prepare(`SELECT MAX(CASE WHEN status = 'canceled' THEN COALESCE(canceled_at, current_period_end)
+                       ELSE COALESCE(current_period_end, trial_end) END) AS ends
+           FROM subscriptions WHERE company_id = ?`)
+      .bind(companyId),
   ]);
 
   const c = company.results[0] as
@@ -196,5 +203,6 @@ export async function loadBillingState(
     stripeOpen: open.results.length > 0,
     stripeCustomerId: cust?.stripe_customer_id ?? null,
     trialAvailable: trial.results.length === 0,
+    lastPeriodEnd: (last.results[0] as { ends: string | null } | undefined)?.ends ?? null,
   };
 }

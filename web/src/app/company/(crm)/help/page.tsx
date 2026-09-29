@@ -85,8 +85,8 @@ export default async function CompanyHelpPage() {
               <Link href="/company/billing" className={LINK}>
                 Billing
               </Link>{" "}
-              for the payment link and QR: payment in crypto, one payment for 30 days. Or pay per request through the
-              API with USDC (x402), no subscription.
+              for the payment link and QR: payment in crypto, one payment for 30 days. Paying per request through the
+              API (x402) is coming soon.
             </p>
           </Q>
           <Q q="Do you hold our funds or keys?">
@@ -128,7 +128,7 @@ export default async function CompanyHelpPage() {
           <Link href="/company/developers" className={LINK}>
             Developers
           </Link>
-          . Full reference (OpenAPI, MCP tools, x402 payment) is at{" "}
+          . Full reference (OpenAPI and MCP tools) is at{" "}
           <Link href="/agents" className={LINK}>
             /agents
           </Link>

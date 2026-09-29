@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Agents",
   description:
-    "REST and MCP for crypto jobs and candidates. Job search is free. Candidate search takes a company key or $0.50 in USDC per search with x402.",
+    "REST and MCP for crypto jobs and candidates. Job search is free. Candidate search takes a company key with a subscription. Pay per request with x402 is coming soon.",
 };
 
 const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
@@ -20,9 +20,8 @@ const JOBS_LOG: readonly (readonly [string, string])[] = [
 
 const CANDIDATES_LOG: readonly (readonly [string, string])[] = [
   ["POST", "/api/v1/candidates/search"],
+  ["", "Authorization: Bearer ncj_live_..."],
   ["", '{"filters":{"role":"trader","min_level":8}}'],
-  ["402", "Payment Required, x402: $0.50 USDC"],
-  ["POST", "same body + PAYMENT-SIGNATURE"],
   ["200", '{"data":[{"label":"#B21E90","headline":{"role":"trader","score":81,"level":9}}]}'],
 ];
 
@@ -57,15 +56,15 @@ function Block({ id, title, children, code }: { id: string; title: string; child
   );
 }
 
-/** Для агентів: REST, MCP і x402. Раніше це був розділ головної «Agents scout too». */
+/** Для агентів: REST і MCP (x402 позначено «coming soon», поки вимкнений). Раніше це був розділ головної «Agents scout too». */
 export default function AgentsPage() {
   return (
     <div className={`${WRAP} grid gap-14 pt-12 pb-24 sm:pt-16`}>
       <div className="grid max-w-[62ch] gap-5">
         <h1 className="display text-[clamp(3rem,1.5rem+5.4vw,6rem)] leading-[0.88]">Agents welcome.</h1>
         <p className="text-xl text-ink-muted">
-          REST and MCP run the same actions as the site. Job search is free. Candidate search takes a company key, or an
-          agent without one pays per search in USDC on Base or Solana with x402.
+          REST and MCP run the same actions as the site. Job search is free. Candidate search takes a company key with a
+          subscription. Pay per request with x402 (USDC on Solana) is coming soon.
         </p>
         <p className="flex flex-wrap gap-x-6 gap-y-1">
           <a href="/openapi.yaml" className={`inline-flex min-h-11 items-center ${LINK}`}>
@@ -86,9 +85,9 @@ export default function AgentsPage() {
 
       <Block id="candidates-h" title="Search candidates" code={<Log lines={CANDIDATES_LOG} />}>
         <p className="text-ink-muted">
-          With a company key and plan, searches are included in a daily quota. Without a plan or a key, the server
-          answers 402 and your agent pays $0.50 in USDC per page of up to 20 results, then repeats the request with the
-          payment.
+          Needs a company key and a subscription. Searches are included in a daily quota. Pay per request
+          with x402 (about $0.50 in USDC per page) is coming soon, and is not available yet: without a key or a plan the
+          API answers with an error.
         </p>
         <p className="text-ink-muted">
           Only visible candidates appear (anyone can hide), as anonymous labels with scores and reasons. Never names,
@@ -107,9 +106,9 @@ export default function AgentsPage() {
       >
         <p className="text-ink-muted">
           Endpoint <code className="font-mono text-sm text-ink">https://nextcryptojob.xyz/mcp</code>, streamable HTTP.
-          Without a key, the tool list has <code className="font-mono text-sm text-ink">search_jobs</code> (free) and{" "}
-          <code className="font-mono text-sm text-ink">search_candidates</code> (x402). With a company key you get every
-          tool: pipeline, intros, jobs, saved searches and webhooks.
+          Without a key you can use <code className="font-mono text-sm text-ink">search_jobs</code>{" "}
+          (free). With a company key and a subscription you get every tool: candidate search, pipeline, intros, jobs,
+          saved searches and webhooks.
         </p>
       </Block>
 

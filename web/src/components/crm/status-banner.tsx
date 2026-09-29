@@ -97,7 +97,7 @@ export function accessBannerText(
     return {
       tone: "info",
       title: "Read-only: no active subscription.",
-      body: "Your agent can still search and request intros through the API, paying with x402.",
+      body: "Search, intros and the API need a subscription. Pay 100 USDC on Solana to get them back.",
       link: billing,
     };
   }

@@ -233,9 +233,8 @@ export default function CompanyLandingPage() {
               What 100 USDC a month on Solana includes
             </h2>
             <p className="max-w-[62ch] text-lg text-ink-muted">
-              Pay from your own wallet, Solana Pay or any x402 client; we never hold your keys. Or pay per request
-              through the API with USDC (x402), no subscription. Recruiting agencies apply first; we review
-              applications within 2 business days.
+              Pay from your own wallet with Solana Pay; we never hold your keys. Paying per request through the API
+              (x402) is coming soon. Recruiting agencies apply first; we review applications within 2 business days.
             </p>
           </div>
           <ul className="grid max-w-[62ch] gap-2.5">

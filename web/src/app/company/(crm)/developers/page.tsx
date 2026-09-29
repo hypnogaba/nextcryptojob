@@ -256,7 +256,7 @@ export default async function DevelopersPage({
         </div>
       </Section>
 
-      <Section id="usage" title="Usage, last 30 days" intro="Successful calls by action and x402 spend. Pay per request is used only without a subscription.">
+      <Section id="usage" title="Usage, last 30 days" intro="Successful calls by action. Pay per request (x402) is coming soon, so spend stays at zero for now.">
         {perAction.size === 0 ? (
           <p className={HINT}>No calls yet.</p>
         ) : (
@@ -304,7 +304,7 @@ export default async function DevelopersPage({
             <a href="/openapi.yaml" className={LINK}>
               OpenAPI 3.1 contract
             </a>
-            : all 28 REST operations, the x402 flow and the webhook events.
+            : all 28 REST operations, the planned x402 flow (coming soon) and the webhook events.
           </li>
           <li>
             <Link href="/how-scoring-works" className={LINK}>

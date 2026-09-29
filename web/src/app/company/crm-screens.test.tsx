@@ -301,7 +301,7 @@ describe("search", () => {
     await company("Acme Labs", { subscribed: false });
     candidate();
     const page = await html(SearchPage(sp({ role: "engineer", q: "1" })));
-    expect(page).toContain("Searching in the web app needs a subscription.");
+    expect(page).toContain("Searching needs a subscription.");
     expect(rows("SELECT * FROM usage_events")).toEqual([]);
   });
 });

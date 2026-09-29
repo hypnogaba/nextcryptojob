@@ -104,9 +104,9 @@ describe("company registration", () => {
     expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(co.id);
 
     const page = await html(BillingPage(params({ welcome: "1" })));
-    expect(page).toContain("Your company is ready. Choose how to start.");
+    expect(page).toContain("Your company is ready. Pay to start.");
     expect(page).toContain("Pay 100 USDC on Solana");
-    expect(page).toContain("Continue with pay per request (API only)");
+    expect(page).not.toContain("Continue with pay per request");
     const shell = await html(CrmLayout({ children: null }));
     expect(shell).toContain("Acme Labs");
     expect(shell).toContain("Team");
