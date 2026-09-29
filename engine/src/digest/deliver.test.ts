@@ -150,13 +150,16 @@ describe("Telegram", () => {
       jobs: [{ ...MESSAGE.jobs[0]!, about: "Aave builds lending markets <on> Ethereum." }, MESSAGE.jobs[1]!],
     };
     const text = telegramText(m, "https://nextcryptojob.xyz");
-    expect(text).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
+    expect(text).toContain("1,437 open crypto jobs match your roles and place. These 2 fit you best.");
     expect(text).toContain("\nAave builds lending markets &lt;on&gt; Ethereum.");
     expect(text).toContain("Earlier jobs: send /jobs.");
     expect(text).toContain('<a href="https://nextcryptojob.xyz/jobs">your jobs</a>');
     // Без числа й без опису: рядків немає, а не порожні.
     const plain = telegramText(MESSAGE, "https://nextcryptojob.xyz");
     expect(plain).not.toContain("We checked");
+    expect(plain).not.toContain("match your roles");
+    // Підійшло рівно стільки, скільки показано: рядок нічого не додає.
+    expect(telegramText({ ...MESSAGE, checked: MESSAGE.jobs.length }, "https://nextcryptojob.xyz")).not.toContain("match your roles");
     expect(plain).not.toContain("undefined");
   });
 

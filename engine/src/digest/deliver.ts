@@ -52,7 +52,7 @@ export interface DigestMessage {
   /** Дата людини, YYYY-MM-DD. */
   localDate: string;
   jobs: DeliveryJob[];
-  /** Скільки живих вакансій переглянув підбір (пул прогону): «We checked 1,437 live jobs». */
+  /** Скільки відкритих вакансій підійшло цій людині за роллю й місцем (до відбору п'яти); не розмір пулу. */
   checked?: number | null;
 }
 
@@ -77,6 +77,12 @@ export interface DeliverDeps {
   sleep?: (ms: number) => Promise<void>;
   now?: () => Date;
   log?: (line: string) => void;
+  /**
+   * Спільний запас очікування retry_after Telegram (429) на весь прогін, мс: очікування віднімається,
+   * а коли запасу не вистачає, збій одразу 'failed' (відновний), і людину підхопить наступний прогін.
+   * Без нього кожен 429 чекав би до 60 с x 3, а сервіс має TimeoutStartSec.
+   */
+  waitBudget?: { remainingMs: number };
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -169,11 +175,12 @@ export function companyLineHtml(domain: string | null | undefined, token: string
   return parts.length ? parts.join(" · ") : null;
 }
 
-/** «We checked 1,437 live crypto jobs. These 5 fit you best.»; null, якщо переглянутих не знаємо. */
+/** «37 open crypto jobs match your roles and place. These 5 fit you best.»; null, якщо не знаємо або показано все. */
 export function checkedLine(checked: number | null | undefined, shown: number): string | null {
-  if (!checked || checked < shown || shown <= 0) return null;
+  // Стільки, скільки підійшло цій людині за роллю й місцем; якщо це лише показані, рядок нічого не додає.
+  if (!checked || checked <= shown || shown <= 0) return null;
   const these = shown === 1 ? "This one fits" : `These ${shown} fit`;
-  return `We checked ${checked.toLocaleString("en-US")} live crypto job${checked === 1 ? "" : "s"}. ${these} you best.`;
+  return `${checked.toLocaleString("en-US")} open crypto jobs match your roles and place. ${these} you best.`;
 }
 
 export function telegramText(m: DigestMessage, siteUrl: string): string {
@@ -258,7 +265,12 @@ export async function sendTelegram(token: string, chatId: string, text: string, 
       const s = body.parameters?.retry_after;
       const wait = typeof s === "number" && s > 0 ? s * 1000 : 1000;
       if (wait > MAX_RETRY_AFTER_MS) return { ok: false, status, description: `${description} (retry_after ${s}s too long)`, unreachable: false };
-      // Людей обслуговуємо по одному, тож пауза тут тримає і всіх наступних.
+      // Людей обслуговуємо по одному, тож пауза тут тримає і всіх наступних: рахуємо її в спільний запас.
+      const budget = deps.waitBudget;
+      if (budget && wait > budget.remainingMs) {
+        return { ok: false, status, description: `${description} (wait budget exhausted, retry next run)`, unreachable: false };
+      }
+      if (budget) budget.remainingMs -= wait;
       await sleep(wait);
       continue;
     }

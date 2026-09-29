@@ -3,6 +3,7 @@ import { runCli } from "../cli.js";
 import { __resetLimiters } from "../limits.js";
 import { FakeJobsDb } from "../testing/jobs-fake.js";
 import { DIGEST_MIGRATIONS, SqliteD1 } from "../testing/sqlite-d1.js";
+import { sendTelegram } from "./deliver.js";
 import { readOnlyJobsDb } from "./jobs-db.js";
 import { INTERRUPTED, isDueHour, localClock, runDigestDue, type DigestDeps } from "./schedule.js";
 
@@ -127,7 +128,7 @@ describe("runDigestDue", () => {
     // Причини словами людини (fit.ts): роль, «як просили», бал 50 за цю роль.
     expect(rows[0]!.why).toBe("Matches your Engineer role. Remote, as you asked. Your Engineer score is 50, from your public work.");
     // Telegram каже, скільки живих вакансій переглянуто.
-    expect(tgCalls[0]).toContain("We checked 7 live crypto jobs. These 5 fit you best.");
+    expect(tgCalls[0]).toContain("7 open crypto jobs match your roles and place. These 5 fit you best.");
   });
 
   it("причини словами людини в sent.why і Telegram, речення про компанію з реєстру (db/jobs 0005)", async () => {
@@ -140,7 +141,8 @@ describe("runDigestDue", () => {
     expect(sent()[0]!.why).toBe('Matches your Engineer role, and the title has your words "solidity" and "defi". Remote, as you asked. ' +
       "Your Engineer score is 50, from your public work.");
     expect(tgCalls[0]).toContain("Lend Labs runs lending markets on Base.");
-    expect(tgCalls[0]).toContain("This one fits you best.");
+    // Підійшла лише ця одна: рядок про кількість нічого не додає.
+    expect(tgCalls[0]).not.toContain("match your roles");
   });
 
   it("база вакансій без 0005: добірка йде без речень про компанію, у журналі видно чому", async () => {
@@ -438,5 +440,213 @@ describe("CLI digest-due", () => {
     const err: string[] = [];
     const code = await runCli(["digest-due", "--user", "u1"], { env: {}, db: () => db, jobs: () => readOnlyJobsDb(jobs), err: (l) => err.push(l) });
     expect(code).toBe(2);
+  });
+});
+
+// ---------------- невдала доставка: вакансії не згорають, день повторюється ----------------
+
+type TgMode = "429" | "500" | "network" | "ok";
+
+/** Telegram, що відповідає за `state.mode`; тіла надісланих повідомлень лишаються в tgCalls. */
+function flakyTelegram(state: { mode: TgMode }): typeof fetch {
+  return (async (url: string, init: RequestInit) => {
+    if (url.includes("api.telegram.org")) {
+      tgCalls.push(String(init.body));
+      if (state.mode === "429") return new Response(JSON.stringify({ ok: false, description: "Too Many Requests", parameters: { retry_after: 30 } }), { status: 429 });
+      if (state.mode === "500") return new Response(JSON.stringify({ ok: false, description: "Internal Server Error" }), { status: 500 });
+      if (state.mode === "network") throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+    }
+    emailCalls.push(String(init.body));
+    return new Response(null, { status: 202 });
+  }) as unknown as typeof fetch;
+}
+
+const later = (min: number) => new Date(NOW.getTime() + min * 60_000);
+/** Невдача «сталась» о 08:05 Києва (NOW): finished_at у базі ставить справжній годинник, тестам потрібен свій. */
+const failedAtNow = () => db.exec("UPDATE digest_runs SET finished_at = '2026-09-12 05:05:00'");
+
+describe("невдала доставка (C1)", () => {
+  it("вакансії з невдалої доставки не згорають: наступного дня їх пропонують знову", async () => {
+    addUser("u1");
+    addJobs(5);
+    const s = await runDigestDue(deps({ fetchImpl: flakyTelegram({ mode: "500" }) }));
+    expect(s.failed).toBe(1);
+    expect(sent().every((r) => r.status === "failed")).toBe(true);
+    // Наступний день: усі п'ять знову доступні, а не «згоріли».
+    const tomorrow = await runDigestDue(deps({}, later(24 * 60)));
+    expect(tomorrow.sent).toBe(1);
+    expect(sent().filter((r) => r.status === "sent")).toHaveLength(5);
+    expect(sent().filter((r) => r.status === "failed")).toHaveLength(0);
+  });
+
+  it("надіслане й те, що відправляється, як і раніше не пропонуємо вдруге", async () => {
+    addUser("u1");
+    addJobs(7);
+    await runDigestDue(deps());
+    db.exec("INSERT INTO digest_runs (id, user_id, local_date, status, jobs) VALUES ('dg_p', 'u1', '2026-09-10', 'pending', 1)");
+    db.exec("INSERT INTO sent (user_id, job_ref, source, digest_id, position, status) VALUES ('u1', 'nr:j5', 'nextrole', 'dg_p', 1, 'pending')");
+    const tomorrow = await runDigestDue(deps({}, later(24 * 60)));
+    expect(tomorrow.sent).toBe(1);
+    const second = sent().filter((r) => r.digest_id !== "dg_p" && r.status === "sent").map((r) => r.job_ref);
+    expect(new Set(second).size).toBe(second.length);
+    expect(second).not.toContain("nr:j5");
+  });
+
+  it("відновний збій (Telegram 5xx): наступна година того ж дня доставляє, digest_id той самий, рядки не дублюються", async () => {
+    addUser("u1");
+    addJobs(6);
+    const state = { mode: "500" as TgMode };
+    const fetchImpl = flakyTelegram(state);
+    await runDigestDue(deps({ fetchImpl }));
+    const failedId = db.all<{ id: string }>("SELECT id FROM digest_runs")[0]!.id;
+    failedAtNow();
+    state.mode = "ok";
+    // Той самий місцевий день, наступна година людини (Київ 09:05), минуло 60 хв від невдачі.
+    const retry = await runDigestDue(deps({ fetchImpl }, later(60)));
+    expect(retry).toMatchObject({ retried: 1, sent: 1, failed: 0, already: 0 });
+    expect(runs()).toEqual([{ user_id: "u1", local_date: "2026-09-12", status: "sent", jobs: 5, error: null }]);
+    expect(db.all<{ id: string }>("SELECT id FROM digest_runs")[0]!.id).toBe(failedId);
+    expect(sent()).toHaveLength(5);
+    expect(sent().every((r) => r.status === "sent" && r.digest_id === failedId)).toBe(true);
+    // Після успіху далі вже «зроблено».
+    const again = await runDigestDue(deps({ fetchImpl }, later(70)));
+    expect(again).toMatchObject({ already: 1, sent: 0, retried: 0 });
+  });
+
+  it("невдача, що щойно сталась (менше RETRY_MIN_AGE), лишається до наступного запуску", async () => {
+    addUser("u1");
+    addJobs(6);
+    const state = { mode: "500" as TgMode };
+    const fetchImpl = flakyTelegram(state);
+    await runDigestDue(deps({ fetchImpl }));
+    failedAtNow();
+    state.mode = "ok";
+    const tooSoon = await runDigestDue(deps({ fetchImpl }, later(5)));
+    expect(tooSoon).toMatchObject({ already: 1, retried: 0, sent: 0 });
+  });
+
+  it("повтор обмежений вікном: коли година людини минула, день не повторюється", async () => {
+    addUser("u1");
+    addJobs(6);
+    const state = { mode: "500" as TgMode };
+    const fetchImpl = flakyTelegram(state);
+    await runDigestDue(deps({ fetchImpl }));
+    failedAtNow();
+    state.mode = "ok";
+    const late = await runDigestDue(deps({ fetchImpl }, later(120)));
+    expect(late).toMatchObject({ due: 0, sent: 0 });
+    expect(runs()[0]!.status).toBe("failed");
+  });
+
+  it("повторний збій теж не безкінечний: після другої невдачі у вікні третьої спроби немає", async () => {
+    addUser("u1");
+    addJobs(6);
+    const fetchImpl = flakyTelegram({ mode: "500" });
+    await runDigestDue(deps({ fetchImpl }));
+    failedAtNow();
+    const second = await runDigestDue(deps({ fetchImpl }, later(60)));
+    expect(second).toMatchObject({ retried: 1, failed: 1 });
+    db.exec("UPDATE digest_runs SET finished_at = '2026-09-12 06:05:00'");
+    const third = await runDigestDue(deps({ fetchImpl }, later(120)));
+    expect(third).toMatchObject({ due: 0, sent: 0, retried: 0 });
+    expect(tgCalls).toHaveLength(2);
+  });
+
+  it("мережевий збій Telegram (міг дійти): НЕ повторюємо, щоб не надіслати вдруге", async () => {
+    addUser("u1");
+    addJobs(6);
+    const state = { mode: "network" as TgMode };
+    const fetchImpl = flakyTelegram(state);
+    const first = await runDigestDue(deps({ fetchImpl }));
+    expect(first.failed).toBe(1);
+    expect(runs()[0]!.error).toMatch(/network error/);
+    failedAtNow();
+    state.mode = "ok";
+    const next = await runDigestDue(deps({ fetchImpl }, later(60)));
+    expect(next).toMatchObject({ already: 1, retried: 0, sent: 0 });
+    expect(tgCalls).toHaveLength(1);
+  });
+
+  it("перерваний прогін (INTERRUPTED) не повторюється: невідомо, чи дійшло", async () => {
+    addUser("u1");
+    addJobs(3);
+    db.exec(`INSERT INTO digest_runs (id, user_id, local_date, status, jobs, error, finished_at)
+             VALUES ('dg_i', 'u1', '2026-09-12', 'failed', 1, '${INTERRUPTED}', '2026-09-12 05:05:00')`);
+    const s = await runDigestDue(deps({}, later(60)));
+    expect(s).toMatchObject({ already: 1, retried: 0, sent: 0 });
+    expect(tgCalls).toHaveLength(0);
+  });
+
+  it("лист: повтор іде з тим самим digest_id, тож сайт відкине дубль, якщо перша спроба таки дійшла", async () => {
+    addUser("u1", { channel: "email", telegram: null });
+    addJobs(6);
+    const bodies: Array<{ digest_id: string }> = [];
+    let status = 500;
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(null, { status });
+    }) as unknown as typeof fetch;
+    const first = await runDigestDue(deps({ fetchImpl }));
+    expect(first.failed).toBe(1);
+    expect(runs()[0]!.error).toBe("email endpoint HTTP 500");
+    failedAtNow();
+    status = 409; // «цей digest_id уже надіслано»
+    const retry = await runDigestDue(deps({ fetchImpl }, later(60)));
+    expect(retry).toMatchObject({ retried: 1, sent: 1 });
+    expect(new Set(bodies.map((b) => b.digest_id)).size).toBe(1);
+  });
+});
+
+describe("запас очікування 429 (G-b)", () => {
+  it("спільний запас на прогін: сумарний сон не більший за стелю, решта людей відновно failed", async () => {
+    for (let i = 0; i < 6; i++) addUser(`u${i}`);
+    addJobs(40);
+    const slept: number[] = [];
+    const s = await runDigestDue(deps({ fetchImpl: flakyTelegram({ mode: "429" }), sleep: async (ms) => { slept.push(ms); } }));
+    expect(s.failed).toBe(6);
+    // Без спільного запасу було б 6 x 2 x 30 с = 360 с.
+    expect(slept.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(240_000);
+    expect(slept.length).toBeGreaterThan(0);
+    expect(runs().every((r) => /^telegram 429/.test(r.error ?? ""))).toBe(true);
+    expect(runs().some((r) => /wait budget exhausted/.test(r.error ?? ""))).toBe(true);
+  });
+
+  it("запас менший за retry_after: не спимо зовсім, причина названа", async () => {
+    const slept: number[] = [];
+    const f = (async () => new Response(JSON.stringify({ ok: false, description: "Too Many Requests", parameters: { retry_after: 60 } }), { status: 429 })) as unknown as typeof fetch;
+    const r = await sendTelegram("t", "1", "hi", { env: ENV, fetchImpl: f, sleep: async (ms) => { slept.push(ms); }, waitBudget: { remainingMs: 10_000 } });
+    expect(slept).toEqual([]);
+    expect(r).toMatchObject({ ok: false, status: 429 });
+    expect((r as { description: string }).description).toMatch(/wait budget exhausted/);
+  });
+});
+
+describe("пояс і порожні дні (G-a, G-d)", () => {
+  it("невпізнаний пояс: людина рахується за UTC, а прогін каже про це в підсумку й WARN", async () => {
+    addUser("u1", { tz: "Mars/Olympus", hour: 5 });
+    addUser("u2");
+    addJobs(6);
+    const s = await runDigestDue(deps());
+    expect(s.tzFallback).toBe(1);
+    expect(log.some((l) => /WARN 1 user\(s\) with an unrecognised timezone/.test(l) && l.includes("Mars/Olympus"))).toBe(true);
+    expect(s.sent).toBe(2); // u1 о 05 UTC, u2 о 08 Києва
+  });
+
+  it("тижневий підсумок порожніх днів: лише у свій час (понеділок 06 UTC), по людях, або за weeklySummary", async () => {
+    addUser("u1", { roles: ["trader"], hour: 20 });
+    addUser("u2", { hour: 20 });
+    addJobs(3); // трейдеру нічого
+    db.exec("INSERT INTO digest_runs (id, user_id, local_date, status, jobs) VALUES ('e1', 'u1', '2026-09-09', 'empty', 0)");
+    db.exec("INSERT INTO digest_runs (id, user_id, local_date, status, jobs) VALUES ('e2', 'u1', '2026-09-10', 'empty', 0)");
+    db.exec("INSERT INTO digest_runs (id, user_id, local_date, status, jobs) VALUES ('e3', 'u1', '2026-08-01', 'empty', 0)");
+    const plain = await runDigestDue(deps());
+    expect(plain.weeklyEmpty).toBeNull();
+    // Понеділок 2026-09-14, 06:05 UTC.
+    const s = await runDigestDue(deps({}, new Date("2026-09-14T06:05:00Z")));
+    expect(s.weeklyEmpty).toEqual([{ userId: "u1", emptyDays: 2 }]); // старий 01.08 поза тижнем
+    expect(log.some((l) => /digest-weekly: empty days in the last 7 d for 1 user\(s\): u1 ?2/.test(l))).toBe(true);
+    const forced = await runDigestDue(deps(), { weeklySummary: true });
+    expect(forced.weeklyEmpty).not.toBeNull();
   });
 });

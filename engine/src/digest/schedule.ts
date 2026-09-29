@@ -23,7 +23,7 @@ import {
   type CompanyProfile, estimateText, loadCompanyPool, loadCompanyProfiles, loadCrawlPool, type PoolStats, type SalaryEstimate,
 } from "./jobs.js";
 import type { JobsDb } from "./jobs-db.js";
-import { type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
+import { countMatches, type DigestJob, type DigestPick, type DigestProfile, formatSalary, selectJobs } from "./match.js";
 import { isRoleKey, parseRoles } from "./roles.js";
 import { tokenChip } from "./token.js";
 
@@ -153,23 +153,49 @@ export function profileOf(u: Pick<DigestUserRow, "roles" | "remote_mode" | "city
   };
 }
 
+/** Прогін, що вже є на дату людини. */
+export interface ExistingRun { id: string; status: string; error: string | null; finishedAt: string | null }
+
 /** Прогони, що вже є на дати людей. IN по user_id і межа дати йдуть індексом UNIQUE(user_id, local_date). */
-async function existingRuns(db: Db, due: ReadonlyArray<{ id: string; date: string }>): Promise<Set<string>> {
-  const out = new Set<string>();
+async function existingRuns(db: Db, due: ReadonlyArray<{ id: string; date: string }>): Promise<Map<string, ExistingRun>> {
+  const out = new Map<string, ExistingRun>();
   const minDate = due.reduce((m, d) => (d.date < m ? d.date : m), "9999-12-31");
   for (let i = 0; i < due.length; i += 90) {
     const chunk = due.slice(i, i + 90);
-    const rows = await db.query<{ user_id: string; local_date: string }>(
-      `SELECT user_id, local_date FROM digest_runs WHERE user_id IN (${chunk.map(() => "?").join(", ")}) AND local_date >= ?`,
+    const rows = await db.query<{ id: string; user_id: string; local_date: string; status: string; error: string | null; finished_at: string | null }>(
+      `SELECT id, user_id, local_date, status, error, finished_at FROM digest_runs WHERE user_id IN (${chunk.map(() => "?").join(", ")}) AND local_date >= ?`,
       [...chunk.map((d) => d.id), minDate]);
-    for (const r of rows) out.add(`${r.user_id}|${r.local_date}`);
+    for (const r of rows) out.set(`${r.user_id}|${r.local_date}`, { id: r.id, status: r.status, error: r.error, finishedAt: r.finished_at });
   }
   return out;
 }
 
+/** Скільки хвилин мусить минути після невдалої спроби, перш ніж пробувати вдруге (не бити двічі за одну годину). */
+export const RETRY_MIN_AGE_MINUTES = 20;
+
+/**
+ * Збої, після яких повтор безпечний: повідомлення точно не дійшло (Telegram 429 і 5xx, вичерпаний
+ * запас очікування) або лист має той самий digest_id, і сайт відкине дубль (409 = уже надіслано).
+ * НЕ повторюємо те, що могло дійти: мережевий збій Telegram (таймаут після відправки), перерваний
+ * прогін (INTERRUPTED), і те, що не мине само: пошта не налаштована, бот заблокований.
+ */
+export function isRetryableFailure(error: string | null): boolean {
+  if (!error) return false;
+  return /^telegram (429|5\d\d):/.test(error) || /^email endpoint (HTTP 5\d\d|unreachable)/.test(error);
+}
+
+/** Невдалий прогін цієї дати можна пробувати знову: збій відновний і з останньої спроби минуло досить часу. */
+export function canRetryRun(run: ExistingRun, now: Date): boolean {
+  if (run.status !== "failed" || !isRetryableFailure(run.error)) return false;
+  const at = run.finishedAt ? Date.parse(`${run.finishedAt.replace(" ", "T")}Z`) : NaN;
+  const ageMin = Number.isNaN(at) ? Infinity : (now.getTime() - at) / 60_000;
+  return ageMin >= RETRY_MIN_AGE_MINUTES;
+}
+
 async function sentRefs(db: Db, userId: string): Promise<Set<string>> {
-  // Усі, без межі в часі: UNIQUE(user_id, job_ref) не дасть вставити старий рядок удруге.
-  const rows = await db.query<{ job_ref: string }>("SELECT job_ref FROM sent WHERE user_id = ?", [userId]);
+  // Усі надіслані й ті, що зараз відправляються, без межі в часі: UNIQUE(user_id, job_ref) не дасть вставити
+  // старий рядок удруге. 'failed' не рахуємо: доставка не вдалась, людина цих вакансій не бачила.
+  const rows = await db.query<{ job_ref: string }>("SELECT job_ref FROM sent WHERE user_id = ? AND status IN ('sent', 'pending')", [userId]);
   return new Set(rows.map((r) => r.job_ref));
 }
 
@@ -213,7 +239,17 @@ export interface DigestOptions {
   userId?: string;
   /** Вигаданий профіль замість людей з бази (лише з dryRun). */
   profile?: DigestProfile;
+  /** Показати тижневий підсумок порожніх днів у цьому прогоні (типово лише в понеділок о WEEKLY_SUMMARY_HOUR_UTC). */
+  weeklySummary?: boolean;
 }
+
+/** Тижневий підсумок порожніх днів: понеділок (UTC), година, на яку припадає таймер :05. */
+export const WEEKLY_SUMMARY_WEEKDAY_UTC = 1;
+export const WEEKLY_SUMMARY_HOUR_UTC = 6;
+export const WEEKLY_SUMMARY_DAYS = 7;
+
+/** Загальний запас очікування Telegram 429 на весь прогін, мс; решта людей ідуть у наступний прогін. */
+export const MAX_TOTAL_RETRY_WAIT_MS = 240_000;
 
 export interface DryRunEntry {
   who: string;
@@ -236,10 +272,18 @@ export interface DigestSummary {
   failed: number;
   /** Telegram сказав «недосяжний», а пошти немає: позначено, не рахується збоєм. */
   unreachable: number;
+  /** Невдалі сьогоднішні прогони, які цього разу пробували вдруге (відновний збій: 429, 5xx). */
+  retried: number;
+  /** Людей з невпізнаним users.timezone (рахувались за UTC); id людей у журналі рядком WARN. */
+  tzFallback: number;
+  /** Тижневий підсумок порожніх днів (лише в години підсумку, див. WEEKLY_SUMMARY_*); інакше null. */
+  weeklyEmpty: WeeklyEmptyEntry[] | null;
   pool: PoolStats | null;
   companyJobs: number;
   dry: DryRunEntry[];
 }
+
+export interface WeeklyEmptyEntry { userId: string; emptyDays: number }
 
 const who = (id: string) => id.slice(0, 8);
 
@@ -267,7 +311,7 @@ export function deliveryJobs(
   });
 }
 
-/** Що бачить людина поруч із вибором: оцінки дошки, профілі компаній, скільки вакансій переглянуто. */
+/** Що бачить людина поруч із вибором: оцінки дошки, профілі компаній; checked рахується на людину (countMatches). */
 export interface DeliveryExtras {
   estimates: ReadonlyMap<string, SalaryEstimate>;
   profiles: ReadonlyMap<string, CompanyProfile>;
@@ -285,13 +329,16 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   const { db } = deps;
   if (!db && !opts.profile) throw new Error("digest: database is required");
   const summary: DigestSummary = {
-    eligible: 0, due: 0, already: 0, skipped: 0, empty: 0, sent: 0, failed: 0, unreachable: 0, pool: null, companyJobs: 0, dry: [],
+    eligible: 0, due: 0, already: 0, skipped: 0, empty: 0, sent: 0, failed: 0, unreachable: 0, retried: 0, tzFallback: 0,
+    weeklyEmpty: null, pool: null, companyJobs: 0, dry: [],
   };
 
   if (db && !dry) await sweepStale(db);
 
   // 1. Кому пора.
   let planned: Planned[] = [];
+  /** user id → id невдалого прогону цієї дати, який пробуємо вдруге (той самий digest_id: сайт відкине дубль листа). */
+  const retryOf = new Map<string, string>();
   if (opts.profile) {
     planned = [{ row: null, profile: opts.profile, clock: localClock(now, "UTC"), plan: { primary: "email", emailFallback: false } }];
     summary.eligible = summary.due = 1;
@@ -302,12 +349,21 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       .map((row) => ({ row, clock: localClock(now, row.timezone) }))
       .filter(({ row, clock }) => opts.userId || isDueHour(clock.hour, row.digest_hour));
     summary.due = due.length;
-    for (const { row, clock } of due) {
-      if (!clock.tzValid) log(`digest: user ${who(row.id)} timezone not recognised, using UTC`);
+    // Невпізнаний пояс мовчки ставав UTC: лишаємо UTC, але рахуємо всіх (не лише тих, кому пора) і пишемо WARN.
+    const badTz = rows.filter((row) => !localClock(now, row.timezone).tzValid);
+    summary.tzFallback = badTz.length;
+    if (badTz.length) {
+      log(`digest: WARN ${badTz.length} user(s) with an unrecognised timezone are counted in UTC: ` +
+        badTz.map((r) => `${who(r.id)} "${(r.timezone ?? "").slice(0, 40)}"`).join(", "));
     }
-    const done = due.length && !dry ? await existingRuns(db!, due.map((d) => ({ id: d.row.id, date: d.clock.date }))) : new Set<string>();
+    const done = due.length && !dry ? await existingRuns(db!, due.map((d) => ({ id: d.row.id, date: d.clock.date }))) : new Map<string, ExistingRun>();
     for (const { row, clock } of due) {
-      if (done.has(`${row.id}|${clock.date}`)) { summary.already++; continue; }
+      const prev = done.get(`${row.id}|${clock.date}`);
+      if (prev) {
+        // Невдалий сьогодні прогін з відновним збоєм пробуємо знову в межах вікна isDueHour (година людини і наступна).
+        if (!canRetryRun(prev, now)) { summary.already++; continue; }
+        retryOf.set(row.id, prev.id);
+      }
       const plan = planChannel(deliveryUser(row), deps.env);
       if ("skip" in plan && !dry) {
         summary.skipped++;
@@ -318,7 +374,8 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
     }
   }
   if (planned.length === 0) {
-    log(`digest-due: nobody due (eligible ${summary.eligible}, due ${summary.due}, already ${summary.already}, skipped ${summary.skipped})`);
+    log(`digest-due: nobody due (eligible ${summary.eligible}, due ${summary.due}, already ${summary.already}, skipped ${summary.skipped}, tz-fallback ${summary.tzFallback})`);
+    if (db && !dry) await weeklyEmptyIfDue(db, now, log, summary, opts.weeklySummary);
     return summary;
   }
 
@@ -329,11 +386,14 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   summary.companyJobs = company.length;
   const pool = { crawl: crawl.jobs, company };
   const extras: DeliveryExtras = {
-    estimates: crawl.estimates, profiles: await loadCompanyProfiles(deps.jobs, log), checked: crawl.jobs.length + company.length,
+    estimates: crawl.estimates, profiles: await loadCompanyProfiles(deps.jobs, log), checked: 0,
   };
   log(`digest: pool ${crawl.stats.kept} jobs, ${crawl.stats.older} of them posted over 30 d ago (fetched ${crawl.stats.fetched}, dropped tag ${crawl.stats.dropped.tag} ` +
     `company ${crawl.stats.dropped.company} title ${crawl.stats.dropped.title}; rows_read ${crawl.stats.rowsRead ?? "n/a"}, ` +
     `D1 ${crawl.stats.d1Ms === null ? "n/a" : `${Math.round(crawl.stats.d1Ms)} ms`}, wall ${crawl.stats.wallMs} ms); company jobs ${company.length}`);
+
+  // Запас очікування Telegram 429 один на весь прогін: сервіс не може вийти за TimeoutStartSec.
+  const waitBudget = { remainingMs: MAX_TOTAL_RETRY_WAIT_MS };
 
   // 3. Кожна людина окремо: збій однієї не зупиняє інших.
   for (const p of planned) {
@@ -353,7 +413,11 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       }
       const row = p.row!;
       const plan = p.plan as Exclude<ChannelPlan, { skip: string }>;
-      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, newId(), log, extras);
+      const retryId = retryOf.get(row.id);
+      // Скільки вакансій підійшло саме цій людині (а не розмір пулу до фільтрів).
+      const mine = { ...extras, checked: countMatches(pool, p.profile, { now, exclude }) };
+      const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, retryId ?? newId(), log, mine, waitBudget, !!retryId);
+      if (retryId && typeof outcome === "object") summary.retried++;
       if (outcome === "empty") summary.empty++;
       else if (outcome === "already") summary.already++;
       else if (outcome.status === "sent") summary.sent++;
@@ -365,8 +429,9 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
     }
   }
   log(`digest-due: eligible ${summary.eligible}, due ${summary.due}, sent ${summary.sent}, failed ${summary.failed}, ` +
-    `unreachable ${summary.unreachable}, ` +
+    `unreachable ${summary.unreachable}, retried ${summary.retried}, tz-fallback ${summary.tzFallback}, ` +
     `empty ${summary.empty}, skipped ${summary.skipped}, already ${summary.already}${dry ? " (dry run)" : ""}`);
+  if (db && !dry) await weeklyEmptyIfDue(db, now, log, summary, opts.weeklySummary);
   return summary;
 }
 
@@ -378,6 +443,7 @@ async function buildAndDeliver(
   db: Db, deps: DigestDeps, row: DigestUserRow, localDate: string, picks: DigestPick[],
   plan: { primary: "telegram" | "email"; emailFallback: boolean }, digestId: string, log: (l: string) => void,
   extras: DeliveryExtras = { estimates: new Map(), profiles: new Map(), checked: 0 },
+  waitBudget?: { remainingMs: number }, isRetry = false,
 ): Promise<DeliveryOutcome | "empty" | "already"> {
   if (picks.length === 0) {
     // Запис, щоб наступна година (запас isDueHour) не шукала вдруге того самого дня.
@@ -387,6 +453,15 @@ async function buildAndDeliver(
     return "empty";
   }
   const insert: D1Statement[] = [
+    // Повтор невдалого прогону: старі рядки прогону й його 'failed' sent прибираємо в тій самій транзакції.
+    // Якщо інша копія вже забрала прогін ('pending'), DELETE нічого не зачепить, а вставка впреться в PRIMARY KEY.
+    ...(isRetry ? [
+      { sql: "DELETE FROM sent WHERE digest_id = ? AND status = 'failed'", params: [digestId] },
+      { sql: "DELETE FROM digest_runs WHERE id = ? AND status = 'failed'", params: [digestId] },
+    ] : []),
+    // Вакансії з невдалих доставок (інших днів) знову вільні: старий 'failed' рядок не має блокувати вставку (UNIQUE user_id, job_ref).
+    { sql: `DELETE FROM sent WHERE user_id = ? AND status = 'failed' AND job_ref IN (${picks.map(() => "?").join(", ")})`,
+      params: [row.id, ...picks.map((p) => p.job.ref)] },
     { sql: "INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES (?, ?, ?, 'pending', ?, ?)",
       params: [digestId, row.id, localDate, picks.length, plan.primary] },
     ...picks.map((p, i) => ({
@@ -411,7 +486,7 @@ async function buildAndDeliver(
   const outcome = await deliverDigest(deliveryUser(row), message, plan,
     // Годинник, а не мить початку прогону: `ts` листа ставиться під час відправки. Прогін
     // з паузами Telegram (429) може тривати довше за 5 хвилин, і сайт відкинув би старий ts.
-    { env: deps.env, fetchImpl: deps.fetchImpl, sleep: deps.sleep, now: deps.now, log });
+    { env: deps.env, fetchImpl: deps.fetchImpl, sleep: deps.sleep, now: deps.now, log, ...(waitBudget ? { waitBudget } : {}) });
   const status = outcome.status;
   const channel = outcome.channel;
   const detail = outcome.status === "sent" ? outcome.note : outcome.error;
@@ -452,4 +527,28 @@ export function formatDryRun(summary: DigestSummary): string[] {
     });
   }
   return lines;
+}
+
+// ---------------- тижневий підсумок порожніх днів ----------------
+
+/** Скільки днів за останні WEEKLY_SUMMARY_DAYS людина не мала жодної вакансії (digest_runs 'empty'). Лише ті, у кого хоч один. */
+export async function weeklyEmptyDays(db: Db, now: Date): Promise<WeeklyEmptyEntry[]> {
+  const from = new Date(now.getTime() - WEEKLY_SUMMARY_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const rows = await db.query<{ user_id: string; n: number }>(
+    "SELECT user_id, COUNT(*) AS n FROM digest_runs WHERE status = 'empty' AND local_date >= ? GROUP BY user_id ORDER BY n DESC, user_id", [from]);
+  return rows.map((r) => ({ userId: r.user_id, emptyDays: r.n }));
+}
+
+/** Раз на тиждень (понеділок, WEEKLY_SUMMARY_HOUR_UTC) або за `force`: у журнал і в підсумок. Помилка підсумку прогін не валить. */
+async function weeklyEmptyIfDue(db: Db, now: Date, log: (l: string) => void, summary: DigestSummary, force?: boolean): Promise<void> {
+  const time = now.getUTCDay() === WEEKLY_SUMMARY_WEEKDAY_UTC && now.getUTCHours() === WEEKLY_SUMMARY_HOUR_UTC;
+  if (!force && !time) return;
+  try {
+    const list = await weeklyEmptyDays(db, now);
+    summary.weeklyEmpty = list;
+    log(`digest-weekly: empty days in the last ${WEEKLY_SUMMARY_DAYS} d for ${list.length} user(s)` +
+      `${list.length ? `: ${list.map((e) => `${who(e.userId)} ${e.emptyDays}`).join(", ")}` : ""}`);
+  } catch (e) {
+    log(`digest-weekly: not available: ${shortError(e, 120)}`);
+  }
 }
