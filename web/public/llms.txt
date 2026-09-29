@@ -1,0 +1,30 @@
+# NextCryptoJob
+
+> Crypto job search that matches people by public proof of work: their X, wallets and GitHub. Free for candidates. Up to 5 matching jobs a day by Telegram or email.
+
+NextCryptoJob reads only public work. A candidate says what job they want in their own words. We score their public X, GitHub and wallets for that role, check new crypto jobs every day, and send the best matches with the reason each one fits. No CV and no cover letter. Companies can search candidates who opted in. The candidate score formula is v10.
+
+## For candidates
+- [Home](https://nextcryptojob.xyz/): start a brief and get jobs daily
+- [Crypto jobs by role](https://nextcryptojob.xyz/crypto-jobs): live jobs for engineers, security auditors, DevRel, product, marketing, BD, community, traders, designers and more
+- [Remote crypto engineer jobs](https://nextcryptojob.xyz/crypto-jobs/engineer/remote): example of a role page; every role also has a /remote page
+- [How your score works](https://nextcryptojob.xyz/how-scoring-works): sources, weights and how to contest a score
+- [Where the jobs come from](https://nextcryptojob.xyz/sources): job boards, employer career pages and crawler rules
+- [FAQ](https://nextcryptojob.xyz/faq)
+- [Leaderboard](https://nextcryptojob.xyz/leaderboard): public talent cards ranked by score
+
+## For companies
+- [Hire crypto talent by proof of work](https://nextcryptojob.xyz/company): candidate search, scores and job posting
+- [Terms](https://nextcryptojob.xyz/terms) and [Privacy](https://nextcryptojob.xyz/privacy)
+
+## For agents
+- [API and MCP guide](https://nextcryptojob.xyz/agents): REST API and MCP server for crypto jobs and candidates
+- [OpenAPI spec](https://nextcryptojob.xyz/openapi.yaml)
+- MCP endpoint: https://nextcryptojob.xyz/mcp (streamable HTTP)
+- Job search is free. Candidate search needs a company key with a subscription.
+- x402 pay-per-request is coming soon. It is not available yet.
+
+## Notes
+- Jobs on our pages come from employer career pages and crypto job boards. Apply links lead to the employer or the original board.
+- Pages of individual scanned jobs and personal score cards are not meant for search indexing.
+- Contact: hello@nextcryptojob.xyz
