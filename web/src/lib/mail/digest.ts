@@ -5,6 +5,7 @@ import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
 import { escapeHtml, MAIL_DISPLAY, MAIL_FAINT, MAIL_INK, MAIL_LINE, MAIL_MUTED, MAIL_SOFT, mailButton, mailLayout } from "./layout";
 import { logoPath } from "@/lib/jobs/companies";
+import { BOT_URL } from "@/lib/telegram/bot-link";
 
 /**
  * Лист щоденної добірки (W7). Вигляд як у листах Getro (власник 17.09, замість плиток варіанта 5):
@@ -137,7 +138,16 @@ export type DigestEmailInput = {
   unsubscribeUrl: string;
   /** Скільки живих вакансій переглянув підбір; null, якщо engine не сказав. */
   checked?: number | null;
+  /** Підписані посилання «Not for me» за позицією вакансії (lib/digest/feedback.ts); немає = без посилання. */
+  feedbackUrls?: Record<number, string>;
+  /** Один раз сказати, що Telegram недосяжний і добірка йде поштою. */
+  telegramBlocked?: boolean;
 };
+
+/** Рядок про заблокованого бота: лише в першому листі замість Telegram (engine ставить прапор один раз). */
+export const TELEGRAM_BLOCKED_NOTE =
+  "We could not send your jobs to Telegram. The bot was blocked or never started, so your jobs come by email now. " +
+  "To get them in Telegram again, open the bot and send /start.";
 
 export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const jobs = [...input.jobs].sort((a, b) => a.position - b.position).map((j) => tidy(j, input.site));
@@ -148,6 +158,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const pauseUrl = input.unsubscribeUrl;
   const checked = checkedLine(input.checked, n);
 
+  const byPosition = [...input.jobs].sort((a, b) => a.position - b.position).map((j) => input.feedbackUrls?.[j.position] ?? null);
   const textBlocks = jobs.map((j, i) =>
     [
       `${i + 1}. ${j.title}`,
@@ -161,6 +172,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
       j.via ? `via ${j.via}` : null,
       j.ours ? `Open in your jobs: ${j.ours}` : null,
       j.url ? (j.ours ? `Apply directly: ${j.url}` : j.url) : null,
+      byPosition[i] ? `Not for me: ${byPosition[i]}` : null,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -168,6 +180,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const text =
     [
       checked ? `${heading}\n${checked}` : heading,
+      ...(input.telegramBlocked ? [`${TELEGRAM_BLOCKED_NOTE} ${BOT_URL}`] : []),
       ...textBlocks,
       [
         `All jobs we sent you: ${jobsUrl}`,
@@ -178,7 +191,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
     ].join("\n\n") + "\n";
 
   const htmlJobs = jobs
-    .map((j) => {
+    .map((j, index) => {
       // Раунд 6 (власник 16.09): назва веде на НАШУ сторінку вакансії, звідти людина подається.
       // Пряме посилання на джерело лишається окремим рядком, follow, як вимагають умови web3.career.
       const openHref = j.ours ?? j.url;
@@ -206,6 +219,9 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         j.via ? `via ${escapeHtml(j.via)}` : "",
       ].filter(Boolean).join(" &nbsp;·&nbsp; ");
       const line = (html: string, style: string) => `<div style="${style}">${html}</div>`;
+      const notForMe = byPosition[index]
+        ? line(`<a href="${escapeHtml(byPosition[index]!)}" style="color:${MAIL_FAINT}">Not for me</a>`, `margin-top:8px;font-size:13px;line-height:1.5;color:${MAIL_FAINT}`)
+        : "";
       return (
         `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px"><tr>` +
         logoCell(j) +
@@ -217,6 +233,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         line(escapeHtml(j.why), `margin-top:6px;font-size:14px;line-height:1.5;color:${MAIL_MUTED}`) +
         (links ? line(links, `margin-top:4px;font-size:13px;line-height:1.5;color:${MAIL_FAINT}`) : "") +
         apply +
+        notForMe +
         `</td></tr></table>`
       );
     })
@@ -225,6 +242,9 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
   const body =
     `<h1 style="margin:0 0 32px;font-family:${MAIL_DISPLAY};font-size:30px;line-height:1.2;font-weight:500;letter-spacing:-0.01em;color:${MAIL_INK}">` +
     `${n} new crypto job${n === 1 ? "" : "s"} matching your profile</h1>` +
+    (input.telegramBlocked
+      ? p(escapeHtml(TELEGRAM_BLOCKED_NOTE) + ` <a href="${escapeHtml(BOT_URL)}" style="color:${MAIL_INK}">Open the bot</a>.`, `padding:12px 14px;background:${MAIL_SOFT};border-radius:10px;margin-bottom:24px`)
+      : "") +
     p(`&#128075; ${escapeHtml(checked ?? `Here ${n === 1 ? "is" : "are"} today's best match${n === 1 ? "" : "es"} for you:`)}`, "margin-bottom:24px") +
     htmlJobs +
     `<div style="height:8px;line-height:8px">&nbsp;</div>` +

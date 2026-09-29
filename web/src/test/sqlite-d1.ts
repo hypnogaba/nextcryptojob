@@ -55,6 +55,8 @@ export const APPLIED_AFTER_CRM = [
   "0026_profile_prefs.sql",
   // Добірки 17.09: users.telegram_unreachable_at. Ще НЕ накочено.
   "0027_telegram_unreachable.sql",
+  // Воронка 29.09: job_feedback і nudges. Ще НЕ накочено.
+  "0028_funnel.sql",
 ];
 
 function toSql(value: unknown): SQLInputValue {

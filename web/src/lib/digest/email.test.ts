@@ -454,3 +454,48 @@ describe("email content", () => {
     expect(String(sent[0].html)).not.toContain("javascript:");
   });
 });
+
+describe("funnel: feedback links and the blocked-bot note", () => {
+  const withIds = (over: Partial<DigestEmailPayload> = {}) => {
+    const p = payload(over);
+    p.jobs[0]!.job_id = "jabc123";
+    return p;
+  };
+  const body = () => String(sent[0]!.text) + String(sent[0]!.html);
+
+  it("puts a signed 'Not for me' link under each job that has an id, and the link verifies", async () => {
+    const res = await signedPost(withIds());
+    expect(res.status).toBe(200);
+    expect(String(sent[0]!.html)).toContain("Not for me");
+    const link = /Not for me: (https:\/\/\S+)/.exec(String(sent[0]!.text))![1]!;
+    const { verifyFeedback } = await import("./feedback");
+    expect(await verifyFeedback(SECRET, new URL(link).searchParams)).toEqual({ userId: "ada", ref: "nr:jabc123" });
+    // Друга вакансія без id: посилання немає, лист цілий.
+    expect(String(sent[0]!.text).match(/Not for me:/g)).toHaveLength(1);
+  });
+
+  it("the link does not verify for another person or a changed job", async () => {
+    await signedPost(withIds());
+    const link = /Not for me: (https:\/\/\S+)/.exec(String(sent[0]!.text))![1]!;
+    const { verifyFeedback } = await import("./feedback");
+    const other = new URL(link);
+    other.searchParams.set("u", "bob");
+    expect(await verifyFeedback(SECRET, other.searchParams)).toBeNull();
+    const swapped = new URL(link);
+    swapped.searchParams.set("j", "nr:jother");
+    expect(await verifyFeedback(SECRET, swapped.searchParams)).toBeNull();
+  });
+
+  it("an old engine without job ids gets the same email as before, no links", async () => {
+    await signedPost(payload());
+    expect(body()).not.toContain("Not for me");
+    expect(body()).not.toContain("We could not send your jobs to Telegram");
+  });
+
+  it("telegram_blocked adds one plain sentence about the blocked bot, with the way back", async () => {
+    await signedPost(withIds({ telegram_blocked: true }));
+    expect(String(sent[0]!.text)).toContain("We could not send your jobs to Telegram.");
+    expect(String(sent[0]!.text)).toContain("send /start");
+    expect(String(sent[0]!.html)).toContain("Open the bot");
+  });
+});

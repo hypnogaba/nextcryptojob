@@ -43,6 +43,8 @@ export const MERGE_REFS: Record<string, "merged" | "moved" | "deleted"> = {
   "digest_runs.user_id": "merged",
   "saved_jobs.user_id": "merged",
   "profile_prefs.user_id": "merged",
+  "job_feedback.user_id": "merged",
+  "nudges.user_id": "merged",
   "company_members.user_id": "merged",
   "company_members.invited_by": "moved",
   "companies.created_by": "moved",
@@ -255,6 +257,10 @@ export async function mergeAccounts(d: D1Database, survivorId: string, otherId: 
   // Профіль-доказ: налаштування survivor лишаються; якщо своїх немає, беруться налаштування другого
   // профілю (його ключ виводився з іншого id, тож старе посилання подачі стає публічним).
   st.push(q("UPDATE OR IGNORE profile_prefs SET user_id = ?1 WHERE user_id = ?2", S, O));
+  // Відгуки на вакансії й журнал повідомлень воронки (0028): голос за ту саму вакансію в обох лишається один (survivor),
+  // одноразові повідомлення (onboarding_reminder, tg_blocked_notice) теж; решта переходить до survivor.
+  st.push(q("UPDATE OR IGNORE job_feedback SET user_id = ?1 WHERE user_id = ?2", S, O));
+  st.push(q("UPDATE OR IGNORE nudges SET user_id = ?1 WHERE user_id = ?2", S, O));
 
   // --- Команди компаній ------------------------------------------------------------------------
   st.push(

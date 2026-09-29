@@ -4,6 +4,7 @@ import type { SolanaPayEnv } from "@/lib/billing/solana-pay";
 import { notifierFromEnv, type NotifyEnv } from "@/lib/crm/notify";
 import { jobsDbFromEnv } from "@/lib/jobs-db";
 import { DELIVER_BUDGET_MS, deliverWebhooks } from "@/lib/crm/webhooks";
+import { runNudges } from "@/lib/nudges/run";
 import { savedSearchAlerts } from "./alerts";
 import { sendExpiryReminders } from "./billing-reminders";
 import { countStalePayments, dailyCleanup } from "./cleanup";
@@ -19,7 +20,7 @@ import { checkPendingSolanaPay } from "./solana-pay-check";
  * | Тригер          | Задачі                                                            |
  * |-----------------|-------------------------------------------------------------------|
  * | кожні 5 хв      | прострочення знайомств і мертві броні, потім доставка вебхуків    |
- * | щогодини        | прострочені вакансії компаній, сповіщення збережених пошуків, завислі платежі x402 (лише підрахунок), рахунки Solana Pay (звірити в мережі, прострочити старі), нагадування за 3 дні до кінця оплаченого USDC-періоду, сповіщення власнику, щотижневий звіт (понеділок 08:00 UTC) |
+ * | щогодини        | прострочені вакансії компаній, сповіщення збережених пошуків, завислі платежі x402 (лише підрахунок), рахунки Solana Pay (звірити в мережі, прострочити старі), нагадування за 3 дні до кінця оплаченого USDC-періоду, повідомлення воронки (нагадування про анкету, «Still looking?», порожній тиждень, пауза після тиші), сповіщення власнику, щотижневий звіт (понеділок 08:00 UTC) |
  * | щодня 03:00 UTC | прибирання: сесії, коди входу, лічильники, апдейти бота, облік 400 днів, журнал cron 30 днів |
  *
  * Кожна задача обмежена пачкою і часом (CRON_BUDGET_MS, budgetMs) і добирає
@@ -51,6 +52,9 @@ const DEFAULT_BUDGET_MS = 60_000;
 /** Прив'язки й секрети, які читають задачі. */
 export type CronEnv = NotifyEnv & SolanaPayEnv & {
   DB: D1Database;
+  /** Ключ підписаних посилань у листах воронки (lib/digest/unsubscribe.ts); INTERNAL_API_SECRET як запас. */
+  SESSION_SECRET?: string;
+  INTERNAL_API_SECRET?: string;
   WEBHOOK_SIGNING_KEY?: string;
   /** База вакансій (лише читання, lib/jobs-db.ts): сповіщення власнику про сканер. */
   JOBS_DB?: D1Database;
@@ -116,6 +120,12 @@ export const JOBS = {
     name: "billing.reminders",
     run: async (env, { scheduled }) => ({ ...(await sendExpiryReminders(env.DB, { env, now: scheduled })) }),
   },
+  nudges: {
+    name: "nudges.send",
+    // Кілька десятків повідомлень за раз; решту добере наступна година.
+    budgetMs: 120_000,
+    run: async (env, { now, deadline }) => ({ ...(await runNudges(env.DB, { env, now, deadline })) }),
+  },
   ownerAlerts: {
     name: "owner.alerts",
     budgetMs: 120_000,
@@ -156,7 +166,7 @@ export const SCHEDULE: Record<string, readonly CronJob[]> = {
   [CRONS.every5Minutes]: [JOBS.expireIntros, JOBS.deliverWebhooks],
   [CRONS.hourly]: [
     JOBS.closeExpiredJobs, JOBS.savedSearchAlerts, JOBS.stalePayments, JOBS.solanaPayCheck, JOBS.billingReminders,
-    JOBS.ownerAlerts, JOBS.weeklyReport,
+    JOBS.nudges, JOBS.ownerAlerts, JOBS.weeklyReport,
   ],
   [CRONS.daily]: [JOBS.dailyCleanup],
 };

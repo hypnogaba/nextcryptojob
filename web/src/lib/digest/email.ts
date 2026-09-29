@@ -3,6 +3,7 @@ import { hmacSha256Verify } from "@/lib/auth/hash";
 import { cloudflareMailer } from "@/lib/mail/cloudflare";
 import { digestEmail } from "@/lib/mail/digest";
 import { siteOrigin } from "@/lib/site";
+import { feedbackUrl, jobRefOf } from "./feedback";
 import { unsubscribeKey, unsubscribeUrl } from "./unsubscribe";
 
 /**
@@ -44,6 +45,8 @@ const Envelope = z.object({
   ts: z.number().int(),
   /** Скільки живих вакансій переглянув підбір (з 14.09.2026); старий engine поля не шле. */
   pool_jobs: z.number().int().min(0).max(10_000_000).optional(),
+  /** true: один раз сказати, що Telegram недосяжний і добірка йде поштою (з 29.09.2026); старий engine поля не шле. */
+  telegram_blocked: z.boolean().optional(),
   // Кожну вакансію перевіряємо окремо (Job нижче): крива вакансія не топить решту листа.
   jobs: z.array(z.unknown()).min(1).max(10),
 });
@@ -240,12 +243,21 @@ export async function digestEmailResponse(request: Request, deps: DigestEmailDep
 
   // Лист складаємо до заявки: помилка тут не лишає заявку 'sending'.
   const site = siteOrigin(deps.env);
+  const key = unsubscribeKey(deps.env) ?? secret;
+  // «Not for me» під кожною вакансією: підписане посилання на сторінку відгуку (lib/digest/feedback.ts).
+  const feedback: Record<number, string> = {};
+  for (const j of body.jobs) {
+    const ref = jobRefOf(j.source, j.job_id);
+    if (ref) feedback[j.position] = await feedbackUrl(site, key, body.user_id, ref);
+  }
   const message = digestEmail({
     localDate: body.local_date,
     jobs: body.jobs,
     checked: body.pool_jobs ?? null,
     site,
-    unsubscribeUrl: await unsubscribeUrl(site, unsubscribeKey(deps.env) ?? secret, body.user_id),
+    unsubscribeUrl: await unsubscribeUrl(site, key, body.user_id),
+    feedbackUrls: feedback,
+    telegramBlocked: body.telegram_blocked === true,
   });
 
   const claimed = await claim(deps.db, body.digest_id);

@@ -32,6 +32,8 @@ beforeEach(() => {
     INSERT INTO intros (id, company_id, user_id, mode, status, message, requested_via, respond_token_hash, contact_kind, contact_value, expires_at) VALUES
       ('int_1', 'co_1', 'a', 'approval', 'accepted', 'We would like to talk about a role.', 'web', '${RESPOND_TOKEN_HASH}', 'email', 'a@example.com', datetime('now', '+14 days')),
       ('int_2', 'co_1', 'b', 'approval', 'pending', 'A message meant for bob only.', 'web', NULL, NULL, NULL, datetime('now', '+14 days'));
+    INSERT INTO job_feedback (user_id, job_ref, vote, reason, company_key) VALUES ('a', 'nr:1', 'down', 'wrong_level', 'acme'), ('b', 'nr:9', 'up', NULL, NULL);
+    INSERT INTO nudges (user_id, kind, channel) VALUES ('a', 'still_looking', 'telegram'), ('b', 'empty_week', 'email');
     INSERT INTO consents (user_id, kind, granted, text_version) VALUES ('a', 'scoring', 1, 'v1');
     INSERT INTO consent_events (user_id, kind, granted, text_version) VALUES ('a', 'scoring', 1, 'v1');
   `);
@@ -43,7 +45,7 @@ describe("exportUserData", () => {
     expect(Object.keys(data!).sort()).toEqual(
       [
         "cards", "consent_events", "consents", "digest_runs", "exported_at", "format", "identities", "intros",
-        "profile_prefs", "saved_jobs", "scores", "sent", "source_facts", "user",
+        "job_feedback", "nudges", "profile_prefs", "saved_jobs", "scores", "sent", "source_facts", "user",
       ].sort(),
     );
     expect(data!.user).toMatchObject({ id: "a", email: "a@example.com", roles: ["engineer"], timezone: "Europe/Paris" });
@@ -68,6 +70,13 @@ describe("exportUserData", () => {
       updated_at: expect.any(String),
     });
     expect(data!.saved_jobs).toEqual([expect.objectContaining({ job_ref: "nr:7" })]);
+  });
+
+  it("has the person's thumbs and the funnel messages we sent, only their own", async () => {
+    const data = await exportUserData(t.d1, "a");
+    expect(data!.job_feedback).toEqual([expect.objectContaining({ job_ref: "nr:1", vote: "down", reason: "wrong_level" })]);
+    expect(data!.nudges).toEqual([expect.objectContaining({ kind: "still_looking", channel: "telegram" })]);
+    expect(JSON.stringify(data)).not.toContain("nr:9");
   });
 
   it("has the jobs we sent and the daily runs, and the intro requests the person received, only their own", async () => {
@@ -95,7 +104,7 @@ describe("exportUserData", () => {
     // Вивантажується (export.ts) або свідомо ні: секрети входу, службові й чужі дані про людину.
     const EXPORTED = [
       "identities", "source_facts", "scores", "cards", "consents", "consent_events", "profile_prefs", "saved_jobs", "sent",
-      "digest_runs", "intros",
+      "digest_runs", "intros", "job_feedback", "nudges",
     ];
     const LEFT_OUT = [
       "sessions", "score_jobs", "pipeline", "pipeline_events", "company_members", "testimonials", "feedback", "job_clicks",
