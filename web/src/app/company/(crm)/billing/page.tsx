@@ -44,6 +44,7 @@ const ERRORS: Record<BillingError, string> = {
   rate_limited: WEB_BURST_TEXT,
   not_found: "That payment link is gone. Get a new one below.",
   rpc_failed: "We could not check the Solana network just now. Try again in a minute.",
+  duplicate_tx: "We found your payment, but that transaction was already applied to another payment link. Write to support@nextcryptojob.xyz and we will sort it out.",
 };
 
 const DAY_MS = 86_400_000;

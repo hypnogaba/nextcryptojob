@@ -310,6 +310,44 @@ export async function findConfirmedMonth(db: D1Database, invoiceId: string): Pro
 export async function confirmInvoice(db: D1Database, invoice: SolanaPayInvoice, tx: string, payer: string | null, now: Date): Promise<ConfirmedMonth> {
   const already = await findConfirmedMonth(db, invoice.id);
   if (already) return already;
+  try {
+    return await confirmInvoiceOnce(db, invoice, tx, payer, now);
+  } catch (e) {
+    // Той самий підпис уже закриває інший рахунок (uq_solana_pay_tx): батч відкотився, гроші одного платежу
+    // двічі не зараховуємо. Не 500 і не зупинка cron: викликач мусить це обробити (markDuplicateTx).
+    if (isDuplicateTxError(e)) throw new DuplicateTxError(invoice.id, tx);
+    throw e;
+  }
+}
+
+/** Платіж (tx) уже зарахований іншому рахунку: унікальний індекс uq_solana_pay_tx не пустив повтор. */
+export class DuplicateTxError extends Error {
+  constructor(readonly invoiceId: string, readonly tx: string) {
+    super(`solana pay: tx ${tx} is already applied to another invoice`);
+    this.name = "DuplicateTxError";
+  }
+}
+
+function isDuplicateTxError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return /UNIQUE constraint failed/i.test(m) && /solana_pay_invoices\.tx|uq_solana_pay_tx/.test(m);
+}
+
+/**
+ * Рахунок з уже використаним підписом: більше його не перевіряємо (expired, cron не повертається до нього щогодини)
+ * і лишаємо слід для власника в audit_log (`solana_pay.duplicate_tx`). Підписи в журналі публічні, персональних даних нема.
+ */
+export async function markDuplicateTx(db: D1Database, invoice: SolanaPayInvoice, tx: string): Promise<void> {
+  await db.batch([
+    db.prepare(`UPDATE solana_pay_invoices SET status = 'expired' WHERE id = ? AND status = 'pending'`).bind(invoice.id),
+    db
+      .prepare(`INSERT INTO audit_log (actor, action, target, meta_json) VALUES ('system:solana-pay', 'solana_pay.duplicate_tx', ?, ?)`)
+      .bind(invoice.id, JSON.stringify({ company_id: invoice.companyId, tx })),
+  ]);
+  console.error("solana pay: duplicate tx, invoice not confirmed", { invoiceId: invoice.id, tx });
+}
+
+async function confirmInvoiceOnce(db: D1Database, invoice: SolanaPayInvoice, tx: string, payer: string | null, now: Date): Promise<ConfirmedMonth> {
 
   const subId = newId("sub");
   const nowSql = sqlTime(now);
