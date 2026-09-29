@@ -120,7 +120,7 @@ export default function ScoringPage() {
             <p className="text-lg text-ink-muted">
               Your score has three layers. Work comes from your role&apos;s main sources. Reputation is the stronger of
               two signals: well-known crypto accounts among your X followers, or your GitHub followers. Connecting X
-              never lowers it. Followers count in Reputation only, never in Work too. Breadth rewards every other
+              never lowers it. Breadth rewards every other
               source you connect, up to 5 points each and 20 in total: your site, YouTube, wallets. Onchain is part of
               Work for BD, Community and Trader, and counts as Breadth for everyone else.
             </p>

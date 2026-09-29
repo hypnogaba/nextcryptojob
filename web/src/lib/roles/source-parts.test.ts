@@ -29,14 +29,12 @@ describe("SOURCE_PARTS", () => {
   });
 
   it("matches the engine's GitHub weights", () => {
-    // v10: без підписників (вони лише в репутації); ваги 35/25/15/10 нормуються на 100, на сторінці округлені.
-    const near = (got: number | null, shown: number) => expect(Math.abs(got! - shown)).toBeLessThan(1);
-    near(srcGhEng({ ...gh, mergedPrsElsewhere: 1000 }), weights("gh_eng")[0]!);
-    near(srcGhEng({ ...gh, stars: 5000 }), weights("gh_eng")[1]!);
-    near(srcGhEng({ ...gh, reviews12m: 300 }), weights("gh_eng")[2]!);
-    near(srcGhEng({ ...gh, commits12m: 2000 }), weights("gh_eng")[3]!);
-    expect(srcGhEng({ ...gh, followers: 100_000 })).toBe(0);
-    expect(weights("gh_eng")).toEqual([41, 29, 18, 12]);
+    expect(srcGhEng({ ...gh, mergedPrsElsewhere: 1000 })).toBeCloseTo(35);
+    expect(srcGhEng({ ...gh, stars: 5000 })).toBeCloseTo(25);
+    expect(srcGhEng({ ...gh, reviews12m: 300 })).toBeCloseTo(15);
+    expect(srcGhEng({ ...gh, followers: 3000 })).toBeCloseTo(15);
+    expect(srcGhEng({ ...gh, commits12m: 2000 })).toBeCloseTo(10);
+    expect(weights("gh_eng")).toEqual([35, 25, 15, 15, 10]);
     expect(srcGhBuilder({ ...gh, reposPushed12m: 12 })).toBeCloseTo(40);
     expect(srcGhBuilder({ ...gh, reposWithSite: 4 })).toBeCloseTo(30);
     expect(srcGhBuilder({ ...gh, commits12m: 1500 })).toBeCloseTo(30);
@@ -44,15 +42,13 @@ describe("SOURCE_PARTS", () => {
   });
 
   it("matches the engine's X and YouTube weights", () => {
-    // v10: без відомих підписників (KOL лише в репутації); ваги 15/15/15/15/10 нормуються на 100.
-    const near = (got: number | null, shown: number) => expect(Math.abs(got! - shown)).toBeLessThan(1);
-    expect(srcX({ ...x, kol: 500 })).toBe(0);
-    near(srcX({ ...x, followers: 500_000 }), weights("x")[0]!);
-    near(srcX({ ...x, ownAvgLikesRt: 1500 }), weights("x")[1]!);
-    near(srcX({ ...x, ownAvgViews: 150_000 }), weights("x")[2]!);
-    near(srcX({ ...x, ownAvgReplies: 150 }), weights("x")[3]!);
-    near(srcX({ ...x, own: 20 }), weights("x")[4]!);
-    expect(weights("x")).toEqual([22, 21, 21, 21, 15]);
+    expect(srcX({ ...x, kol: 500 })).toBeCloseTo(30);
+    expect(srcX({ ...x, followers: 500_000 })).toBeCloseTo(15);
+    expect(srcX({ ...x, ownAvgLikesRt: 1500 })).toBeCloseTo(15);
+    expect(srcX({ ...x, ownAvgViews: 150_000 })).toBeCloseTo(15);
+    expect(srcX({ ...x, ownAvgReplies: 150 })).toBeCloseTo(15);
+    expect(srcX({ ...x, own: 20 })).toBeCloseTo(10);
+    expect(weights("x")).toEqual([30, 15, 15, 15, 15, 10]);
     expect(srcYt({ ...yt, subscribers: 1_000_000 })).toBeCloseTo(45);
     expect(srcYt({ ...yt, avgViewsRecent: 100_000 })).toBeCloseTo(35);
     expect(srcYt({ ...yt, videos90d: 12 })).toBeCloseTo(20);

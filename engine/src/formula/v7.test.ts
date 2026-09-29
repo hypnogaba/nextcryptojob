@@ -65,25 +65,23 @@ describe("v7: будова", () => {
 });
 
 describe("v7: джерела", () => {
-  it("v10 (B4): відомі підписники X не входять у джерело X, лише в репутацію", () => {
+  it("v10: відомі підписники X лишаються в джерелі X (ворота: без них бал відомих людей падав на 10-14)", () => {
     expect(KOL_TOP).toBe(500);
-    expect(srcXV7({ ...X, kol: 0 })).toBeCloseTo(srcXV7({ ...X, kol: 5000 })!);
-    expect(srcXV7({ ...X, kol: 0, kolSourceGap: true })).toBeCloseTo(srcXV7({ ...X, kol: 500 })!);
+    expect(srcXV7({ ...X, kol: 5000 })!).toBeGreaterThan(srcXV7({ ...X, kol: 0 })!);
+    // Немає відповіді про KOL: вага випадає, а не рахується нулем.
+    expect(srcXV7({ ...X, kol: 0, kolSourceGap: true })!).toBeGreaterThan(srcXV7({ ...X, kol: 0 })!);
     expect(reputation({ x: { ...X, kol: 500 } })).toBeCloseTo(100);
-    // Решта ваг нормується: усі сигнали на межі дають 100, а не 70.
-    const full = { ...X, followers: 500_000, ownAvgLikesRt: 1500, ownAvgViews: 150_000, ownAvgReplies: 150, own: 20, daysCovered: 30, kol: 0 };
-    expect(srcXV7(full)).toBeCloseTo(100);
     expect(srcXV7({ ...X, followers: null })).toBeNull();
   });
 
-  it("v10 (B4): підписники GitHub не входять у код; командні зірки теж", () => {
+  it("v10: підписники GitHub лишаються в коді; командні зірки ні", () => {
     const base = { ...GH, stars: 0, followers: 0, commits12m: 0, reviews12m: 0, mergedPrsElsewhere: 0 };
     expect(srcGhEngV7(base)).toBe(0);
-    expect(srcGhEngV7({ ...base, followers: 100_000 })).toBe(0);
+    expect(srcGhEngV7({ ...base, followers: 100_000 })!).toBeGreaterThan(0);
     expect(srcGhEngV7({ ...base, teamStars: 5000 })).toBe(0);
-    expect(srcGhEngV7({ ...base, teamCommits: 1000 })).toBeCloseTo(35 / 0.85);
-    // Усе на межі = 100 (ваги 35+25+15+10 нормуються).
-    expect(srcGhEngV7({ ...base, stars: 5000, reviews12m: 300, commits12m: 2000, mergedPrsElsewhere: 1000 })).toBeCloseTo(100);
+    expect(srcGhEngV7({ ...base, teamCommits: 1000 })!).toBeGreaterThan(0);
+    // Усе на межі = 100.
+    expect(srcGhEngV7({ ...base, stars: 5000, reviews12m: 300, commits12m: 2000, mergedPrsElsewhere: 1000, followers: 3000 })).toBeCloseTo(100);
   });
 
   it("v10: репутація лишається єдиним місцем підписників (X KOL і GitHub followers)", () => {

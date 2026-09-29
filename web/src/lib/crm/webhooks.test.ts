@@ -165,7 +165,7 @@ describe("webhook URL guard (SSRF)", () => {
     expect(webhookUrlProblem(url)).toContain(reason);
   });
 
-  it("refuses every host of this Worker: the custom domains from wrangler.jsonc and our workers.dev subdomain", () => {
+  it("refuses every host of this Worker: the custom domains from wrangler.jsonc and our old workers.dev subdomain", () => {
     const config = readFileSync(new URL("../../../wrangler.jsonc", import.meta.url), "utf8");
     const patterns = [...config.matchAll(/"pattern":\s*"([^"]+)"/g)].map((m) => m[1].split("/")[0]);
     expect(patterns.length).toBeGreaterThan(0);
@@ -173,7 +173,8 @@ describe("webhook URL guard (SSRF)", () => {
       expect(OWN_HOSTS.some((own) => host === own || host.endsWith(`.${own}`))).toBe(true);
       expect(webhookUrlProblem(`https://${host}/hook`)).toContain("NextCryptoJob");
     }
-    expect(config).toMatch(/"workers_dev":\s*true/);
+    // workers_dev вимкнено 29.09, але піддомен акаунта лишається у списку: адреси версій і старі посилання.
+    expect(config).toMatch(/"workers_dev":\s*false/);
     expect(OWN_HOSTS).toContain("hypnogaba.workers.dev");
   });
 

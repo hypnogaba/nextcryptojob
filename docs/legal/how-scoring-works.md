@@ -44,7 +44,7 @@ Your score has three layers. Together they can pass 100, so the total is capped 
    GitHub, a trader on trading, media roles on X or YouTube. Some roles use two.
 2. **Reputation, up to 25.** The same for every role: how many well-known crypto accounts
    follow you on X, or your GitHub followers, whichever counts for more. Connecting X
-   never lowers it. Followers count here only, so they are never counted twice.
+   never lowers it.
 3. **Breadth, up to 20.** Everything else you connect counts: every other source adds up to
    5 points, and breadth stops at 20.
 4. **A role needs its main source.** Without it we show "not enough data" instead of a low

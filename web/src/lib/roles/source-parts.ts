@@ -16,10 +16,11 @@ type Direct = Exclude<SourceKey, "media" | "output" | "best" | "rep" | "links">;
 
 export const SOURCE_PARTS: Record<Direct, readonly SourcePart[]> = {
   gh_eng: [
-    { label: "Pull requests merged into other projects, or commits to your team's repos", weight: 41, top: "1,000", scale: "log" },
-    { label: "Stars on your own projects", weight: 29, top: "5,000", scale: "log" },
-    { label: "Code reviews, last 12 months", weight: 18, top: "300", scale: "log" },
-    { label: "Commits, last 12 months", weight: 12, top: "2,000", scale: "log" },
+    { label: "Pull requests merged into other projects, or commits to your team's repos", weight: 35, top: "1,000", scale: "log" },
+    { label: "Stars on your own projects", weight: 25, top: "5,000", scale: "log" },
+    { label: "Code reviews, last 12 months", weight: 15, top: "300", scale: "log" },
+    { label: "Followers", weight: 15, top: "3,000", scale: "log" },
+    { label: "Commits, last 12 months", weight: 10, top: "2,000", scale: "log" },
   ],
   gh_builder: [
     { label: "Projects you pushed to, last 12 months", weight: 40, top: "12", scale: "linear" },
@@ -27,11 +28,12 @@ export const SOURCE_PARTS: Record<Direct, readonly SourcePart[]> = {
     { label: "Commits, last 12 months", weight: 30, top: "1,500", scale: "log" },
   ],
   x: [
-    { label: "Followers", weight: 22, top: "500,000", scale: "log" },
-    { label: "Likes and reposts per post", weight: 21, top: "1,500", scale: "log" },
-    { label: "Views per post", weight: 21, top: "150,000", scale: "log" },
-    { label: "Replies per post", weight: 21, top: "150", scale: "log" },
-    { label: "Your own posts per 30 days", weight: 15, top: "20", scale: "linear" },
+    { label: "Well-known crypto accounts that follow you", weight: 30, top: "500", scale: "log" },
+    { label: "Followers", weight: 15, top: "500,000", scale: "log" },
+    { label: "Likes and reposts per post", weight: 15, top: "1,500", scale: "log" },
+    { label: "Views per post", weight: 15, top: "150,000", scale: "log" },
+    { label: "Replies per post", weight: 15, top: "150", scale: "log" },
+    { label: "Your own posts per 30 days", weight: 10, top: "20", scale: "linear" },
   ],
   yt: [
     { label: "Subscribers", weight: 45, top: "1,000,000", scale: "log" },
