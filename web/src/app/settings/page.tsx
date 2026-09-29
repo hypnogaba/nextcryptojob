@@ -12,6 +12,7 @@ import { HISTORY_DAYS } from "@/lib/digest/history";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { AddEmailForm } from "../account/add-email-form";
+import { TelegramUnreachableNotice } from "@/components/telegram-unreachable-notice";
 import { TelegramPanel } from "../account/telegram-panel";
 import { DailyJobsForm } from "./daily-jobs-form";
 import { DeleteAccountForm } from "./delete-form";
@@ -67,6 +68,7 @@ export default async function SettingsPage() {
             <AddEmailForm intro="To get daily jobs by email, add an email first. We send a code to check it's yours." />
           </div>
         )}
+        {s.telegramUnreachable ? <TelegramUnreachableNotice hasEmail={s.email !== null} /> : null}
         <DailyJobsForm
           email={s.email}
           telegramLinked={s.telegramLinked}

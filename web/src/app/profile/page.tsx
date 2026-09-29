@@ -16,6 +16,8 @@ import { loadAnswers } from "@/lib/onboarding/store";
 import { cardBack } from "@/lib/card/back";
 import { sealSeed } from "@/lib/card/seal";
 import { listActiveCards } from "@/lib/card/store";
+import { TelegramUnreachableNotice } from "@/components/telegram-unreachable-notice";
+import { telegramStatus } from "@/lib/telegram/channel";
 import { explainRole, hasStaleVerifyGap, sourceState } from "@/lib/score/explain";
 import { loadScores } from "@/lib/score/load";
 import { mainRole, rankRoles } from "@/lib/score/result";
@@ -35,13 +37,14 @@ type Props = { searchParams: Promise<{ wait?: string | string[] }> };
 export default async function ProfilePage({ searchParams }: Props) {
   const user = await requireUser();
   const d = db();
-  const [answers, identities, status, scores, consent, cards] = await Promise.all([
+  const [answers, identities, status, scores, consent, cards, tg] = await Promise.all([
     loadAnswers(d, user.id),
     listIdentities(d, user.id),
     profileStatus(d, user.id),
     loadScores(d, user.id),
     hasScoringBasis(d, user.id),
     listActiveCards(d, user.id),
+    telegramStatus(d, user.id),
   ]);
   // Анкету пройдено й умови прийнято: бал уже рахується, навіть якщо «Stand out» ще попереду.
   const done = briefDone(answers.step);
@@ -90,6 +93,8 @@ export default async function ProfilePage({ searchParams }: Props) {
       ) : (
         <StatusPanel key={`${status.job?.status ?? "none"}:${status.scored}`} initial={status} />
       )}
+
+      {tg?.unreachable ? <TelegramUnreachableNotice hasEmail={tg.email !== null} /> : null}
 
       {changed ? (
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:p-5">
