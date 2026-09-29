@@ -12,7 +12,7 @@ import { FINISHES } from "@/lib/card/tiers";
 import { FORMULA_VERSION } from "@/lib/score/formula";
 
 export const metadata: Metadata = {
-  title: "How your score works",
+  title: "How your crypto talent score works",
   description:
     "Optional: your posts on X, your wallets' history and your GitHub become a 0 to 100 score for your role, on a card you can post on X.",
 };

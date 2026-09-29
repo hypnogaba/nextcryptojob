@@ -3,7 +3,8 @@ import { ContactForm } from "./contact-form";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Reach the NextCryptoJob team: candidates, companies or press.",
+  description:
+    "Reach the NextCryptoJob team by email or contact form. Questions from candidates, companies, boards and press are all welcome.",
 };
 
 const EMAIL = "hello@nextcryptojob.xyz";

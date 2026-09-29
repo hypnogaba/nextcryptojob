@@ -4,6 +4,8 @@ import { LogoMark } from "@/components/wordmark";
 // Раунд 5: Agents прибрано (п.9, лишається за прямим посиланням), Terms і Company terms
 // злито в один пункт «Terms» (п.11, /terms з розділами candidates/companies).
 const LINKS = [
+  { href: "/crypto-jobs", label: "Crypto jobs" },
+  { href: "/crypto-jobs/engineer", label: "Engineer jobs" },
   { href: "/scoring", label: "How scoring works" },
   { href: "/company", label: "For companies" },
   { href: "/faq", label: "FAQ" },

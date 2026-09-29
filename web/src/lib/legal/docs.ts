@@ -17,31 +17,31 @@ export const LEGAL_DOCS = {
     path: "/privacy",
     file: "privacy-policy.md",
     source: privacy,
-    description: "What personal data NextCryptoJob processes, why, who receives it and your rights.",
+    description: "What personal data NextCryptoJob processes, why, who receives it and what rights you have. Read how to see, fix or remove your data.",
   },
   terms: {
     path: "/terms",
     file: "terms-candidates.md",
     source: termsCandidates,
-    description: "Terms for candidates who use NextCryptoJob to find a job. Free for candidates.",
+    description: "Terms for candidates who use NextCryptoJob to find a crypto job: what the service does, what you agree to and what we expect. Free for candidates.",
   },
   termsCompanies: {
     path: "/terms/companies",
     file: "terms-companies.md",
     source: termsCompanies,
-    description: "Terms for companies and agencies that use the NextCryptoJob CRM, API and job posting.",
+    description: "Terms for companies and agencies that use the NextCryptoJob candidate search, API and job posting: access, payment, data use and contact rules.",
   },
   sources: {
     path: "/sources",
     file: "sources.md",
     source: sources,
-    description: "Where NextCryptoJob jobs come from, how our crawler behaves, and how a board asks us to change or stop.",
+    description: "Where the crypto jobs on NextCryptoJob come from, how our crawler behaves, and how a job board or company can ask us to change or stop.",
   },
   howScoring: {
     path: "/how-scoring-works",
     file: "how-scoring-works.md",
     source: howScoring,
-    description: "Where your NextCryptoJob score comes from, what we look at and how to contest it.",
+    description: "Where your NextCryptoJob score comes from: what we read on X, GitHub and wallets, how it is weighed for your role, and how to contest it.",
   },
 } as const satisfies Record<string, LegalDoc>;
 

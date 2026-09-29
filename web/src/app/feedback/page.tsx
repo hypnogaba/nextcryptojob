@@ -4,7 +4,7 @@ import { currentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
 export const metadata: Metadata = {
-  title: "Got a job through NextCryptoJob? Tell us | NextCryptoJob",
+  title: "Got a job through NextCryptoJob? Tell us",
   description: "Tell us how NextCryptoJob helped you get hired. We may feature your story on the site with your permission.",
 };
 

@@ -11,8 +11,9 @@ import { db } from "@/lib/db";
 import { POSITION_CODE } from "@/lib/roles/recipes";
 
 export const metadata: Metadata = {
-  title: "Leaderboard",
-  description: "Everyone's public NextCryptoJob card, ranked by score.",
+  title: "Crypto talent leaderboard",
+  description:
+    "The public NextCryptoJob cards of crypto builders, traders and marketers, ranked by score. Each score comes from public X, GitHub and wallet work.",
 };
 
 // Читає D1 напряму (без cookies()/сесії, Next інакше спробував би зробити сторінку статичною
