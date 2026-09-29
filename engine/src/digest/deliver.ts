@@ -36,6 +36,8 @@ export interface DeliveryJob {
   source: "nextrole" | "company";
   /** id вакансії: сайт робить з нього адресу своєї сторінки /jobs/<id> (раунд 6, лист). */
   jobId?: string | null;
+  /** sent.job_ref ('nr:<id>' або 'co:<id>'): кнопки 👍/👎 у Telegram несуть його в callback_data. */
+  ref?: string;
   /** «est. $180k to $225k (web3.career estimate)», лише коли вилки роботодавця немає; оцінка, не зарплата. */
   salaryEstimate?: string | null;
   /** Одне-два речення про компанію (companies.about, db/jobs 0005); null, якщо не знаємо. */
@@ -54,6 +56,8 @@ export interface DigestMessage {
   jobs: DeliveryJob[];
   /** Скільки відкритих вакансій підійшло цій людині за роллю й місцем (до відбору п'яти); не розмір пулу. */
   checked?: number | null;
+  /** У листі один раз сказати, що Telegram недосяжний (бот заблоковано чи не запущено) і добірка йде поштою. */
+  telegramBlocked?: boolean;
 }
 
 export interface DeliveryUser {
@@ -183,6 +187,25 @@ export function checkedLine(checked: number | null | undefined, shown: number): 
   return `${checked.toLocaleString("en-US")} open crypto jobs match your roles and place. ${these} you best.`;
 }
 
+/** Ліміт Telegram на callback_data, байтів. */
+const CALLBACK_MAX_BYTES = 64;
+
+/**
+ * Кнопки відгуку під добіркою: рядок на вакансію, «👍 1» і «👎 1». callback_data `fb:u:<ref>` / `fb:d:<ref>`
+ * обробляє бот сайту (web/src/lib/telegram/bot.ts). Вакансія без ref, чи з ref задовгим для Telegram, кнопок не має.
+ * null, коли кнопок немає зовсім.
+ */
+export function telegramKeyboard(m: DigestMessage): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } | null {
+  const rows = m.jobs.flatMap((j) => {
+    if (!j.ref) return [];
+    const up = `fb:u:${j.ref}`;
+    const down = `fb:d:${j.ref}`;
+    if (Buffer.byteLength(down, "utf8") > CALLBACK_MAX_BYTES) return [];
+    return [[{ text: `\u{1F44D} ${j.position}`, callback_data: up }, { text: `\u{1F44E} ${j.position}`, callback_data: down }]];
+  });
+  return rows.length ? { inline_keyboard: rows } : null;
+}
+
 export function telegramText(m: DigestMessage, siteUrl: string): string {
   const checked = checkedLine(m.checked, m.jobs.length);
   const head = `<b>Your crypto jobs for ${escapeHtml(shortDate(m.localDate))}</b>${checked ? `\n${escapeHtml(checked)}` : ""}`;
@@ -209,7 +232,9 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
     if (via) lines.push(`via ${via}`);
     return lines.join("\n");
   });
-  const foot = `Earlier jobs: send /jobs. Every job with its reasons: <a href="${escapeHtml(siteUrl)}/jobs">your jobs</a>. ` +
+  // Кнопки 👍/👎 є лише коли є що натискати (telegramKeyboard).
+  const hint = telegramKeyboard(m) ? "Not a fit? Tap \u{1F44E} under the message: we hide that company for 30 days.\n" : "";
+  const foot = `${hint}Earlier jobs: send /jobs. Every job with its reasons: <a href="${escapeHtml(siteUrl)}/jobs">your jobs</a>. ` +
     `Change the time or pause: <a href="${escapeHtml(siteUrl)}/settings">settings</a>.`;
   let text = [head, ...blocks, foot].join("\n\n");
   // П'ять вакансій у 4096 символів вміщаються з запасом; обрізаємо лише на випадок дивних даних.
@@ -237,11 +262,16 @@ function isUnreachable(status: number, description: string): boolean {
   return status === 400 && /chat not found|user not found|peer_id_invalid/i.test(description);
 }
 
-export async function sendTelegram(token: string, chatId: string, text: string, deps: DeliverDeps): Promise<TelegramResult> {
+export async function sendTelegram(
+  token: string, chatId: string, text: string, deps: DeliverDeps, replyMarkup?: Record<string, unknown> | null,
+): Promise<TelegramResult> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const sleep = deps.sleep ?? defaultSleep;
   const url = `https://${TELEGRAM_HOST}/bot${token}/sendMessage`;
-  const payload = JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  const payload = JSON.stringify({
+    chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true },
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  });
   for (let attempt = 1; attempt <= TELEGRAM_ATTEMPTS; attempt++) {
     let status: number;
     let body: TgBody;
@@ -288,6 +318,8 @@ export interface EmailPayload {
   local_date: string;
   /** Unix-секунди підпису: сайт відкидає запити старші за 5 хвилин. */
   ts: number;
+  /** true: у листі один раз сказати, що Telegram недосяжний і добірка йде поштою (з 29.09.2026, необов'язкове). */
+  telegram_blocked?: boolean;
   /** Скільки живих вакансій переглянув підбір (з 14.09.2026, необов'язкове): рядок «We checked …» у листі. */
   pool_jobs?: number;
   jobs: Array<{
@@ -310,6 +342,7 @@ export function emailPayload(m: DigestMessage, now: Date): EmailPayload {
   return {
     version: 1, digest_id: m.digestId, user_id: m.userId, local_date: m.localDate, ts: Math.floor(now.getTime() / 1000),
     ...(m.checked ? { pool_jobs: m.checked } : {}),
+    ...(m.telegramBlocked ? { telegram_blocked: true } : {}),
     jobs: m.jobs.map((j) => ({
       position: j.position, title: cleanText(j.title, 200), company: cleanText(j.company, 100),
       location: j.location ? cleanText(j.location, 100) : null, salary: j.salary, why: j.why, url: j.url,
@@ -382,12 +415,13 @@ export async function deliverDigest(user: DeliveryUser, m: DigestMessage, plan: 
   const token = deps.env.TELEGRAM_BOT_TOKEN;
   if (!token || !user.telegramId) return { status: "failed", channel: "telegram", error: TELEGRAM_NOT_CONFIGURED };
   const site = siteUrlOf(deps.env) ?? DEFAULT_SITE_URL;
-  const tg = await sendTelegram(token, user.telegramId, telegramText(m, site), deps);
+  const tg = await sendTelegram(token, user.telegramId, telegramText(m, site), deps, telegramKeyboard(m));
   if (tg.ok) return { status: "sent", channel: "telegram", note: null };
   const tgError = `telegram ${tg.status ?? "error"}: ${tg.description}`;
   if (!tg.unreachable) return { status: "failed", channel: "telegram", error: tgError };
   if (!plan.emailFallback) return { status: "failed", channel: "telegram", error: tgError, unreachable: true };
-  const r = await sendEmail(m, deps);
+  // Перший лист замість Telegram: одразу кажемо чому (сайт покаже рядок про заблокованого бота).
+  const r = await sendEmail({ ...m, telegramBlocked: true }, deps);
   return r.ok
     ? { status: "sent", channel: "email", note: `${tgError}; sent by email instead`, unreachable: true }
     : { status: "failed", channel: "email", error: `${tgError}; email fallback: ${r.error}`, unreachable: true };

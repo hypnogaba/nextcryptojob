@@ -276,6 +276,10 @@ export interface DigestSummary {
   failed: number;
   /** Telegram сказав «недосяжний», а пошти немає: позначено, не рахується збоєм. */
   unreachable: number;
+  /** Листи, у яких людині один раз сказано, що бот заблоковано і добірка йде поштою (nudges 'tg_blocked_notice'). */
+  blockedNotices: number;
+  /** Людей, у кого за 30 днів є 👎 і чиї компанії тому прибрано з добірки. */
+  dislikeFiltered: number;
   /** Невдалі сьогоднішні прогони, які цього разу пробували вдруге (відновний збій: 429, 5xx). */
   retried: number;
   /** Людей з невпізнаним users.timezone (рахувались за UTC); id людей у журналі рядком WARN. */
@@ -306,7 +310,7 @@ export function deliveryJobs(
     position: i + 1, title: p.job.title, company: p.job.company, location: p.job.location,
     salary: formatSalary(p.job.salary), why: p.why, url: p.job.url,
     salaryEstimate: formatSalary(p.job.salary) ? null : estimateText(estimates.get(p.job.ref)),
-    postedBy: p.job.source === "company" ? p.job.company : null, source: p.job.source, jobId: p.job.id,
+    postedBy: p.job.source === "company" ? p.job.company : null, source: p.job.source, jobId: p.job.id, ref: p.job.ref,
     about: known?.about ?? null,
     companyDomain: known?.domain ?? null,
     // Лише свіжі ціни (не старші за TOKEN_STALE_DAYS): інакше рядка немає.
@@ -320,6 +324,8 @@ export interface DeliveryExtras {
   estimates: ReadonlyMap<string, SalaryEstimate>;
   profiles: ReadonlyMap<string, CompanyProfile>;
   checked: number;
+  /** У листі цієї людини сказати про заблокованого бота (раз): Telegram недосяжний, а лист ще без цього рядка. */
+  blockedNotice?: boolean;
 }
 
 type Planned = { row: DigestUserRow | null; profile: DigestProfile; clock: LocalClock; plan: ChannelPlan };
@@ -333,7 +339,8 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
   const { db } = deps;
   if (!db && !opts.profile) throw new Error("digest: database is required");
   const summary: DigestSummary = {
-    eligible: 0, due: 0, already: 0, skipped: 0, empty: 0, sent: 0, failed: 0, unreachable: 0, retried: 0, tzFallback: 0,
+    eligible: 0, due: 0, already: 0, skipped: 0, empty: 0, sent: 0, failed: 0, unreachable: 0, blockedNotices: 0, dislikeFiltered: 0,
+    retried: 0, tzFallback: 0,
     weeklyEmpty: null, pool: null, companyJobs: 0, dry: [],
   };
 
@@ -408,7 +415,10 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       const fit: FitContext = { words: p.row?.target_text ?? null, scores: p.row && db ? await userScores(db, p.row.id) : {} };
       // Рівень картки людини для м'якого ранжування за сенйорністю (match.ts personLevel).
       const profile: DigestProfile = { ...p.profile, scoreLevel: levelOfScores(fit.scores) };
-      const picks = selectJobs(pool, profile, { now, exclude }).map((pk) => ({ ...pk, why: fitLine(pk, profile, fit, now) }));
+      // Компанії, які людина відхилила 👎 за останні 30 днів (job_feedback, 0028).
+      const excludeCompanies = p.row && db ? await dislikedCompanies(db, p.row.id, pool, now, log) : new Set<string>();
+      if (excludeCompanies.size > 0) summary.dislikeFiltered++;
+      const picks = selectJobs(pool, profile, { now, exclude, excludeCompanies }).map((pk) => ({ ...pk, why: fitLine(pk, profile, fit, now) }));
       if (dry) {
         summary.dry.push({
           who: label, local: `${p.clock.date} ${String(p.clock.hour).padStart(2, "0")}h ${p.clock.tz}`,
@@ -421,12 +431,17 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
       const plan = p.plan as Exclude<ChannelPlan, { skip: string }>;
       const retryId = retryOf.get(row.id);
       // Скільки вакансій підійшло саме цій людині (а не розмір пулу до фільтрів).
-      const mine = { ...extras, checked: countMatches(pool, profile, { now, exclude }) };
+      const blockedNotice = plan.primary === "email" && !!row.telegram_id && !!row.telegram_unreachable_at
+        && !(await hasNudge(db!, row.id, "tg_blocked_notice", log));
+      const mine: DeliveryExtras = { ...extras, blockedNotice, checked: countMatches(pool, profile, { now, exclude, excludeCompanies }) };
       const outcome = await buildAndDeliver(db!, deps, row, p.clock.date, picks, plan, retryId ?? newId(), log, mine, waitBudget, !!retryId);
       if (retryId && typeof outcome === "object") summary.retried++;
       if (outcome === "empty") summary.empty++;
       else if (outcome === "already") summary.already++;
-      else if (outcome.status === "sent") summary.sent++;
+      else if (outcome.status === "sent") {
+        summary.sent++;
+        if (outcome.channel === "email" && (outcome.unreachable || mine.blockedNotice)) summary.blockedNotices++;
+      }
       else if (outcome.unreachable && outcome.channel === "telegram") summary.unreachable++;
       else summary.failed++;
     } catch (e) {
@@ -435,7 +450,8 @@ export async function runDigestDue(deps: DigestDeps, opts: DigestOptions = {}): 
     }
   }
   log(`digest-due: eligible ${summary.eligible}, due ${summary.due}, sent ${summary.sent}, failed ${summary.failed}, ` +
-    `unreachable ${summary.unreachable}, retried ${summary.retried}, tz-fallback ${summary.tzFallback}, ` +
+    `unreachable ${summary.unreachable}, blocked-notices ${summary.blockedNotices}, disliked-filtered ${summary.dislikeFiltered}, ` +
+    `retried ${summary.retried}, tz-fallback ${summary.tzFallback}, ` +
     `empty ${summary.empty}, skipped ${summary.skipped}, already ${summary.already}${dry ? " (dry run)" : ""}`);
   if (db && !dry) await weeklyEmptyIfDue(db, now, log, summary, opts.weeklySummary);
   return summary;
@@ -488,6 +504,7 @@ async function buildAndDeliver(
 
   const message: DigestMessage = {
     digestId, userId: row.id, localDate, jobs: deliveryJobs(picks, extras.estimates, extras.profiles, (deps.now ?? (() => new Date()))()), checked: extras.checked,
+    ...(extras.blockedNotice ? { telegramBlocked: true } : {}),
   };
   const outcome = await deliverDigest(deliveryUser(row), message, plan,
     // Годинник, а не мить початку прогону: `ts` листа ставиться під час відправки. Прогін
@@ -507,6 +524,11 @@ async function buildAndDeliver(
     await db.run("UPDATE users SET telegram_unreachable_at = datetime('now') WHERE id = ?", [row.id], { idempotent: true })
       .catch((e: unknown) => log(`digest: telegram_unreachable_at not set: ${shortError(e, 120)}`));
   }
+  if (status === "sent" && channel === "email" && (outcome.unreachable || extras.blockedNotice)) {
+    // Людині сказано, чому лист замість Telegram: вдруге цього не пишемо (унікальний індекс 0028).
+    await db.run("INSERT OR IGNORE INTO nudges (user_id, kind, channel) VALUES (?, 'tg_blocked_notice', 'email')", [row.id], { idempotent: true })
+      .catch((e: unknown) => log(`digest: tg_blocked_notice not saved: ${shortError(e, 120)}`));
+  }
   if (status === "sent") {
     const shown = picks.filter((p) => p.job.source === "company");
     // Лічильник для компанії (специфікація CRM 5.6). Приріст не ідемпотентний: окремо й без повтору.
@@ -518,6 +540,54 @@ async function buildAndDeliver(
   log(`digest: user ${who(row.id)} ${localDate}: ${status} via ${channel ?? "none"}, ${picks.length} jobs` +
     `${detail ? ` (${detail})` : ""}`);
   return outcome;
+}
+
+// ---------------- відгук і службові повідомлення (0028) ----------------
+
+/** Скільки днів 👎 тримає компанію поза добіркою людини. */
+export const DISLIKE_DAYS = 30;
+
+const noTable = (e: unknown): boolean => e instanceof Error && /no such table/i.test(e.message);
+let warnedNoFunnelTables = false;
+
+/**
+ * companyKey компаній, на чиї вакансії людина поставила 👎 за DISLIKE_DAYS. Ключ береться з
+ * job_feedback.company_key, а якщо сайт його не записав, з пулу за job_ref (поки вакансія в пулі).
+ * Немає таблиці (міграція 0028 ще не накочена): порожньо, добірка йде як раніше.
+ */
+export async function dislikedCompanies(
+  db: Db, userId: string, pool: { crawl: readonly DigestJob[]; company: readonly DigestJob[] }, now: Date, log: (l: string) => void,
+): Promise<Set<string>> {
+  const since = new Date(now.getTime() - DISLIKE_DAYS * 86_400_000).toISOString().slice(0, 19).replace("T", " ");
+  let rows: Array<{ job_ref: string; company_key: string | null }>;
+  try {
+    rows = await db.query("SELECT job_ref, company_key FROM job_feedback WHERE user_id = ? AND vote = 'down' AND at >= ?", [userId, since]);
+  } catch (e) {
+    if (!noTable(e)) throw e;
+    if (!warnedNoFunnelTables) log("digest: job_feedback missing (migration 0028 not applied), thumbs-down is not honoured yet");
+    warnedNoFunnelTables = true;
+    return new Set();
+  }
+  const keys = new Set<string>();
+  const refs = new Set<string>();
+  for (const r of rows) {
+    if (r.company_key) keys.add(r.company_key);
+    else refs.add(r.job_ref);
+  }
+  if (refs.size > 0) for (const j of [...pool.crawl, ...pool.company]) if (refs.has(j.ref)) keys.add(j.companyKey);
+  return keys;
+}
+
+/** Чи є в людини повідомлення цього виду (nudges, 0028). Немає таблиці: true, щоб не слати те, що не вдасться зафіксувати. */
+async function hasNudge(db: Db, userId: string, kind: string, log: (l: string) => void): Promise<boolean> {
+  try {
+    return (await db.query("SELECT 1 AS yes FROM nudges WHERE user_id = ? AND kind = ? LIMIT 1", [userId, kind])).length > 0;
+  } catch (e) {
+    if (!noTable(e)) throw e;
+    if (!warnedNoFunnelTables) log("digest: nudges missing (migration 0028 not applied), the blocked-bot note is off");
+    warnedNoFunnelTables = true;
+    return true;
+  }
 }
 
 /** Текст сухого прогону для командного рядка. */

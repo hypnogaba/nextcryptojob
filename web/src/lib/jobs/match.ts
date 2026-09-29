@@ -98,6 +98,8 @@ export interface SelectOptions {
   now: Date;
   /** `sent.job_ref`, уже надіслані цій людині (sent і pending; невдалі доставки не рахуються). */
   exclude: ReadonlySet<string>;
+  /** companyKey компаній, які людина відхилила 👎 за останні 30 днів: їхніх вакансій у добірці немає. */
+  excludeCompanies?: ReadonlySet<string>;
   limit?: number;
 }
 
@@ -429,6 +431,7 @@ function candidatesFor(pool: readonly DigestJob[], profile: DigestProfile, o: Se
   for (const job of pool) {
     if (o.exclude.has(job.ref)) continue;
     if (job.dedupeKey && excludedDedupe.has(job.dedupeKey)) continue;
+    if (o.excludeCompanies?.has(job.companyKey)) continue;
     const own = profile.roles.find((r) => job.roles.includes(r));
     // Не наша роль, але в назві слова своєї ролі людини: вакансія підходить під першою роллю вакансії,
     // а коли ролі в назві немає зовсім, без ролі (role null): у тексті однаково стоять слова людини.
