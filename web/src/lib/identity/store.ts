@@ -15,7 +15,7 @@ export type Identity = {
 };
 
 /** Джерела, де в людини один запис: новий замінює старий. */
-export type SingleKind = "x" | "github" | "youtube" | "site" | "sherlock";
+export type SingleKind = "x" | "github" | "youtube" | "site";
 
 type Row = {
   id: number;
@@ -57,7 +57,7 @@ export async function getIdentity(db: D1Database, userId: string, kind: SingleKi
 }
 
 /**
- * Ставить людині одне значення джерела (X, GitHub, YouTube, сайт, Sherlock), прибираючи її
+ * Ставить людині одне значення джерела (X, GitHub, YouTube, сайт), прибираючи її
  * попереднє. Своє те саме значення не чіпає (дата додавання й давня позначка перевірки лишаються).
  * Той самий нік в іншому профілі не заважає (0022).
  */
