@@ -6,6 +6,7 @@ import { Ago, CLOCK, NUM, Panel, Stat, Stats, SubHead } from "@/components/admin
 import { BOARD, TABLE, TD_TIGHT, TH_TIGHT, TR } from "@/components/board";
 import { SubmitButton } from "@/components/form/submit-button";
 import { recentAlerts, type RecentAlert } from "@/lib/admin/alerts";
+import { type FunnelMessages, loadFunnelMessages } from "@/lib/admin/funnel-messages";
 import { DEMO_CANDIDATES, DEMO_COMPANY_NAME, demoState, type DemoState } from "@/lib/admin/demo";
 import { cachedJobSourcesReport, loadJobSourcesReport, type JobSourcesReport } from "@/lib/admin/job-sources";
 import { loadOverview, type Overview } from "@/lib/admin/overview";
@@ -147,6 +148,57 @@ function Scores({ o }: { o: Overview }) {
   );
 }
 
+
+/** Повідомлення воронки й відгуки (аудит 29.09, F): що пішло людям, скільки відповіли й проголосували. */
+function Funnel({ f }: { f: FunnelMessages | null }) {
+  if (!f) {
+    return (
+      <Panel id="funnel" title="Funnel messages">
+        <p className="text-sm text-ink-muted">Not available yet: migration 0028 is not applied.</p>
+      </Panel>
+    );
+  }
+  const rows: Array<[string, string, { d7: number; d30: number }]> = [
+    ["Setup reminders", "Telegram people who stopped at the first step, once each", f.onboardingReminders],
+    ["Still looking?", "14 days quiet, at most once in 30 days", f.stillLooking],
+    ["Paused for silence", "No answer in 3 days", f.inactivePaused],
+    ["Empty week", "3+ empty days out of 7, at most weekly", f.emptyWeek],
+    ["Bot blocked, email instead", "Told once in the email", f.blockedNotices],
+  ];
+  return (
+    <Panel id="funnel" title="Funnel messages">
+      <Stats className="sm:grid-cols-3">
+        <Stat label="Thumbs down, 30 d" value={NUM.format(f.thumbsDown)} note="Each hides that company for 30 days" />
+        <Stat label="Thumbs up, 30 d" value={NUM.format(f.thumbsUp)} />
+        <Stat label="People who voted" value={NUM.format(f.voters)} note="Last 30 days" />
+      </Stats>
+      <div className={BOARD}>
+        <table className={`${TABLE} min-w-[420px]`} data-table="funnel-messages">
+          <thead>
+            <tr>
+              <th scope="col" className={TH_TIGHT}>Message</th>
+              <th scope="col" className={TH_NUM}>7 d</th>
+              <th scope="col" className={TH_NUM}>30 d</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, note, n]) => (
+              <tr key={label} className={TR}>
+                <td className={TD}>
+                  {label}
+                  <div className="text-xs text-ink-muted">{note}</div>
+                </td>
+                <td className={TD_NUM}>{NUM.format(n.d7)}</td>
+                <td className={TD_NUM}>{NUM.format(n.d30)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-sm text-ink-muted">Answered yes to Still looking?, 30 days: {NUM.format(f.stillAnswered)}.</p>
+    </Panel>
+  );
+}
 
 function Digests({ o }: { o: Overview }) {
   const d = o.digests;
@@ -360,7 +412,7 @@ export default async function AdminHealthPage({ searchParams }: { searchParams: 
   if (!admin) notFound();
   const query = await searchParams;
   const main = db();
-  const [overview, report, alerts, demo] = await Promise.all([
+  const [overview, report, alerts, demo, funnel] = await Promise.all([
     loadOverview(main),
     cachedJobSourcesReport((now) => loadJobSourcesReport(jobsDb(), main, now)).then(
       (r) => r,
@@ -368,6 +420,7 @@ export default async function AdminHealthPage({ searchParams }: { searchParams: 
     ),
     recentAlerts(main),
     demoState(main, admin.id),
+    loadFunnelMessages(main).catch(() => null),
   ]);
 
   return (
@@ -383,6 +436,7 @@ export default async function AdminHealthPage({ searchParams }: { searchParams: 
         <Health o={overview} report={report} />
         <Scores o={overview} />
         <Digests o={overview} />
+        <Funnel f={funnel} />
         <Owner alerts={alerts} now={overview.now} status={statusFor(query, "owner")} />
         <Demo demo={demo} status={statusFor(query, "demo")} />
       </div>

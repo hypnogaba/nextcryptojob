@@ -66,12 +66,36 @@ function chatOf(update: TgUpdate): number | null {
  */
 export async function markTelegramReachable(d: D1Database, telegramId: number): Promise<void> {
   try {
-    await d
+    const res = await d
       .prepare("UPDATE users SET telegram_unreachable_at = NULL WHERE telegram_id = ? AND telegram_unreachable_at IS NOT NULL")
       .bind(String(telegramId))
       .run();
+    // Бот знову досяжний: якщо він знову зламається, перший лист замість Telegram знову скаже чому (nudges, 0028).
+    if (res.meta.changes === 1) {
+      await d
+        .prepare("DELETE FROM nudges WHERE kind = 'tg_blocked_notice' AND user_id = (SELECT id FROM users WHERE telegram_id = ?)")
+        .bind(String(telegramId))
+        .run();
+    }
   } catch (err) {
     console.warn(`telegram webhook: reachable mark failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Слово чи кнопка боту це «людина тут»: рахується проти нагадування «Still looking?» (lib/nudges/run.ts).
+ * Не частіше разу на годину, як last_active_at із сесії сайту (lib/auth/session.ts).
+ */
+export async function touchActive(d: D1Database, telegramId: number): Promise<void> {
+  try {
+    await d
+      .prepare(
+        "UPDATE users SET last_active_at = datetime('now') WHERE telegram_id = ? AND last_active_at < datetime('now', '-1 hour')",
+      )
+      .bind(String(telegramId))
+      .run();
+  } catch (err) {
+    console.warn(`telegram webhook: activity mark failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -107,7 +131,10 @@ export async function handleWebhookRequest(request: Request, env: TelegramEnv, d
     if (chatId !== null && !(await consume(`tg-chat:${chatId}`, BOT_CHAT_LIMITS)).allowed) return ok();
     // Лише особистий чат: повідомлення в групі не значить, що бот може написати людині.
     const from = update.message?.chat?.type === "private" ? update.message.from?.id : update.callback_query?.from?.id;
-    if (typeof from === "number") await markTelegramReachable(db(), from);
+    if (typeof from === "number") {
+      await markTelegramReachable(db(), from);
+      await touchActive(db(), from);
+    }
     await handleUpdate(update, { token: env.TELEGRAM_BOT_TOKEN, origin: new URL(request.url).origin, deps });
   } catch (err) {
     console.error(`telegram webhook failed: ${err instanceof Error ? err.message : String(err)}`);

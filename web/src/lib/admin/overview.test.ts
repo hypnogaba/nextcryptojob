@@ -145,7 +145,7 @@ describe("loadOverview", () => {
     const byJob = Object.fromEntries(o.cron.jobs.map((j) => [j.job, j]));
     expect(o.cron.jobs.map((j) => j.job)).toEqual([
       "intros.expire", "webhooks.deliver", "jobs.expire", "saved_searches.alert", "x402.stale", "solana_pay.check",
-      "billing.reminders", "owner.alerts", "owner.weekly", "cleanup.daily",
+      "billing.reminders", "nudges.send", "owner.alerts", "owner.weekly", "cleanup.daily",
     ]);
     expect(byJob["intros.expire"]).toMatchObject({ ok: true, late: false, lastAt: Date.parse("2026-09-13T11:55:00Z"), counts: { expired: 0 } });
     expect(byJob["webhooks.deliver"]).toMatchObject({ ok: false, late: false, failed24h: 2, lastOkAt: null, error: "D1_ERROR: boom", ms: 1200 });
@@ -198,6 +198,7 @@ describe("overviewFlags", () => {
       "alert: Cron x402.stale (0 * * * *): no run recorded yet.",
       "alert: Cron solana_pay.check (0 * * * *): no run recorded yet.",
       "alert: Cron billing.reminders (0 * * * *): no run recorded yet.",
+      "alert: Cron nudges.send (0 * * * *): no run recorded yet.",
       "alert: Cron owner.alerts (0 * * * *): no run recorded yet.",
       "alert: Cron owner.weekly (0 * * * *): no run recorded yet.",
       "alert: Cron cleanup.daily (0 3 * * *) is late: last run 33 h ago.",

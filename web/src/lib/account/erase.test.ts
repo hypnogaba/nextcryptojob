@@ -73,6 +73,8 @@ function seed(raw: DatabaseSync) {
       ('a', 'nr:1', 'nextrole', 'dg_a', 1, 'sent', 'telegram'), ('b', 'nr:1', 'nextrole', 'dg_b', 1, 'sent', 'email');
     INSERT INTO saved_jobs (user_id, job_ref) VALUES ('a', 'nr:1'), ('b', 'nr:1');
     INSERT INTO profile_prefs (user_id, key_version) VALUES ('a', 1), ('b', 2);
+    INSERT INTO job_feedback (user_id, job_ref, vote, company_key) VALUES ('a', 'nr:1', 'down', 'acme'), ('b', 'nr:1', 'up', NULL);
+    INSERT INTO nudges (user_id, kind, channel) VALUES ('a', 'still_looking', 'telegram'), ('b', 'empty_week', 'email');
 
     INSERT INTO login_codes (email, code_hash, expires_at) VALUES
       ('a@example.com', 'x', datetime('now', '+10 minutes')), ('b@example.com', 'y', datetime('now', '+10 minutes'));

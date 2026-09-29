@@ -1,10 +1,17 @@
 import { audit } from "@/lib/audit";
+import { ROLES } from "@/lib/card/roles";
 import { handleIntroCallback } from "@/lib/crm/intro-callbacks";
 import { db } from "@/lib/db";
+import { recordFeedback, type Vote } from "@/lib/digest/feedback";
 import { cleanText, hourLabel, shortDate } from "@/lib/digest/format";
 import { BOT_JOBS_LIMIT, type RecentJob, recentSentJobs } from "@/lib/digest/history";
 import { type JobsDb, jobsDb } from "@/lib/jobs-db";
 import { jobVia } from "@/lib/jobs/link";
+import { answerStillLooking } from "@/lib/nudges/still-looking";
+import { ROLE_TEXT_MAX, rolesFields, saveStep, TARGET_MAX, targetFields } from "@/lib/onboarding/store";
+import { parseSavedStep } from "@/lib/onboarding/steps";
+import { parseRoles } from "@/lib/roles/catalog";
+import { inferRoles } from "@/lib/roles/infer";
 import type { Channel } from "./channel";
 import { answerCallbackQuery, escapeHtml, sendMessage, type SendDeps } from "./send";
 
@@ -92,6 +99,28 @@ export const BOT_TEXT = {
   jobsUnavailable: (origin: string) =>
     `We could not load your jobs right now. Try again in a minute, or open ${named(origin, "/jobs", "your jobs page")}.`,
   unknown: () => "I understand /start, /jobs, /help and /stop.",
+  /** Первая відповідь після /start людині, яка зупинилась на першому кроці: питаємо прямо. */
+  askWork: () =>
+    "What work are you looking for? Write it in your own words.\n\n" +
+    "For example: <i>Solidity auditor</i> or <i>community manager for a DeFi project</i>. " +
+    "I use it to pick your first jobs.",
+  askWorkAgain: () => "Write a few words about the work you want, for example <i>product manager</i>.",
+  askWorkTooLong: () => `That is a bit long. Keep it under ${TARGET_MAX} characters.`,
+  workNoRole: (origin: string) =>
+    "I saved your words, but I could not tell which role they are. Try a short job title, " +
+    `or pick the closest role on the site: ${named(origin, "/welcome?step=roles", "choose your role")}.`,
+  workSaved: (origin: string, roleNames: string[]) =>
+    `Got it. I read it as: <b>${escapeHtml(roleNames.join(", "))}</b>.\n\n` +
+    `Two steps are left: where you want to work, and how to get your jobs. It takes a minute: ` +
+    `${named(origin, "/welcome?step=place", "finish your setup")}.\n` +
+    `Your first jobs come after that. Wrong role? You can change it on the site.`,
+  feedbackUp: "Thanks, noted.",
+  feedbackDown: "Got it. No jobs from this company for 30 days.",
+  feedbackUnknown: "This job is not in your list.",
+  feedbackNotLinked: "Sign in on the site with this Telegram first.",
+  feedbackFailed: "Something went wrong. Try again in a minute.",
+  stillYes: "Great. Your daily jobs keep coming.",
+  stillGone: "This question is old. Your daily jobs settings are on the site.",
   unknownAction: "Unknown action",
   introFailed: "Something went wrong. Try again from the link in the message.",
 } as const;
@@ -136,13 +165,53 @@ export function parseCommand(text: string | undefined): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
-type Profile = { id: string; channel: Channel; digest_paused: number; digest_hour: number; timezone: string | null; email: string | null };
+type Profile = {
+  id: string;
+  channel: Channel;
+  digest_paused: number;
+  digest_hour: number;
+  timezone: string | null;
+  email: string | null;
+  roles: string;
+  role_text: string | null;
+  onboarding_step: string | null;
+};
 
 async function profileByTelegram(telegramId: number): Promise<Profile | null> {
   return db()
-    .prepare("SELECT id, channel, digest_paused, digest_hour, timezone, email FROM users WHERE telegram_id = ?")
+    .prepare(
+      "SELECT id, channel, digest_paused, digest_hour, timezone, email, roles, role_text, onboarding_step FROM users WHERE telegram_id = ?",
+    )
     .bind(String(telegramId))
     .first<Profile>();
+}
+
+/** Людина зупинилась на першому кроці: ролей ще немає (ні зі списку, ні своїми словами). */
+export function atFirstStep(u: Pick<Profile, "roles" | "role_text">): boolean {
+  return parseRoles(u.roles).length === 0 && !(u.role_text ?? "").trim();
+}
+
+/**
+ * Відповідь людини на «What work are you looking for?»: ті самі слова й ролі, що в анкеті на сайті
+ * (saveTargetAction і saveRolesAction в app/welcome/actions/answers.ts): слова в target_text, ролі з тих самих
+ * слів (inferRoles), коротка фраза ще й у role_text. Далі анкета чекає на сайті (місце й доставка, умови).
+ */
+async function answerWork(user: Profile, text: string, origin: string): Promise<string> {
+  const clean = text.trim().replace(/\s+/g, " ");
+  if (clean.length < 2) return BOT_TEXT.askWorkAgain();
+  if (clean.length > TARGET_MAX) return BOT_TEXT.askWorkTooLong();
+  const saved = parseSavedStep(user.onboarding_step);
+  const roles = inferRoles(clean);
+  if (roles.length === 0) {
+    // Слова не губимо, але без ролі анкета не рухається: як на сайті, роль треба вибрати.
+    await saveStep(db(), user.id, "target", targetFields(clean), saved);
+    return BOT_TEXT.workNoRole(origin);
+  }
+  // Коротка фраза схожа на назву посади й годиться для збігу за словами; довгий опис лишається лише в target_text.
+  const roleText = clean.length <= ROLE_TEXT_MAX ? clean : null;
+  await saveStep(db(), user.id, "roles", { ...targetFields(clean), ...rolesFields(roles, roleText) }, saved);
+  await audit(user.id, "bot.onboarding", user.id, { roles: roles.length });
+  return BOT_TEXT.workSaved(origin, roles.map((r) => ROLES[r].name));
 }
 
 const scheduleOf = (u: Profile): Schedule => ({ hour: u.digest_hour, timezone: u.timezone, channel: u.channel, hasEmail: !!u.email });
@@ -172,6 +241,8 @@ async function stop(from: TgUser, origin: string): Promise<string> {
 async function start(from: TgUser, origin: string): Promise<string> {
   const user = await profileByTelegram(from.id);
   if (!user) return BOT_TEXT.startNew(origin);
+  // Зупинився на першому кроці: перша відповідь питає прямо, без екскурсії.
+  if (atFirstStep(user)) return BOT_TEXT.askWork();
   if (user.digest_paused !== 1) return BOT_TEXT.startKnown(origin, scheduleOf(user));
   if (await setPaused(user.id, false)) await audit(user.id, "bot.start", user.id, { digest_paused: false });
   return BOT_TEXT.startResumed(origin, scheduleOf(user));
@@ -210,8 +281,11 @@ export async function handleMessage(message: TgMessage, ctx: BotContext): Promis
     case "stop":
       reply = await stop(from, ctx.origin);
       break;
-    default:
-      reply = BOT_TEXT.unknown();
+    default: {
+      // Звичайний текст від людини на першому кроці це відповідь на питання про роботу.
+      const user = message.text?.trim() && !parseCommand(message.text) ? await profileByTelegram(from.id) : null;
+      reply = user && atFirstStep(user) ? await answerWork(user, message.text!, ctx.origin) : BOT_TEXT.unknown();
+    }
   }
   await sendMessage(ctx.token, message.chat.id, reply, {}, ctx.deps);
 }
@@ -224,6 +298,9 @@ export async function handleMessage(message: TgMessage, ctx: BotContext): Promis
  * - `ia:` / `id:` / `ib:<intro_id>`: відповідь на запит знайомства (CRM 5.5):
  *   Accept, Decline, Decline and block (lib/crm/intro-callbacks.ts). Бот
  *   відповідає на натискання й пише результат у чат.
+ * - `fb:u:<job_ref>` / `fb:d:<job_ref>`: 👍/👎 під вакансією добірки (lib/digest/feedback.ts);
+ *   👎 на 30 днів прибирає компанію з добірки цієї людини.
+ * - `sl:y`: «Yes» на «Still looking?» (lib/nudges/still-looking.ts): добірка йде далі.
  * Решта кнопок отримує «Unknown action».
  */
 export async function handleCallbackQuery(query: TgCallbackQuery, ctx: BotContext): Promise<void> {
@@ -244,8 +321,50 @@ export async function handleCallbackQuery(query: TgCallbackQuery, ctx: BotContex
       if (r.reply) await sendMessage(ctx.token, query.from.id, r.reply, {}, ctx.deps);
       break;
     }
+    case "fb": {
+      await answerCallbackQuery(ctx.token, query.id, await feedbackAnswer(query, ctx), ctx.deps);
+      break;
+    }
+    case "sl": {
+      await answerCallbackQuery(ctx.token, query.id, await stillLookingAnswer(query), ctx.deps);
+      break;
+    }
     default:
       await answerCallbackQuery(ctx.token, query.id, BOT_TEXT.unknownAction, ctx.deps);
+  }
+}
+
+/** Текст відповіді на кнопку 👍/👎. Хто натиснув, каже Telegram (callback_query.from.id), не дані кнопки. */
+async function feedbackAnswer(query: TgCallbackQuery, ctx: BotContext): Promise<string> {
+  const m = /^fb:([ud]):(.+)$/.exec(query.data ?? "");
+  if (!m) return BOT_TEXT.unknownAction;
+  try {
+    const user = await profileByTelegram(query.from.id);
+    if (!user) return BOT_TEXT.feedbackNotLinked;
+    const vote: Vote = m[1] === "d" ? "down" : "up";
+    let jobs: JobsDb | null = null;
+    try {
+      jobs = (ctx.jobs ?? jobsDb)();
+    } catch {
+      // Без бази вакансій ключ компанії не запишемо; рушій знайде її в пулі за job_ref.
+    }
+    const res = await recordFeedback(db(), jobs, user.id, m[2], vote);
+    if (res !== "saved") return BOT_TEXT.feedbackUnknown;
+    return vote === "down" ? BOT_TEXT.feedbackDown : BOT_TEXT.feedbackUp;
+  } catch (err) {
+    console.error(`telegram feedback button failed: ${err instanceof Error ? err.message : String(err)}`);
+    return BOT_TEXT.feedbackFailed;
+  }
+}
+
+async function stillLookingAnswer(query: TgCallbackQuery): Promise<string> {
+  try {
+    const user = await profileByTelegram(query.from.id);
+    if (!user) return BOT_TEXT.feedbackNotLinked;
+    return (await answerStillLooking(db(), user.id)) ? BOT_TEXT.stillYes : BOT_TEXT.stillGone;
+  } catch (err) {
+    console.error(`telegram still-looking button failed: ${err instanceof Error ? err.message : String(err)}`);
+    return BOT_TEXT.feedbackFailed;
   }
 }
 

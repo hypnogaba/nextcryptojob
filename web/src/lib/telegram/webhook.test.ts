@@ -152,7 +152,7 @@ describe("commands", () => {
   });
 
   it("/start greets a linked person with their hour, channel and /jobs", async () => {
-    exec("INSERT INTO users (id, telegram_id, channel, digest_hour, timezone) VALUES ('u1', '555', 'telegram', 9, 'Europe/Paris')");
+    exec("INSERT INTO users (id, telegram_id, channel, digest_hour, timezone, roles) VALUES ('u1', '555', 'telegram', 9, 'Europe/Paris', '[\"engineer\"]')");
     await post(message("/start"));
     expect(sent[0].body.text).toBe(BOT_TEXT.startKnown(ORIGIN, { hour: 9, timezone: "Europe/Paris", channel: "telegram", hasEmail: false }));
     expect(plain()).toContain("Your jobs come every day at 09:00 (Europe/Paris), in this chat");
@@ -214,7 +214,7 @@ describe("/stop", () => {
   });
 
   it("answers the same when already paused, without another audit entry", async () => {
-    exec("INSERT INTO users (id, telegram_id, channel, digest_paused) VALUES ('u1', '555', 'telegram', 1)");
+    exec("INSERT INTO users (id, telegram_id, channel, digest_paused, roles) VALUES ('u1', '555', 'telegram', 1, '[\"engineer\"]')");
     await post(message("/stop"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 1 }]);
     expect(plain()).toContain("Daily jobs are paused.");
@@ -231,7 +231,7 @@ describe("/stop", () => {
 
 describe("/start after /stop", () => {
   it("clears the pause and says where daily jobs go", async () => {
-    exec("INSERT INTO users (id, telegram_id, channel, digest_paused) VALUES ('u1', '555', 'telegram', 1)");
+    exec("INSERT INTO users (id, telegram_id, channel, digest_paused, roles) VALUES ('u1', '555', 'telegram', 1, '[\"engineer\"]')");
     await post(message("/start"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
     expect(sent[0].body.text).toBe(BOT_TEXT.startResumed(ORIGIN, { hour: 7, timezone: null, channel: "telegram", hasEmail: false }));
@@ -243,7 +243,7 @@ describe("/start after /stop", () => {
 
   it("names email when that is the channel", async () => {
     exec(
-      "INSERT INTO users (id, email, telegram_id, channel, digest_paused) VALUES ('u1', 'a@example.com', '555', 'email', 1)",
+      "INSERT INTO users (id, email, telegram_id, channel, digest_paused, roles) VALUES ('u1', 'a@example.com', '555', 'email', 1, '[\"engineer\"]')",
     );
     await post(message("/start"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
@@ -251,7 +251,7 @@ describe("/start after /stop", () => {
   });
 
   it("a stop then a start leaves daily jobs on", async () => {
-    exec("INSERT INTO users (id, telegram_id, channel) VALUES ('u1', '555', 'telegram')");
+    exec("INSERT INTO users (id, telegram_id, channel, roles) VALUES ('u1', '555', 'telegram', '[\"engineer\"]')");
     await post(message("/stop"));
     await post(message("/start"));
     expect(rows("SELECT digest_paused FROM users")).toEqual([{ digest_paused: 0 }]);
@@ -446,5 +446,160 @@ describe("/jobs", () => {
     exec("INSERT INTO users (id, telegram_id, channel, digest_hour, timezone) VALUES ('u3', '888', 'telegram', 6, 'UTC')");
     await post(message("/jobs", { fromId: 888 }));
     expect(plain()).toContain("We have not sent you any jobs yet. Your first ones come every day at 06:00 (UTC), in this chat.");
+  });
+});
+
+describe("first step: the bot asks for the work in the person's own words (funnel F1)", () => {
+  const addFirstStepUser = () => exec("INSERT INTO users (id, telegram_id, channel) VALUES ('u1', '555', 'telegram')");
+  const user = () =>
+    rows<{ roles: string; role_text: string | null; target_text: string | null; onboarding_step: string | null }>(
+      "SELECT roles, role_text, target_text, onboarding_step FROM users WHERE id = 'u1'",
+    )[0]!;
+
+  it("the first reply after /start is the question, not a tour", async () => {
+    addFirstStepUser();
+    await post(message("/start"));
+    expect(sent[0].body.text).toBe(BOT_TEXT.askWork());
+    expect(plain()).toContain("What work are you looking for? Write it in your own words.");
+    expect(plain()).not.toContain("How it works");
+  });
+
+  it("the answer is saved the way the site's form saves it: words, roles and the short phrase, step moves on", async () => {
+    addFirstStepUser();
+    await post(message("/start"));
+    await post(message("Solidity smart contract auditor"));
+    const saved = user();
+    expect(JSON.parse(saved.roles)).toEqual(expect.arrayContaining(["security_auditor"]));
+    expect(saved).toMatchObject({
+      role_text: "Solidity smart contract auditor",
+      target_text: "Solidity smart contract auditor",
+      onboarding_step: "place",
+    });
+    expect(plain(1)).toContain("Got it. I read it as:");
+    expect(plain(1)).toContain("Security auditor");
+    expect(String(sent[1].body.text)).toContain(`${ORIGIN}/welcome?step=place`);
+    expect(rows("SELECT action FROM audit_log")).toEqual([{ action: "bot.onboarding" }]);
+  });
+
+  it("a long description stays in target_text only; role_text is for short job titles", async () => {
+    addFirstStepUser();
+    const long = "I am a community manager with many years in DeFi and I want to run a community for a serious protocol";
+    await post(message(long));
+    expect(user().target_text).toBe(long);
+    expect(user().role_text).toBeNull();
+    expect(JSON.parse(user().roles)).toContain("community");
+  });
+
+  it("words that name no role are kept, but the person is sent to pick a role", async () => {
+    addFirstStepUser();
+    await post(message("something meaningful"));
+    expect(user()).toMatchObject({ roles: "[]", target_text: "something meaningful" });
+    expect(plain()).toContain("could not tell which role");
+    expect(String(sent[0].body.text)).toContain(`${ORIGIN}/welcome?step=roles`);
+    // Ще на першому кроці: наступне слово знову вважається відповіддю.
+    await post(message("product manager"));
+    expect(JSON.parse(user().roles)).toEqual(["product_manager"]);
+  });
+
+  it("a person who is already set up gets no interview: plain text is still just the command list", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, roles) VALUES ('u1', '555', 'telegram', '[\"engineer\"]')");
+    await post(message("marketing"));
+    expect(sent[0].body.text).toBe(BOT_TEXT.unknown());
+    expect(JSON.parse(user().roles)).toEqual(["engineer"]);
+  });
+
+  it("a stranger without a profile: nothing is saved, no account is made", async () => {
+    await post(message("Solidity auditor", { fromId: 999 }));
+    expect(sent[0].body.text).toBe(BOT_TEXT.unknown());
+    expect(rows("SELECT id FROM users")).toEqual([]);
+  });
+
+  it("a command is never taken for the answer", async () => {
+    addFirstStepUser();
+    await post(message("/help"));
+    expect(user().roles).toBe("[]");
+    expect(user().target_text).toBeNull();
+  });
+});
+
+describe("thumbs under the digest (funnel F2)", () => {
+  beforeEach(() => {
+    const jobs = jobsTestDb();
+    addPoolJob(jobs.raw, { id: "acme1", title: "Solidity Engineer", company: "Acme Labs", fetchedAt: "2026-09-12 05:00:00" });
+    jobsHolder.db = readOnlyJobsDb(jobs.d1);
+    exec("INSERT INTO users (id, telegram_id, channel, roles) VALUES ('u1', '555', 'telegram', '[\"engineer\"]'), ('u2', '777', 'telegram', '[\"engineer\"]')");
+    exec("INSERT INTO digest_runs (id, user_id, local_date, status, jobs, channel) VALUES ('dg_1', 'u1', '2026-09-12', 'sent', 1, 'telegram')");
+    exec("INSERT INTO sent (user_id, job_ref, source, digest_id, position, status, channel, why) VALUES ('u1', 'nr:acme1', 'nextrole', 'dg_1', 1, 'sent', 'telegram', 'x')");
+  });
+
+  const tap = (data: string, fromId = 555) =>
+    post({
+      update_id: nextUpdateId++,
+      callback_query: { id: "cb9", from: { id: fromId }, data, message: { message_id: 3, chat: { id: fromId, type: "private" } } },
+    });
+  const votes = () => rows("SELECT user_id, job_ref, vote, company_key FROM job_feedback ORDER BY id");
+
+  it("thumbs down is stored with the company key and answers that the company is hidden for 30 days", async () => {
+    await tap("fb:d:nr:acme1");
+    expect(votes()).toEqual([{ user_id: "u1", job_ref: "nr:acme1", vote: "down", company_key: "acme" }]);
+    expect(sent).toEqual([{ method: "answerCallbackQuery", body: { callback_query_id: "cb9", text: BOT_TEXT.feedbackDown } }]);
+    expect(BOT_TEXT.feedbackDown).toContain("30 days");
+  });
+
+  it("thumbs up after thumbs down replaces the vote: one row per person and job", async () => {
+    await tap("fb:d:nr:acme1");
+    await tap("fb:u:nr:acme1");
+    expect(votes()).toEqual([{ user_id: "u1", job_ref: "nr:acme1", vote: "up", company_key: "acme" }]);
+    expect(sent[1].body.text).toBe(BOT_TEXT.feedbackUp);
+  });
+
+  it("a job that was not sent to this person cannot be voted on; a stranger cannot vote at all", async () => {
+    await tap("fb:d:nr:acme1", 777);
+    await tap("fb:d:nr:other", 555);
+    await tap("fb:d:nr:acme1", 999);
+    expect(votes()).toEqual([]);
+    expect(sent.map((s) => s.body.text)).toEqual([BOT_TEXT.feedbackUnknown, BOT_TEXT.feedbackUnknown, BOT_TEXT.feedbackNotLinked]);
+  });
+
+  it("garbage in the button data is 'Unknown action', not an error", async () => {
+    await tap("fb:x:nr:acme1");
+    await tap("fb:d:");
+    expect(votes()).toEqual([]);
+    expect(sent.map((s) => s.body.text)).toEqual([BOT_TEXT.unknownAction, BOT_TEXT.unknownAction]);
+  });
+
+  it("a vote counts as being active, so the person is not asked 'Still looking?'", async () => {
+    exec("UPDATE users SET last_active_at = '2026-08-01 00:00:00' WHERE id = 'u1'");
+    await tap("fb:u:nr:acme1");
+    expect(rows<{ a: string }>("SELECT last_active_at AS a FROM users WHERE id = 'u1'")[0]!.a > "2026-09-01").toBe(true);
+  });
+});
+
+describe("still looking button", () => {
+  it("Yes closes the open question and counts as activity", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, roles, last_active_at) VALUES ('u1', '555', 'telegram', '[\"engineer\"]', '2026-08-01 00:00:00')");
+    exec("INSERT INTO nudges (user_id, kind, channel) VALUES ('u1', 'still_looking', 'telegram')");
+    await post({
+      update_id: nextUpdateId++,
+      callback_query: { id: "cb1", from: { id: 555 }, data: "sl:y", message: { message_id: 3, chat: { id: 555, type: "private" } } },
+    });
+    expect(sent[0].body.text).toBe(BOT_TEXT.stillYes);
+    expect(rows<{ answered_at: string | null }>("SELECT answered_at FROM nudges")[0]!.answered_at).not.toBeNull();
+    expect(rows<{ a: string }>("SELECT last_active_at AS a FROM users")[0]!.a > "2026-09-01").toBe(true);
+  });
+});
+
+describe("bot messages keep the bot alive", () => {
+  it("a message clears the unreachable mark and the 'told about the blocked bot' note, so the note can come again", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, telegram_unreachable_at) VALUES ('u1', '555', 'telegram', datetime('now'))");
+    exec("INSERT INTO nudges (user_id, kind, channel) VALUES ('u1', 'tg_blocked_notice', 'email')");
+    await post(message("/help"));
+    expect(rows("SELECT * FROM nudges")).toEqual([]);
+  });
+
+  it("a message counts as activity for the 'Still looking?' rule", async () => {
+    exec("INSERT INTO users (id, telegram_id, channel, last_active_at) VALUES ('u1', '555', 'telegram', '2026-08-01 00:00:00')");
+    await post(message("/help"));
+    expect(rows<{ a: string }>("SELECT last_active_at AS a FROM users")[0]!.a > "2026-09-01").toBe(true);
   });
 });

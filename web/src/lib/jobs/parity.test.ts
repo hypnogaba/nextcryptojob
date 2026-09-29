@@ -35,6 +35,10 @@ describe("Job rules in web are the engine's rules", () => {
     expect(fromFirstExport(read("./match.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/match.ts")));
   });
 
+  it("country, region and time zone rules (US only, EMEA, UTC windows): the code is the same as engine/src/digest/geo.ts", () => {
+    expect(fromFirstExport(read("./geo.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/geo.ts")));
+  });
+
   it("why a job fits (the reasons on /jobs, in sent.why, the email and Telegram): the code is the same as engine/src/digest/fit.ts", () => {
     expect(fromFirstExport(read("./fit.ts"))).toBe(fromFirstExport(read("../../../../engine/src/digest/fit.ts")));
   });

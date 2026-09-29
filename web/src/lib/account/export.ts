@@ -43,6 +43,10 @@ export type UserExport = {
   saved_jobs: Row[];
   sent: Row[];
   digest_runs: Row[];
+  /** 👍/👎 на вакансії з добірки (0028); company_key службовий, не виводимо. */
+  job_feedback: Row[];
+  /** Службові повідомлення воронки, які ми людині слали (0028). */
+  nudges: Row[];
   intros: Row[];
   consents: Row[];
   consent_events: Row[];
@@ -55,7 +59,7 @@ export async function exportUserData(d: D1Database, userId: string): Promise<Use
     .first<Row>();
   if (!user) return null;
 
-  const [identities, sourceFacts, scores, cards, prefs, savedJobs, sent, digestRuns, intros, consents, consentEvents] = await Promise.all([
+  const [identities, sourceFacts, scores, cards, prefs, savedJobs, sent, digestRuns, feedback, nudges, intros, consents, consentEvents] = await Promise.all([
     all(d, "SELECT kind, value, verified_via, verified_at, created_at FROM identities WHERE user_id = ? ORDER BY id", userId),
     all(d, "SELECT source, facts_json, gap_reason, fetched_at FROM source_facts WHERE user_id = ? ORDER BY source", userId),
     all(
@@ -80,6 +84,8 @@ export async function exportUserData(d: D1Database, userId: string): Promise<Use
       "SELECT id, local_date, status, jobs, channel, error, created_at, finished_at FROM digest_runs WHERE user_id = ? ORDER BY local_date",
       userId,
     ),
+    all(d, "SELECT job_ref, vote, reason, at FROM job_feedback WHERE user_id = ? ORDER BY at, id", userId),
+    all(d, "SELECT kind, channel, sent_at, answered_at FROM nudges WHERE user_id = ? ORDER BY sent_at, id", userId),
     // Знайомства, які компанії просили в цієї людини: те, що вона сама бачила й відповідала. Без токена відповіді.
     all(
       d,
@@ -111,6 +117,8 @@ export async function exportUserData(d: D1Database, userId: string): Promise<Use
     saved_jobs: savedJobs,
     sent,
     digest_runs: digestRuns,
+    job_feedback: feedback,
+    nudges,
     intros,
     consents,
     consent_events: consentEvents,
