@@ -1,16 +1,17 @@
-// Приклад картки для головної: вигадана людина, справжня формула v7.
+// Приклад картки для головної: вигадана людина, чинна формула (FORMULA_VERSION; рахунок тут той самий у v7 і новіших).
 // Engineer: робота GitHub 82 (40 балів) і GitHub projects 80 (20) = 48.8; репутація 70 (до 25) = 17.5;
 // ширина onchain 91.7 і X 46.3 (по 5) = 6.9. Разом 73.2, на картці 73, рівень 8 (Chrome).
 // Лише звідси береться kind: "example", тож позначка EXAMPLE не потрапить на справжню картку.
 import type { Breakdown } from "@/lib/score/explain";
 import { POSITION_CODE } from "@/lib/roles/recipes";
+import { FORMULA_VERSION } from "@/lib/score/formula";
 import { cardBack } from "./back";
 import { sealSeed } from "./seal";
 import { displayScore, levelFor, tierFor } from "./tiers";
 import { summaryOf, type CardFace } from "./view";
 
 export const EXAMPLE_BREAKDOWN: Breakdown = {
-  formula: "v7",
+  formula: FORMULA_VERSION,
   core: { gh_eng: { weight: 40, value: 82 }, gh_builder: { weight: 20, value: 80 } },
   bonus: { rep: { max: 25, value: 70 }, onchain: { max: 5, value: 91.7 }, x: { max: 5, value: 46.3 } },
   cover: 100,

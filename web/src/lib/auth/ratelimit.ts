@@ -22,8 +22,15 @@ export const CODE_EMAIL_LIMITS: Limits = { windowMinutes: 60, maxAttempts: 5, bl
 export const CODE_EMAIL_DAY_LIMITS: Limits = { windowMinutes: 24 * 60, maxAttempts: 10, blockMinutes: 24 * 60 };
 /** `code:ip:<ip>`: 20 кодів з однієї адреси IP за годину (з запасом на офіс за NAT). */
 export const CODE_IP_LIMITS: Limits = { windowMinutes: 60, maxAttempts: 20, blockMinutes: 60 };
-/** `verify:email:<email>`: 10 перевірок коду за 15 хвилин, на всі коди разом. */
-export const VERIFY_EMAIL_LIMITS: Limits = { windowMinutes: 15, maxAttempts: 10, blockMinutes: 15 };
+/**
+ * `verify:pair:<ip>:<email>`: 10 перевірок коду за 15 хвилин з однієї IP на одну адресу, на всі коди разом.
+ * Ключ з IP навмисно: раніше він був лише за адресою, і будь-хто міг за 10 хибних кодів закрити вхід чужій людині
+ * на 15 хвилин. Тепер чужа IP б'є лише по своєму лічильнику. Від підбору коду це не залежить: код 6 цифр,
+ * 5 спроб на код (login_codes.attempts), нових кодів на адресу 5 за годину й 10 за добу (CODE_EMAIL_*).
+ */
+export const VERIFY_PAIR_LIMITS: Limits = { windowMinutes: 15, maxAttempts: 10, blockMinutes: 15 };
+/** `verify:ip:<ip>`: 40 перевірок коду за 15 хвилин з однієї IP на всі адреси (щоб одна IP не молотила базу). */
+export const VERIFY_IP_LIMITS: Limits = { windowMinutes: 15, maxAttempts: 40, blockMinutes: 15 };
 
 /** `export:<user id>`: 10 вивантажень своїх даних на годину (файл збирається з багатьох таблиць). */
 export const EXPORT_LIMITS: Limits = { windowMinutes: 60, maxAttempts: 10, blockMinutes: 60 };

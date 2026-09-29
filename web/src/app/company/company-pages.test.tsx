@@ -104,9 +104,9 @@ describe("company registration", () => {
     expect(harness.jar.get(COMPANY_COOKIE)?.value).toBe(co.id);
 
     const page = await html(BillingPage(params({ welcome: "1" })));
-    expect(page).toContain("Your company is ready. Choose how to start.");
+    expect(page).toContain("Your company is ready. Pay to start.");
     expect(page).toContain("Pay 100 USDC on Solana");
-    expect(page).toContain("Continue with pay per request (API only)");
+    expect(page).not.toContain("Continue with pay per request");
     const shell = await html(CrmLayout({ children: null }));
     expect(shell).toContain("Acme Labs");
     expect(shell).toContain("Team");
@@ -206,7 +206,10 @@ describe("team pages", () => {
 
     // Не ввійшов.
     harness.jar = (await import("@/test/harness")).fakeCookieJar();
-    expect(await html(JoinPage(params({ t })))).toContain("Sign in with l***@acme.io to accept.");
+    const signedOut = await html(JoinPage(params({ t })));
+    expect(signedOut).toContain("Sign in with l***@acme.io to accept.");
+    // Вхід повертає на це саме запрошення (next), а не в кабінет.
+    expect(signedOut).toContain(`href="/login?next=${encodeURIComponent(`/company/join?t=${t}`)}"`);
     // Інша пошта.
     await signIn("eve@acme.io");
     const wrong = await html(JoinPage(params({ t })));

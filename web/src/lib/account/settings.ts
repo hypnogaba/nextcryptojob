@@ -17,6 +17,8 @@ export type Settings = {
   email: string | null;
   telegramLinked: boolean;
   telegramHandle: string | null;
+  /** Бот не може написати людині (не натискала Start / заблокувала): не показувати «connected». */
+  telegramUnreachable: boolean;
   channel: Channel;
   digestHour: number;
   timezone: string | null;
@@ -33,6 +35,7 @@ type Row = {
   email: string | null;
   telegram_id: string | null;
   telegram_username: string | null;
+  telegram_unreachable_at: string | null;
   channel: Channel;
   digest_hour: number;
   timezone: string | null;
@@ -47,7 +50,7 @@ type Row = {
 async function loadRow(d: D1Database, userId: string): Promise<Row | null> {
   return d
     .prepare(
-      `SELECT u.email, u.telegram_id, u.telegram_username, u.channel, u.digest_hour, u.timezone,
+      `SELECT u.email, u.telegram_id, u.telegram_username, u.telegram_unreachable_at, u.channel, u.digest_hour, u.timezone,
               u.digest_paused, u.visible_to_companies, u.contact_mode, u.card_public,
               (SELECT granted FROM consents WHERE user_id = u.id AND kind = ?2) AS visibility,
               (SELECT MAX(granted) FROM consents WHERE user_id = u.id AND kind IN ${SCORING_BASIS_SQL}) AS scoring
@@ -64,6 +67,7 @@ export async function loadSettings(d: D1Database, userId: string): Promise<Setti
     email: row.email,
     telegramLinked: row.telegram_id !== null,
     telegramHandle: row.telegram_username,
+    telegramUnreachable: row.telegram_id !== null && row.telegram_unreachable_at !== null,
     channel: row.channel,
     digestHour: row.digest_hour,
     timezone: row.timezone,

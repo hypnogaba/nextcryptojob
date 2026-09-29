@@ -53,6 +53,39 @@ describe("/leaderboard (item 7)", () => {
     expect(html).not.toContain(`href="/c/${first}"`);
   });
 
+  it("excludes demo accounts", async () => {
+    user("a");
+    user("d");
+    exec("UPDATE users SET is_demo = 1 WHERE id = 'd'");
+    await card("a", "bd", 40, "@real");
+    await card("d", "engineer", 90, "@demo-person");
+    const html = await render();
+    expect(html).toContain("@real");
+    expect(html).not.toContain("@demo-person");
+  });
+
+  it("ranks by the current score, not the snapshot taken when the card was made", async () => {
+    user("a");
+    user("b");
+    await card("a", "bd", 30, "@grew");
+    await card("b", "engineer", 60, "@static");
+    exec("INSERT INTO quality_runs (formula_version, people, exact_pct, near_pct, unscored, report_json, passed) VALUES ('v9', 5, 90, 95, 0, '{}', 1)");
+    exec("INSERT INTO scores (user_id, role, score, breakdown_json, formula_version) VALUES ('a', 'bd', 88.5, '{}', 'v9')");
+    const html = await render();
+    expect(html.indexOf("@grew")).toBeLessThan(html.indexOf("@static"));
+    expect(html).toContain(">88.5<");
+    expect(html).toContain("Level 9 of 10");
+  });
+
+  it("keeps the snapshot when the current score is from a formula that did not pass the gate", async () => {
+    user("a");
+    await card("a", "bd", 30, "@held");
+    exec("INSERT INTO scores (user_id, role, score, breakdown_json, formula_version) VALUES ('a', 'bd', 99, '{}', 'v10')");
+    const html = await render();
+    expect(html).toContain(">30<");
+    expect(html).not.toContain(">99<");
+  });
+
   it("each row opens that card, where the score breakdown is public", async () => {
     user("a");
     const slug = await card("a", "engineer", 90, "@high");

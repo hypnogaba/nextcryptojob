@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Button } from "@/components/ui/button";
+import { loginPathFor } from "@/lib/auth/next-path";
 import { currentUser } from "@/lib/auth/session";
 import { findInvite } from "@/lib/crm/team";
 import { db } from "@/lib/db";
@@ -79,9 +80,9 @@ export default async function JoinPage({
     return (
       <Shell title={title}>
         {intro}
-        <p className="text-ink">Sign in with {invite.maskedEmail} to accept. Then open this link again.</p>
+        <p className="text-ink">Sign in with {invite.maskedEmail} to accept. You will come back to this page.</p>
         <Button asChild className="h-11 w-full px-5 text-base sm:w-fit">
-          <Link href="/login">Sign in</Link>
+          <Link href={loginPathFor(`/company/join?t=${encodeURIComponent(token)}`)}>Sign in</Link>
         </Button>
       </Shell>
     );

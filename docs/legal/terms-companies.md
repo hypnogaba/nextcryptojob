@@ -3,7 +3,7 @@
 These terms are a contract between NextCryptoJob, sole trader, France,
 hello@nextcryptojob.xyz, hello@nextcryptojob.xyz ("we", "us") and the company or agency that subscribes to
 NextCryptoJob ("you"). They apply to the CRM, the job posting tools, the REST API, the
-MCP server and paid requests through x402.
+MCP server. Paying per request through x402 is coming soon and is not available yet (section 11).
 
 ## 1. Who can subscribe
 
@@ -90,16 +90,19 @@ The score is an input to your judgment. It is not a decision.
 - **Late payment.** For invoices paid late, penalties apply at the statutory rate and a fixed recovery fee of EUR 40 is due (art. L441-10 French Commercial Code, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038414392>; art. D441-5, <https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043197457>).
 - **Price changes.** We tell you at least 30 days before a price change. You can cancel before it applies.
 
-## 11. API, MCP and x402
+## 11. API, MCP and x402 (coming soon)
 
-- **Same rules.** Everything your agents do through the API, the MCP server or x402 is subject to these terms, the same as actions in the CRM.
+- **Same rules.** Everything your agents do through the API or the MCP server is subject to these terms, the same as actions in the CRM.
 - **API keys.** API keys work within your subscription.
-- **x402.** You can pay per request in USDC through the x402 protocol, at the prices shown in each payment request (HTTP 402 response).
-  - A payment is final once confirmed on the blockchain. You pay the network fees.
-  - If we accept a payment and fail to deliver the result, we credit or refund the amount.
-  - We do not hold funds for you. We are not a crypto service provider for you.
-  - Contact data is never returned through x402 or the API unless the candidate approved contact.
-- **Rate limits.** We set limits on requests per minute and per day [NUMBERS to set]. We may slow or block traffic above them.
+- **x402: coming soon.** Paying per request through the x402 protocol is not available yet. Today the only way to pay is the subscription in section 10, in USDC on Solana. If we switch x402 on, it will be in USDC on Solana, we will update these terms first, and the rules for it will be written here before it starts.
+- **No contact data through the API without approval.** Contact data is never returned through the API unless the candidate approved contact.
+- **Rate limits.** We set limits on requests per minute and per day. Today they are:
+  - 60 requests per minute for each API key, and 120 requests per minute for each signed-in team member in the web app;
+  - with a subscription, per day: 300 candidate searches (one page of up to 20 results is one search), 200 candidate profile views and 10 introduction requests, and at most 40 introduction requests in each 30-day period;
+  - during a trial, per day: 50 candidate searches, 50 candidate profile views and 3 introduction requests, and at most 5 introduction requests in the whole trial;
+  - public job search, without a key: 30 requests per minute for each IP address.
+
+  We may slow or block traffic above these limits, and we may change them with notice to you.
 - **Identification.** Your agents must identify your company in each request (through the key or the account linked to the payment).
 - **Changes.** We may change the API. We announce breaking changes at least 30 days ahead, except for urgent security fixes.
 
@@ -137,7 +140,7 @@ can cancel before that date.
 
 ## 16. Law and courts
 
-French law applies. Disputes go to the courts of [CITY], France.
+French law applies. Disputes go to the courts of Paris, France.
 
 ---
 

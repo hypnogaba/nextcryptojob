@@ -3,7 +3,7 @@ import { createSession, SESSION_COOKIE } from "@/lib/auth/session";
 import { runAction } from "@/lib/crm/actions";
 import { publishFormula } from "@/test/crm-fixtures";
 import { harness, resetHarness, rows } from "@/test/harness";
-import { addCandidate, addTestCompany, ask, fakeEmail, stubNetwork, tokenFromMail, type Network, type TestCompany } from "@/test/intro-fixtures";
+import { addCandidate, addTestCompany, ask, fakeEmail, NOW, stubNetwork, tokenFromMail, type Network, type TestCompany } from "@/test/intro-fixtures";
 import type { TestDb } from "@/test/sqlite-d1";
 import { answerIntroAction } from "./actions";
 
@@ -22,6 +22,9 @@ function form(fields: Record<string, string>): FormData {
 }
 
 beforeEach(async () => {
+  // Годинник дорівнює NOW фікстур (12.09): знайомство живе 14 днів, справжній «сьогодні» його вже прострочив би.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   net = stubNetwork();
   resetHarness({ EMAIL: fakeEmail(net) });
   db = { raw: harness.raw, d1: harness.env.DB };
@@ -30,6 +33,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -79,7 +83,7 @@ describe("answerIntroAction (POST from /intro/[id])", () => {
 
   it("after expires_at the token no longer works and the page says the request expired", async () => {
     const alice = await emailed();
-    harness.raw.prepare("UPDATE intros SET expires_at = datetime('now', '-1 minute') WHERE id = ?").run(alice.introId);
+    harness.raw.prepare("UPDATE intros SET expires_at = '2026-09-12 11:59:00' WHERE id = ?").run(alice.introId);
     const res = await answerIntroAction({}, form({ intro_id: alice.introId, t: alice.token, decision: "accept" }));
     expect(res).toEqual({ done: true, tone: "info", text: "This request has expired." });
     // Без планувальника прострочення робить саме це читання: картка знову found.

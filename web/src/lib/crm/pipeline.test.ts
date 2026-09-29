@@ -689,11 +689,22 @@ describe("permissions and access from the registry", () => {
 
     const c = await company("Free", { subscribed: false });
     const id = candidate();
-    expect(((await runAction("list_pipeline", {}, c.member)).output as PipelineList).data).toEqual([]);
-    const w = await rejection(add(c.member, id));
-    expect([w.code, w.status]).toEqual(["subscription_required", 403]);
-    // Агент без підписки працює з воронкою (pay per request, дії безкоштовні).
-    expect((await add(c.agent, id)).status).toBe(201);
+    // Без підписки (ключ API теж): ні читати воронку й профіль, ні писати. Раніше ключ без підписки користувався цим безкоштовно.
+    for (const who of [c.member, c.agent]) {
+      for (const [name, input] of [
+        ["list_pipeline", {}],
+        ["get_candidate", { candidate_id: id }],
+        ["add_to_pipeline", { candidate_id: id }],
+        ["update_stage", { candidate_id: id, stage: "interview" }],
+        ["remove_from_pipeline", { candidate_id: id }],
+        ["add_note", { candidate_id: id, body: "x" }],
+        ["list_candidate_history", { candidate_id: id }],
+      ] as const) {
+        const r = await rejection(runAction(name, input, who));
+        expect([name, r.code, r.status]).toEqual([name, "subscription_required", 403]);
+      }
+    }
+    expect(all(db.raw, "SELECT * FROM pipeline")).toEqual([]);
   });
 
   it("pipeline actions are not metered against quotas but leave a usage row", async () => {

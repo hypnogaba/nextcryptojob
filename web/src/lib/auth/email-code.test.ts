@@ -370,20 +370,31 @@ describe("verifyCode", () => {
     expect(harness.jar.store.has(SESSION_COOKIE)).toBe(false);
   });
 
-  it("rate-limits after ten wrong tries across codes in 15 minutes", async () => {
+  it("rate-limits after ten wrong tries across codes in 15 minutes from the same IP", async () => {
     for (let round = 0; round < 2; round++) {
       const bad = wrong(await sendCode());
-      for (let i = 0; i < 5; i++) await verifyCode("ada@example.com", bad);
+      for (let i = 0; i < 5; i++) await verifyCode("ada@example.com", bad, IP);
     }
     const code = await sendCode();
-    await expect(verifyCode("ada@example.com", code)).resolves.toMatchObject({ ok: false, reason: "rate_limited" });
+    await expect(verifyCode("ada@example.com", code, IP)).resolves.toMatchObject({ ok: false, reason: "rate_limited" });
   });
 
-  it("a successful sign-in clears the failed-try counter", async () => {
+  it("a stranger's wrong guesses from another IP do not lock the real owner out of their own code", async () => {
+    const code = await sendCode();
+    // Чужа IP б'є в ліміт своєї пари й лишає адресу жертви відкритою для власника з іншої IP.
+    for (let i = 0; i < 12; i++) await verifyCode("ada@example.com", "000000", "198.51.100.66");
+    await expect(verifyCode("ada@example.com", "000000", "198.51.100.66")).resolves.toMatchObject({ ok: false, reason: "rate_limited" });
+    // Власник з іншої IP: не rate_limited (код міг бути спалений спробами чужого, але ліміт входу не блокує).
+    const owner = await verifyCode("ada@example.com", code, IP);
+    expect(owner.ok === false && owner.reason === "rate_limited").toBe(false);
+  });
+
+  it("a successful sign-in clears the failed-try counter of that IP and email, not the IP-wide one", async () => {
     const code = await sendCode();
     await verifyCode("ada@example.com", wrong(code));
     await verifyCode("ada@example.com", code);
-    expect(rows("SELECT key FROM auth_attempts WHERE key LIKE 'verify:%'")).toHaveLength(0);
+    expect(rows("SELECT key FROM auth_attempts WHERE key LIKE 'verify:pair:%'")).toHaveLength(0);
+    expect(rows("SELECT key FROM auth_attempts WHERE key LIKE 'verify:ip:%'")).toHaveLength(1);
   });
 
   it("refuses when no code was asked for, and does not reveal anything else", async () => {

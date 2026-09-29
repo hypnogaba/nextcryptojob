@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGithub, normalizeSherlock, normalizeSite, normalizeX, normalizeYoutube } from "./normalize";
+import { normalizeGithub, normalizeSite, normalizeX, normalizeYoutube } from "./normalize";
 
 const value = (r: ReturnType<typeof normalizeX>) => (r.ok ? r.value : `ERR ${r.error}`);
 
@@ -84,19 +84,5 @@ describe("normalizeSite", () => {
     "https://example.org:8443",
   ])("rejects %j", (input) => {
     expect(normalizeSite(input).ok).toBe(false);
-  });
-});
-
-describe("normalizeSherlock", () => {
-  it.each([
-    ["Pashov", "pashov"],
-    ["@0x52", "0x52"],
-    ["https://audits.sherlock.xyz/watson/Pashov", "pashov"],
-  ])("%j → %j", (input, expected) => {
-    expect(value(normalizeSherlock(input))).toBe(expected);
-  });
-
-  it.each(["", "a b", "-x", "x!"])("rejects %j", (input) => {
-    expect(normalizeSherlock(input).ok).toBe(false);
   });
 });

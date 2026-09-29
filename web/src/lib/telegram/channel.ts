@@ -37,14 +37,28 @@ export type TelegramStatus = {
   username: string | null;
   email: string | null;
   channel: Channel;
+  /** Бот не може написати людині (users.telegram_unreachable_at, 0027). */
+  unreachable: boolean;
 };
 
 export async function telegramStatus(d: D1Database, userId: string): Promise<TelegramStatus | null> {
   const row = await d
-    .prepare("SELECT telegram_id, telegram_username, email, channel FROM users WHERE id = ?")
+    .prepare("SELECT telegram_id, telegram_username, email, channel, telegram_unreachable_at FROM users WHERE id = ?")
     .bind(userId)
-    .first<{ telegram_id: string | null; telegram_username: string | null; email: string | null; channel: Channel }>();
+    .first<{
+      telegram_id: string | null;
+      telegram_username: string | null;
+      email: string | null;
+      channel: Channel;
+      telegram_unreachable_at: string | null;
+    }>();
   return row
-    ? { telegramId: row.telegram_id, username: row.telegram_username, email: row.email, channel: row.channel }
+    ? {
+        telegramId: row.telegram_id,
+        username: row.telegram_username,
+        email: row.email,
+        channel: row.channel,
+        unreachable: row.telegram_id !== null && row.telegram_unreachable_at !== null,
+      }
     : null;
 }

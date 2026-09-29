@@ -25,7 +25,7 @@
     "headers": { "Authorization": "Bearer ncj_live_..." } } } }
 ```
 
-## 2. Оплата x402 у MCP
+## 2. Оплата x402 у MCP (COMING SOON: зараз вимкнена, лише Solana)
 
 Транспорт за специфікацією x402 v2 для MCP:
 https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
@@ -35,8 +35,7 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
    { "isError": true,
      "structuredContent": { "x402Version": 2, "error": "Payment required",
        "resource": { "url": "mcp://tool/search_candidates", "description": "NextCryptoJob candidate search, one page of up to 20 results", "mimeType": "application/json" },
-       "accepts": [ { "scheme": "exact", "network": "eip155:8453", "amount": "500000", "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "payTo": "0x…", "maxTimeoutSeconds": 60, "extra": { "name": "USD Coin", "version": "2" } },
-                    { "scheme": "exact", "network": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "amount": "500000", "asset": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "payTo": "…", "maxTimeoutSeconds": 60, "extra": { "feePayer": "…" } } ] },
+       "accepts": [ { "scheme": "exact", "network": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "amount": "500000", "asset": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "payTo": "…", "maxTimeoutSeconds": 60, "extra": { "feePayer": "…" } } ] },
      "content": [ { "type": "text", "text": "<той самий JSON>" } ] }
    ```
 2. Клієнт повторює `tools/call` з `params._meta["x402/payment"]` = об'єкт PaymentPayload (не base64).
@@ -125,7 +124,7 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 | `get_account` | `GET /me` | free, key | `{}` | `Account` |
 | `get_usage` | `GET /usage` | free, key | `{"from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD"}` | `Usage` |
 
-`get_account` опис для моделі: "Returns your company, access mode (subscription or pay per request), quotas left today and x402 prices. Call this first."
+`get_account` опис для моделі: "Returns your company, access mode (subscription or none), quotas left today and the planned x402 prices (x402 is coming soon). Call this first."
 
 ### 4.2 Кандидати
 
@@ -223,7 +222,7 @@ https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/mcp.md
 ### 4.8 Оплата
 
 **`buy_usdc_month`** → `POST /billing/usdc-month`. $100.00 через x402, лише з ключем.
-Опис: "Pay 100 USDC on Base or Solana for 30 days of subscription access."
+Опис: "Coming soon, not available yet: pay 100 USDC on Solana with x402 for 30 days of subscription access. Today, pay in the web app (Billing)."
 Вхід `{}`. Вихід `UsdcMonthResult`.
 
 ### 4.9 Для кандидатів (публічно)

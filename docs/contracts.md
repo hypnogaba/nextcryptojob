@@ -81,7 +81,37 @@ type AuditsFacts = { earningsUsd: number|null; high: number|null; contests: numb
 type DuneFacts = { spellbookPrs: number|null; spellbookPrs12m: number|null };  // злиті PR у duneanalytics/spellbook (за GitHub людини)
 ```
 
-## 4. Формула v6 (`formula_version = "v6"`; v4 + зміни v5 і v6 в кінці розділу)
+## 4. Формула v9 (`formula_version = "v9"`; чинна з 18.09.2026)
+
+Чинна формула це v9, код `engine/src/formula/v7.ts` (файл лишився v7.ts заради історії), версія на сайті
+в одному місці: `web/src/lib/score/formula.ts` (тест `formula.test.ts` звіряє її з рушієм). Джерела й їхні бали
+(0–100) описані нижче як «джерела v6»: `gh_eng`, `gh_builder`, `x`, `yt`, `onchain`, `trading`, `site`, `audits`,
+`dune` лишились тими самими, з правками v7 (нижче). Ядро й додатки v4–v6 з таблиці ролей замінили шари v7–v9.
+
+### Чинна схема (v7, v8, v9)
+Бал ролі = Робота + Репутація + Ширина, `score = min(100, Робота + Репутація + Ширина)`, округлено до 0,1.
+- **Робота** (разом 60 балів, `WORK_POINTS`): вага кожного головного джерела ролі в балах, `Σ w·s/100`.
+  Ролі: engineer gh_eng 40 + gh_builder 20; security_auditor (audits 30 + gh_eng 30) або gh_eng 60; devrel media 30 +
+  gh_eng 30; data_research output 30 + x 30; product_manager x 20 + gh_builder 20 + output 20; bd x 50 + onchain 10;
+  marketing_content media 40 + site 20; creator_kol media 60; community x 50 + onchain 10; trader trading 50 +
+  onchain 10; designer links 40 + x 20; operations_support, finance, legal_compliance, hr_recruiting: best 40 + links 20.
+  Усі 15 ролей отримують бал; без жодного ненульового головного джерела `score = null`, `reason = 'missing_anchor:…'`.
+- **Репутація** (до 25, `REP_POINTS`), однакова для всіх ролей. v9: **більше з двох**: відомі крипто-підписники X
+  (`logn(kol, 500)`, лише без `kolSourceGap`) або підписники GitHub (`logn(followers, 3000)`). До v9 X, коли він був,
+  заміняв GitHub, і підключення X могло знизити бал; тепер підключене джерело бал не знижує ніколи.
+- **Ширина** (до 20, `WIDTH_MAX`). v8: **кожне** інше підключене джерело (те, що не використане в Роботі цієї ролі),
+  по 5 балів `WIDTH_EACH · s/100`, разом не більше 20. До v8 (у v7) бралися лише 3 найсильніші.
+- Нові в v7 джерела: `links` (посилання на роботи, додані людиною без перевірки, `100·lin(count, 10)`, позначка
+  «self-added»), `media = max(x, yt)`, `output = max(site, links, gh_eng, dune)`, `best` = найсильніше з базових
+  джерел (для загальних ролей). `gh_eng` рахує й командні репозиторії (`teamCommits`, `teamStars`); `x` бере верх KOL 500.
+- `breakdown_json`: `formula`, `sources`, `core` (вага в балах і значення), `bonus` (`rep` з max 25 і кожне джерело
+  ширини з max 5), `cover`, `level`, `reason`, `gaps`, `layers {work, rep, width}`, `bestOf`, `selfAddedLinks`.
+- Рівень: `level = min(10, floor(score/10) + 1)`. Ворота якості (нижче) перевіряють кожну нову версію.
+- Публічно та сама схема пояснена на `/scoring` і `/how-scoring-works`; версію на сторінці бере `FORMULA_VERSION`.
+
+Зміни версій: v7 (17.09) шари й посилання на роботи; v8 (18.09) ширина за всі джерела; v9 (18.09) репутація = більше з X і GitHub.
+
+### Історія: формула v6 (`formula_version = "v6"`; v4 + зміни v5 і v6)
 `logn(x, cap) = min(1, log10(1+max(0,x)) / log10(1+cap))`, `lin(x, cap) = min(1, max(0,x)/cap)`;
 `null` на вході дає `null`. `combine([(w, v)…]) = 100 · Σ w·v / Σ w` лише по не-`null` v;
 якщо всі `null` → `null`.

@@ -105,7 +105,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   if (company.access === "none") {
     // Сторінка нижче покаже, що доступу немає.
   } else if (company.access === "pay_per_request") {
-    error = "Searching in the web app needs a subscription. Your agent can search through the API and pay with x402.";
+    error = "Searching needs a subscription. Pay 100 USDC on Solana in Billing to continue.";
   } else if (parsed.run) {
     try {
       result = (await runAction("search_candidates", { filters: parsed.filters, sort: parsed.sort }, ctx)).output as SearchResponse;

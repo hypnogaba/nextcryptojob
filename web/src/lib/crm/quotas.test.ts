@@ -155,6 +155,13 @@ describe("monthly intro quota", () => {
     if (!second.ok) expect(second.exceeded.resetsAt.toISOString()).toBe("2026-10-05T10:00:00.000Z");
   });
 
+  it("a trial (manual or Stripe) counts its own period, not the calendar month: a trial across a month boundary gets its quota once", () => {
+    const trial = { id: "sub", provider: "manual" as const, status: "trialing", periodStart: "2026-09-25 00:00:00", periodEnd: "2026-10-09 00:00:00" };
+    expect(monthWindow(new Date("2026-10-02T12:00:00Z"), trial)).toEqual({ start: "2026-09-25 00:00:00", resetsAt: new Date("2026-10-09T00:00:00Z") });
+    // Без періоду (порожні дати) лишається календарний місяць.
+    expect(monthWindow(NOON, { ...trial, periodStart: null, periodEnd: null }).start).toBe("2026-09-01 00:00:00");
+  });
+
   it("manual and USDC access use the calendar month", () => {
     const w = monthWindow(NOON, { id: "sub", provider: "usdc", status: "active", periodStart: "2026-09-10 00:00:00", periodEnd: "2026-10-10 00:00:00" });
     expect(w).toEqual({ start: "2026-09-01 00:00:00", resetsAt: new Date("2026-10-01T00:00:00Z") });

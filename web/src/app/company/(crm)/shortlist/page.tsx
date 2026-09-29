@@ -49,7 +49,7 @@ export default async function ShortlistPage({ searchParams }: { searchParams: Pr
   let signals: Record<string, Signal[]> = {};
   let error: string | null = ERRORS[errorKey] ?? (errorKey ? "Something went wrong. Reload the page and try again." : null);
   if (company.access === "pay_per_request") {
-    error = "Shortlists in the web app need a subscription. Your agent can search through the API and pay with x402.";
+    error = "Shortlists need a subscription. Pay 100 USDC on Solana in Billing to continue.";
   } else if (company.access === "subscription" && role) {
     try {
       const out = (await runAction("search_candidates", { filters: briefFilters(brief, role), sort: "score", limit: SHORTLIST_SIZE }, ctx)).output as SearchResponse;

@@ -7,7 +7,7 @@ import { createCheckout, type CheckoutResult } from "@/lib/billing/checkout";
 import { requestOrigin } from "@/lib/billing/origin";
 import { createPortal, type PortalResult } from "@/lib/billing/portal";
 import {
-  confirmInvoice, createInvoice, loadInvoice, readSolanaPayConfig, type SolanaPayEnv, verifyOnChain,
+  confirmInvoice, createInvoice, DuplicateTxError, loadInvoice, markDuplicateTx, readSolanaPayConfig, type SolanaPayEnv, verifyOnChain,
 } from "@/lib/billing/solana-pay";
 import { stripeClient, stripeSettings, type StripeEnv } from "@/lib/billing/stripe";
 import { crmActionActor, type ActionContext } from "@/lib/crm/context";
@@ -33,7 +33,8 @@ export type BillingError =
   | "stripe_failed"
   | "rate_limited"
   | "not_found"
-  | "rpc_failed";
+  | "rpc_failed"
+  | "duplicate_tx";
 
 function fail(code: BillingError): never {
   redirect(`${BILLING}?error=${code}`);
@@ -122,6 +123,14 @@ export async function checkSolanaPayInvoiceAction(form: FormData): Promise<void>
     console.error("solana pay verify failed:", result.reason);
     fail("rpc_failed");
   }
-  if (result.status === "confirmed") await confirmInvoice(db(), invoice, result.tx, result.payer, new Date());
+  if (result.status === "confirmed") {
+    try {
+      await confirmInvoice(db(), invoice, result.tx, result.payer, new Date());
+    } catch (e) {
+      if (!(e instanceof DuplicateTxError)) throw e;
+      await markDuplicateTx(db(), invoice, result.tx);
+      fail("duplicate_tx");
+    }
+  }
   redirect(`${BILLING}?invoice=${invoice.id}${result.status === "pending" ? "&checked=1" : ""}`);
 }

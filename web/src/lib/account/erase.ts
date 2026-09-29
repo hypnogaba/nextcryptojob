@@ -37,9 +37,10 @@ export async function eraseAccount(d: D1Database, userId: string): Promise<Erase
       .prepare(
         `DELETE FROM auth_attempts
           WHERE key IN (?1, ?2, ?3)
-             OR (length(key) > length(?4) AND substr(key, -length(?4)) = ?4)`,
+             OR (length(key) > length(?4) AND substr(key, -length(?4)) = ?4)
+             OR (key LIKE 'verify:pair:%' AND length(key) > length(?5) AND substr(key, -length(?5)) = ?5)`,
       )
-      .bind(`code:email:${email}`, `code:email:day:${email}`, `verify:email:${email}`, suffix),
+      .bind(`code:email:${email}`, `code:email:day:${email}`, `verify:email:${email}`, suffix, `:${email}`),
     ...(user.telegram_id ? [d.prepare("DELETE FROM auth_attempts WHERE key = ?").bind(`tg-chat:${user.telegram_id}`)] : []),
     d
       .prepare("INSERT INTO audit_log (actor, action, target, meta_json) VALUES (?, 'account.delete', ?, NULL)")

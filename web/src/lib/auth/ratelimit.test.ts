@@ -4,7 +4,8 @@ import {
   CODE_EMAIL_DAY_LIMITS,
   CODE_EMAIL_LIMITS,
   CODE_IP_LIMITS,
-  VERIFY_EMAIL_LIMITS,
+  VERIFY_IP_LIMITS,
+  VERIFY_PAIR_LIMITS,
   clearRate,
   clientIp,
   consume,
@@ -107,13 +108,14 @@ describe("sign-in limits", () => {
     expect(await allowedOf("code:ip:1.2.3.4", 25, CODE_IP_LIMITS)).toBe(20);
   });
 
-  it("ten code checks per email per 15 minutes", async () => {
-    expect(VERIFY_EMAIL_LIMITS.windowMinutes).toBe(15);
-    expect(await allowedOf("verify:email:a@b.co", 12, VERIFY_EMAIL_LIMITS)).toBe(10);
-    await expect(consume("verify:email:a@b.co", VERIFY_EMAIL_LIMITS)).resolves.toEqual({
+  it("ten code checks per IP and email pair per 15 minutes, and forty per IP", async () => {
+    expect(VERIFY_PAIR_LIMITS.windowMinutes).toBe(15);
+    expect(await allowedOf("verify:pair:1.2.3.4:a@b.co", 12, VERIFY_PAIR_LIMITS)).toBe(10);
+    await expect(consume("verify:pair:1.2.3.4:a@b.co", VERIFY_PAIR_LIMITS)).resolves.toEqual({
       allowed: false,
       retryAfterMinutes: 15,
     });
+    expect(await allowedOf("verify:ip:1.2.3.4", 45, VERIFY_IP_LIMITS)).toBe(40);
   });
 });
 

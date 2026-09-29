@@ -4,7 +4,8 @@ import { CardFront } from "@/components/card/card-front";
 import { ROLES, isRoleKey, type RoleKey } from "@/lib/card/roles";
 import { sealSeed } from "@/lib/card/seal";
 import { cardPath } from "@/lib/card/share";
-import { tierFor } from "@/lib/card/tiers";
+import { LIVE_SCORE, LIVE_SCORE_JOIN } from "@/lib/card/store";
+import { levelFor, tierFor } from "@/lib/card/tiers";
 import { summaryOf, type CardFace } from "@/lib/card/view";
 import { db } from "@/lib/db";
 import { POSITION_CODE } from "@/lib/roles/recipes";
@@ -19,6 +20,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /**
+ * Бал і рівень живі (scores за правилами CRM, знімок cards.score лише запасний); демо-акаунти
+ * (users.is_demo) на табло не потрапляють.
+ *
  * Раунд 5, п.7: усі, хто має публічну картку й не вимкнув її в Privacy (/settings, "Show my card
  * on the leaderboard"), за балом.
  *
@@ -35,7 +39,6 @@ type Row = {
   slug: string;
   role: string;
   score: number;
-  level: number;
   display_name: string;
 };
 
@@ -52,10 +55,10 @@ async function loadBoard(page: number): Promise<{ rows: Row[]; hasNext: boolean 
   // Тягнемо на один рядок більше за сторінку, щоб знати, чи є ще одна, без окремого count(*).
   const { results } = await db()
     .prepare(
-      `SELECT c.slug, c.role, c.score, c.level, c.display_name
-         FROM cards c JOIN users u ON u.id = c.user_id
-        WHERE c.revoked_at IS NULL AND u.card_public = 1
-        ORDER BY c.score DESC, c.created_at ASC
+      `SELECT c.slug, c.role, ${LIVE_SCORE} AS score, c.display_name
+         FROM cards c JOIN users u ON u.id = c.user_id ${LIVE_SCORE_JOIN}
+        WHERE c.revoked_at IS NULL AND u.card_public = 1 AND u.is_demo = 0
+        ORDER BY ${LIVE_SCORE} DESC, c.created_at ASC
         LIMIT ? OFFSET ?`,
     )
     .bind(PAGE_SIZE + 1, offset)
@@ -66,13 +69,14 @@ async function loadBoard(page: number): Promise<{ rows: Row[]; hasNext: boolean 
 function faceFor(row: Row, rank: number): CardFace | null {
   if (!isRoleKey(row.role)) return null;
   const role: RoleKey = row.role;
-  const tier = tierFor(row.level);
+  const level = levelFor(row.score);
+  const tier = tierFor(level);
   const face: CardFace = {
     kind: "real",
     roleName: ROLES[role].name,
     positionCode: POSITION_CODE[role],
     score: row.score,
-    level: row.level,
+    level,
     tier,
     displayName: row.display_name,
     sealSeed: sealSeed({ slug: row.slug }),
@@ -129,7 +133,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-ink sm:text-base">{row.display_name}</span>
                       <span className="mt-0.5 block truncate text-xs text-ink-muted">
-                        {ROLES[row.role as RoleKey].name} · Level {row.level} of 10
+                        {ROLES[row.role as RoleKey].name} · Level {levelFor(row.score)} of 10
                       </span>
                     </span>
                     <span className="shrink-0 text-right">

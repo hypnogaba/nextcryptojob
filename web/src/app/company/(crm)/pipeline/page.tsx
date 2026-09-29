@@ -4,7 +4,7 @@ import { FIELD, LABEL } from "@/components/form/styles";
 import { doneText, errorText, first } from "@/components/crm/messages";
 import { BOARD, POS, ScoreChip, TABLE, TD, TH, TR } from "@/components/board";
 import { EmptyChip } from "@/components/crm/candidate-row";
-import { Chip, EmptyState, LINK, NoAccess, Notice, PAGE, PageTitle, StageText } from "@/components/crm/ui";
+import { Chip, EmptyState, LINK, NoAccess, Notice, PAGE, PageTitle, StageText, SubscriptionNeeded } from "@/components/crm/ui";
 import { POSITION_CODE } from "@/lib/roles/recipes";
 import { Button } from "@/components/ui/button";
 import { readAction } from "@/lib/crm/actions";
@@ -50,6 +50,15 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
       <div className={`${PAGE} max-w-7xl`}>
         <PageTitle>Pipeline</PageTitle>
         <NoAccess />
+      </div>
+    );
+  }
+
+  if (!canWrite) {
+    return (
+      <div className={`${PAGE} max-w-7xl`}>
+        <PageTitle>Pipeline</PageTitle>
+        <SubscriptionNeeded what="Your pipeline and notes" />
       </div>
     );
   }

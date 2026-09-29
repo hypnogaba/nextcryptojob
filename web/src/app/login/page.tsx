@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { TelegramButton } from "@/components/telegram-button";
 import { getSettings } from "@/lib/admin/settings";
+import { safeNextPath } from "@/lib/auth/next-path";
 import { currentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { telegramLoginEnabled } from "@/lib/auth/telegram-oidc";
@@ -10,9 +11,12 @@ import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ next?: string | string[] }> }) {
+  const rawNext = (await searchParams)?.next;
+  // Куди повернути після входу (лист-запрошення в команду тощо): лише шлях цього сайту.
+  const next = safeNextPath(Array.isArray(rawNext) ? rawNext[0] : rawNext);
   // Хто вже ввійшов, тому форма ні до чого.
-  if (await currentUser()) redirect("/account");
+  if (await currentUser()) redirect(next ?? "/account");
   // Без ключів OIDC кнопки Telegram немає зовсім (docs/contracts.md, §8).
   const telegram = telegramLoginEnabled(telegramEnv());
   // Нові реєстрації закрито в /admin/settings: хто вже має акаунт, входить як завжди.
@@ -40,7 +44,7 @@ export default async function LoginPage() {
         Enter your email and we will send you a <span className="whitespace-nowrap">6-digit</span> code.
         {signupsOpen ? " New here? The same step creates your account." : null}
       </p>
-      <LoginForm />
+      <LoginForm next={next} />
     </section>
   );
 }

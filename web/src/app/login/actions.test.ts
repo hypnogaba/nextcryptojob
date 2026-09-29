@@ -55,6 +55,24 @@ describe("loginAction", () => {
     await expect(signIn("back@example.com")).resolves.toBe("/account");
   });
 
+  it("goes back to the page the person came from (next), for a new person too", async () => {
+    const code = await codeFor("lee@example.com");
+    const err = await loginAction(
+      { step: "code", email: "lee@example.com" },
+      form({ intent: "verify", email: "lee@example.com", code, next: "/company/join?t=abc" }),
+    ).catch((e) => e);
+    expect((err as RedirectCalled).url).toBe("/company/join?t=abc");
+  });
+
+  it("ignores a next that would leave the site", async () => {
+    for (const [i, next] of ["https://evil.example/", "//evil.example", "/\\evil.example"].entries()) {
+      const email = `person${i}@example.com`;
+      const code = await codeFor(email);
+      const err = await loginAction({ step: "code", email }, form({ intent: "verify", email, code, next })).catch((e) => e);
+      expect((err as RedirectCalled).url).toBe("/welcome");
+    }
+  });
+
   it("sends an admin straight to /admin, new or returning, and never through the brief", async () => {
     (harness.env as { ADMIN_EMAILS?: string }).ADMIN_EMAILS = "boss@example.com, Other@Example.com";
     await expect(signIn("boss@example.com")).resolves.toBe("/admin");

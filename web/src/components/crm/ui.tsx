@@ -88,6 +88,20 @@ export function NoAccess() {
   );
 }
 
+/** Доступу немає, бо підписка закінчилась або її не було: профілі, воронка й нотатки лише з підпискою (аудит 29.09, G). */
+export function SubscriptionNeeded({ what }: { what: string }) {
+  return (
+    <Notice tone="warning">
+      <p className="font-semibold">{what} need a subscription.</p>
+      <p className="mt-2">
+        <Link href="/company/billing" className={LINK}>
+          Pay 100 USDC on Solana in Billing
+        </Link>
+      </p>
+    </Notice>
+  );
+}
+
 /** Порожній стан: що тут буде і що зробити далі. */
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (

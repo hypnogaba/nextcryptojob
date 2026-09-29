@@ -407,17 +407,24 @@ describe("email content", () => {
     expect(String(sent[0].html)).toContain(`href="${url.replace(/&/g, "&amp;")}"`);
   });
 
-  it("says how many live jobs were checked and what each company does, when engine sends them", async () => {
+  it("says how many open jobs match this person and what each company does, when engine sends them", async () => {
     const p = payload({ pool_jobs: 1437 });
     p.jobs[0] = { ...p.jobs[0], about: "Paying Labs builds <payment> rails." };
     expect((await signedPost(p)).status).toBe(200);
     const text = String(sent[0].text);
     const html = String(sent[0].html);
-    expect(text).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
+    expect(text).toContain("1,437 open crypto jobs match your roles and place. These 2 fit you best.");
+    expect(text).not.toContain("We checked");
     expect(text).toContain("Paying Labs builds <payment> rails.");
-    expect(html).toContain("We checked 1,437 live crypto jobs. These 2 fit you best.");
+    expect(html).toContain("1,437 open crypto jobs match your roles and place. These 2 fit you best.");
     // Лист у стилі Getro (17.09): речення про компанію лише в текстовій версії, рядок вакансії короткий.
     expect(html).not.toContain("builds &lt;payment&gt;");
+  });
+
+  it("leaves the matches sentence out when there is nothing beyond what is shown", async () => {
+    expect((await signedPost(payload({ pool_jobs: 2 }))).status).toBe(200);
+    expect(String(sent[0].text)).not.toContain("match your roles");
+    expect(String(sent[0].html)).not.toContain("match your roles");
   });
 
   it("an old engine without the new fields still gets the same email, without those lines", async () => {

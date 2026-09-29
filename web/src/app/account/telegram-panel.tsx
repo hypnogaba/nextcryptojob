@@ -1,4 +1,5 @@
 import { TelegramButton } from "@/components/telegram-button";
+import { TelegramUnreachableNotice } from "@/components/telegram-unreachable-notice";
 import { telegramLoginEnabled } from "@/lib/auth/telegram-oidc";
 import { db } from "@/lib/db";
 import { telegramStatus } from "@/lib/telegram/channel";
@@ -24,7 +25,7 @@ export async function TelegramPanel({ userId }: { userId: string }) {
       {status.telegramId ? (
         <>
           <p className="text-ink">
-            Connected
+            {status.unreachable ? "Linked, but not reachable" : "Connected"}
             {status.username ? (
               <>
                 {" as "}
@@ -32,6 +33,7 @@ export async function TelegramPanel({ userId }: { userId: string }) {
               </>
             ) : null}
           </p>
+          {status.unreachable ? <TelegramUnreachableNotice hasEmail={status.email !== null} /> : null}
           <ChannelSwitch on={status.channel === "telegram"} hasEmail={status.email !== null} />
         </>
       ) : (

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MiniCard } from "@/components/card/mini-card";
 import { POS } from "@/components/board";
-import { CARD, H2, LINK, NoAccess, Notice } from "@/components/crm/ui";
+import { CARD, H2, LINK, NoAccess, Notice, SubscriptionNeeded } from "@/components/crm/ui";
 import { fnv1a } from "@/lib/card/pattern";
 import { POSITION_CODE } from "@/lib/roles/recipes";
 import { isRoleKey } from "@/lib/card/roles";
@@ -134,6 +134,8 @@ export default async function CandidatePage({
 
   if (company.access === "none") return shell(<NoAccess />);
   if (!CandidateId.safeParse(id).success) return shell(<Notice tone="warning">This candidate is not available.</Notice>);
+
+  if (company.access !== "subscription") return shell(<SubscriptionNeeded what="Candidate profiles" />);
 
   let view: CandidateView;
   try {

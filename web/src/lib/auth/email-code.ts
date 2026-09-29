@@ -8,7 +8,8 @@ import {
   CODE_EMAIL_DAY_LIMITS,
   CODE_EMAIL_LIMITS,
   CODE_IP_LIMITS,
-  VERIFY_EMAIL_LIMITS,
+  VERIFY_IP_LIMITS,
+  VERIFY_PAIR_LIMITS,
   clearRate,
   consume,
   pruneRateStatement,
@@ -209,15 +210,21 @@ async function spendCode(
   email: string,
   rawCode: unknown,
   purpose: CodePurpose,
+  ip: string,
 ): Promise<{ ok: true; limitKey: string } | CodeFailure> {
   const code = typeof rawCode === "string" ? rawCode.replace(/\s+/g, "") : "";
   if (!/^\d{6}$/.test(code)) return { ok: false, reason: "invalid_code" };
   const key = secret();
   if (!key) return { ok: false, reason: "email_unavailable" };
 
-  // Кожна перевірка рахується до порівняння; вдала дія лічильник стирає.
-  const limitKey = `verify:email:${email}`;
-  const gate = await consume(limitKey, VERIFY_EMAIL_LIMITS);
+  // Кожна перевірка рахується до порівняння; вдала дія стирає лічильник пари. Ключ з IP: чужа людина не може
+  // вичерпати ліміт адреси жертви (раніше ключ був лише за адресою). Підбір коду це не послаблює: головний
+  // захист це 5 спроб на код і ліміт нових кодів на адресу (див. VERIFY_PAIR_LIMITS).
+  const limitKey = `verify:pair:${ip}:${email}`;
+  const gate = await consumeAll([
+    [`verify:ip:${ip}`, VERIFY_IP_LIMITS],
+    [limitKey, VERIFY_PAIR_LIMITS],
+  ]);
   if (!gate.allowed) {
     return { ok: false, reason: "rate_limited", retryAfterMinutes: gate.retryAfterMinutes };
   }
@@ -270,10 +277,10 @@ async function spendCode(
  * завжди, нової не створюємо. Про це кажемо лише після правильного коду: до нього
  * відповідь однакова для будь-якої адреси, тож не видно, чи є акаунт.
  */
-export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<VerifyCodeResult> {
+export async function verifyCode(rawEmail: unknown, rawCode: unknown, ip = "unknown"): Promise<VerifyCodeResult> {
   const email = normaliseEmail(rawEmail);
   if (!email) return { ok: false, reason: "invalid_email" };
-  const spent = await spendCode(email, rawCode, SIGN_IN);
+  const spent = await spendCode(email, rawCode, SIGN_IN, ip);
   if (!spent.ok) return spent;
 
   const d = db();
@@ -296,10 +303,15 @@ export async function verifyCode(rawEmail: unknown, rawCode: unknown): Promise<V
  * purpose add_email), і лише тоді пише users.email. Сесію не чіпає: людина
  * лишається в сесії, якою ввійшла (метод входу не змінюється).
  */
-export async function verifyAddEmailCode(userId: string, rawEmail: unknown, rawCode: unknown): Promise<AddEmailResult> {
+export async function verifyAddEmailCode(
+  userId: string,
+  rawEmail: unknown,
+  rawCode: unknown,
+  ip = "unknown",
+): Promise<AddEmailResult> {
   const email = normaliseEmail(rawEmail);
   if (!email) return { ok: false, reason: "invalid_email" };
-  const spent = await spendCode(email, rawCode, { kind: "add_email", userId });
+  const spent = await spendCode(email, rawCode, { kind: "add_email", userId }, ip);
   if (!spent.ok) return spent;
   await clearRate(spent.limitKey);
 

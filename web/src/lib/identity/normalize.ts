@@ -115,23 +115,9 @@ export function normalizeSite(input: string): Normalized {
   return ok(`https://${host}${path}`);
 }
 
-const SHERLOCK_HANDLE = /^[a-z0-9](?:[a-z0-9._-]{0,38}[a-z0-9])?$/;
-
-/** Sherlock: нік, нижній регістр. Приймає `audits.sherlock.xyz/watson/<нік>`. */
-export function normalizeSherlock(input: string): Normalized {
-  let raw = input.trim();
-  if (!raw) return fail("Enter your Sherlock handle.");
-  const path = pathOn(raw, ["audits.sherlock.xyz", "app.sherlock.xyz", "sherlock.xyz"]);
-  if (path) raw = path[0] === "watson" ? (path[1] ?? "") : (path.at(-1) ?? "");
-  const value = raw.replace(/^@/, "").toLowerCase();
-  if (!SHERLOCK_HANDLE.test(value)) return fail("A Sherlock handle has letters, digits, dots, dashes or _.");
-  return ok(value);
-}
-
 export const NORMALIZERS = {
   x: normalizeX,
   github: normalizeGithub,
   youtube: normalizeYoutube,
   site: normalizeSite,
-  sherlock: normalizeSherlock,
 } as const;

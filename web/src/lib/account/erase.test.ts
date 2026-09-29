@@ -78,7 +78,9 @@ function seed(raw: DatabaseSync) {
       ('a@example.com', 'x', datetime('now', '+10 minutes')), ('b@example.com', 'y', datetime('now', '+10 minutes'));
     INSERT INTO auth_attempts (key, attempts, window_start) VALUES
       ('code:email:a@example.com', 1, datetime('now')), ('code:email:day:a@example.com', 1, datetime('now')),
-      ('verify:email:a@example.com', 1, datetime('now')), ('identity:a', 1, datetime('now')),
+      ('verify:email:a@example.com', 1, datetime('now')), ('verify:pair:203.0.113.7:a@example.com', 1, datetime('now')),
+      ('verify:pair:2001:db8::1:a@example.com', 1, datetime('now')), ('verify:pair:203.0.113.7:b@example.com', 1, datetime('now')),
+      ('verify:ip:203.0.113.7', 1, datetime('now')), ('identity:a', 1, datetime('now')),
       ('card:a', 1, datetime('now')), ('verify:github:a', 1, datetime('now')), ('settings:a', 1, datetime('now')),
       ('code:email:b@example.com', 1, datetime('now')), ('identity:b', 1, datetime('now')), ('card:ba', 1, datetime('now'));
   `);
@@ -146,7 +148,7 @@ describe("eraseAccount", () => {
         .prepare("SELECT key FROM auth_attempts ORDER BY key")
         .all()
         .map((r) => r.key),
-    ).toEqual(["card:ba", "code:email:b@example.com", "identity:b"]);
+    ).toEqual(["card:ba", "code:email:b@example.com", "identity:b", "verify:ip:203.0.113.7", "verify:pair:203.0.113.7:b@example.com"]);
   });
 
   it("records the deletion in the audit log with ids only", async () => {
