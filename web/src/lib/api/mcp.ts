@@ -30,8 +30,8 @@ import { mcpError, mcpResult, readPaymentMeta, type ToolResult } from "@/lib/x40
  */
 
 export const MCP_ROUTE = "/mcp";
-/** Хости, з яких приймаємо MCP (захист від DNS rebinding): прод, адреса workers.dev, локальна розробка. */
-export const MCP_HOSTNAMES = ["nextcryptojob.xyz", "nextcryptojob.hypnogaba.workers.dev", "localhost", "127.0.0.1"];
+/** Хости, з яких приймаємо MCP (захист від DNS rebinding): прод і локальна розробка. */
+export const MCP_HOSTNAMES = ["nextcryptojob.xyz", "localhost", "127.0.0.1"];
 
 const SERVER_INFO = { name: "nextcryptojob", version: "1.0.0" };
 

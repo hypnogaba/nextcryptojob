@@ -52,11 +52,11 @@
     { "name": "RL_PUBLIC", "namespace_id": "4104", "simple": { "limit": 30, "period": 60 } }
   ],
   // Власний домен: зона nextcryptojob.xyz active на Cloudflare з 12.09.
-  // workers_dev поки лишаємо: на ньому вебхук бота й адреси входу Telegram.
-  // Коли вони переїдуть на nextcryptojob.xyz, workers_dev треба вимкнути: інакше
-  // правила WAF зони обходяться другою адресою, і в тій адресі стоїть нік акаунта.
+  // workers_dev вимкнено 29.09: вебхук бота переїхав на nextcryptojob.xyz. Друга адреса
+  // обходила правила WAF зони, і в ній стояв нік акаунта.
   "routes": [{ "pattern": "nextcryptojob.xyz", "custom_domain": true }],
-  "workers_dev": true,
+  "workers_dev": false,
+  "preview_urls": false,
   // Пошта для кодів входу: Cloudflare Email Service (бета, тариф Workers Paid).
   // Домен nextcryptojob.xyz підключено 12.09 (API email/sending/subdomains):
   // записи MX і SPF на cf-bounce, DKIM cf-bounce._domainkey, DMARC на _dmarc.
