@@ -87,7 +87,7 @@ export interface DigestPick {
 
 export interface SelectOptions {
   now: Date;
-  /** `sent.job_ref`, уже надіслані цій людині (будь-який статус). */
+  /** `sent.job_ref`, уже надіслані цій людині (sent і pending; невдалі доставки не рахуються). */
   exclude: ReadonlySet<string>;
   limit?: number;
 }
@@ -422,4 +422,19 @@ export function selectJobs(
 
   const rest = chosen.slice(companyPicks.length).sort((a, b) => compareKeys(a.key, b.key));
   return [...companyPicks, ...rest].map(({ key: _key, fresh: _fresh, ...pick }) => ({ ...pick, why: whyLine(pick, profile, o.now) }));
+}
+
+/**
+ * Скільки вакансій пулу підходять цій людині за роллю (або словами своєї ролі) і місцем, ще не надісланих:
+ * чесне число для рядка «N open jobs match your roles and place». Розмір усього пулу до фільтрів сюди не годиться.
+ */
+export function countMatches(
+  pool: { crawl: readonly DigestJob[]; company: readonly DigestJob[] }, profile: DigestProfile, o: SelectOptions,
+): number {
+  const phrases = roleKeywords(profile.roleText);
+  if (profile.roles.length === 0 && phrases.length === 0) return 0;
+  const excludedDedupe = new Set(pool.crawl.filter((j) => o.exclude.has(j.ref) && j.dedupeKey).map((j) => j.dedupeKey!));
+  const crawl = candidatesFor(pool.crawl, profile, o, excludedDedupe, phrases).filter((c) => c.job.source === "nextrole");
+  const company = candidatesFor(pool.company, profile, o, excludedDedupe, phrases).filter((c) => c.job.source === "company");
+  return crawl.length + company.length;
 }
