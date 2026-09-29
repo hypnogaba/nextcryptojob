@@ -83,7 +83,7 @@ export async function addEmailAction(prev: AddEmailState, form: FormData): Promi
   if (intent === "verify") {
     let res: AddEmailResult;
     try {
-      res = await verifyAddEmailCode(user.id, email, form.get("code"));
+      res = await verifyAddEmailCode(user.id, email, form.get("code"), clientIp(await headers()));
     } catch (err) {
       console.error("verifyAddEmailCode failed:", err instanceof Error ? err.message : String(err));
       return { step: "code", email, message: GENERIC };

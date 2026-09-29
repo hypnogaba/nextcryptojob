@@ -36,7 +36,7 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
   if (intent === "verify") {
     let res: VerifyCodeResult;
     try {
-      res = await verifyCode(email, form.get("code"));
+      res = await verifyCode(email, form.get("code"), clientIp(await headers()));
     } catch (err) {
       console.error("verifyCode failed:", err instanceof Error ? err.message : String(err));
       return { step: "code", email, message: GENERIC };
