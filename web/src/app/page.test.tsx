@@ -68,7 +68,7 @@ describe("home page", () => {
   it("leads with one promise and a brief box that carries the text to the brief", async () => {
     const html = await home();
     const t = text(html);
-    expect(t).toContain("Get hired for what you've actually done.");
+    expect(t).toContain("Crypto jobs matched to what you've actually done.");
     expect(t).toContain("The easy way to find a crypto job. We match you by your real achievements: your X, your wallets, your GitHub.");
     // Бриф іде GET на /start (кука для першого кроку анкети), без ланцюжка кроків.
     expect(html).toMatch(/<form id="find"[^>]*action="\/start" method="get"/);
@@ -150,7 +150,7 @@ describe("home page", () => {
     jobsHolder.open = () => ({ all: async () => Promise.reject(new Error("D1_ERROR: overloaded")), first: async () => null });
     const html = await home();
     const t = text(html);
-    expect(t).toContain("Get hired for what you've actually done.");
+    expect(t).toContain("Crypto jobs matched to what you've actually done.");
     expect(html).toMatch(/action="\/start"/);
     // Сама сторінка стоїть, а табло каже, що сьогоднішніх вакансій нема.
     const board = text(await boardHtml());
@@ -164,7 +164,7 @@ describe("home page", () => {
     jobsHolder.open = () => {
       throw new Error("JOBS_DB is not bound");
     };
-    expect(text(await home())).toContain("Get hired for what you've actually done.");
+    expect(text(await home())).toContain("Crypto jobs matched to what you've actually done.");
     expect(text(await boardHtml())).toContain("Today's jobs did not load just now.");
   });
 

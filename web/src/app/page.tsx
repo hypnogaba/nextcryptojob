@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   // пишемо тут самі: за словами «next crypto job» шукають і нас, і просто крипто-роботу.
   title: "NextCryptoJob: crypto and web3 jobs by proof of work",
   description:
-    "Get hired for what you've actually done. The easy way to find a crypto job: we match you by your X, your wallets and your GitHub, and send up to 5 jobs a day by Telegram or email. Free.",
+    "Crypto jobs matched to your X, your wallets and your GitHub. We send up to 5 matching jobs a day by Telegram or email. Free for candidates.",
 };
 
 // Живі числа й стрічка з пулу вакансій: сторінку рендеримо на запит, бо статична збірка не бачить
@@ -92,7 +92,7 @@ export default function HomePage() {
         className={`${WRAP} relative grid items-center gap-x-12 gap-y-10 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:pt-10`}
       >
         <div>
-          <h1 className="display max-w-[600px] text-hero">Get hired for what you&apos;ve actually done.</h1>
+          <h1 className="display max-w-[600px] text-hero">Crypto jobs matched to what you&apos;ve actually done.</h1>
           <p className="mt-6 max-w-[520px] text-lg text-ink-muted sm:text-xl sm:leading-[30px]">
             The easy way to find a crypto job. We match you by your real achievements:{" "}
             <b className="font-semibold text-ink">your X, your wallets, your GitHub.</b>
@@ -164,6 +164,22 @@ export default function HomePage() {
             More answers in the{" "}
             <Link href="/faq" className="font-semibold text-ink underline underline-offset-4">
               FAQ
+            </Link>
+            . Or browse{" "}
+            <Link href="/crypto-jobs" className="font-semibold text-ink underline underline-offset-4">
+              crypto jobs by role
+            </Link>
+            : {" "}
+            <Link href="/crypto-jobs/engineer/remote" className="font-semibold text-ink underline underline-offset-4">
+              remote engineer
+            </Link>
+            ,{" "}
+            <Link href="/crypto-jobs/marketing" className="font-semibold text-ink underline underline-offset-4">
+              marketing
+            </Link>
+            ,{" "}
+            <Link href="/crypto-jobs/bd" className="font-semibold text-ink underline underline-offset-4">
+              business development
             </Link>
             .
           </p>
