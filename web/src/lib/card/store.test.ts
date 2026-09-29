@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { sqliteD1 } from "@/test/sqlite-d1";
-import { CardInputError, createCard, getCard, type NewCard } from "./store";
+import { CardInputError, createCard, getCard, listActiveCards, type NewCard } from "./store";
 
 const INPUT: NewCard = {
   userId: "u1",
@@ -38,6 +38,16 @@ describe("createCard + getCard", () => {
       formulaVersion: "v5",
     });
     expect(card?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it("shows the current published score and level, not the snapshot", async () => {
+    const slug = await createCard(db, INPUT);
+    // Формула v9 ще не пройшла ворота: лишається знімок.
+    raw.exec("INSERT INTO scores (user_id, role, score, breakdown_json, formula_version) VALUES ('u1', 'security_auditor', 95, '{}', 'v9')");
+    expect(await getCard(db, slug)).toMatchObject({ score: 72.4, level: 8, formulaVersion: "v5" });
+    raw.exec("INSERT INTO quality_runs (formula_version, people, exact_pct, near_pct, unscored, report_json, passed) VALUES ('v9', 5, 90, 95, 0, '{}', 1)");
+    expect(await getCard(db, slug)).toMatchObject({ score: 95, level: 10, formulaVersion: "v9" });
+    expect((await listActiveCards(db, "u1"))[0].score).toBe(95);
   });
 
   it("never exposes who owns the card", async () => {

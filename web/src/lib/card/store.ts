@@ -1,9 +1,12 @@
 // Картки в D1 (таблиця cards, db/migrations/0005_cards.sql).
-// Картка це знімок балу на момент поширення: бал, рівень і ім'я не змінюються.
+// Картка фіксує ім'я, роль і адресу; бал і рівень на ній живі: читаємо з scores (ті самі правила,
+// що в CRM: формула пройшла ворота якості), а знімок cards.score лишається запасним, коли живого
+// опублікованого балу немає (ще не пораховано, версія формули не пройшла ворота).
 // Нова картка тієї ж людини й ролі відкликає попередню, тож активна одна.
 import type { IdentityKind } from "@/lib/identity/normalize";
 import { normalizeDisplayName } from "./display-name";
 import { isRoleKey, type RoleKey } from "./roles";
+import { publishedSql } from "@/lib/crm/visibility";
 import { isSlug, newSlug } from "./slug";
 import { levelFor } from "./tiers";
 import type { CardEvidence } from "./view";
@@ -32,13 +35,19 @@ type CardRow = {
   slug: string;
   role: string;
   score: number;
-  level: number;
   display_name: string;
   formula_version: string;
   created_at: string;
 };
 
 export class CardInputError extends Error {}
+
+/**
+ * Живий бал картки `c` (псевдонім cards): опублікований рядок scores власника для ролі картки,
+ * інакше знімок. Разом з LIVE_SCORE_JOIN; рівень рахує levelFor від цього балу, не cards.level.
+ */
+export const LIVE_SCORE_JOIN = `LEFT JOIN scores ls ON ls.user_id = c.user_id AND ls.role = c.role AND ${publishedSql("ls")}`;
+export const LIVE_SCORE = "COALESCE(ls.score, c.score)";
 
 /** Створює картку й повертає slug. Кидає CardInputError на хибний вхід. */
 export async function createCard(db: D1Database, input: NewCard): Promise<string> {
@@ -89,8 +98,9 @@ export async function getCard(db: D1Database, slug: string): Promise<PublicCard 
   if (!isSlug(slug)) return null;
   const row = await db
     .prepare(
-      "SELECT slug, role, score, level, display_name, formula_version, created_at " +
-        "FROM cards WHERE slug = ? AND revoked_at IS NULL",
+      `SELECT c.slug, c.role, ${LIVE_SCORE} AS score, c.display_name,
+              COALESCE(ls.formula_version, c.formula_version) AS formula_version, c.created_at
+         FROM cards c ${LIVE_SCORE_JOIN} WHERE c.slug = ? AND c.revoked_at IS NULL`,
     )
     .bind(slug)
     .first<CardRow>();
@@ -99,7 +109,7 @@ export async function getCard(db: D1Database, slug: string): Promise<PublicCard 
     slug: row.slug,
     role: row.role,
     score: row.score,
-    level: row.level,
+    level: levelFor(row.score),
     displayName: row.display_name,
     formulaVersion: row.formula_version,
     createdAt: row.created_at,
@@ -175,7 +185,8 @@ export type ActiveCard = { slug: string; role: RoleKey; score: number; displayNa
 export async function listActiveCards(db: D1Database, userId: string): Promise<ActiveCard[]> {
   const { results } = await db
     .prepare(
-      "SELECT slug, role, score, display_name, created_at FROM cards WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at",
+      `SELECT c.slug, c.role, ${LIVE_SCORE} AS score, c.display_name, c.created_at
+         FROM cards c ${LIVE_SCORE_JOIN} WHERE c.user_id = ? AND c.revoked_at IS NULL ORDER BY c.created_at`,
     )
     .bind(userId)
     .all<{ slug: string; role: string; score: number; display_name: string; created_at: string }>();
