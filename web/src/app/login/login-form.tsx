@@ -48,7 +48,7 @@ function keepDigits(event: React.FormEvent<HTMLInputElement>) {
   if (digits !== input.value) input.value = digits;
 }
 
-export function LoginForm() {
+export function LoginForm({ next = null }: { next?: string | null }) {
   const [state, formAction] = useActionState(loginAction, INITIAL);
   const codeRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +61,7 @@ export function LoginForm() {
     const invalid = state.message?.tone === "error";
     return (
       <form action={formAction} className="mt-8 grid gap-3">
+        {next ? <input type="hidden" name="next" value={next} /> : null}
         <label htmlFor="email" className="text-sm font-semibold text-ink">
           Email
         </label>
@@ -89,6 +90,7 @@ export function LoginForm() {
   return (
     <form action={formAction} className="mt-8 grid gap-3">
       <input type="hidden" name="email" value={state.email} />
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <label htmlFor="code" className="text-sm font-semibold text-ink">
         6-digit code
       </label>

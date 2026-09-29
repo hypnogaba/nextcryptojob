@@ -11,6 +11,7 @@ import {
   type RequestCodeResult,
   type VerifyCodeResult,
 } from "@/lib/auth/email-code";
+import { safeNextPath } from "@/lib/auth/next-path";
 import { clientIp } from "@/lib/auth/ratelimit";
 import { signOut } from "@/lib/auth/session";
 import { appEnv } from "@/lib/db";
@@ -42,7 +43,9 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
     }
     // redirect кидає виняток, тож стоїть поза try. Адмін (пошта зі списку, сесія поштою) іде
     // в адмінку без анкети; новий акаунт налаштовувати профіль; той, хто повернувся, у кабінет.
-    if (res.ok) redirect(landingAfterEmailLogin(email, res.created));
+    // `next` (форма, повторно перевірений безпечний шлях цього сайту) сильніший за типовий вибір: запрошення в команду
+    // після входу мусить повернути на своє посилання, а не в анкету чи кабінет.
+    if (res.ok) redirect(safeNextPath(form.get("next")) ?? landingAfterEmailLogin(email, res.created));
     if (res.reason === "signups_closed") return { step: "email", email, message: { tone: "info", text: SIGNUPS_CLOSED } };
     if (res.reason === "invalid_email") return { step: "email", email, message: verifyCodeMessage(res, UNAVAILABLE) };
     return { step: "code", email, message: verifyCodeMessage(res, UNAVAILABLE) };
