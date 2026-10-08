@@ -1,4 +1,5 @@
 import { SCORING_BASIS_SQL } from "@/lib/consent";
+import { jobVia } from "@/lib/jobs/link";
 import type { JobsDb } from "@/lib/jobs-db";
 import { isRoleKey } from "@/lib/card/roles";
 import { brandKey } from "@/lib/jobs/clean";
@@ -51,6 +52,8 @@ export type JobDetails = {
   url: string | null;
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
+  /** Підпис джерела за рядком бази («chainjobs.io», lib/jobs/link.ts jobVia); null, якщо його немає. */
+  via?: string | null;
   /** Оцінка дошки підписом («est. … (web3.career estimate)»), лише без зарплати; null для решти. */
   salaryEstimate?: string | null;
   /** Про компанію з реєстру (db/jobs 0005), лише для вакансій зі сканування. */
@@ -246,6 +249,7 @@ async function crawlDetails(
         salary: formatSalary({ min: r.salary_min, max: r.salary_max, currency: r.salary_currency, period: "year" }),
         url: safeUrl(r.url),
         postedBy: null,
+        ...(jobVia(r.url, r.source) ? { via: jobVia(r.url, r.source) } : {}),
         ...(estimate ? { salaryEstimate: estimate } : {}),
         ...(known ? { about: known.about, domain: known.domain, token: tokenChip(known.token, now) } : {}),
         freshness: freshnessLine(

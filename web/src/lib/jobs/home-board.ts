@@ -134,7 +134,7 @@ type TickerLink = { href: string; external: boolean; rel: string | null; via: st
  */
 export function tickerHref(job: PoolJob): TickerLink | null {
   if (job.source === "company") return { href: `/jobs/${encodeURIComponent(job.jobId)}`, external: false, rel: null, via: null };
-  const link = externalJobLink(job.url);
+  const link = externalJobLink(job.url, job.origin);
   if (!link || !/^https?:/i.test(link.href)) return null;
   return { href: link.href, external: true, rel: link.rel, via: link.via };
 }

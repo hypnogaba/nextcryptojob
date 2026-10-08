@@ -34,6 +34,8 @@ export interface DeliveryJob {
   /** Для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   postedBy: string | null;
   source: "nextrole" | "company";
+  /** jobs_cache.source вакансії зі сканування (DigestJob.origin): для підпису джерела, jobVia. */
+  origin?: string | null;
   /** id вакансії: сайт робить з нього адресу своєї сторінки /jobs/<id> (раунд 6, лист). */
   jobId?: string | null;
   /** sent.job_ref ('nr:<id>' або 'co:<id>'): кнопки 👍/👎 у Telegram несуть його в callback_data. */
@@ -160,7 +162,14 @@ const BOARDS: ReadonlyArray<{ host: RegExp; label: string }> = [
   { host: /^(.+\.)?remote3\.co$/i, label: "remote3.co" },
 ];
 
-export function jobVia(url: string): string | null {
+/**
+ * Джерела, які називаємо за рядком бази, а не за адресою: адреса веде до роботодавця, а дані взято з
+ * них (ChainJobs, CC BY 4.0: «link back to chainjobs.io»). Той самий список на сайті (link.ts).
+ */
+const ORIGINS: Readonly<Record<string, string>> = { "aggregator:chainjobs": "chainjobs.io" };
+
+export function jobVia(url: string, origin?: string | null): string | null {
+  if (origin && ORIGINS[origin]) return ORIGINS[origin]!;
   const host = /^https?:\/\/([^/?#:]+)/i.exec(url.trim())?.[1]?.toLowerCase();
   if (!host) return null;
   return BOARDS.find((b) => b.host.test(host))?.label ?? null;
@@ -228,8 +237,8 @@ export function telegramText(m: DigestMessage, siteUrl: string): string {
     ];
     if (!linked && /^mailto:/i.test(j.url)) lines.push(`Apply: ${escapeHtml(j.url.replace(/^mailto:/i, "").split("?")[0]!)}`);
     if (j.postedBy) lines.push(`Posted by ${escapeHtml(cleanText(j.postedBy, 60))} on NextCryptoJob`);
-    const via = jobVia(j.url);
-    if (via) lines.push(`via ${via}`);
+    const via = jobVia(j.url, j.origin);
+    if (via) lines.push(via === "chainjobs.io" ? `via <a href="https://chainjobs.io">chainjobs.io</a>` : `via ${via}`);
     return lines.join("\n");
   });
   // Кнопки 👍/👎 є лише коли є що натискати (telegramKeyboard).
@@ -325,6 +334,8 @@ export interface EmailPayload {
   jobs: Array<{
     position: number; title: string; company: string; location: string | null; salary: string | null;
     why: string; url: string; posted_by: string | null; source: "nextrole" | "company";
+    /** jobs_cache.source вакансії зі сканування (з 08.10.2026, необов'язкове): сайт підписує джерело (jobVia). */
+    origin?: string | null;
     /** id вакансії на сайті: плитка листа веде на /jobs/<id>, а не одразу назовні (раунд 6). */
     job_id?: string | null;
     /** Оцінка дошки підписом (DeliveryJob.salaryEstimate); сайт показує її приглушено. */
@@ -346,7 +357,7 @@ export function emailPayload(m: DigestMessage, now: Date): EmailPayload {
     jobs: m.jobs.map((j) => ({
       position: j.position, title: cleanText(j.title, 200), company: cleanText(j.company, 100),
       location: j.location ? cleanText(j.location, 100) : null, salary: j.salary, why: j.why, url: j.url,
-      posted_by: j.postedBy, source: j.source, job_id: j.jobId ?? null,
+      posted_by: j.postedBy, source: j.source, job_id: j.jobId ?? null, ...(j.origin ? { origin: j.origin } : {}),
       salary_estimate: j.salary ? null : j.salaryEstimate ?? null,
       about: j.about ? cleanText(j.about, 240) : null,
       company_domain: companySiteUrl(j.companyDomain) ? j.companyDomain!.trim().toLowerCase().replace(/^www\./, "") : null,

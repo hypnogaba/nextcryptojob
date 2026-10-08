@@ -6,7 +6,7 @@ import { recordFeedback, type Vote } from "@/lib/digest/feedback";
 import { cleanText, hourLabel, shortDate } from "@/lib/digest/format";
 import { BOT_JOBS_LIMIT, type RecentJob, recentSentJobs } from "@/lib/digest/history";
 import { type JobsDb, jobsDb } from "@/lib/jobs-db";
-import { jobVia } from "@/lib/jobs/link";
+import { jobVia, VIA_HOME } from "@/lib/jobs/link";
 import { answerStillLooking } from "@/lib/nudges/still-looking";
 import { ROLE_TEXT_MAX, rolesFields, saveStep, TARGET_MAX, targetFields } from "@/lib/onboarding/store";
 import { parseSavedStep } from "@/lib/onboarding/steps";
@@ -149,8 +149,8 @@ export function jobsList(origin: string, jobs: readonly RecentJob[]): string {
       lines.push(href && /^https?:\/\//i.test(href) ? `${i + 1}. <a href="${escapeHtml(href)}">${title}</a>` : `${i + 1}. ${title}`);
       const meta = [cleanText(d.company, 60), d.location ? cleanText(d.location, 60) : null, d.salary].filter(Boolean).join(" · ");
       if (meta) lines.push(escapeHtml(meta));
-      const via = d.postedBy ? null : jobVia(d.url);
-      if (via) lines.push(`via ${via}`);
+      const via = d.postedBy ? null : (d.via ?? jobVia(d.url));
+      if (via) lines.push(VIA_HOME[via] ? `via <a href="${VIA_HOME[via]}">${escapeHtml(via)}</a>` : `via ${via}`);
     }
     blocks.push(lines.join("\n"));
   });

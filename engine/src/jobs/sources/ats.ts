@@ -410,6 +410,17 @@ export const ATS: Record<AtsProvider, AtsFetcher> = {
 };
 
 /** Ключ джерела в jobs_cache.source і source_state: `<провайдер>:<слаг>`, як пишуть fetch* вище. */
+/**
+ * Роботодавці не з крипто, у яких є крипто-команда: з їхньої дошки беремо лише вакансії з крипто-словом
+ * у назві (08.10.2026: Block 1 з 223, Robinhood 11 з 161). Решта їхніх вакансій не наша.
+ */
+export const CRYPTO_TITLE_ONLY: ReadonlySet<string> = new Set(["greenhouse:block", "greenhouse:robinhood"]);
+const CRYPTO_TITLE = /\b(?:bitcoin|btc|crypto|blockchain|bitkey|proto|web3|lightning|stablecoins?|on-?chain|digital assets?)\b/i;
+
+export function titleFiltered(sourceKey: string, jobs: RawJob[]): RawJob[] {
+  return CRYPTO_TITLE_ONLY.has(sourceKey) ? jobs.filter((j) => CRYPTO_TITLE.test(j.title)) : jobs;
+}
+
 export function atsSourceKey(provider: AtsProvider, atsSlug: string): string {
   // Comeet: токен у ключ не йде (ключ видно в адмінці й журналі); Workday: назва сайту чутлива до регістру.
   if (provider === "comeet") return `comeet:${comeetSlug(atsSlug).uid}`;

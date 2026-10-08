@@ -146,7 +146,7 @@ export function crawlJob(r: PoolRow): { job: DigestJob } | { drop: "tag" | "comp
       placeText: r.location, remote: isRemoteLocation(r.remote === 1, r.location), country: r.country,
       salary: salaryOf(r.salary_min, r.salary_max, r.salary_currency, null),
       postedAt: parseDbTime(r.posted_at), firstSeenAt: parseDbTime(r.first_seen_at), seenAt: parseDbTime(r.fetched_at),
-      dedupeKey: r.dedupe_key, roles,
+      dedupeKey: r.dedupe_key, roles, origin: r.source ?? null,
     },
   };
 }

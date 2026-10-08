@@ -45,8 +45,20 @@ const BOARDS: ReadonlyArray<{ host: RegExp; label: string }> = [
   { host: /^(.+\.)?remote3\.co$/i, label: "remote3.co" },
 ];
 
-/** Кого назвати джерелом поруч із вакансією: підпис дошки або null. */
-export function jobVia(url: string | null | undefined): string | null {
+/**
+ * Джерела, які називаємо за рядком бази (jobs_cache.source), а не за адресою: адреса веде до
+ * роботодавця, а дані взято з них. ChainJobs (CC BY 4.0) просить «link back to chainjobs.io» там,
+ * де показуємо їхні дані: підпис «via chainjobs.io» посиланням (JobVia). Той самий список в engine
+ * (digest/deliver.ts ORIGINS).
+ */
+export const CHAINJOBS = "chainjobs.io";
+const ORIGINS: Readonly<Record<string, string>> = { "aggregator:chainjobs": CHAINJOBS };
+/** Куди веде підпис джерела, коли він посилання. */
+export const VIA_HOME: Readonly<Record<string, string>> = { [CHAINJOBS]: "https://chainjobs.io" };
+
+/** Кого назвати джерелом поруч із вакансією: підпис дошки або null. origin = jobs_cache.source. */
+export function jobVia(url: string | null | undefined, origin?: string | null): string | null {
+  if (origin && ORIGINS[origin]) return ORIGINS[origin]!;
   const host = url ? hostOf(url) : null;
   if (!host) return null;
   return BOARDS.find((b) => b.host.test(host))?.label ?? null;
@@ -63,10 +75,10 @@ export type ExternalLink = { href: string; rel: string; via: string | null };
  * Зовнішнє посилання на вакансію: href рівно вхідна адреса (safeUrl: лише http(s)/mailto, без
  * переписування), rel за правилом вище, via для підпису «via web3.career». null, якщо адреса крива.
  */
-export function externalJobLink(raw: string | null | undefined): ExternalLink | null {
+export function externalJobLink(raw: string | null | undefined, origin?: string | null): ExternalLink | null {
   const href = safeUrl(raw);
   if (!href) return null;
-  return { href, rel: externalRel(href), via: jobVia(href) };
+  return { href, rel: externalRel(href), via: jobVia(href, origin) };
 }
 
 /** Кнопка "Apply" на картці вакансії: куди, чи в новій вкладці, з яким rel. */

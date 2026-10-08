@@ -23,7 +23,14 @@ Some jobs come from other job boards. Three rules hold for all of them:
 3. We take only what the board's terms and robots.txt allow: an official API, a feed, or nothing.
 
 Today these boards are web3.career (their official Web3 Jobs API, links stay follow links),
-remote3.co (their RSS feed) and the a16z speedrun network (their open API).
+remote3.co (their RSS feed), the a16z speedrun network (their open API) and
+[ChainJobs](https://chainjobs.io) (their open JSON feed).
+
+ChainJobs data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Their
+links go to the employer's own job page, so for ChainJobs rule 2 is different: the link stays the
+employer's address as they give it, and the card says "via chainjobs.io" with a link to
+chainjobs.io. When we read the same job straight from the employer's job board, we show that copy
+and not theirs.
 
 ## Boards we do not read
 

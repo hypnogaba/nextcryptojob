@@ -1,5 +1,5 @@
 import { cleanText, safeUrl, shortDate } from "@/lib/digest/format";
-import { jobVia } from "@/lib/jobs/link";
+import { jobVia, VIA_HOME } from "@/lib/jobs/link";
 import { companySiteUrl } from "@/lib/jobs/token";
 import { DIGEST_FROM } from "./cloudflare";
 import type { MailMessage } from "./index";
@@ -26,6 +26,8 @@ export type DigestEmailJob = {
   url: string;
   /** Не null лише для вакансій компаній: «Posted by {Company} on NextCryptoJob». */
   posted_by: string | null;
+  /** jobs_cache.source вакансії зі сканування: підпис джерела за рядком бази (lib/jobs/link.ts jobVia). */
+  origin?: string | null;
   /** Оцінка дошки («est. $180k to $225k (web3.career estimate)»), лише без зарплати; не зарплата. */
   salary_estimate?: string | null;
   /** Одне-два речення про компанію, якщо знаємо. */
@@ -65,7 +67,7 @@ function tidy(j: DigestEmailJob, site: string): Job {
     // Адреса як є (safeUrl лише перевіряє): умови web3.career забороняють міняти apply_url.
     url: safeUrl(j.url),
     postedBy: j.posted_by ? cleanText(j.posted_by, 100) : null,
-    via: j.posted_by ? null : jobVia(j.url),
+    via: j.posted_by ? null : jobVia(j.url, j.origin),
     estimate: !j.salary && j.salary_estimate ? cleanText(j.salary_estimate, 120) : null,
     about: j.about ? cleanText(j.about, 240) : null,
     // companySiteUrl ще раз перевіряє домен (захист від чужих даних, як safeUrl вище).
@@ -216,7 +218,7 @@ export function digestEmail(input: DigestEmailInput): Omit<MailMessage, "to"> {
         : "";
       const links = [
         j.postedBy ? `Posted by ${escapeHtml(j.postedBy)} on NextCryptoJob` : "",
-        j.via ? `via ${escapeHtml(j.via)}` : "",
+        j.via ? (VIA_HOME[j.via] ? `via <a href="${VIA_HOME[j.via]}" style="color:${MAIL_FAINT}">${escapeHtml(j.via)}</a>` : `via ${escapeHtml(j.via)}`) : "",
       ].filter(Boolean).join(" &nbsp;·&nbsp; ");
       const line = (html: string, style: string) => `<div style="${style}">${html}</div>`;
       const notForMe = byPosition[index]

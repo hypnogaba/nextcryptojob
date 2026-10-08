@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import Link from "next/link";
 import { logoPath } from "@/lib/jobs/companies";
-import { applyLink, EXTERNAL_JOB_REL, externalJobLink } from "@/lib/jobs/link";
+import { applyLink, EXTERNAL_JOB_REL, externalJobLink, VIA_HOME } from "@/lib/jobs/link";
 import { companySiteUrl, type TokenChip } from "@/lib/jobs/token";
 import { cn } from "@/lib/utils";
 import { ApplyChoice } from "./apply-choice";
@@ -28,6 +28,8 @@ export type CardJob = {
   url: string | null;
   /** «Posted by {Company} on NextCryptoJob» для вакансій компаній. */
   postedBy: string | null;
+  /** Підпис джерела за рядком бази («chainjobs.io»), коли адреса веде до роботодавця (lib/jobs/link.ts jobVia). */
+  via?: string | null;
   about?: string | null;
   domain?: string | null;
   /** Чип токена компанії (символ, ціна, MC, зміна за добу); null, якщо токена немає чи ціна не свіжа. */
@@ -159,7 +161,15 @@ function Why({ reasons, why, note, label }: { reasons?: readonly string[]; why?:
 
 function Apply({ job, compact, jobRef, saved }: { job: CardJob; compact: boolean; jobRef?: string; saved?: boolean }) {
   const apply = applyLink(job.url);
-  const note = job.postedBy ? `Posted by ${job.postedBy} on NextCryptoJob` : apply?.via ? `via ${apply.via}` : null;
+  const via = job.via ?? apply?.via ?? null;
+  const note = job.postedBy ? `Posted by ${job.postedBy} on NextCryptoJob` : via && !VIA_HOME[via] ? `via ${via}` : via ? (
+    <>
+      via{" "}
+      <a href={VIA_HOME[via]} target="_blank" rel={EXTERNAL_JOB_REL} className="underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+        {via}
+      </a>
+    </>
+  ) : null;
   const save = jobRef ? <SaveButton jobRef={jobRef} initialSaved={Boolean(saved)} compact={compact} /> : null;
   if (!apply) {
     if (!note && !save) return null;

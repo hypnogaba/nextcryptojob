@@ -14,8 +14,9 @@ import type { RoleKey } from "../types.js";
 import { envFlag, envInt } from "./env.js";
 import { type Dropped, prepare, type Windows, WINDOWS } from "./prepare.js";
 import { mapLimit, runSource } from "./run.js";
-import { ATS, atsSourceKey } from "./sources/ats.js";
+import { ATS, atsSourceKey, titleFiltered } from "./sources/ats.js";
 import { fetchBoard } from "./sources/boards.js";
+import { CHAINJOBS_SOURCE, fetchChainJobs } from "./sources/chainjobs.js";
 import { fetchSpeedrunCrypto } from "./sources/speedrun.js";
 import { fetchSuperteam, SUPERTEAM_SOURCE } from "./sources/superteam.js";
 import { fetchWeb3Career, WEB3CAREER_SOURCE, WEB3CAREER_TOKEN_ENV } from "./sources/web3career.js";
@@ -170,6 +171,9 @@ function tasks(reg: Registry, env: EngineEnv, windowDays: number, now: Date, o: 
       // Лише офіційний API з токеном, незалежно від `kind` рядка в sources (там лишився 'jsonld'
       // з часів читання сторінок): сторінки web3.career скан більше не читає (fetchBoard відмовить).
       add(b.name, () => fetchWeb3Career(env[WEB3CAREER_TOKEN_ENV], b, o));
+    } else if (b.name === CHAINJOBS_SOURCE) {
+      // Відкритий JSON за назвою джерела, як web3.career: CHECK на sources.kind не знає 'chainjobs'.
+      add(b.name, () => fetchChainJobs(reg.companies, o));
     } else if (b.kind === "speedrun") {
       if (envFlag(env, "JOBS_SPEEDRUN", true)) add(b.name, () => fetchSpeedrunCrypto(windowDays, o, now));
     } else {
@@ -178,7 +182,8 @@ function tasks(reg: Registry, env: EngineEnv, windowDays: number, now: Date, o: 
   }
   if (envFlag(env, "JOBS_SUPERTEAM", false)) add(SUPERTEAM_SOURCE, () => fetchSuperteam(now, o));
   for (const c of reg.companies) {
-    add(atsSourceKey(c.provider, c.atsSlug), () => ATS[c.provider](c.atsSlug, c.name, o));
+    const key = atsSourceKey(c.provider, c.atsSlug);
+    add(key, async () => titleFiltered(key, await ATS[c.provider](c.atsSlug, c.name, o)));
   }
   return out;
 }

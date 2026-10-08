@@ -206,7 +206,7 @@ function openCursor(cursor: string): Cursor {
  * доменом сканованих компаній, а не з нашими власними (той самий порядок, що в digest/schedule.ts engine).
  */
 function toPublic(job: PoolJob, profiles: CompanyProfiles, now: Date): PublicJob {
-  const via = job.source === "crawl" ? jobVia(job.url) : null;
+  const via = job.source === "crawl" ? jobVia(job.url, job.origin) : null;
   const known = job.source === "crawl" ? profileFor(profiles, job.companyKey, job.company) : null;
   const quote = known?.token ?? null;
   return {

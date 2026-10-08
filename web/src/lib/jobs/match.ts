@@ -58,6 +58,8 @@ export interface DigestJob {
   /** Ключ змісту зі сканування (компанія + роль): та сама вакансія під новою адресою. */
   dedupeKey: string | null;
   roles: RoleKey[];
+  /** jobs_cache.source вакансії зі сканування: кого назвати джерелом («via chainjobs.io», deliver.ts jobVia). */
+  origin?: string | null;
 }
 
 export interface DigestProfile {

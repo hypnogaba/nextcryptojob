@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { safeUrl } from "@/lib/digest/format";
-import { applyLink, EXTERNAL_JOB_REL, externalJobLink, externalRel, isWeb3CareerUrl, jobVia, WEB3CAREER_REL } from "./link";
+import { applyLink, EXTERNAL_JOB_REL, externalJobLink, externalRel, isWeb3CareerUrl, jobVia, VIA_HOME, WEB3CAREER_REL } from "./link";
 import { crawlJob } from "./pool";
 
 /**
@@ -141,5 +141,16 @@ describe("no job link bypasses the helper", () => {
       .filter((path) => /utm_(source|medium|campaign)|[?&]ref=/.test(code(path)))
       .map((path) => relative(SRC, path));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("ChainJobs: джерело за рядком бази, адреса роботодавця як є", () => {
+  it("jobVia і externalJobLink називають chainjobs.io за origin, не за адресою", () => {
+    const url = "https://careers.tether.io/jobs/1";
+    expect(jobVia(url)).toBeNull();
+    expect(jobVia(url, "aggregator:chainjobs")).toBe("chainjobs.io");
+    expect(jobVia(url, "greenhouse:tether")).toBeNull();
+    expect(externalJobLink(url, "aggregator:chainjobs")).toEqual({ href: url, rel: "noopener noreferrer nofollow", via: "chainjobs.io" });
+    expect(VIA_HOME["chainjobs.io"]).toBe("https://chainjobs.io");
   });
 });

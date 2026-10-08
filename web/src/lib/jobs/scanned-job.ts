@@ -107,7 +107,7 @@ export async function loadScannedJob(jobs: JobsDb, id: string, profiles: Company
     site,
     about: known?.about ?? null,
     token: tokenChip(known?.token, now),
-    via: jobVia(url),
+    via: jobVia(url, row.source),
     freshness: freshnessLine(
       { postedMs: parseDbTime(row.posted_at), firstSeenMs: parseDbTime(row.first_seen_at), checkedMs: parseDbTime(row.fetched_at) },
       now,

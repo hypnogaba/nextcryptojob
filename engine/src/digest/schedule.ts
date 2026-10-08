@@ -311,6 +311,7 @@ export function deliveryJobs(
     salary: formatSalary(p.job.salary), why: p.why, url: p.job.url,
     salaryEstimate: formatSalary(p.job.salary) ? null : estimateText(estimates.get(p.job.ref)),
     postedBy: p.job.source === "company" ? p.job.company : null, source: p.job.source, jobId: p.job.id, ref: p.job.ref,
+    origin: p.job.origin ?? null,
     about: known?.about ?? null,
     companyDomain: known?.domain ?? null,
     // Лише свіжі ціни (не старші за TOKEN_STALE_DAYS): інакше рядка немає.

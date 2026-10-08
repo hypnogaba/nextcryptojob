@@ -137,6 +137,14 @@ describe("Telegram", () => {
     expect(telegramText(MESSAGE, "https://nextcryptojob.xyz")).not.toContain("via ");
   });
 
+  it("ChainJobs: адреса роботодавця, а джерело за рядком бази, посиланням на chainjobs.io (CC BY 4.0)", () => {
+    const cj = { ...MESSAGE, jobs: [{ ...MESSAGE.jobs[0]!, origin: "aggregator:chainjobs" }, MESSAGE.jobs[1]!] };
+    const text = telegramText(cj, "https://nextcryptojob.xyz");
+    expect(text.match(/via <a href="https:\/\/chainjobs\.io">chainjobs\.io<\/a>/g)).toHaveLength(1);
+    expect(emailPayload(cj, new Date()).jobs[0]!.origin).toBe("aggregator:chainjobs");
+    expect(emailPayload(MESSAGE, new Date()).jobs[0]).not.toHaveProperty("origin");
+  });
+
   it("надто довге повідомлення обрізається до 4096 символів цілими вакансіями", () => {
     const long = { ...MESSAGE, jobs: Array.from({ length: 5 }, (_, i) => ({ ...MESSAGE.jobs[0]!, position: i + 1, why: "x".repeat(1500) })) };
     const text = telegramText(long, "https://nextcryptojob.xyz");

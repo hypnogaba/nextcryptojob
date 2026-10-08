@@ -1,4 +1,5 @@
 import type { RoleKey } from "@/lib/card/roles";
+import { jobVia } from "@/lib/jobs/link";
 import { loadCompanyJobs } from "@/lib/crm/public-jobs";
 import type { JobsDb } from "@/lib/jobs-db";
 import {
@@ -42,6 +43,8 @@ export type ShownJob = {
   url: string | null;
   /** «Posted by {Company} on NextCryptoJob» для вакансій компаній. */
   postedBy: string | null;
+  /** Підпис джерела за рядком бази («chainjobs.io», lib/jobs/link.ts jobVia); null, якщо його немає. */
+  via?: string | null;
   /** «est. $Xk to $Yk (web3.career estimate)»: оцінка дошки, лише без зарплати; у підборі не бере участі. */
   salaryEstimate: string | null;
   /** Одна-три причини, чому вакансія підходить (fit.ts); `why` це вони (і примітка) одним рядком. */
@@ -104,6 +107,7 @@ export function digestJobOf(job: PoolJob): DigestJob {
     seenAt: job.seenMs,
     dedupeKey: job.dedupeKey,
     roles: job.roles,
+    origin: job.origin,
   };
 }
 
@@ -127,6 +131,7 @@ function shown(pick: DigestPick, estimates: ReadonlyMap<string, string>, profile
     why: [...reasons, ...(note ? [note] : [])].join(" "),
     url: j.url,
     postedBy: company ? j.company : null,
+    via: company ? null : jobVia(j.url, j.origin),
     salaryEstimate: salary ? null : (estimates.get(j.ref) ?? null),
     reasons,
     note,

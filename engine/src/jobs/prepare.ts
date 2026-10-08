@@ -4,6 +4,7 @@ import { brandKey, companyKey, isNonCryptoCompany } from "../digest/clean.js";
 import { ATS_WINDOW_DAYS, isEmployerFeed, POSTED_WINDOW_DAYS } from "../digest/jobs.js";
 import { dedupeKey, jobId } from "./ids.js";
 import { extractSalary } from "./salary-text.js";
+import { CHAINJOBS_SOURCE } from "./sources/chainjobs.js";
 import { jobTags } from "./tags.js";
 import type { JobRow, RawJob } from "./types.js";
 
@@ -100,7 +101,9 @@ export function prepare(jobs: readonly RawJob[], windows: Windows, now: Date): P
   const seenId = new Set<string>();
   const rows: JobRow[] = [];
   const fetchedAt = now.toISOString();
-  const ordered = [...jobs].sort((a, b) => richness(b) - richness(a));
+  // ChainJobs зібраний з тих самих ATS: за однакового ключа пряма версія лишається (chainjobs.ts).
+  const last = (j: RawJob) => (j.source === CHAINJOBS_SOURCE ? 1 : 0);
+  const ordered = [...jobs].sort((a, b) => last(a) - last(b) || richness(b) - richness(a));
   for (const j of ordered) {
     if (!j.crypto) { dropped.notCrypto++; continue; }
     const url = j.url.trim();
