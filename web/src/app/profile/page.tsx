@@ -16,6 +16,7 @@ import { loadAnswers } from "@/lib/onboarding/store";
 import { cardBack } from "@/lib/card/back";
 import { sealSeed } from "@/lib/card/seal";
 import { listActiveCards } from "@/lib/card/store";
+import { ROLES } from "@/lib/card/roles";
 import { TelegramUnreachableNotice } from "@/components/telegram-unreachable-notice";
 import { telegramStatus } from "@/lib/telegram/channel";
 import { explainRole, hasStaleVerifyGap, sourceState } from "@/lib/score/explain";
@@ -158,6 +159,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                 // Раунд 5, п.7: одна картка на людину. Лише головна роль показує «Create my
                 // card»; решта лише в розборі (RoleCard приховує CardArea, коли не головна).
                 isMain={role === main}
+                mainName={main ? ROLES[main].name : null}
               />
             );
           })}

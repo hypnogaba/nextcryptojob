@@ -306,7 +306,8 @@ describe("the board on the home page", () => {
     const first = await board();
     const afterFirst = reads;
     expect(afterFirst).toBeGreaterThan(0);
-    expect(store.size).toBe(1);
+    // Два записи: табло і сирі рядки пулу (pool.ts, огляд 08.10).
+    expect(store.size).toBe(2);
 
     resetHomeBoard();
     resetCrawlPool();

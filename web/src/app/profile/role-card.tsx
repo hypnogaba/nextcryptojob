@@ -110,6 +110,7 @@ export function RoleCard({
   active,
   sealSeed,
   isMain,
+  mainName = null,
 }: {
   view: RoleView;
   /** Зворот з breakdown_json ролі або null. */
@@ -125,6 +126,8 @@ export function RoleCard({
    * решта ролей лише розбір бала (CardBackFace), без картки й без кнопки.
    */
   isMain: boolean;
+  /** Назва ролі, що стоїть на картці людини (для пояснення в неголовних ролях); null, якщо головної немає. */
+  mainName?: string | null;
 }) {
   return (
     <article aria-labelledby={`role-${view.role}`} className="grid gap-5 rounded-xl border border-line bg-surface p-4 sm:p-6">
@@ -157,7 +160,9 @@ export function RoleCard({
               aspect-ratio 1.586 ncj-card обрізає зайве без overflow, і панель налазить на те, що
               йде після неї (власник 15.09, п.1: «How the score was built» лягала на «Could not
               read» і на кнопку біля «Name on your card» на 1280/1440). */}
-          <div className={isMain ? "grid items-start justify-items-center gap-5 md:grid-cols-2" : "grid justify-items-center"}>
+          {/* Неголовна роль (огляд 08.10): вузька таблиця сама посередині широкого блоку виглядала як
+              картка, що не завантажилась. Тепер праворуч від таблиці сказано, чому картки тут немає. */}
+          <div className="grid items-start justify-items-center gap-5 md:grid-cols-2">
             {isMain ? (
               <div className="ncj-card w-full max-w-[340px]">
                 <CardFront face={faceFor(view, back, active, sealSeed, defaultName)} />
@@ -169,6 +174,21 @@ export function RoleCard({
               meta={`Formula ${view.formulaVersion}, checked ${formatIssuedOn(view.computedAt)}.`}
               className="w-full max-w-[340px]"
             />
+            {isMain ? null : (
+              <div className="grid w-full max-w-[340px] gap-2 self-center text-sm text-ink-muted md:justify-self-start">
+                <p className="font-semibold text-ink">One card per person</p>
+                <p>
+                  {mainName ? `Your card shows your first role, ${mainName}.` : "Your card shows your first role."} This
+                  score still counts: the reasons under your {view.name} jobs use it.
+                </p>
+                <Link
+                  href="/welcome?step=roles"
+                  className="w-fit font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink"
+                >
+                  Change which role comes first
+                </Link>
+              </div>
+            )}
           </div>
           {view.reason ? <p className="text-sm text-ink-muted">{view.reason}</p> : null}
           <p className="text-sm text-ink-muted">We found data for {view.cover}% of what this score counts.</p>

@@ -149,3 +149,38 @@ describe("pool sieve counters", () => {
     expect(s!.rolelessTitles[0]).toMatchObject({ title: "Tokenomics Wizard", company: "Chain Labs", n: 2 });
   });
 });
+
+describe("Job pool in the edge cache", () => {
+  /** Кеш краю як у Worker: Map за адресою, відповіді з тілом JSON. */
+  function fakeEdge() {
+    const store = new Map<string, string>();
+    const cache = {
+      match: async (key: string) => (store.has(key) ? new Response(store.get(key)) : undefined),
+      put: async (key: string, res: Response) => void store.set(key, await res.text()),
+    };
+    vi.stubGlobal("caches", { default: cache });
+    return store;
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a new isolate takes the rows from the edge and does not read the jobs database", async () => {
+    const store = fakeEdge();
+    const first = fakeDb(async () => [row("a"), row("b")]);
+    expect((await crawlPool(() => first.db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a", "nr_b"]);
+    expect(store.size).toBe(1);
+
+    resetCrawlPool(); // новий ізолят: пам'ять порожня, край той самий
+    const second = fakeDb(async () => {
+      throw new Error("must not be read");
+    });
+    expect((await crawlPool(() => second.db, NOW))?.map((j) => j.jobId)).toEqual(["nr_a", "nr_b"]);
+    expect(second.calls).toHaveLength(0);
+  });
+
+  it("does not keep an empty pool at the edge", async () => {
+    const store = fakeEdge();
+    const { db } = fakeDb(async () => []);
+    await crawlPool(() => db, NOW);
+    expect(store.size).toBe(0);
+  });
+});

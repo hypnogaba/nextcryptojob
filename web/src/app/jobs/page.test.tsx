@@ -179,7 +179,9 @@ describe("/jobs: Jobs for you now", () => {
       ('ada', 'nr:mine', '2026-09-16 10:00:00'), ('ada', 'nr:gone', '2026-09-15 10:00:00'), ('bob', 'nr:theirs', '2026-09-16 10:00:00')`);
     await signIn("ada");
     const html = await render();
-    const saved = html.slice(html.indexOf('id="saved-h"'), html.indexOf('id="sent-h"'));
+    // Огляд 08.10: збережені стоять після «Sent to you» (на телефоні вакансії першими), перед порадами.
+    expect(html.indexOf('id="sent-h"')).toBeLessThan(html.indexOf('id="saved-h"'));
+    const saved = html.slice(html.indexOf('id="saved-h"'), html.indexOf("<aside"));
     expect(saved).toContain("Saved (2)");
     expect(saved).toContain('href="/jobs/saved"');
     expect(saved).not.toContain("Protocol Engineer");

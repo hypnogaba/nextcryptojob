@@ -61,14 +61,15 @@ export function HeaderNav() {
     };
   }, []);
 
-  // /jobs сама показує запрошення створити профіль, коли людина не ввійшла (власник 15.09, п.9).
-  const jobsHref = "/jobs";
+  // Гість з «Jobs» одразу бачить живі вакансії (огляд 08.10: /jobs без входу показує лише заклик
+  // створити профіль, і людина, що шукала вакансії, їх не бачила). /jobs/all сама кличе до профілю.
+  const jobsHref = signedIn ? "/jobs" : "/jobs/all";
   const current = (href: string) => (pathname === href ? "page" : undefined);
 
   return (
     <div className="flex items-center gap-0.5 sm:gap-2">
       <nav aria-label="Main" className="flex items-center gap-1">
-        <Link href={jobsHref} aria-current={current("/jobs")} className={`${NAV_LINK} max-md:hidden`}>
+        <Link href={jobsHref} aria-current={current(jobsHref)} className={`${NAV_LINK} max-md:hidden`}>
           Jobs
         </Link>
         <Link href="/leaderboard" aria-current={current("/leaderboard")} className={`${NAV_LINK} max-md:hidden`}>

@@ -293,15 +293,67 @@ export function resetCrawlPool(): void {
   failedAt = null;
 }
 
+/**
+ * Сирі рядки пулу в кеші краю Cloudflare (огляд 08.10). Пам'ять ізолята живе хвилини, і кожен новий
+ * ізолят читав з D1 усі ~3 000 рядків: /jobs/all і головна відповідали то за 0,2 с, то за 1 до 5 с.
+ * Кешуємо рядки, а не готові PoolJob, тож сито й crawlJob нижче ті самі. Поза Worker (тести) кешу немає.
+ */
+const POOL_EDGE_TTL_S = POOL_TTL_MS / 1000;
+
+function poolEdge(): Cache | null {
+  try {
+    return (globalThis as { caches?: { default?: Cache } }).caches?.default ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const poolEdgeKey = (cap: number) => `https://nextcryptojob.xyz/__edge/pool-rows-v1?cap=${cap}`;
+
+async function rowsFromEdge(cap: number): Promise<PoolRow[] | null> {
+  const c = poolEdge();
+  if (!c) return null;
+  try {
+    const hit = await c.match(poolEdgeKey(cap));
+    if (!hit) return null;
+    const rows = (await hit.json()) as unknown;
+    return Array.isArray(rows) && rows.length > 0 ? (rows as PoolRow[]) : null;
+  } catch (e) {
+    console.warn(`search_jobs: edge cache read failed (${e instanceof Error ? e.message : "unknown"})`);
+    return null;
+  }
+}
+
+async function rowsToEdge(cap: number, rows: PoolRow[]): Promise<void> {
+  const c = poolEdge();
+  if (!c || rows.length === 0) return;
+  try {
+    await c.put(
+      poolEdgeKey(cap),
+      new Response(JSON.stringify(rows), {
+        headers: { "content-type": "application/json", "cache-control": `max-age=${POOL_EDGE_TTL_S}` },
+      }),
+    );
+  } catch (e) {
+    console.warn(`search_jobs: edge cache write failed (${e instanceof Error ? e.message : "unknown"})`);
+  }
+}
+
 async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<{ jobs: PoolJob[]; stats: PoolStats } | null> {
   const started = Date.now();
   let rows: PoolRow[];
-  try {
-    // Найсвіжіше бачені першими: якщо межа спрацює, відріжуться ті, кого скан бачив давніше.
-    rows = await jobs.all<PoolRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, ...poolParams(now), cap);
-  } catch (e) {
-    console.warn(`search_jobs: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
-    return null;
+  const edge = await rowsFromEdge(cap);
+  if (edge) {
+    rows = edge;
+  } else {
+    try {
+      // Найсвіжіше бачені першими: якщо межа спрацює, відріжуться ті, кого скан бачив давніше.
+      rows = await jobs.all<PoolRow>(`${POOL_READ_SQL}\n ORDER BY fetched_at DESC\n LIMIT ?`, ...poolParams(now), cap);
+    } catch (e) {
+      console.warn(`search_jobs: JOBS_DB read failed (${e instanceof Error ? e.name : "unknown"})`);
+      return null;
+    }
+    await rowsToEdge(cap, rows);
   }
   if (rows.length >= cap) {
     console.warn(`search_jobs: job pool hit the ${cap}-row cap; older jobs are left out`);
@@ -331,7 +383,7 @@ async function loadPool(jobs: JobsDb, now: Date, cap: number): Promise<{ jobs: P
   }
   stats.kept = out.length;
   stats.rolelessTitles = [...titles.values()].sort((a, b) => b.n - a.n || a.title.localeCompare(b.title)).slice(0, ROLELESS_TITLES_KEPT);
-  console.log(`search_jobs: job pool ${out.length} of ${rows.length} rows in ${Date.now() - started} ms`);
+  console.log(`search_jobs: job pool ${out.length} of ${rows.length} rows in ${Date.now() - started} ms${edge ? " (edge cache)" : ""}`);
   return { jobs: out, stats };
 }
 

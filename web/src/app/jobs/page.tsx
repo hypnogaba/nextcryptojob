@@ -209,25 +209,6 @@ export default async function JobsPage() {
           <JobsNow now={now} savedRefs={savedRefs} />
         </section>
 
-        <aside className="grid gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-3 lg:row-start-1">
-          <Improve step={page.step} />
-          <DailyJobs setup={setup} />
-        </aside>
-
-        {/* Власник 17.09: збережені більше не тягнуться довгим хвостом тут, вони на /jobs/saved
-            (підпункт меню). Лишається рядок з лічильником, щоб людина знала, що вони є. */}
-        {hasSaved ? (
-          <section aria-labelledby="saved-h" className="grid max-w-[820px] gap-2 rounded-3xl bg-soft p-5 sm:p-6 lg:col-start-1 lg:row-start-2">
-            <h2 id="saved-h" className="font-sans text-base font-semibold text-ink">
-              Saved{saved.refs.size > 0 ? ` (${saved.refs.size})` : ""}
-            </h2>
-            <p className={HINT}>Jobs you saved, newest first, on their own page.</p>
-            <Link href="/jobs/saved" className={`${TEXT_LINK} w-fit`}>
-              See your saved jobs
-            </Link>
-          </section>
-        ) : null}
-
         {setup.hasRoles || !noHistory ? (
           <section aria-labelledby="sent-h" className="grid max-w-[820px] gap-5 lg:col-start-1 lg:row-start-3">
             <div className="grid gap-1">
@@ -256,6 +237,28 @@ export default async function JobsPage() {
             )}
           </section>
         ) : null}
+
+        {/* Власник 17.09: збережені більше не тягнуться довгим хвостом тут, вони на /jobs/saved
+            (підпункт меню). Лишається рядок з лічильником, щоб людина знала, що вони є. */}
+        {hasSaved ? (
+          <section aria-labelledby="saved-h" className="grid max-w-[820px] gap-2 rounded-3xl bg-soft p-5 sm:p-6 lg:col-start-1 lg:row-start-2">
+            <h2 id="saved-h" className="font-sans text-base font-semibold text-ink">
+              Saved{saved.refs.size > 0 ? ` (${saved.refs.size})` : ""}
+            </h2>
+            <p className={HINT}>Jobs you saved, newest first, on their own page.</p>
+            <Link href="/jobs/saved" className={`${TEXT_LINK} w-fit`}>
+              See your saved jobs
+            </Link>
+          </section>
+        ) : null}
+
+        {/* Огляд 08.10: на телефоні надіслані вакансії йшли після трьох панелей порад, на другому
+            екрані. Тепер у розмітці спершу вакансії, потім збережені й поради; на широкому екрані
+            місця ті самі (lg:col-start / row-start). */}
+        <aside className="grid gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+          <Improve step={page.step} />
+          <DailyJobs setup={setup} />
+        </aside>
       </div>
     </AccountShell>
   );
