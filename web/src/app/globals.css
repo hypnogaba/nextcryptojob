@@ -810,10 +810,6 @@
     overflow: clip;
     mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
   }
-  /* Табло в героя (варіант A, 08.10): на широкому екрані стрічка вища, щоб стати врівень з формою зліва. */
-  @media (min-width: 1024px) {
-    .ncj-hero-board .ncj-feed { height: 330px; }
-  }
   .ncj-feed ul { list-style: none; }
   .ncj-feed-row {
     display: grid;

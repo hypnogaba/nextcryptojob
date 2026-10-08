@@ -61,8 +61,8 @@ describe("home page", () => {
     const steps = ["Say what you want", "Connect X and a wallet", "Get up to 5 jobs a day"].map((s) => t.indexOf(s));
     expect(steps.every((i) => i > 0)).toBe(true);
     expect([...steps].sort((x, y) => x - y)).toEqual(steps);
-    // Варіант A (08.10): табло вакансій у героя, кроки йдуть уже після нього.
-    expect(t.indexOf("Live jobs")).toBeLessThan(t.indexOf("How it works"));
+    // Блок стоїть одразу під першим екраном, перед табло вакансій.
+    expect(t.indexOf("How it works")).toBeLessThan(t.indexOf("Live jobs"));
   });
 
   it("leads with one promise and a brief box that carries the text to the brief", async () => {
@@ -78,14 +78,9 @@ describe("home page", () => {
     expect(html).not.toContain("The brief, about 5 clicks");
   });
 
-  it("puts the live board in the hero and one level 10 example card next to what we read", async () => {
+  it("puts one level 10 example card in the hero, with the seal drawing and spinning", async () => {
     const html = await home();
-    // Варіант A огляду 08.10: у героя табло вакансій, картка біля розділу про джерела.
-    expect(html.indexOf('id="board-h"')).toBeLessThan(html.indexOf('id="how-h"'));
-    expect(html.indexOf('id="read-h"')).toBeLessThan(html.indexOf('class="ncj-stage"'));
-    expect(text(html)).toContain("Signed in, every job you get says why it fits you: your role, place, pay and score.");
-    expect(html).toMatch(/href="\/jobs\/all"[^>]*>Browse all live jobs/);
-    const stage = html.slice(html.indexOf('class="ncj-stage"'));
+    const stage = html.slice(html.indexOf('class="ncj-stage"'), html.indexOf('id="board-h"'));
     expect(stage).toContain("ncj-tilt");
     expect(stage).toContain("ncj-sweep");
     expect(stage).toContain("ncj-seal-draw");

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { GithubLogo, XLogo } from "@/components/brand-icons";
 import { CardStack } from "@/components/landing/card-stack";
 import { exampleFace } from "@/lib/card/example";
+import { underprintDataUri } from "@/lib/card/seal";
 import { BRIEF_MAX_CHARS } from "@/lib/onboarding/brief-cookie";
 import { HomeBoard, HomeBoardShell } from "./home-board";
 
@@ -82,11 +83,13 @@ const STEPS = [
 ] as const;
 
 export default function HomePage() {
+  const underprint = underprintDataUri("#0e0f12", 1);
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(SITE_LD) }} />
       <section
-        className={`${WRAP} relative grid items-start gap-x-12 gap-y-10 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:pt-10`}
+        className={`${WRAP} relative grid items-center gap-x-12 gap-y-10 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:pt-10`}
       >
         <div>
           <h1 className="display max-w-[600px] text-hero">Crypto jobs matched to what you&apos;ve actually done.</h1>
@@ -128,31 +131,26 @@ export default function HomePage() {
           </form>
         </div>
 
-        {/* Варіант A огляду 08.10 («табло першим»): живі вакансії стоять у героя, на першому екрані,
-            а не на четвертому. Картка балу переїхала до розділу про джерела нижче. */}
-        <div className="ncj-hero-board min-w-0">
-          <Suspense fallback={<HomeBoardShell />}>
-            <HomeBoard />
-          </Suspense>
-          <p className="mt-3 px-1 text-[0.9375rem] text-ink-muted">
-            Signed in, every job you get says why it fits you: your role, place, pay and score.{" "}
-            <Link href="/jobs/all" className="font-semibold whitespace-nowrap text-ink underline underline-offset-4">
-              Browse all live jobs
-            </Link>
-          </p>
-        </div>
+        <CardStack faces={[exampleFace(10), exampleFace(6), exampleFace(4), exampleFace(2)]} />
+        <div className="ncj-wave" aria-hidden="true" style={{ backgroundImage: `url("${underprint}")` }} />
       </section>
 
       <section aria-labelledby="how-h" className={`${WRAP} pb-14`}>
         <div className="border-t border-line pt-10 sm:pt-12">
           <p className="ncj-label">How it works</p>
           <h2 id="how-h" className="display mt-4 max-w-[760px] text-section">
-            You tell us once. We look for you every day.
+            You tell us once. We look for you <span className="ncj-mark">every day</span>.
           </h2>
-          <ol className="mt-8 grid gap-x-10 gap-y-6 md:grid-cols-3">
+          <ol className="mt-8 grid overflow-hidden rounded-[28px] border-[1.5px] border-line md:grid-cols-3">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="grid grid-cols-[40px_minmax(0,1fr)] items-start gap-3 border-t border-ink pt-4">
-                <span aria-hidden="true" className="font-display text-[1.75rem] leading-8 font-bold tabular-nums">
+              <li
+                key={step.title}
+                className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-4 p-7 max-md:[&+&]:border-t-[1.5px] md:[&+&]:border-l-[1.5px] [&+&]:border-line"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid size-12 place-items-center rounded-[14px] bg-soft font-display text-xl font-semibold tabular-nums"
+                >
                   {i + 1}
                 </span>
                 <div>
@@ -188,35 +186,39 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section aria-labelledby="board-h" className={`${WRAP} pb-24`}>
+        <Suspense fallback={<HomeBoardShell />}>
+          <HomeBoard />
+        </Suspense>
+      </section>
+
       <section aria-labelledby="read-h" className={`${WRAP} pb-24`}>
         <div className="border-t border-line pt-16 sm:pt-[72px]">
-          <div className="grid items-center gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-            <div className="min-w-0">
-            <h2 id="read-h" className="display max-w-[760px] text-section">
-              We read the work you&apos;ve already done, and find jobs that fit it.
-            </h2>
-            <ul className="mt-10 grid">
-              {SOURCES.map((src) => (
-                <li key={src.name} className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-4 border-t border-line py-5 last:border-b">
-                  <span aria-hidden="true" className="grid size-12 place-items-center rounded-[14px] bg-soft">
-                    {src.icon === "x" ? (
-                      <XLogo className="size-6" />
-                    ) : src.icon === "wallet" ? (
-                      <Wallet className="size-6" strokeWidth={2} />
-                    ) : (
-                      <GithubLogo className="size-6" />
-                    )}
-                  </span>
-                  <div>
-                    <h3 className="font-display text-xl leading-7 font-semibold">{src.name}</h3>
-                    <p className="mt-1 text-[0.9375rem] leading-[22px] text-ink-muted">{src.body}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            </div>
-            <CardStack faces={[exampleFace(10), exampleFace(6), exampleFace(4), exampleFace(2)]} />
-          </div>
+          <h2 id="read-h" className="display max-w-[760px] text-section">
+            We read the work you&apos;ve <span className="ncj-mark">already done</span>, and find jobs that fit it.
+          </h2>
+          <ul className="mt-12 grid overflow-hidden rounded-[28px] border-[1.5px] border-line md:grid-cols-3">
+            {SOURCES.map((src) => (
+              <li
+                key={src.name}
+                className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-4 p-7 max-md:[&+&]:border-t-[1.5px] md:[&+&]:border-l-[1.5px] [&+&]:border-line"
+              >
+                <span aria-hidden="true" className="grid size-12 place-items-center rounded-[14px] bg-soft">
+                  {src.icon === "x" ? (
+                    <XLogo className="size-6" />
+                  ) : src.icon === "wallet" ? (
+                    <Wallet className="size-6" strokeWidth={2} />
+                  ) : (
+                    <GithubLogo className="size-6" />
+                  )}
+                </span>
+                <div>
+                  <h3 className="font-display text-xl leading-7 font-semibold">{src.name}</h3>
+                  <p className="mt-1 text-[0.9375rem] leading-[22px] text-ink-muted">{src.body}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     </>
