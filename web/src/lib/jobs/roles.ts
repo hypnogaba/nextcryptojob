@@ -216,6 +216,86 @@ const TITLE_TERMS: Partial<Record<RoleKey, Term[]>> = {
 };
 
 /**
+ * Огляд 08.10: назви з кешу й ChainJobs, що не діставали жодної ролі (12% кешу) і тому нікому не йшли.
+ * Додатні ваги тут додаються до наявних (["gtm", 1] разом з ["gtm", 2] вище дає 3, тобто досить на роль).
+ */
+const MORE_TITLE_TERMS: Partial<Record<RoleKey, Term[]>> = {
+  engineer: [
+    ["chief technology officer", 4], ["fpga", 4], ["swe", 4], ["technical lead", 3], ["gpu", 1],
+    ["blockchain lead", 2], ["exchange infrastructure", 3], ["network infrastructure", 3], ["data platform", 3],
+    ["systems administrator*", 4], ["python", 3], ["machine learning", 1],
+  ],
+  security_auditor: [["identity governance", 3], ["incident response", 3], ["csirt", 4]],
+  data_research: [["data strateg*", 3], ["data lead", 3], ["data governance", 3], ["research intern*", 3]],
+  product_manager: [
+    ["product director*", 4], ["card product", 2], ["product expert*", 2], ["product specialist*", 2], ["member of product", 2],
+    ["pmo", 3], ["pdm", 3], ["platform product", 2],
+  ],
+  bd: [
+    ["gtm", 1], ["business lead", 3], ["institution*", 1], ["account director*", 4], ["client manag*", 3], ["client partner*", 3],
+    ["client relations", 3], ["solution consult*", 3], ["business solutions", 3], ["commercial*", 3], ["strategic accounts", 4],
+    ["channel partner*", 4], ["partner manag*", 4], ["partner development", 4], ["deployment strateg*", 3], ["market lead*", 3],
+    ["expansion", 2], ["expansion lead*", 1], ["presales", 4], ["broker*", 3], ["blockchain consultant*", 3], ["wholesale", 3], ["smb", 3],
+    ["head of tokeni*", 3], ["head of rwa", 3], ["head of defi", 3], ["head of institutions", 4], ["head of ecosystem", 3],
+  ],
+  marketing_content: [
+    ["media buyer*", 4], ["paid media", 4], ["paid ads", 4], ["google ads", 4], ["campaign manag*", 3], ["pr manag*", 4],
+    ["creative strateg*", 3], ["creative", 2], ["social lead", 4], ["comms lead", 2], ["communications", 1],
+    ["branding manag*", 3], ["crm", 2], ["user engagement", 3],
+  ],
+  creator_kol: [["producer*", 3], ["multimedia", 2], ["animator*", 2]],
+  community: [["organiser*", 3], ["organizer*", 3], ["activist*", 3], ["campus", 3]],
+  trader: [["macro", 3]],
+  designer: [["creative lead", 3], ["animator*", 3]],
+  operations_support: [
+    ["support", 1], ["concierge", 4], ["client experience", 4], ["client success", 4], ["customer care", 4], ["escalation*", 3],
+    ["implementation", 3], ["administrative", 3], ["corporate services", 3], ["document control", 3], ["scheduler", 3],
+    ["founders associate", 4], ["ceo office", 4], ["corporate strategy", 3], ["strategy intern", 3], ["strategic program*", 3],
+    ["special projects", 3], ["operational excellence", 3], ["transformation", 3], ["professional services", 3],
+    ["managed services", 3], ["user operation*", 3], ["account specialist*", 3], ["account administration", 3],
+    ["operation manag*", 3], ["trade ops", 3], ["customer complaints", 2], ["executive business partner", 4], ["it", 3],
+  ],
+  finance: [
+    ["risk specialist*", 3], ["risk lead", 3], ["risk strateg*", 3], ["risk control*", 3], ["risk assessment", 3], ["capital markets", 1], ["capital officer", 3], ["treausry", 4], ["investment lead", 3], ["investment advisor*", 3],
+    ["general partner", 3], ["operating partner", 3], ["venture", 2], ["liquidity manag*", 3], ["payment*", 3], ["fixed assets", 3],
+    ["cost manag*", 3], ["salt", 3], ["invoic*", 3], ["stock plan", 3], ["banking", 3], ["clearing", 3], ["audit manag*", 3],
+    ["underwriter*", 3], ["capital market", 3],
+  ],
+  legal_compliance: [
+    ["head of fraud", 2], ["money laundering", 4], ["chief control", 4], ["control officer", 3], ["risk and control*", 3], ["government affairs", 4],
+    ["public policy", 3], ["policy", 1], ["governance", 1], ["privacy", 1], ["data protection", 4], ["due diligence", 3],
+    ["identity verification", 3], ["trust and safety", 4], ["verification specialist*", 3], ["lawfare", 3], ["responsible manager", 3],
+  ],
+  hr_recruiting: [
+    ["people and culture", 4], ["people business partner*", 4], ["head of people", 4], ["people success", 3],
+    ["people technology", 3], ["people automation*", 3],
+  ],
+};
+
+/**
+ * Назви китайською й японською: межі слова там немає (ієрогліфи йдуть підряд), тож ці терміни
+ * шукаємо як підрядок. Огляд 08.10: «数据分析师», «Web3 研发工程师», «ソフトウェアエンジニア» не діставали ролі.
+ */
+const CJK_TERMS: Partial<Record<RoleKey, Term[]>> = {
+  engineer: [["测试", 3], ["工程师", 3], ["开发", 3], ["研发", 2], ["程序员", 3], ["エンジニア", 3], ["開発者", 3], ["アーキテクト", 3]],
+  security_auditor: [["安全", 3], ["セキュリティ", 3]],
+  data_research: [["数据分析", 4], ["分析师", 3], ["アナリスト", 3], ["研究员", 2], ["リサーチ", 2]],
+  product_manager: [
+    ["产品经理", 4], ["产品负责人", 4], ["产品专家", 3], ["产品", 3], ["プロダクトマネージャー", 4], ["プロジェクトマネージャー", 4],
+    ["プロダクト", 2],
+  ],
+  bd: [["事業開発", 4], ["商务", 3], ["销售", 4], ["営業", 4], ["业务拓展", 4]],
+  marketing_content: [["营销", 4], ["市场", 3], ["マーケティング", 4], ["広報", 3], ["品牌", 2]],
+  community: [["社区", 4], ["コミュニティ", 4]],
+  trader: [["交易员", 4], ["交易", 1], ["トレーダー", 4]],
+  designer: [["设计", 4], ["デザイナー", 4], ["デザイン", 3]],
+  operations_support: [["运营", 3], ["客服", 4], ["サポート", 2]],
+  finance: [["财务", 4], ["会计", 4], ["経理", 4], ["財務", 4]],
+  legal_compliance: [["法务", 4], ["合规", 4], ["风控", 3], ["法務", 4], ["コンプライアンス", 4]],
+  hr_recruiting: [["招聘", 4], ["人事", 4], ["採用", 4], ["人力资源", 4]],
+};
+
+/**
  * Головне слово назви: що людина робитиме. Дає +5 один раз на роль, щоб доменне
  * слово не перебило функцію: «Senior Software Engineer, Trading Platform» це
  * інженер, а не трейдер; «Trading Analyst» це трейдер (див. TITLE_TERMS).
@@ -276,12 +356,18 @@ const NON_CRYPTO_TITLE = new RegExp([
   "clinical", "caregiver", "teacher", "sneaker", "apparel", "retail (?:store|associate)", "cashier", "store associate", "merchandis\\w*",
   "procurement", "strategic sourcing", "supply chain", "logistics", "radar", "undersea", "insurance", "actuar\\w*",
   "annuit\\w*", "mortgage", "branch (?:teller|manager)", "teller", "general application", "open application",
-  "spontaneous application", "expression of interest", "talent (?:pool|community)", "future opportunit\\w*",
+  "spontaneous application", "expression of interest",
+  // Огляд 08.10: будівництво й енергетика майнінгових майданчиків.
+  "site (?:development|selection|maintenance)", "land acquisition", "power (?:origination|strateg\\w*|systems|infrastructure)",
+  "onsite generation", "transmission and interconnection", "utility and energy", "superintendent", "ehs",
+  "environmental, health", "mechanic", "inventory supervisor", "material(?:s)? (?:manager|planner)", "cdl driver", "framing manager",
+  "shop supervisor", "printmaker", "(?:mechanical|electrical) systems", "talent (?:pool|community)", "future opportunit\\w*",
   "resume (?:&|and) information", "propose your dream job",
 ].map((p) => `(?:${p})`).join("|"), "u");
 
 // Межа слова для будь-якої абетки: \b у JS бачить лише латиницю.
-const WORD = "[\\p{L}\\p{N}]";
+// Ієрогліфи й кана не рахуються за літеру: «QAリード» містить «qa» (огляд 08.10).
+const WORD = "(?:(?![\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}])[\\p{L}\\p{N}])";
 const NON_CRYPTO = new RegExp(`(?<!${WORD})(?:${NON_CRYPTO_TITLE.source})(?!${WORD})`, "u");
 
 function escape(s: string): string {
@@ -299,9 +385,10 @@ function termPattern(term: string): RegExp {
 }
 
 type Compiled = { re: RegExp; weight: number };
-const COMPILED: Array<{ role: RoleKey; terms: Compiled[]; heads: RegExp[] }> = ROLE_ORDER.map((role) => ({
+const COMPILED: Array<{ role: RoleKey; terms: Compiled[]; cjk: Term[]; heads: RegExp[] }> = ROLE_ORDER.map((role) => ({
   role,
-  terms: [...TERMS[role], ...(TITLE_TERMS[role] ?? [])].map(([t, weight]) => ({ re: termPattern(t), weight })),
+  terms: [...TERMS[role], ...(TITLE_TERMS[role] ?? []), ...(MORE_TITLE_TERMS[role] ?? [])].map(([t, weight]) => ({ re: termPattern(t), weight })),
+  cjk: CJK_TERMS[role] ?? [],
   heads: (HEADS[role] ?? []).map(termPattern),
 }));
 
@@ -324,9 +411,10 @@ export function scoreTitle(title: string, tags: readonly string[] = []): Map<Rol
   const out = new Map<RoleKey, number>();
   if (!text) return out;
   const tagged = new Set(tags.flatMap((t) => TAG_ROLES[t.toLowerCase()] ?? []));
-  for (const { role, terms, heads } of COMPILED) {
+  for (const { role, terms, cjk, heads } of COMPILED) {
     let score = 0;
     for (const { re, weight } of terms) if (re.test(text)) score += weight;
+    for (const [term, weight] of cjk) if (text.includes(term)) score += weight;
     if (heads.some((h) => h.test(text))) score += HEAD_BONUS;
     if (score > 0 && tagged.has(role)) score += 1;
     if (score > 0) out.set(role, score);

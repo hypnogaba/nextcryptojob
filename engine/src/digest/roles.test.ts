@@ -93,3 +93,68 @@ describe("parseRoles", () => {
     expect(parseRoles(null)).toEqual([]);
   });
 });
+
+describe("titleRoles: назви, що до огляду 08.10 не діставали ролі", () => {
+  it.each([
+    ["Head of GTM", "bd"],
+    ["USAT Institutional Associate", "bd"],
+    ["Account Director, Crypto", "bd"],
+    ["Head of Tokenization", "bd"],
+    ["Paid Media Specialist", "marketing_content"],
+    ["Online Media Buyer (10Bet)", "marketing_content"],
+    ["PR Manager, Pakistan", "marketing_content"],
+    ["CRM and Lifecycle Manager II", "marketing_content"],
+    ["People Business Partner", "hr_recruiting"],
+    ["People & Culture Associate", "hr_recruiting"],
+    ["Money Laundering Reporting Officer, ADGM", "legal_compliance"],
+    ["Data Protection Officer", "legal_compliance"],
+    ["Head of US Government Affairs", "legal_compliance"],
+    ["Concierge Specialist IV", "operations_support"],
+    ["Client Success Manager", "operations_support"],
+    ["Implementation Manager", "operations_support"],
+    ["Treausry Associate", "finance"],
+    ["Chief Technology Officer", "engineer"],
+    ["FPGA Intern", "engineer"],
+    ["Specialist, CSIRT", "security_auditor"],
+    ["Product Director, VIP Products", "product_manager"],
+    ["Research Intern", "data_research"],
+    ["Creative Producer", "creator_kol"],
+  ] as const)("%s → %s", (title, role) => {
+    expect(titleRoles(title)).toContain(role);
+  });
+
+  it.each([
+    ["数据分析师（无障碍纯英文沟通）", "data_research"],
+    ["Web3 研发工程师（资深）— 钱包方向", "engineer"],
+    ["交易引擎核心开发", "engineer"],
+    ["ソフトウェアエンジニア｜規制対応オンチェーン金融基盤", "engineer"],
+    ["QAリード | 規制対応オンチェーン金融基盤", "engineer"],
+    ["事業開発／プロジェクトマネージャー（オンチェーン金融）", "bd"],
+    ["测试负责人", "engineer"],
+  ] as const)("китайська й японська: %s → %s", (title, role) => {
+    expect(titleRoles(title)).toContain(role);
+  });
+
+  it("does not take a domain word or a business title for engineering", () => {
+    expect(titleRoles("Corporate Development Lead")).toEqual(["bd"]);
+    expect(titleRoles("Account Executive, Domain Name Inventory")).toContain("bd");
+    expect(titleRoles("Crypto Inventory Operations Intern")).toContain("operations_support");
+  });
+
+  it("keeps quant and analyst roles on a risk title", () => {
+    const roles = titleRoles("Quantitative Risk Analyst — Derivatives & Clearing");
+    expect(roles).toContain("finance");
+    expect(roles.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    "Sr. Director, Site Development – Texas",
+    "Onsite Generation & Power Origination Associate",
+    "Superintendent, Mechanical",
+    "Senior Power Strategist - Load",
+    "Transmission & Interconnection, Principal",
+  ])("mining sites and power are not our audience: %s", (title) => {
+    expect(isNonCryptoTitle(title)).toBe(true);
+    expect(titleRoles(title)).toEqual([]);
+  });
+});
