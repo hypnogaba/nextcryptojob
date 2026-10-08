@@ -17,7 +17,7 @@ import { isId } from "@/lib/ids";
 import { currentUser } from "@/lib/auth/session";
 import { brandKey } from "@/lib/jobs/clean";
 import { freshnessLine } from "@/lib/jobs/freshness";
-import { applyLink } from "@/lib/jobs/link";
+import { applyLink, EXTERNAL_JOB_REL, VIA_HOME } from "@/lib/jobs/link";
 import { companyProfiles, profileFor } from "@/lib/jobs/companies";
 import { NO_FIT, reasonsForRef } from "@/lib/jobs/instant";
 import { jobPostingJsonLd, jsonLdScript } from "@/lib/jobs/job-posting";
@@ -251,7 +251,21 @@ function ScannedJobView({
           <ApplyChoice href={apply.href} label={apply.label} newTab={apply.newTab} rel={apply.rel} company={job.company} />
         ) : null}
         <p className="text-sm text-ink-muted">
-          You apply directly with {job.company}{apply?.via ? `, via ${apply.via}` : job.via ? `, via ${job.via}` : ""}.
+          You apply directly with {job.company}
+          {(() => {
+            const via = apply?.via ?? job.via;
+            if (!via) return null;
+            // ChainJobs (CC BY 4.0) просить посилання на chainjobs.io там, де показуємо їхні дані.
+            return VIA_HOME[via] ? (
+              <>
+                , via{" "}
+                <a href={VIA_HOME[via]} target="_blank" rel={EXTERNAL_JOB_REL} className="underline decoration-line-strong underline-offset-4 hover:decoration-brand">
+                  {via}
+                </a>
+              </>
+            ) : `, via ${via}`;
+          })()}
+          .
         </p>
       </div>
 
