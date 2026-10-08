@@ -226,8 +226,14 @@ const PLATFORM: Record<string, string> = {
   none: "None",
 };
 
-function Problems({ report, now }: { report: BoardsReport; now: number }) {
+/**
+ * Збій джерела вакансій не видаляє (їх прибирає лише щотижнева чистка за віком), тож остання вдала
+ * синхронізація = найсвіжіший fetched_at його вакансій. Беремо з кешованого звіту, а не окремим
+ * запитом до jobs_cache. sources = null: звіт не прочитався, колонку не вигадуємо.
+ */
+function Problems({ report, sources, now }: { report: BoardsReport; sources: JobSource[] | null; now: number }) {
   const list = report.failing;
+  const synced = new Map((sources ?? []).map((s) => [s.key, s]));
   const serious = list.filter((f) => f.status === "dead" || f.failDays >= 2);
   return (
     <section id="problems" aria-labelledby="problems-title" className="mt-12 scroll-mt-6">
@@ -249,12 +255,13 @@ function Problems({ report, now }: { report: BoardsReport; now: number }) {
             scans or dead), {NUM.format(list.length - serious.length)} failed once.
           </p>
           <div className={`mt-4 ${BOARD}`}>
-            <table className={`${TABLE} min-w-[760px]`} data-table="problems">
+            <table className={`${TABLE} min-w-[880px]`} data-table="problems">
               <thead>
                 <tr>
                   <th scope="col" className={TH_TIGHT}>Source</th>
                   <th scope="col" className={TH_TIGHT}>State</th>
                   <th scope="col" className={TH_TIGHT}>Last error</th>
+                  <th scope="col" className={TH_TIGHT}>Last sync OK</th>
                   <th scope="col" className={TH_TIGHT}>What to do</th>
                 </tr>
               </thead>
@@ -271,6 +278,18 @@ function Problems({ report, now }: { report: BoardsReport; now: number }) {
                       </div>
                     </td>
                     <td className={`${TD} max-w-64 text-xs break-words text-ink-muted`}>{f.lastError ?? ""}</td>
+                    <td className={`${TD} whitespace-nowrap text-xs`} data-last-ok>
+                      {sources ? (
+                        <>
+                          <Seen at={synced.get(f.source)?.newestAt ?? null} now={now} />
+                          <div className="text-ink-muted">
+                            {NUM.format(synced.get(f.source)?.web3Jobs ?? 0)} {synced.get(f.source)?.web3Jobs === 1 ? "job" : "jobs"} kept
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-ink-muted">unknown</span>
+                      )}
+                    </td>
                     <td className={`${TD} max-w-80 text-xs text-ink`}>{failingAdvice(f)}</td>
                   </tr>
                 ))}
@@ -483,7 +502,7 @@ export default async function AdminSourcesPage() {
       ) : null}
       {boards ? (
         <>
-          <Problems report={boards} now={now} />
+          <Problems report={boards} sources={report?.sources ?? null} now={now} />
           <Boards report={boards} now={now} />
         </>
       ) : null}

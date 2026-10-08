@@ -179,6 +179,7 @@ describe("/admin/sources for an admin", () => {
       ('lever:gone', 'dead', 8, 'HTTP 404', '2026-09-12T04:31:00.000Z', '2026-09-12T04:31:00.000Z'),
       ('ashby:slow', 'failing', 2, 'timeout after 15000 ms', '2026-09-12T04:31:00.000Z', '2026-09-12T04:31:00.000Z'),
       ('greenhouse:blip', 'failing', 1, 'HTTP 502', '2026-09-12T04:31:00.000Z', '2026-09-12T04:31:00.000Z')`);
+    for (let i = 0; i < 3; i++) addCachedJob(t.raw, { source: "lever:gone", company: "Gone", fetchedAt: "2026-09-04T04:40:00.000Z" });
     jobs.d1 = t.d1;
     await createSession("boss", "email");
     const html = await render();
@@ -188,6 +189,13 @@ describe("/admin/sources for an admin", () => {
     expect(html).toContain("Dead: read once a week only");
     expect(html).toContain("Failing 2 scans");
     expect(html).toContain("usually heals by itself");
+    // Збій не видаляє вакансій: видно останню вдалу синхронізацію і скільки вакансій лишилось.
+    const gone = html.match(/<tr[^>]*data-failing="dead"[^>]*>[\s\S]*?<\/tr>/)![0];
+    expect(gone).toContain("3 jobs kept");
+    expect(gone).toContain('dateTime="2026-09-04T04:40:00.000Z"');
+    const blip = html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*greenhouse:blip[\s\S]*?<\/tr>/)![0];
+    expect(blip).toContain("never");
+    expect(blip).toContain("0 jobs kept");
   });
 
   it("says so when the jobs DB cannot be read", async () => {
