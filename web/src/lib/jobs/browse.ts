@@ -1,6 +1,6 @@
 import { isRoleKey, type RoleKey } from "@/lib/card/roles";
 import { compare, loadCompanyJobs, matches } from "@/lib/crm/public-jobs";
-import { estimateText } from "@/lib/digest/format";
+import { boardJobLocation, estimateText } from "@/lib/digest/format";
 import type { JobsDb } from "@/lib/jobs-db";
 import { type CompanyProfiles, companyProfiles, profileFor } from "./companies";
 import { freshnessLine } from "./freshness";
@@ -78,7 +78,7 @@ function card(job: PoolJob, openRoles: number, profiles: CompanyProfiles, now: D
     ref: j.ref,
     title: j.title,
     company: j.company,
-    location: j.location,
+    location: boardJobLocation(j.location, j.remote),
     salary,
     why: "",
     url: j.url,

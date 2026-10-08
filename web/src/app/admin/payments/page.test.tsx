@@ -106,7 +106,8 @@ describe("/admin/payments", () => {
     expect(rows("SELECT id FROM audit_log")).toHaveLength(1);
     const html = await render({ done: "refunded", payment: paid });
     expect(html).toContain("is marked refunded");
-    expect(html).toContain("Refunded Sep");
+    // Час повернення ставить база (зараз), тож місяць не фіксуємо: 08.10 тест падав на «Sep».
+    expect(html).toMatch(/Refunded [A-Z][a-z]{2} \d{1,2}, \d{2}:\d{2} UTC/);
     expect(html).toContain("(0 waiting)");
   });
 

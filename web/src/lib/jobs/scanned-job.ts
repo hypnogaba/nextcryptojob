@@ -3,7 +3,7 @@
 // jobs_cache (db/jobs 0001_schema.sql) не має опису вакансії (сканер його не зберігає, лише
 // метадані), тож сторінка показує те, що є: компанію, місце, зарплату, токен, теги, причини
 // підбору (коли людина ввійшла й підходить), і веде далі на джерело кнопкою Apply.
-import { cleanText, formatSalary, safeUrl } from "@/lib/digest/format";
+import { boardJobLocation, cleanText, formatSalary, safeUrl } from "@/lib/digest/format";
 import { type CompanyProfiles, profileFor } from "./companies";
 import { brandKey } from "./clean";
 import type { JobsDb } from "@/lib/jobs-db";
@@ -97,7 +97,7 @@ export async function loadScannedJob(jobs: JobsDb, id: string, profiles: Company
     id: row.id,
     title: cleanText(row.title, 200),
     company: cleanText(row.company, 100),
-    location: row.location?.trim() ? cleanText(row.location, 100) : row.remote === 1 ? "Remote" : null,
+    location: boardJobLocation(row.location, row.remote === 1),
     remote: row.remote === 1,
     country: row.country,
     salary: formatSalary({ min: row.salary_min, max: row.salary_max, currency: row.salary_currency, period: "year" }),

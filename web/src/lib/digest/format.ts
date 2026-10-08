@@ -98,6 +98,18 @@ export function estimateText(e: (Salary & { by: string }) | null | undefined): s
 }
 
 /** Місце вакансії компанії, як у engine (companyJob): «Remote», «Lisbon», «Remote or Lisbon». */
+/**
+ * Місце вакансії з дошки для картки. Джерело каже «віддалено», а в локації лише місто (огляд 08.10:
+ * «Growth Manager Brazil», São Paulo, remote = 1, а причина під нею «Remote, as you asked»):
+ * показуємо «São Paulo · Remote», щоб картка не сперечалась із причиною.
+ */
+export function boardJobLocation(location: string | null, remote: boolean): string | null {
+  const place = location?.trim() ? cleanText(location, 100) : null;
+  if (!place) return remote ? "Remote" : null;
+  if (!remote || /\b(remote|anywhere|worldwide|hybrid|on-?site|office)\b/i.test(place)) return place;
+  return `${place} · Remote`;
+}
+
 export function companyJobLocation(remoteMode: string, city: string | null): string | null {
   const modes = remoteMode.split(",").map((m) => m.trim());
   const place = modes.includes("city") ? city?.trim() || null : null;

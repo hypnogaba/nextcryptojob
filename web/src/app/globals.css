@@ -680,7 +680,9 @@
   .ncj-stage { display: grid; justify-items: center; gap: 18px; max-width: 100%; }
   /* 460 px це повний розмір; на вужчій колонці стос стискається разом з нею, а не вилазить за край
      (власник 16.09 прислав скриншот, де картка обрізана правим краєм екрана). */
-  .ncj-stack { position: relative; width: min(460px, 100%); aspect-ratio: 460 / 290; height: auto; }
+  /* Картка квадратна (напрям D, .ncj-card aspect-ratio: 1), тож і рамка квадратна. Зі старим
+     460 / 290 картка вилазила вниз і ховала підпис .ncj-cap на всіх екранах (огляд 08.10). */
+  .ncj-stack { position: relative; width: min(460px, 100%); aspect-ratio: 1; height: auto; }
   .ncj-cap { max-width: 380px; text-align: center; font-size: 14px; color: var(--ink-2); }
   .ncj-slot {
     position: absolute;

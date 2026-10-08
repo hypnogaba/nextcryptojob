@@ -11,7 +11,7 @@ import {
   selectJobs,
   workModes,
 } from "./match";
-import { estimateText } from "@/lib/digest/format";
+import { boardJobLocation, estimateText } from "@/lib/digest/format";
 import { type CompanyProfiles, companyProfiles, profileFor } from "./companies";
 import { type FitContext, fitNote, fitReasons } from "./fit";
 import { crawlPool, type PoolJob } from "./pool";
@@ -122,7 +122,7 @@ function shown(pick: DigestPick, estimates: ReadonlyMap<string, string>, profile
     ref: j.ref,
     title: j.title,
     company: j.company,
-    location: j.location,
+    location: boardJobLocation(j.location, j.remote),
     salary,
     why: [...reasons, ...(note ? [note] : [])].join(" "),
     url: j.url,

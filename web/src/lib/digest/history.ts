@@ -10,7 +10,7 @@ import type { Channel } from "@/lib/telegram/channel";
 import { freshnessLine } from "@/lib/jobs/freshness";
 import { parseDbTime, salaryEstimateOf } from "@/lib/jobs/pool";
 import { type TokenChip, tokenChip } from "@/lib/jobs/token";
-import { cleanText, companyJobLocation, estimateText, formatSalary, safeUrl } from "./format";
+import { boardJobLocation, cleanText, companyJobLocation, estimateText, formatSalary, safeUrl } from "./format";
 
 /**
  * Дані сторінки /jobs: вакансії, які добірка вже надіслала людині (`sent`, 0006),
@@ -242,7 +242,7 @@ async function crawlDetails(
       {
         title: cleanText(r.title, 200),
         company: cleanText(r.company, 100),
-        location: r.location?.trim() ? cleanText(r.location, 100) : r.remote === 1 ? "Remote" : null,
+        location: boardJobLocation(r.location, r.remote === 1),
         salary: formatSalary({ min: r.salary_min, max: r.salary_max, currency: r.salary_currency, period: "year" }),
         url: safeUrl(r.url),
         postedBy: null,
