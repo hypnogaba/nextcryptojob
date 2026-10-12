@@ -263,7 +263,8 @@ export async function runWeeklyReport(
   deps: { jobs: JobsDb | null; notifier: Notifier; adminEmails: string | undefined; now?: Date; force?: boolean },
 ): Promise<WeeklyResult> {
   const now = deps.now ?? new Date();
-  if (!deps.force && !weeklyDue(now)) return { sent: false, skipped: "not_due", channels: [], errors: [] };
+  // Щотижневий звіт сам не шлемо (12.10, власник: зайві листи); лише кнопкою з адмінки.
+  if (!deps.force) return { sent: false, skipped: "not_due", channels: [], errors: [] };
   const key = deps.force ? "weekly-preview" : `weekly:${weekStart(now)}`;
   const claimed = await claimAlert(
     db,

@@ -20,8 +20,7 @@ import { parseDbTime, scannerMissed } from "./job-sources";
  * Що перевіряє щогодинний cron (collectAlerts):
  *   - нова заявка агенції (ще й одразу, коли її подали: app/company/(crm)/apply/actions.ts);
  *   - задача cron упала або запізнилась;
- *   - сканер вакансій: прогін не ok, пропущений плановий скан, джерело падає 2+ скани поспіль
- *     або вже dead; розвідка роботодавців упала чи не запускалась тиждень;
+ *   - сканер вакансій: прогін не ok, пропущений плановий скан; розвідка роботодавців упала чи не запускалась тиждень;
  *   - оплати x402 без результату (чекають повернення) і завислі;
  *   - сплеск збоїв добірки, або добірки не йдуть добу.
  * Персональних даних у перевірках cron немає: лише назви компаній, джерел, числа й причини
@@ -440,25 +439,7 @@ async function jobsAlerts(jobs: JobsDb, now: Date): Promise<OwnerAlert[]> {
     });
   }
 
-  const failing = await jobs.all<Row>(
-    `SELECT source, status, fail_days, last_error FROM source_state
-      WHERE status = 'dead' OR fail_days >= 2 ORDER BY status = 'dead', fail_days DESC, source LIMIT 60`,
-  );
-  if (failing.length > 0) {
-    out.push({
-      key: `sources:${now.toISOString().slice(0, 10)}`,
-      kind: "source",
-      title: `Job sources not working: ${failing.length}`,
-      windowMs: SOURCE_WINDOW_MS,
-      parts: failing.map((s) => ({
-        key: `source:${String(s.source)}`,
-        line: `${String(s.source)}: ${s.status === "dead" ? "dead, read once a week" : `failing ${num(s.fail_days)} scans in a row`}${s.last_error ? ` (${cut(s.last_error, 80)})` : ""}`,
-      })),
-      why: "Jobs from these employers or boards stop coming in; after 7 failing days a source is only retried weekly.",
-      next: "Open Job sources, Problems. Open the board link: if the page is gone or moved to another ATS, change the company in the jobs registry (db/jobs, companies) or disable it; a timeout that heals by itself needs nothing.",
-      href: "/admin/sources#problems",
-    });
-  }
+  // Джерела, що падають, не шлемо (12.10, власник: зайві листи): вони видно в /admin/sources#problems.
 
   const [disc] = await jobs.all<Row>(
     `SELECT id, status, started_at, jobs_new, notes FROM scan_runs WHERE kind = 'discover' ORDER BY started_at DESC LIMIT 1`,

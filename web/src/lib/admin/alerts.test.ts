@@ -11,7 +11,6 @@ import {
   collectAlerts,
   ownerAlertMessage,
   ownerRecipients,
-  runOwnerAlerts,
   sendOwnerAlert,
   type OwnerAlert,
 } from "./alerts";
@@ -203,18 +202,15 @@ describe("collectAlerts", () => {
     }
   });
 
-  it("reads the jobs DB: failed scan, sources failing 2+ scans or dead, failed discovery", async () => {
+  it("reads the jobs DB: failed scan and failed discovery; failing sources send nothing (12.10)", async () => {
     const t = jobsTestDb();
     addScanRun(t.raw, { id: "scan_1", startedAt: "2026-09-14T04:30:00.000Z", status: "partial" });
     addScanRun(t.raw, { id: "disc_1", startedAt: "2026-09-13T05:30:00.000Z", status: "failed", kind: "discover" });
     t.raw.exec(`INSERT INTO source_state (source, status, fail_days, last_error, failed_at, checked_at) VALUES
       ('lever:gone', 'dead', 8, 'HTTP 404', '2026-09-14T04:31:00Z', '2026-09-14T04:31:00Z'),
-      ('ashby:slow', 'failing', 2, 'timeout', '2026-09-14T04:31:00Z', '2026-09-14T04:31:00Z'),
-      ('greenhouse:blip', 'failing', 1, 'HTTP 502', '2026-09-14T04:31:00Z', '2026-09-14T04:31:00Z')`);
+      ('ashby:slow', 'failing', 2, 'timeout', '2026-09-14T04:31:00Z', '2026-09-14T04:31:00Z')`);
     const { alerts } = await collectAlerts(db.d1, { jobs: readOnlyJobsDb(t.d1), cronJobs: [], now: NOW });
-    expect(alerts.map((a) => a.key)).toEqual(["scan:scan_1", "sources:2026-09-14", "discover:disc_1"]);
-    const sources = alerts.find((a) => a.kind === "source")!;
-    expect(sources.parts?.map((p) => p.key)).toEqual(["source:ashby:slow", "source:lever:gone"]);
+    expect(alerts.map((a) => a.key)).toEqual(["scan:scan_1", "discover:disc_1"]);
   });
 
   it("says when the scanner missed its daily run", async () => {
@@ -222,24 +218,6 @@ describe("collectAlerts", () => {
     addScanRun(t.raw, { id: "scan_old", startedAt: "2026-09-12T04:30:00.000Z" });
     const { alerts } = await collectAlerts(db.d1, { jobs: readOnlyJobsDb(t.d1), cronJobs: [], now: NOW });
     expect(alerts.map((a) => a.key)).toContain("scan:missed");
-  });
-
-  it("names each failing source at most once a week, even when the daily list repeats", async () => {
-    addUser(db.raw, { email: "boss@example.com", visible: false });
-    const t = jobsTestDb();
-    // Скан, свіжий на обидві дати перевірки: лишаються тільки джерела.
-    addScanRun(t.raw, { id: "scan_1", startedAt: "2026-09-16T04:30:00.000Z" });
-    t.raw.exec(`INSERT INTO source_state (source, status, fail_days, last_error, failed_at, checked_at) VALUES
-      ('ashby:slow', 'failing', 2, 'timeout', '2026-09-14T04:31:00Z', '2026-09-14T04:31:00Z')`);
-    const deps = { jobs: readOnlyJobsDb(t.d1), cronJobs: [], notifier: notifier(), adminEmails: ADMINS };
-    expect(await runOwnerAlerts(db.d1, { ...deps, now: NOW })).toMatchObject({ sent: 1 });
-    expect(await runOwnerAlerts(db.d1, { ...deps, now: new Date(NOW.getTime() + 2 * 86_400_000) })).toMatchObject({ sent: 0, deduped: 1 });
-    t.raw.exec(`INSERT INTO source_state (source, status, fail_days, last_error, failed_at, checked_at) VALUES
-      ('lever:new', 'failing', 2, 'HTTP 404', '2026-09-16T04:31:00Z', '2026-09-16T04:31:00Z')`);
-    expect(await runOwnerAlerts(db.d1, { ...deps, now: new Date(NOW.getTime() + 2 * 86_400_000) })).toMatchObject({ sent: 1 });
-    expect(net.mail).toHaveLength(2);
-    expect(net.mail[1].text).toContain("lever:new");
-    expect(net.mail[1].text).not.toContain("ashby:slow");
   });
 
   it("works through the Telegram bot token from the environment", () => {

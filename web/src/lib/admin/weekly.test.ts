@@ -42,26 +42,17 @@ describe("schedule", () => {
     expect(weekStart(MONDAY_8)).toBe("2026-09-14");
   });
 
-  it("sends once a week by Telegram and email; a failed 08:00 run is picked up at 09:00", async () => {
-    expect(await runWeeklyReport(db.d1, deps(new Date("2026-09-13T08:00:00Z")))).toMatchObject({ sent: false, skipped: "not_due" });
-    const first = await runWeeklyReport(db.d1, deps(MONDAY_8));
-    expect(first).toMatchObject({ sent: true, channels: ["telegram", "email"] });
-    expect(net.messagesTo("4242")).toHaveLength(1);
-    expect(net.mail.map((m) => m.to)).toEqual(["boss@example.com"]);
-    expect(await runWeeklyReport(db.d1, deps(new Date("2026-09-14T09:00:00Z")))).toMatchObject({ sent: false, skipped: "already_sent" });
-    // Наступного понеділка знову.
-    expect((await runWeeklyReport(db.d1, deps(new Date("2026-09-21T08:00:00Z")))).sent).toBe(true);
+  it("never sends by itself, even on Monday 08:00 (12.10: owner asked to stop)", async () => {
+    expect(await runWeeklyReport(db.d1, deps(MONDAY_8))).toMatchObject({ sent: false, skipped: "not_due" });
+    expect(net.mail).toHaveLength(0);
+    expect(net.messagesTo("4242")).toHaveLength(0);
   });
 
-  it("the admin button sends now, any day, and does not use up Monday's report", async () => {
+  it("the admin button still sends now, any day, by Telegram and email", async () => {
     const wednesday = new Date("2026-09-16T12:00:00Z");
+    expect(await runWeeklyReport(db.d1, deps(wednesday, true))).toMatchObject({ sent: true, channels: ["telegram", "email"] });
     expect((await runWeeklyReport(db.d1, deps(wednesday, true))).sent).toBe(true);
-    expect((await runWeeklyReport(db.d1, deps(wednesday, true))).sent).toBe(true);
-    expect((await runWeeklyReport(db.d1, deps(new Date("2026-09-21T08:00:00Z")))).sent).toBe(true);
-    expect(all(db.raw, "SELECT key, times FROM owner_alerts ORDER BY key")).toEqual([
-      { key: "weekly-preview", times: 2 },
-      { key: "weekly:2026-09-21", times: 1 },
-    ]);
+    expect(all(db.raw, "SELECT key, times FROM owner_alerts ORDER BY key")).toEqual([{ key: "weekly-preview", times: 2 }]);
   });
 });
 
