@@ -105,6 +105,19 @@ export function placeFields(place: Place): Fields {
   };
 }
 
+/**
+ * Змінює поля брифу людини, яка вже пройшла анкету (конектор для помічників, lib/api/mcp-me.ts),
+ * не чіпаючи кроку анкети. Назви стовпців лише з Fields, не з запиту.
+ */
+export async function updateBrief(db: D1Database, userId: string, fields: Fields): Promise<void> {
+  const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
+  if (entries.length === 0) return;
+  await db
+    .prepare(`UPDATE users SET ${entries.map(([k]) => `${k} = ?`).join(", ")} WHERE id = ?`)
+    .bind(...entries.map(([, v]) => v), userId)
+    .run();
+}
+
 /** Усе пройдено (і «Stand out»): далі /welcome показує кроки як редагування. */
 export async function finishOnboarding(db: D1Database, userId: string): Promise<void> {
   await db.prepare("UPDATE users SET onboarding_step = 'done' WHERE id = ?").bind(userId).run();

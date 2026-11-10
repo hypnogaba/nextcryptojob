@@ -3,9 +3,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Crypto jobs API and MCP server for AI agents",
+  title: "Crypto jobs in Claude, ChatGPT and MCP",
   description:
-    "REST API and MCP server for crypto jobs and candidates. Job search is free. Candidate search takes a company key. Pay per request with x402 is coming soon.",
+    "Connect your crypto job search to Claude or ChatGPT: matches, brief and live jobs as cards in the chat. Plus a free REST API and MCP server for agents.",
 };
 
 const WRAP = "mx-auto max-w-[1240px] px-[clamp(16px,4vw,56px)]";
@@ -23,6 +23,16 @@ const CANDIDATES_LOG: readonly (readonly [string, string])[] = [
   ["", "Authorization: Bearer ncj_live_..."],
   ["", '{"filters":{"role":"trader","min_level":8}}'],
   ["200", '{"data":[{"label":"#B21E90","headline":{"role":"trader","score":81,"level":9}}]}'],
+];
+
+// Конектор людини (lib/api/mcp-me.ts): адреса, яку вставляють у Claude чи ChatGPT, і що в нього питати.
+const CONNECTOR_URL = "https://nextcryptojob.xyz/mcp/me";
+const CONNECTOR_ASKS: readonly string[] = [
+  "What did NextCryptoJob send me this week? Which one fits best?",
+  "Find remote Solidity jobs paying over $150k.",
+  "Write a short note to the hiring team for the second job, in my words.",
+  "I moved to Lisbon. Change my brief to Lisbon or remote.",
+  "Thumbs down the first one, the pay is too low.",
 ];
 
 const MCP_CONFIG = `{ "mcpServers": { "nextcryptojob": {
@@ -75,6 +85,45 @@ export default function AgentsPage() {
           </Link>
         </p>
       </div>
+
+      <Block
+        id="connector-h"
+        title="Your job search inside Claude or ChatGPT"
+        code={
+          <div className="grid gap-4">
+            <pre className={PRE}>
+              <code>{CONNECTOR_URL}</code>
+            </pre>
+            <ul className="grid gap-2 text-ink-muted">
+              {CONNECTOR_ASKS.map((q) => (
+                <li key={q} className="rounded-[10px] border border-line px-4 py-3">
+                  “{q}”
+                </li>
+              ))}
+            </ul>
+          </div>
+        }
+      >
+        <p className="text-ink-muted">
+          Looking for a job? Connect NextCryptoJob to your own AI app. It sees your brief and your daily matches, searches
+          live jobs, and shows them as cards in the chat. Your AI writes notes and letters on your own plan, in your words.
+        </p>
+        <ol className="grid list-decimal gap-1 pl-5 text-ink-muted">
+          <li>
+            In Claude: <span className="text-ink">Settings → Connectors → Add custom connector</span>. In ChatGPT, add it as a
+            custom connector in developer mode.
+          </li>
+          <li>Paste the address. Sign in with the email or Telegram you use here, then choose Allow.</li>
+          <li>Ask in your own words. You can disconnect it at any time in the app.</li>
+        </ol>
+        <p className="text-ink-muted">
+          It cannot see your wallets, X or GitHub details, message companies or delete your account. No account yet?{" "}
+          <Link href="/start" className={LINK}>
+            Start your brief
+          </Link>
+          .
+        </p>
+      </Block>
 
       <Block id="jobs-h" title="Search jobs, free" code={<Log lines={JOBS_LOG} />}>
         <p className="text-ink-muted">

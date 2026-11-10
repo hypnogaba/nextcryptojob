@@ -28,7 +28,23 @@ describe("safeNextPath", () => {
   });
 
   it("refuses an absurdly long value", () => {
-    expect(safeNextPath(`/${"a".repeat(600)}`)).toBeNull();
+    expect(safeNextPath(`/${"a".repeat(2100)}`)).toBeNull();
+  });
+
+  it("keeps a connector authorize request, which is longer than 512 characters", () => {
+    const q = new URLSearchParams({
+      response_type: "code",
+      client_id: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+      redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+      state: "s".repeat(300),
+      code_challenge: "c".repeat(43),
+      code_challenge_method: "S256",
+      resource: "https://nextcryptojob.xyz/mcp/me",
+      scope: "jobs offline_access",
+    });
+    const next = `/oauth/authorize?${q}`;
+    expect(next.length).toBeGreaterThan(512);
+    expect(safeNextPath(next)).toBe(next);
   });
 });
 

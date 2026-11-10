@@ -36,7 +36,7 @@ export const MCP_HOSTNAMES = ["nextcryptojob.xyz", "localhost", "127.0.0.1"];
 const SERVER_INFO = { name: "nextcryptojob", version: "1.0.0" };
 
 /** Усе, що інструменти одного HTTP-запиту знають про виклик. */
-interface McpSession {
+export interface McpSession {
   base: ContextBase;
   requestId: string;
   /** Контекст ключа API; null для гостя без ключа. */
@@ -68,7 +68,7 @@ function guestContext(session: McpSession, now: Date): ActionContext {
   };
 }
 
-async function callTool(session: McpSession, def: ActionDef, args: unknown, meta: Record<string, unknown> | undefined): Promise<ToolResult> {
+export async function callTool(session: McpSession, def: ActionDef, args: unknown, meta: Record<string, unknown> | undefined): Promise<ToolResult> {
   const now = new Date();
   const ctx: ActionContext = session.agent ? { ...session.agent, now } : guestContext(session, now);
   try {
@@ -98,6 +98,7 @@ export function buildServer(session: McpSession): McpServer {
     server.registerTool(
       def.mcp.tool,
       {
+        title: def.mcp.title,
         description: def.description,
         inputSchema: announceOnly(def.input),
         outputSchema: def.output as unknown as StandardSchemaWithJSON,

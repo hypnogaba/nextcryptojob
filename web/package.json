@@ -20,6 +20,7 @@
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.4",
     "@coinbase/cdp-sdk": "1.55.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@pdf-lib/fontkit": "1.1.1",

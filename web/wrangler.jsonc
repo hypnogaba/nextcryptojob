@@ -31,6 +31,10 @@
       "database_id": "c6a80527-a05a-4e3d-a0ad-4bd4737b2c21"
     }
   ],
+  // Конектор для AI-помічників (lib/oauth, worker.ts): клієнти, гранти й токени OAuth (лише хеші,
+  // props зашифровано). Створено 10.11.2026 `wrangler kv namespace create nextcryptojob-oauth`.
+  // Секрет CONNECTOR_BRIDGE_SECRET (wrangler secret put, 32+ символи): міст від OAuth до маршруту /mcp/me.
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "f45c44539d7f444bb631cbc8e19ae345" }],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",

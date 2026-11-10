@@ -37,9 +37,19 @@ const pj = (p: Partial<PoolJob>): PoolJob => ({
 
 /** robots.txt, як його віддає Next: сайт відкритий, закрито лише перенаправлення "Apply". */
 describe("robots.txt", () => {
-  it("disallows only /jobs/*/apply, allows the rest and names the sitemap", () => {
+  it("disallows only /jobs/*/apply and /oauth/, allows the rest and names the sitemap", () => {
     const text = resolveRobots(robots());
-    expect(text).toBe("User-Agent: *\nAllow: /\nDisallow: /jobs/*/apply\n\nSitemap: https://nextcryptojob.xyz/sitemap.xml\n");
+    expect(text.startsWith("User-Agent: *\nAllow: /\nDisallow: /jobs/*/apply\nDisallow: /oauth/\n\n")).toBe(true);
+    expect(text.endsWith("Sitemap: https://nextcryptojob.xyz/sitemap.xml\n")).toBe(true);
+  });
+
+  it("names the AI search bots with the same rules, so a bot reading only its own group is not shut out", () => {
+    const text = resolveRobots(robots());
+    for (const bot of ["Claude-SearchBot", "Claude-User", "OAI-SearchBot", "ChatGPT-User"]) {
+      expect(text).toContain(`User-Agent: ${bot}\n`);
+    }
+    const group = text.slice(text.indexOf("User-Agent: Claude-SearchBot"));
+    expect(group).toContain("Allow: /\nDisallow: /jobs/*/apply\nDisallow: /oauth/\n");
   });
 });
 

@@ -140,8 +140,11 @@ function annualTop(s: PoolJob["salary"]): number | null {
 export function matches(job: PoolJob, input: SearchJobsInput): boolean {
   if (input.role && !job.roles.includes(input.role)) return false;
   if (input.q) {
+    // Слово запиту мусить починати слово вакансії: «engineer» знаходить «engineering», але «rust»
+    // не знаходить «Trust Wallet» (так було до 10.11: пошук rust давав Coinbase TRUST Network).
     const words = foldText(input.q).split(" ").filter(Boolean);
-    if (!words.every((w) => job.haystack.includes(w))) return false;
+    const hay = ` ${job.haystack}`;
+    if (!words.every((w) => hay.includes(` ${w}`))) return false;
   }
   const city = input.city?.trim();
   if (input.work_mode === "remote") {

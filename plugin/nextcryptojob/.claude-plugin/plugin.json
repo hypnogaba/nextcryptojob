@@ -1,0 +1,19 @@
+{
+  "name": "nextcryptojob",
+  "version": "1.0.0",
+  "description": "Your crypto job search in Claude: daily matches, live jobs as cards, your brief, and notes to employers written in your own words.",
+  "author": {
+    "name": "NextCryptoJob",
+    "email": "hello@nextcryptojob.xyz",
+    "url": "https://nextcryptojob.xyz"
+  },
+  "homepage": "https://nextcryptojob.xyz/agents",
+  "repository": "https://github.com/hypnogaba/nextcryptojob",
+  "keywords": [
+    "jobs",
+    "crypto",
+    "web3",
+    "career",
+    "job-search"
+  ]
+}

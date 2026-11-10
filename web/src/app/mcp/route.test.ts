@@ -71,6 +71,10 @@ describe("tools per actor", () => {
       });
       expect(t.inputSchema.type).toBe("object");
       expect(t.outputSchema.type).toBe("object");
+      // Каталог конекторів Claude вимагає назву й явну позначку читання чи запису в кожного інструмента.
+      expect((t as { title?: string }).title).toBe(a.mcp.title);
+      expect(typeof a.mcp.annotations.readOnlyHint).toBe("boolean");
+      expect(typeof a.mcp.annotations.destructiveHint).toBe("boolean");
     }
     const search = tools.find((t) => t.name === "search_candidates")!;
     expect(Object.keys(search.inputSchema.properties).sort()).toEqual(["cursor", "filters", "limit", "sort"]);

@@ -75,6 +75,8 @@ export interface ActionDef<I extends z.ZodType = z.ZodType, O extends z.ZodType 
   rest: { method: HttpMethod; path: string; status: number; operationId: string };
   mcp: {
     tool: string;
+    /** Людська назва для каталогів конекторів (Claude вимагає `title` у кожного інструмента). */
+    title: string;
     annotations: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
   };
   input: I;
@@ -118,7 +120,7 @@ function defineAction<const N extends string, I extends z.ZodType, O extends z.Z
 
 const ALL_ACCESS = ["subscription", "pay_per_request"] as const;
 const SUBSCRIPTION_ONLY = ["subscription"] as const;
-const READ = { readOnlyHint: true } as const;
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
 
 const withCandidate = <S extends z.ZodRawShape>(shape: S) => z.strictObject({ candidate_id: T.CandidateId, ...shape });
 const cursorLimit50 = { cursor: T.Cursor.optional(), limit: T.Limit50.optional() };
@@ -138,7 +140,7 @@ export const ACTIONS = [
     description:
       "Returns your company, access mode (subscription or none), quotas left today and the planned x402 prices (x402 is coming soon). Call this first.",
     rest: { method: "GET", path: "/me", status: 200, operationId: "getAccount" },
-    mcp: { tool: "get_account", annotations: READ },
+    mcp: { tool: "get_account", title: "Get company account", annotations: READ },
     input: T.Empty,
     output: T.Account,
     permission: "account.read",
@@ -150,7 +152,7 @@ export const ACTIONS = [
     description:
       "Search anonymous profiles of candidates who are visible to companies (candidates can hide at any time). Returns up to 20 per page, max 10 pages per query. No names, handles, wallets or emails.",
     rest: { method: "POST", path: "/candidates/search", status: 200, operationId: "searchCandidates" },
-    mcp: { tool: "search_candidates", annotations: READ },
+    mcp: { tool: "search_candidates", title: "Search candidates", annotations: READ },
     input: T.SearchRequest,
     output: T.SearchResponse,
     permission: "candidates.search",
@@ -181,7 +183,7 @@ export const ACTIONS = [
     description:
       "Full anonymous profile with the score breakdown per chosen role. Contact appears only after an accepted intro or in direct mode.",
     rest: { method: "GET", path: "/candidates/{candidate_id}", status: 200, operationId: "getCandidate" },
-    mcp: { tool: "get_candidate", annotations: READ },
+    mcp: { tool: "get_candidate", title: "Get candidate profile", annotations: READ },
     input: withCandidate({}),
     output: T.CandidateView,
     permission: "candidates.view",
@@ -195,7 +197,7 @@ export const ACTIONS = [
     name: "list_pipeline",
     description: "Pipeline cards, newest activity first, with counts per stage.",
     rest: { method: "GET", path: "/pipeline", status: 200, operationId: "listPipeline" },
-    mcp: { tool: "list_pipeline", annotations: READ },
+    mcp: { tool: "list_pipeline", title: "List hiring pipeline", annotations: READ },
     input: z.strictObject({
       stage: T.Stage.optional(),
       tag: z.string().max(32).optional(),
@@ -211,7 +213,7 @@ export const ACTIONS = [
     name: "add_to_pipeline",
     description: "Add a candidate to the pipeline at stage Found. Idempotent: returns the existing card if there is one.",
     rest: { method: "PUT", path: "/pipeline/{candidate_id}", status: 201, operationId: "addToPipeline" },
-    mcp: { tool: "add_to_pipeline", annotations: { idempotentHint: true } },
+    mcp: { tool: "add_to_pipeline", title: "Add candidate to pipeline", annotations: { idempotentHint: true, readOnlyHint: false, destructiveHint: false } },
     input: withCandidate(T.PipelineAdd.shape),
     output: T.PipelineCard,
     permission: "pipeline.write",
@@ -229,7 +231,7 @@ export const ACTIONS = [
     description:
       "Move a card to found, interview, hired or declined, and/or change tags or the linked job. Interview and hired need a shared contact.",
     rest: { method: "PATCH", path: "/pipeline/{candidate_id}", status: 200, operationId: "updatePipelineCard" },
-    mcp: { tool: "update_stage", annotations: {} },
+    mcp: { tool: "update_stage", title: "Move candidate to a stage", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: withCandidate(T.PipelineUpdate.shape).refine(atLeastOne("candidate_id"), {
       message: "Send at least one of stage, tags or job_id.",
     }),
@@ -244,7 +246,7 @@ export const ACTIONS = [
     name: "remove_from_pipeline",
     description: "Remove the card and its notes. A pending intro is canceled first.",
     rest: { method: "DELETE", path: "/pipeline/{candidate_id}", status: 204, operationId: "removeFromPipeline" },
-    mcp: { tool: "remove_from_pipeline", annotations: { destructiveHint: true } },
+    mcp: { tool: "remove_from_pipeline", title: "Remove candidate from pipeline", annotations: { destructiveHint: true, readOnlyHint: false } },
     input: withCandidate({}),
     output: T.Empty,
     permission: "pipeline.write",
@@ -260,7 +262,7 @@ export const ACTIONS = [
     name: "list_candidate_history",
     description: "History of one card (stage changes, notes, tags, intro events), oldest first.",
     rest: { method: "GET", path: "/pipeline/{candidate_id}/events", status: 200, operationId: "listCandidateHistory" },
-    mcp: { tool: "list_candidate_history", annotations: READ },
+    mcp: { tool: "list_candidate_history", title: "List candidate history", annotations: READ },
     input: withCandidate(cursorLimit50),
     output: T.PipelineEventList,
     permission: "pipeline.read",
@@ -271,7 +273,7 @@ export const ACTIONS = [
     name: "add_note",
     description: "Add a private note to the card. Notes are append-only.",
     rest: { method: "POST", path: "/pipeline/{candidate_id}/notes", status: 201, operationId: "addNote" },
-    mcp: { tool: "add_note", annotations: {} },
+    mcp: { tool: "add_note", title: "Add note on candidate", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: withCandidate(T.NoteCreate.shape),
     output: T.PipelineEvent,
     permission: "pipeline.write",
@@ -285,7 +287,7 @@ export const ACTIONS = [
     description:
       "Ask the candidate for an intro. They get your company name, your message and the linked job, and have 14 days to accept. If they accept, you get their Telegram handle (or email). In direct mode the contact comes back at once.",
     rest: { method: "POST", path: "/intros", status: 201, operationId: "requestIntro" },
-    mcp: { tool: "request_intro", annotations: { openWorldHint: true } },
+    mcp: { tool: "request_intro", title: "Request intro to candidate", annotations: { openWorldHint: true, readOnlyHint: false, destructiveHint: false } },
     input: T.IntroCreate,
     output: T.Intro,
     permission: "intros.write",
@@ -311,7 +313,7 @@ export const ACTIONS = [
     name: "list_intros",
     description: "List intros, most recently updated first. Poll with updated_since instead of (or with) the webhook.",
     rest: { method: "GET", path: "/intros", status: 200, operationId: "listIntros" },
-    mcp: { tool: "list_intros", annotations: READ },
+    mcp: { tool: "list_intros", title: "List intro requests", annotations: READ },
     input: z.strictObject({ status: T.IntroStatus.optional(), updated_since: T.IsoDateTime.optional(), ...cursorLimit50 }),
     output: T.IntroList,
     permission: "intros.read",
@@ -322,7 +324,7 @@ export const ACTIONS = [
     name: "intro_status",
     description: "Status of one intro. The contact is included after acceptance.",
     rest: { method: "GET", path: "/intros/{intro_id}", status: 200, operationId: "getIntro" },
-    mcp: { tool: "intro_status", annotations: READ },
+    mcp: { tool: "intro_status", title: "Get intro status", annotations: READ },
     input: z.strictObject({ intro_id: T.IntroId }),
     output: T.Intro,
     permission: "intros.read",
@@ -333,7 +335,7 @@ export const ACTIONS = [
     name: "cancel_intro",
     description: "Withdraw a pending intro.",
     rest: { method: "POST", path: "/intros/{intro_id}/cancel", status: 200, operationId: "cancelIntro" },
-    mcp: { tool: "cancel_intro", annotations: { destructiveHint: true } },
+    mcp: { tool: "cancel_intro", title: "Cancel intro request", annotations: { destructiveHint: true, readOnlyHint: false } },
     input: z.strictObject({ intro_id: T.IntroId }),
     output: T.Intro,
     permission: "intros.write",
@@ -347,7 +349,7 @@ export const ACTIONS = [
     name: "list_jobs",
     description: "This company's jobs.",
     rest: { method: "GET", path: "/jobs", status: 200, operationId: "listJobs" },
-    mcp: { tool: "list_jobs", annotations: READ },
+    mcp: { tool: "list_jobs", title: "List company jobs", annotations: READ },
     input: z.strictObject({ status: z.enum(["draft", "open", "closed"]).optional(), ...cursorLimit50 }),
     output: T.JobList,
     permission: "jobs.read",
@@ -358,7 +360,7 @@ export const ACTIONS = [
     name: "post_job",
     description: "Create a job (draft or open). Open jobs of subscribed companies appear in candidate digests.",
     rest: { method: "POST", path: "/jobs", status: 201, operationId: "postJob" },
-    mcp: { tool: "post_job", annotations: {} },
+    mcp: { tool: "post_job", title: "Post a job", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: T.JobCreate,
     output: T.Job,
     permission: "jobs.write",
@@ -373,7 +375,7 @@ export const ACTIONS = [
     name: "get_job",
     description: "One job with digest and click counts.",
     rest: { method: "GET", path: "/jobs/{job_id}", status: 200, operationId: "getJob" },
-    mcp: { tool: "get_job", annotations: READ },
+    mcp: { tool: "get_job", title: "Get company job", annotations: READ },
     input: z.strictObject({ job_id: T.JobId }),
     output: T.Job,
     permission: "jobs.read",
@@ -384,7 +386,7 @@ export const ACTIONS = [
     name: "update_job",
     description: "Edit a job or publish a draft (status open).",
     rest: { method: "PATCH", path: "/jobs/{job_id}", status: 200, operationId: "updateJob" },
-    mcp: { tool: "update_job", annotations: {} },
+    mcp: { tool: "update_job", title: "Update a job", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: z.strictObject({ job_id: T.JobId, ...T.JobUpdate.shape }).refine(atLeastOne("job_id"), {
       message: "Send at least one field to change.",
     }),
@@ -402,7 +404,7 @@ export const ACTIONS = [
     name: "close_job",
     description: "Close a job. It leaves digests and the X queue at once.",
     rest: { method: "POST", path: "/jobs/{job_id}/close", status: 200, operationId: "closeJob" },
-    mcp: { tool: "close_job", annotations: { destructiveHint: true } },
+    mcp: { tool: "close_job", title: "Close a job", annotations: { destructiveHint: true, readOnlyHint: false } },
     input: z.strictObject({ job_id: T.JobId }),
     output: T.Job,
     permission: "jobs.write",
@@ -417,7 +419,7 @@ export const ACTIONS = [
     name: "list_saved_searches",
     description: "Saved searches of this company.",
     rest: { method: "GET", path: "/saved-searches", status: 200, operationId: "listSavedSearches" },
-    mcp: { tool: "list_saved_searches", annotations: READ },
+    mcp: { tool: "list_saved_searches", title: "List saved searches", annotations: READ },
     input: T.Empty,
     output: T.SavedSearchList,
     permission: "saved_searches.manage",
@@ -428,7 +430,7 @@ export const ACTIONS = [
     name: "create_saved_search",
     description: "Save a search. Current matches are marked as seen; daily alerts report only new ones.",
     rest: { method: "POST", path: "/saved-searches", status: 201, operationId: "createSavedSearch" },
-    mcp: { tool: "create_saved_search", annotations: {} },
+    mcp: { tool: "create_saved_search", title: "Create saved search", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: T.SavedSearchCreate,
     output: T.SavedSearch,
     permission: "saved_searches.manage",
@@ -439,7 +441,7 @@ export const ACTIONS = [
     name: "update_saved_search",
     description: "Rename a saved search, change its filters or switch the daily alert.",
     rest: { method: "PATCH", path: "/saved-searches/{saved_search_id}", status: 200, operationId: "updateSavedSearch" },
-    mcp: { tool: "update_saved_search", annotations: {} },
+    mcp: { tool: "update_saved_search", title: "Update saved search", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: z
       .strictObject({ saved_search_id: T.SavedSearchId, ...T.SavedSearchUpdate.shape })
       .refine(atLeastOne("saved_search_id"), { message: "Send at least one field to change." }),
@@ -452,7 +454,7 @@ export const ACTIONS = [
     name: "delete_saved_search",
     description: "Delete a saved search.",
     rest: { method: "DELETE", path: "/saved-searches/{saved_search_id}", status: 204, operationId: "deleteSavedSearch" },
-    mcp: { tool: "delete_saved_search", annotations: { destructiveHint: true } },
+    mcp: { tool: "delete_saved_search", title: "Delete saved search", annotations: { destructiveHint: true, readOnlyHint: false } },
     input: z.strictObject({ saved_search_id: T.SavedSearchId }),
     output: T.Empty,
     permission: "saved_searches.manage",
@@ -466,7 +468,7 @@ export const ACTIONS = [
     name: "get_webhook",
     description: "Webhook endpoint settings. The secret is shown only when it is set or rotated.",
     rest: { method: "GET", path: "/webhook", status: 200, operationId: "getWebhook" },
-    mcp: { tool: "get_webhook", annotations: READ },
+    mcp: { tool: "get_webhook", title: "Get webhook", annotations: READ },
     input: T.Empty,
     output: T.Webhook,
     permission: "webhook.read",
@@ -477,7 +479,7 @@ export const ACTIONS = [
     name: "set_webhook",
     description: "Set the webhook URL, enable or disable it, or rotate the signing secret.",
     rest: { method: "PUT", path: "/webhook", status: 200, operationId: "setWebhook" },
-    mcp: { tool: "set_webhook", annotations: { idempotentHint: true } },
+    mcp: { tool: "set_webhook", title: "Set webhook", annotations: { idempotentHint: true, readOnlyHint: false, destructiveHint: false } },
     input: T.WebhookUpdate.refine(atLeastOne(""), { message: "Send at least one of url, enabled or rotate_secret." }),
     output: T.Webhook,
     permission: "webhook.write",
@@ -490,7 +492,7 @@ export const ACTIONS = [
     name: "test_webhook",
     description: "Send a signed ping event now and return the endpoint's answer.",
     rest: { method: "POST", path: "/webhook/test", status: 200, operationId: "testWebhook" },
-    mcp: { tool: "test_webhook", annotations: {} },
+    mcp: { tool: "test_webhook", title: "Send test webhook", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: T.Empty,
     output: T.WebhookTestResult,
     permission: "webhook.write",
@@ -502,7 +504,7 @@ export const ACTIONS = [
     name: "get_usage",
     description: "Calls and x402 spend per day and action.",
     rest: { method: "GET", path: "/usage", status: 200, operationId: "getUsage" },
-    mcp: { tool: "get_usage", annotations: READ },
+    mcp: { tool: "get_usage", title: "Get usage", annotations: READ },
     input: z.strictObject({ from: T.IsoDate.optional(), to: T.IsoDate.optional() }),
     output: T.Usage,
     permission: "usage.read",
@@ -513,7 +515,7 @@ export const ACTIONS = [
     name: "buy_usdc_month",
     description: "Coming soon, not available yet: pay 100 USDC on Solana with x402 for 30 days of subscription access. Today, pay in the web app (Billing).",
     rest: { method: "POST", path: "/billing/usdc-month", status: 200, operationId: "buyUsdcMonth" },
-    mcp: { tool: "buy_usdc_month", annotations: {} },
+    mcp: { tool: "buy_usdc_month", title: "Buy a month with USDC", annotations: { readOnlyHint: false, destructiveHint: false } },
     input: T.Empty,
     output: T.UsdcMonthResult,
     permission: "billing.usdc",
@@ -527,7 +529,7 @@ export const ACTIONS = [
     name: "search_jobs",
     description: "Search open crypto jobs (company jobs and our crypto job crawl). Jobs only, never people. Link each job to its url exactly as returned (add no parameters, no rel=nofollow) and name the board in via as the source. salary_estimate is that board's estimate, not the employer's salary.",
     rest: { method: "GET", path: "/public/jobs", status: 200, operationId: "searchJobs" },
-    mcp: { tool: "search_jobs", annotations: READ },
+    mcp: { tool: "search_jobs", title: "Search crypto jobs", annotations: READ },
     input: z.strictObject({
       q: z.string().max(100).optional(),
       role: T.RoleKey.optional(),

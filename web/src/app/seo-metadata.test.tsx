@@ -68,7 +68,7 @@ describe("public page metadata", () => {
   it("gives every public page a title of at most 60 characters with the site suffix and a 120 to 155 character description", async () => {
     const pages: [string, string][] = [
       ["./faq/page", "FAQ: finding a crypto job by proof of work"],
-      ["./agents/page", "Crypto jobs API and MCP server for AI agents"],
+      ["./agents/page", "Crypto jobs in Claude, ChatGPT and MCP"],
       ["./company/page", "Hire crypto talent by proof of work"],
       ["./leaderboard/page", "Crypto talent leaderboard"],
       ["./scoring/page", "How your crypto talent score works"],

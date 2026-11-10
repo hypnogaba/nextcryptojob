@@ -424,14 +424,19 @@ describe("search_jobs", () => {
     crawlJob({ title: "Rust Engineer", remote: true, location: "Remote", salaryMin: 150000, salaryMax: 200000, currency: "usd" });
     crawlJob({ title: "Growth Marketing Manager", location: "Lisboa, Portugal", salaryMin: 90000, salaryMax: 110000, currency: "EUR" });
     crawlJob({ title: "Trader", location: "New York - Hybrid", remote: true, salaryMin: 1000, currency: "USD" });
+    crawlJob({ title: "Trust and Safety Analyst", location: "Remote", remote: true });
 
     const titles = async (query: string) =>
       (await call("GET", `/public/jobs${query}`)).body.data.map((j: { title: string }) => j.title).sort();
     expect(await titles("?q=defi")).toEqual(["Lending protocol engineer"]);
     expect(await titles("?q=acme%20lending")).toEqual(["Lending protocol engineer"]);
+    // Слово запиту починає слово вакансії: «rust» не знаходить «Trust», а «engin» знаходить «Engineer».
+    expect(await titles("?q=rust")).toEqual(["Rust Engineer"]);
+    expect(await titles("?q=engin%20rust")).toEqual(["Rust Engineer"]);
+    expect(await titles("?q=ust")).toEqual([]);
     expect(await titles("?role=marketing_content")).toEqual(["Growth Marketing Manager"]);
     // «Hybrid» без слова remote перемагає прапорець джерела (як у добірці).
-    expect(await titles("?work_mode=remote")).toEqual(["Rust Engineer"]);
+    expect(await titles("?work_mode=remote")).toEqual(["Rust Engineer", "Trust and Safety Analyst"]);
     expect(await titles("?city=Lisbon")).toEqual(["Growth Marketing Manager", "Lending protocol engineer"]);
     expect(await titles("?work_mode=city")).toEqual(["Growth Marketing Manager", "Lending protocol engineer", "Trader"]);
     expect(await titles("?salary_min=180000")).toEqual(["Rust Engineer"]);

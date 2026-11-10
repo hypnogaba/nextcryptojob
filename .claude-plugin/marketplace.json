@@ -1,0 +1,11 @@
+{
+  "name": "nextcryptojob",
+  "owner": { "name": "NextCryptoJob", "email": "hello@nextcryptojob.xyz" },
+  "plugins": [
+    {
+      "name": "nextcryptojob",
+      "source": "./plugin/nextcryptojob",
+      "description": "Your crypto job search in Claude: daily matches, live jobs as cards, your brief, and notes to employers in your own words."
+    }
+  ]
+}

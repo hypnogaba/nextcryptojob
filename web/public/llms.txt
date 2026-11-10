@@ -17,6 +17,12 @@ NextCryptoJob reads only public work. A candidate says what job they want in the
 - [Hire crypto talent by proof of work](https://nextcryptojob.xyz/company): candidate search, scores and job posting
 - [Terms](https://nextcryptojob.xyz/terms) and [Privacy](https://nextcryptojob.xyz/privacy)
 
+## Connect your job search to Claude or ChatGPT
+- Connector address: https://nextcryptojob.xyz/mcp/me (MCP over streamable HTTP, sign-in with OAuth)
+- In Claude: Settings, Connectors, Add custom connector, paste the address, sign in with the email or Telegram you use on NextCryptoJob, then Allow.
+- Tools: search_jobs, get_my_matches, get_my_brief, update_my_brief, rate_job. Jobs show as cards in the chat.
+- [How it works](https://nextcryptojob.xyz/agents)
+
 ## For agents
 - [API and MCP guide](https://nextcryptojob.xyz/agents): REST API and MCP server for crypto jobs and candidates
 - [OpenAPI spec](https://nextcryptojob.xyz/openapi.yaml)

@@ -4,7 +4,8 @@
  * символів. Усе інше (у тому числі чужі адреси) відкидаємо: інакше вхід був би відкритим перенаправленням.
  */
 
-const MAX_LENGTH = 512;
+// 2048: запит конектора /oauth/authorize?… (client_id, redirect_uri, state, PKCE, resource) після кодування довший за 512.
+const MAX_LENGTH = 2048;
 
 export function safeNextPath(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
