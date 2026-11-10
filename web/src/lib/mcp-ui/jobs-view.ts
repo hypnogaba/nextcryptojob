@@ -82,8 +82,10 @@ if (!window.__votesBound) {
     if (!b) return;
     var ref = b.getAttribute("data-ref"), v = b.getAttribute("data-v");
     var pair = document.querySelectorAll('.vote[data-ref="' + ref + '"]');
-    for (var i = 0; i < pair.length; i++) pair[i].setAttribute("aria-pressed", String(pair[i] === b));
-    api.callTool("rate_job", { ref: ref, vote: v }).catch(function(){ b.setAttribute("aria-pressed", "false"); });
+    var before = [];
+    for (var i = 0; i < pair.length; i++) { before.push(pair[i].getAttribute("aria-pressed")); pair[i].setAttribute("aria-pressed", String(pair[i] === b)); }
+    function undo(){ for (var j = 0; j < pair.length; j++) pair[j].setAttribute("aria-pressed", before[j]); }
+    api.callTool("rate_job", { ref: ref, vote: v }).then(function(r){ if (api.isError(r)) undo(); }, undo);
   });
 }
 return '<div class="list">' + html + '</div><p class="foot">NextCryptoJob · jobs from employer career pages and crypto job boards</p>';

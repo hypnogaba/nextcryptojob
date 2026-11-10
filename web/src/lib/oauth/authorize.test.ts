@@ -132,4 +132,22 @@ describe("helpers", () => {
     expect(html).toContain("an app on your computer");
     expect(html).toContain("@ada on Telegram");
   });
+
+  it("safeReturn accepts only our own authorize request", async () => {
+    const { safeReturn } = await import("./config");
+    expect(safeReturn(encodeURIComponent("/oauth/authorize?client_id=c&state=s"))).toBe("/oauth/authorize?client_id=c&state=s");
+    for (const bad of ["https://evil.example/oauth/authorize?x=1", "//evil.example/oauth/authorize?x", "/oauth/authorizeX?x", "/account", "/oauth/authorize?\n", "%E0%A4%A"]) {
+      expect(safeReturn(bad), bad).toBeNull();
+    }
+  });
+
+  it("a visitor without a session also gets the return cookie, for Telegram sign-in", async () => {
+    const { helpers } = fakeOAuth();
+    const res = await handleAuthorize(new Request(URL_), { DB: t.d1, OAUTH_PROVIDER: helpers });
+    const cookie = res.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toContain("ncj_oauth_return=");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Secure");
+  });
 });
+

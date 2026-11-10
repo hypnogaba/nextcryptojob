@@ -59,6 +59,11 @@ ${opts.css}
     var root = document.getElementById("app");
     try {
       var data = result && result.structuredContent;
+      if (result && result.isError) {
+        var msg = (data && data.error && data.error.message) || (result.content && result.content[0] && result.content[0].text) || "Something went wrong.";
+        root.innerHTML = '<p class="empty">' + esc(msg) + "</p>";
+        return;
+      }
       if (!data) { root.innerHTML = '<p class="empty">' + esc(result && result.isError ? "Something went wrong. Ask again." : "Nothing to show.") + "</p>"; return; }
       root.innerHTML = render(data, api);
     } catch (e) { root.innerHTML = '<p class="empty">Could not show this result.</p>'; }
@@ -80,10 +85,12 @@ ${opts.css}
     var a = e.target.closest && e.target.closest("[data-link]");
     if (a) { e.preventDefault(); api.openLink(a.getAttribute("data-link")); }
   });
+  api.isError = function(r){ return !r || r.isError === true; };
   window.__app = api;
   var last = 0;
   if (window.ResizeObserver) new ResizeObserver(function(){
-    var h = Math.ceil(document.documentElement.scrollHeight);
+    // Висота вмісту, а не документа: scrollHeight документа не менший за саму рамку, тож не зменшувався б.
+    var h = Math.ceil(document.body.getBoundingClientRect().height);
     if (h !== last) { last = h; notify("ui/notifications/size-changed", { height: h }); }
   }).observe(document.body);
   request("ui/initialize", {

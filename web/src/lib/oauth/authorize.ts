@@ -1,6 +1,6 @@
 import { AuthorizationError, CimdFetchError, type ConsentDescription, type OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { sha256Hex } from "../auth/hash";
-import { AUTHORIZE_PATH, type ConnectorProps, SCOPE, SCOPE_WORDS } from "./config";
+import { AUTHORIZE_PATH, type ConnectorProps, RETURN_COOKIE, RETURN_MAX_AGE_S, SCOPE, SCOPE_WORDS } from "./config";
 
 /**
  * Сторінка згоди конектора: GET і POST /oauth/authorize (lib/oauth/config.ts).
@@ -91,7 +91,13 @@ async function showConsent(request: Request, env: AuthorizeEnv): Promise<Respons
   if (!user) {
     const url = new URL(request.url);
     const next = `${AUTHORIZE_PATH}${url.search}`;
-    return new Response(null, { status: 302, headers: { Location: `/login?next=${encodeURIComponent(next)}` } });
+    const headers = new Headers({ Location: `/login?next=${encodeURIComponent(next)}`, "Cache-Control": "no-store" });
+    // Для входу через Telegram, який ?next= не несе (app/auth/telegram/callback).
+    headers.append(
+      "Set-Cookie",
+      `${RETURN_COOKIE}=${encodeURIComponent(next)}; Path=/; Max-Age=${RETURN_MAX_AGE_S}; HttpOnly; Secure; SameSite=Lax`,
+    );
+    return new Response(null, { status: 302, headers });
   }
   const details = await oauth.describeConsent(authRequest);
   const consent = await oauth.beginConsent(authRequest);

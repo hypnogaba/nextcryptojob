@@ -227,4 +227,37 @@ describe("the person's own data", () => {
     expect(r.isError).toBeFalsy();
     expect(Array.isArray(r.structuredContent.data)).toBe(true);
   });
+
+  it("update_my_brief with new words keeps the roles and says plainly when the words point elsewhere", async () => {
+    const ada = person();
+    const r = await tool(ada, "update_my_brief", { job_words: "Product manager for a wallet app" });
+    expect(r.isError).toBeFalsy();
+    expect(r.content[0].text).toContain("still picks jobs by the saved roles");
+    expect(r.content[0].text).toContain("/welcome");
+    const row = db.raw.prepare("SELECT target_text, roles FROM users WHERE id = ?").get(ada) as { target_text: string; roles: string };
+    expect(row.target_text).toBe("Product manager for a wallet app");
+    expect(JSON.parse(row.roles)).toEqual(["engineer"]);
+  });
+
+  it("a match whose source cannot be read now is not called closed", async () => {
+    const ada = person();
+    sent(ada, "dg_a", ["nr:a1"]);
+    jobsHolder.db = {
+      all: async () => {
+        throw new Error("D1 down");
+      },
+      first: async () => {
+        throw new Error("D1 down");
+      },
+    };
+    const r = await tool(ada, "get_my_matches");
+    const m = r.structuredContent?.matches ?? [];
+    if (m.length) {
+      expect(m[0].title).not.toBe("Job no longer listed");
+      expect(m[0].state).toBe("unavailable");
+    } else {
+      expect(r.isError).toBe(true);
+    }
+  });
 });
+

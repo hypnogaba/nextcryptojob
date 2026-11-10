@@ -51,7 +51,7 @@ export function toolsFor(withKey: boolean): ActionDef[] {
 }
 
 /** Схема для tools/list без перевірки на боці SDK: перевіряє реєстр (див. вище). */
-function announceOnly(schema: z.ZodType): StandardSchemaWithJSON {
+export function announceOnly(schema: z.ZodType): StandardSchemaWithJSON {
   const standard = schema["~standard"] as unknown as StandardSchemaWithJSON["~standard"];
   return { "~standard": { ...standard, validate: (value: unknown) => ({ value }) } } as StandardSchemaWithJSON;
 }

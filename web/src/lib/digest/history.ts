@@ -441,6 +441,8 @@ export type RecentJob = {
   localDate: string;
   state: SentJob["state"];
   details: JobDetails | null;
+  /** Чому підходить (sent.why), як у листі; null, якщо не записали. */
+  why: string | null;
 };
 
 /**
@@ -448,18 +450,18 @@ export type RecentJob = {
  * зверху. Лише user_id людини: і `sent`, і `digest_runs` обмежено ним. null, якщо наша база не відповіла.
  */
 export async function recentSentJobs(d: D1Database, jobs: JobsDb, userId: string, limit = BOT_JOBS_LIMIT): Promise<RecentJob[] | null> {
-  let rows: { job_ref: string; local_date: string }[];
+  let rows: { job_ref: string; local_date: string; why: string | null }[];
   try {
     ({ results: rows } = await d
       .prepare(
-        `SELECT s.job_ref, r.local_date
+        `SELECT s.job_ref, r.local_date, s.why
            FROM sent s JOIN digest_runs r ON r.id = s.digest_id AND r.user_id = s.user_id
           WHERE s.user_id = ? AND s.status = 'sent'
           ORDER BY r.local_date DESC, s.digest_id DESC, s.position
           LIMIT ?`,
       )
       .bind(userId, limit)
-      .all<{ job_ref: string; local_date: string }>());
+      .all<{ job_ref: string; local_date: string; why: string | null }>());
   } catch (e) {
     console.warn(`bot jobs: history read failed (${errorName(e)})`);
     return null;
@@ -469,6 +471,7 @@ export async function recentSentJobs(d: D1Database, jobs: JobsDb, userId: string
   return rows.map((r) => {
     const source = r.job_ref.startsWith("nr:") ? nr : co;
     const details = source?.get(r.job_ref) ?? null;
-    return { ref: r.job_ref, localDate: r.local_date, state: details ? "ok" : source === null ? "unavailable" : "gone", details };
+    const state = details ? "ok" : source === null ? "unavailable" : "gone";
+    return { ref: r.job_ref, localDate: r.local_date, state, details, why: r.why ? cleanText(r.why, 300) : null };
   });
 }

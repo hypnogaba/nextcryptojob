@@ -1,11 +1,13 @@
-import { McpServer, type StandardSchemaWithJSON } from "@modelcontextprotocol/server";
+import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
 import { getAction } from "@/lib/crm/actions";
 import { crmBase } from "@/lib/crm/context";
 import { ActionError } from "@/lib/crm/types";
 import { FEEDBACK_REASONS, type FeedbackReason, recordFeedback } from "@/lib/digest/feedback";
-import { loadJobsPage } from "@/lib/digest/history";
+import { recentSentJobs } from "@/lib/digest/history";
+import { ROLES } from "@/lib/card/roles";
+import { inferRoles } from "@/lib/roles/infer";
 import { jobsDb } from "@/lib/jobs-db";
 import { CURRENCIES, parsePlace, whereFromMode } from "@/lib/onboarding/place";
 import { loadAnswers, placeFields, TARGET_MAX, targetFields, updateBrief } from "@/lib/onboarding/store";
@@ -14,7 +16,7 @@ import { MCP_APP_MIME } from "@/lib/mcp-ui/app-shell";
 import { readBridge, type BridgedUser } from "@/lib/oauth/bridge";
 import { CONNECTOR_PATH } from "@/lib/oauth/config";
 import { errorResponse } from "@/lib/x402/http";
-import { callTool, MCP_HOSTNAMES, type McpSession } from "./mcp";
+import { announceOnly, callTool, MCP_HOSTNAMES, type McpSession } from "./mcp";
 import type { ToolResult } from "@/lib/x402/mcp";
 
 /**
@@ -116,17 +118,15 @@ export async function myBrief(userId: string): Promise<ToolResult> {
 
 export async function myMatches(userId: string, input: z.output<typeof MatchesInput>): Promise<ToolResult> {
   const base = crmBase();
-  const page = await loadJobsPage(base.db, jobsDb(), userId);
-  if (!page) return fail("We could not find this account. Connect again from your AI app.");
-  if (page.historyError) return fail("We could not read your matches right now. Try again in a minute.");
-  const limit = input.limit ?? MATCHES_DEFAULT;
-  const flat = page.digests.flatMap((dg) => dg.jobs.map((j) => ({ date: dg.localDate, j }))).slice(0, limit);
-  const votes = await votesFor(base.db, userId, flat.map((f) => f.j.ref));
-  const matches = flat.map(({ date, j }) => ({
+  // Вузьке читання: лише останні N надісланих і їхні подробиці (не вся сторінка /jobs).
+  const recent = await recentSentJobs(base.db, jobsDb(), userId, input.limit ?? MATCHES_DEFAULT);
+  if (recent === null) return fail("We could not read your matches right now. Try again in a minute.");
+  const votes = await votesFor(base.db, userId, recent.map((j) => j.ref));
+  const matches = recent.map((j) => ({
     ref: j.ref,
-    date,
+    date: j.localDate,
     state: j.state,
-    title: j.details?.title ?? "Job no longer listed",
+    title: j.details?.title ?? (j.state === "gone" ? "Job no longer listed" : "Details unavailable right now"),
     company: j.details?.company ?? "",
     location: j.details?.location ?? null,
     salary: j.details?.salary ?? j.details?.salaryEstimate ?? null,
@@ -135,11 +135,13 @@ export async function myMatches(userId: string, input: z.output<typeof MatchesIn
     why: j.why,
     vote: votes.get(j.ref) ?? null,
   }));
-  const paused = page.setup.paused ? " Daily matches are paused in settings." : "";
+  const unavailable = matches.some((m) => m.state === "unavailable")
+    ? " Some job details could not be read right now; they are not closed, ask again later."
+    : "";
   const summary =
     matches.length === 0
-      ? `No matches sent yet.${paused} New matches come once a day by ${page.setup.channel ?? "email or Telegram"}.`
-      : `${matches.length} recent matches.${paused} Link each job by its url exactly as given and name the board in via as the source.`;
+      ? "No matches sent yet. New matches come once a day by email or Telegram after the brief is finished."
+      : `${matches.length} recent matches.${unavailable} Link each job by its url exactly as given and name the board in via as the source.`;
   return ok({ matches }, summary);
 }
 
@@ -159,10 +161,21 @@ export async function changeBrief(userId: string, input: z.output<typeof UpdateB
   if (a.step !== "done") return fail(`Finish the brief on the site first: ${SITE}/welcome`);
 
   const fields: Parameters<typeof updateBrief>[2] = {};
+  // Слова й ролі йдуть парою (сайт веде на крок ролей, бот читає ролі зі слів). Ролі тут не змінюємо:
+  // вони змінюють бал людини. Якщо нові слова вказують на інші ролі, кажемо це прямо.
+  let rolesNote = "";
   if (input.job_words !== undefined) {
     const words = input.job_words.trim().replace(/\s+/g, " ");
     if (words.length < 2) return fail("Say in a few words what job the person wants.");
     Object.assign(fields, targetFields(words));
+    const suggested = inferRoles(words);
+    const same = suggested.length === 0 || (suggested.length === a.roles.length && suggested.every((r) => a.roles.includes(r)));
+    if (!same) {
+      const names = (keys: readonly string[]) => keys.map((k) => ROLES[k as keyof typeof ROLES]?.name ?? k).join(", ");
+      rolesNote =
+        ` The daily list still picks jobs by the saved roles (${names(a.roles) || "none"}). ` +
+        `The new words point to ${names(suggested)}. To switch roles, open ${SITE}/welcome: roles also change the person's score.`;
+    }
   }
   const touchesPlace = input.work !== undefined || input.city !== undefined || input.salary_min !== undefined || input.currency !== undefined;
   if (touchesPlace) {
@@ -179,7 +192,7 @@ export async function changeBrief(userId: string, input: z.output<typeof UpdateB
   await updateBrief(d, userId, fields);
   return myBrief(userId).then((r) => ({
     ...r,
-    content: [{ type: "text" as const, text: `Saved. The next daily list uses the new brief.\n\n${JSON.stringify(r.structuredContent)}` }],
+    content: [{ type: "text" as const, text: `Saved. The next daily list uses the new brief.${rolesNote}\n\n${JSON.stringify(r.structuredContent)}` }],
   }));
 }
 
@@ -207,11 +220,6 @@ async function guard(ctx: Ctx, run: () => Promise<ToolResult>): Promise<ToolResu
   }
 }
 
-const parse = <S extends z.ZodType>(schema: S, args: unknown): z.output<S> | string => {
-  const r = schema.safeParse(args ?? {});
-  return r.success ? r.data : r.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ");
-};
-
 const UI = { ui: { resourceUri: JOBS_VIEW_URI } };
 
 export function buildConnectorServer(ctx: Ctx): McpServer {
@@ -238,7 +246,8 @@ export function buildConnectorServer(ctx: Ctx): McpServer {
       {
         title: "Search crypto jobs",
         description: search.description,
-        inputSchema: search.input as unknown as StandardSchemaWithJSON,
+        // Як на /mcp: схему лише оголошуємо, перевіряє реєстр (validation_failed з полями).
+        inputSchema: announceOnly(search.input),
         annotations: READ,
         _meta: UI,
       },
@@ -261,10 +270,7 @@ export function buildConnectorServer(ctx: Ctx): McpServer {
       _meta: UI,
     },
     async (args: unknown) =>
-      guard(ctx, async () => {
-        const input = parse(MatchesInput, args);
-        return typeof input === "string" ? fail(input) : myMatches(ctx.user.userId, input);
-      }),
+      guard(ctx, () => myMatches(ctx.user.userId, args as z.output<typeof MatchesInput>)),
   );
 
   server.registerTool(
@@ -288,10 +294,7 @@ export function buildConnectorServer(ctx: Ctx): McpServer {
       annotations: WRITE,
     },
     async (args: unknown) =>
-      guard(ctx, async () => {
-        const input = parse(UpdateBriefInput, args);
-        return typeof input === "string" ? fail(input) : changeBrief(ctx.user.userId, input);
-      }),
+      guard(ctx, () => changeBrief(ctx.user.userId, args as z.output<typeof UpdateBriefInput>)),
   );
 
   server.registerTool(
@@ -303,10 +306,7 @@ export function buildConnectorServer(ctx: Ctx): McpServer {
       annotations: WRITE,
     },
     async (args: unknown) =>
-      guard(ctx, async () => {
-        const input = parse(RateInput, args);
-        return typeof input === "string" ? fail(input) : rate(ctx.user.userId, input);
-      }),
+      guard(ctx, () => rate(ctx.user.userId, args as z.output<typeof RateInput>)),
   );
 
   return server;
